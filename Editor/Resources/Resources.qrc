@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/Icons">
+        <file alias="continue.svg">Icons/continue.svg</file>
+        <file alias="interrupt.svg">Icons/interrupt.svg</file>
+        <file alias="step-into.svg">Icons/step-into.svg</file>
+        <file alias="step-out.svg">Icons/step-out.svg</file>
+        <file alias="step-over.svg">Icons/step-over.svg</file>
+        <file alias="attach.svg">Icons/attach.svg</file>
+        <file alias="detach.svg">Icons/detach.svg</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,142 @@
+#include "Document.hpp"
+
+#include <QFileInfo>
+
+namespace fged {
+
+Document::Document(fg::Runtime& rt, QObject* parent) : QObject(parent), rt_(rt) { newScript(); }
+
+QString Document::displayName() const {
+    QString n = path_.isEmpty() ? QString::fromStdString(script_.name) : QFileInfo(path_).fileName();
+    return dirty_ ? n + "*" : n;
+}
+
+void Document::markDirty(bool d) {
+    if (dirty_ == d) return;
+    dirty_ = d;
+    emit titleChanged();
+}
+
+void Document::recompile() {
+    program_ = fg::compile(script_, rt_.registry());
+    emit compiled();
+}
+
+void Document::newScript() {
+    script_ = fg::Script();
+    script_.name = "Untitled";
+    script_.addEventGraph("EventGraph");
+    {
+        fg::Graph& g = script_.graphs.back();
+        g.addNode("event.custom", 0, 0).props["name"] = "Main";
+        g.addNode("util.print", 300, 0);
+        g.connections.push_back({1, "Then", 2, "In"});
+    }
+    path_.clear();
+    undo_.clear(); redo_.clear(); undoLabels_.clear(); redoLabels_.clear();
+    debugger_.clearBreakpoints();
+    recompile();
+    markDirty(false);
+    emit scriptReplaced();
+    emit changed(true);
+    emit undoStateChanged();
+    emit titleChanged();
+}
+
+bool Document::load(const QString& path, QString* error) {
+    try {
+        script_ = fg::Script::load(path.toStdString());
+    } catch (const std::exception& e) {
+        if (error) *error = e.what();
+        return false;
+    }
+    path_ = path;
+    undo_.clear(); redo_.clear(); undoLabels_.clear(); redoLabels_.clear();
+    debugger_.clearBreakpoints();
+    recompile();
+    markDirty(false);
+    emit scriptReplaced();
+    emit changed(true);
+    emit undoStateChanged();
+    emit titleChanged();
+    return true;
+}
+
+bool Document::save(const QString& path, QString* error) {
+    QString target = path.isEmpty() ? path_ : path;
+    if (target.isEmpty()) {
+        if (error) *error = "no file name";
+        return false;
+    }
+    try {
+        script_.save(target.toStdString());
+    } catch (const std::exception& e) {
+        if (error) *error = e.what();
+        return false;
+    }
+    path_ = target;
+    markDirty(false);
+    emit titleChanged();
+    return true;
+}
+
+void Document::edit(const QString& label, const std::function<void(fg::Script&)>& fn, EditKind kind, const QString& coalesceKey) {
+    bool coalesce = !coalesceKey.isEmpty() && coalesceKey == lastKey_ && lastEdit_.isValid() && lastEdit_.elapsed() < 1500 && !undo_.isEmpty();
+    if (!coalesce) {
+        undo_.push_back(QString::fromStdString(script_.toText(0)));
+        undoLabels_.push_back(label);
+        if (undo_.size() > 200) { undo_.removeFirst(); undoLabels_.removeFirst(); }
+    }
+    redo_.clear();
+    redoLabels_.clear();
+    lastKey_ = coalesceKey;
+    lastEdit_.restart();
+    fn(script_);
+    markDirty(true);
+    if (kind == EditKind::Structural) recompile();
+    emit changed(kind == EditKind::Structural);
+    emit undoStateChanged();
+}
+
+void Document::undo() {
+    if (undo_.isEmpty()) return;
+    redo_.push_back(QString::fromStdString(script_.toText(0)));
+    redoLabels_.push_back(undoLabels_.last());
+    script_ = fg::Script::parse(undo_.takeLast().toStdString());
+    undoLabels_.removeLast();
+    lastKey_.clear();
+    markDirty(true);
+    recompile();
+    emit scriptReplaced();
+    emit changed(true);
+    emit undoStateChanged();
+}
+
+void Document::redo() {
+    if (redo_.isEmpty()) return;
+    undo_.push_back(QString::fromStdString(script_.toText(0)));
+    undoLabels_.push_back(redoLabels_.last());
+    script_ = fg::Script::parse(redo_.takeLast().toStdString());
+    redoLabels_.removeLast();
+    lastKey_.clear();
+    markDirty(true);
+    recompile();
+    emit scriptReplaced();
+    emit changed(true);
+    emit undoStateChanged();
+}
+
+const fg::CompiledGraph* Document::compiledGraph(const QString& name) const {
+    return program_ ? program_->findGraph(name.toStdString()) : nullptr;
+}
+
+std::vector<fg::Diagnostic> Document::diagnosticsFor(const QString& graph, fg::NodeId node) const {
+    std::vector<fg::Diagnostic> out;
+    if (!program_) return out;
+    std::string g = graph.toStdString();
+    for (auto& d : program_->diagnostics)
+        if (d.graph == g && d.node == node) out.push_back(d);
+    return out;
+}
+
+} // namespace fged

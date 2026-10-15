@@ -1,0 +1,256 @@
+#include "GraphView.hpp"
+#include "LinkItem.hpp"
+#include "PalettePopup.hpp"
+
+#include <QContextMenuEvent>
+#include <QCursor>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <algorithm>
+#include <cmath>
+#include <QDragEnterEvent>
+#include <QMenu>
+#include <QMimeData>
+#include <QScrollBar>
+#include <QWheelEvent>
+
+namespace fged {
+
+GraphView::GraphView(GraphScene* scene, QWidget* parent) : QGraphicsView(scene, parent) {
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setRenderHint(QPainter::Antialiasing);
+    setRenderHint(QPainter::TextAntialiasing);
+    setOptimizationFlag(QGraphicsView::DontSavePainterState);
+    setTransformationAnchor(AnchorUnderMouse);
+    setResizeAnchor(AnchorUnderMouse);
+    setViewportUpdateMode(FullViewportUpdate);
+    setDragMode(RubberBandDrag);
+    setRubberBandSelectionMode(Qt::IntersectsItemShape);
+    setAcceptDrops(true);
+    setFocusPolicy(Qt::StrongFocus);
+    connect(scene, &GraphScene::paletteRequested, this, [this](const PinRef& from, const QPointF& sp, const QPoint& screen) { showPalette(from, sp, screen); });
+}
+
+void GraphView::setZoom(double z) {
+    zoom_ = std::clamp(z, 0.25, 2.0);
+    QTransform t;
+    t.scale(zoom_, zoom_);
+    setTransform(t);
+}
+
+void GraphView::wheelEvent(QWheelEvent* e) {
+    int d = e->angleDelta().y();
+    if (d == 0) { e->ignore(); return; }
+    setZoom(d > 0 ? zoom_ * 1.15 : zoom_ / 1.15);
+    e->accept();
+}
+
+void GraphView::drawBackground(QPainter* p, const QRectF& rect) {
+    p->save();
+    p->fillRect(rect, palette().base().color());
+    int major = zoom_ < 0.6 ? 500 : 100;
+    int minor = major / 5;
+    auto lines = [&](int spacing, double w) {
+        p->setPen(QPen(palette().window().color(), w));
+        double y = rect.top() - std::fmod(rect.top(), spacing);
+        for (; y < rect.bottom(); y += spacing) p->drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+        double x = rect.left() - std::fmod(rect.left(), spacing);
+        for (; x < rect.right(); x += spacing) p->drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+    };
+    lines(minor, 0.7 / zoom_);
+    lines(major, 2.0 / zoom_);
+    p->restore();
+}
+
+void GraphView::frameAll() {
+    QRectF r = graphScene()->contentRect();
+    if (r.isNull()) { setZoom(1.0); centerOn(0, 0); return; }
+    r.adjust(-80, -80, 80, 80);
+    fitInView(r, Qt::KeepAspectRatio);
+    zoom_ = std::clamp(transform().m11(), 0.25, 1.0);
+    QTransform t;
+    t.scale(zoom_, zoom_);
+    setTransform(t);
+    centerOn(r.center());
+}
+
+void GraphView::centerOnNode(fg::NodeId id, bool animated) {
+    NodeItem* n = graphScene()->nodeItem(id);
+    if (!n) return;
+    QPointF target = n->sceneBoundingRect().center();
+    if (!animated || QLineF(sceneCenter(), target).length() < 50) {
+        centerOn(target);
+        return;
+    }
+    auto* a = new QPropertyAnimation(this, "SceneCenter");
+    a->setDuration(300);
+    a->setStartValue(sceneCenter());
+    a->setEndValue(target);
+    a->setEasingCurve(QEasingCurve::InOutCubic);
+    a->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void GraphView::showPalette(const PinRef& from, const QPointF& scenePos, const QPoint& screenPos) {
+    auto* pop = new PalettePopup(graphScene(), from, this);
+    GraphScene* sc = graphScene();
+    connect(pop, &PalettePopup::chosen, sc, [sc, from, scenePos](const fg::NodeTemplate& t) {
+        sc->addNodeFromTemplate(t, scenePos, from.valid() ? &from : nullptr);
+    });
+    pop->popup(screenPos);
+}
+
+// ------------------------------------------------------------------ mouse
+void GraphView::mousePressEvent(QMouseEvent* e) {
+    if (e->button() == Qt::MiddleButton || e->button() == Qt::RightButton) {
+        QGraphicsItem* under = itemAt(e->pos());
+        if (e->button() == Qt::MiddleButton || !under || dynamic_cast<LinkItem*>(under)) {
+            panning_ = true;
+            panMoved_ = false;
+            panButton_ = e->button();
+            panLast_ = e->pos();
+            if (e->button() == Qt::MiddleButton) { setCursor(Qt::ClosedHandCursor); e->accept(); return; }
+            // right button: keep the event for the context menu if it turns out to be a click
+            return;
+        }
+    }
+    QGraphicsView::mousePressEvent(e);
+}
+
+void GraphView::mouseMoveEvent(QMouseEvent* e) {
+    if (panning_) {
+        QPoint d = e->pos() - panLast_;
+        if (!panMoved_ && (e->pos() - panLast_).manhattanLength() < 4 && panButton_ == Qt::RightButton) return;
+        panMoved_ = true;
+        panLast_ = e->pos();
+        horizontalScrollBar()->setValue(horizontalScrollBar()->value() - d.x());
+        verticalScrollBar()->setValue(verticalScrollBar()->value() - d.y());
+        if (panButton_ == Qt::RightButton) setCursor(Qt::ClosedHandCursor);
+        e->accept();
+        return;
+    }
+    QGraphicsView::mouseMoveEvent(e);
+}
+
+void GraphView::mouseReleaseEvent(QMouseEvent* e) {
+    if (panning_ && e->button() == panButton_) {
+        panning_ = false;
+        unsetCursor();
+        suppressContext_ = panMoved_ && panButton_ == Qt::RightButton;
+        if (panButton_ == Qt::MiddleButton) { e->accept(); return; }
+    }
+    QGraphicsView::mouseReleaseEvent(e);
+}
+
+void GraphView::contextMenuEvent(QContextMenuEvent* e) {
+    if (suppressContext_) { suppressContext_ = false; return; }
+    GraphScene* sc = graphScene();
+    QPointF sp = mapToScene(e->pos());
+    QGraphicsItem* under = nullptr;
+    for (QGraphicsItem* it : items(e->pos()))
+        if (dynamic_cast<NodeItem*>(it) || dynamic_cast<LinkItem*>(it)) { under = it; break; }
+
+    if (auto* node = dynamic_cast<NodeItem*>(under)) {
+        if (auto pin = node->pinAt(sp)) {
+            QMenu m;
+            QAction* brk = m.addAction("Break all links");
+            if (m.exec(e->globalPos()) == brk) sc->breakPinLinks(*pin);
+            return;
+        }
+        if (!node->isSelected()) { sc->clearSelection(); node->setSelected(true); }
+        QMenu m;
+        QAction* cut = m.addAction("Cut");
+        QAction* copy = m.addAction("Copy");
+        QAction* dup = m.addAction("Duplicate");
+        QAction* del = m.addAction("Delete");
+        m.addSeparator();
+        QAction* bp = m.addAction(sc->isBreakpoint(node->nodeId()) ? "Remove breakpoint" : "Add breakpoint");
+        QAction* note = m.addAction("Edit node comment...");
+        QAction* open = nullptr;
+        if (node->compiled().op == fg::NodeOp::CallFunction) open = m.addAction("Open function graph");
+        QAction* a = m.exec(e->globalPos());
+        if (!a) return;
+        if (a == cut) { sc->copySelected(); sc->deleteSelected(); }
+        else if (a == copy) sc->copySelected();
+        else if (a == dup) sc->duplicateSelected();
+        else if (a == del) sc->deleteSelected();
+        else if (a == bp) sc->toggleBreakpoint(node->nodeId());
+        else if (a == note) {
+            bool ok = false;
+            QString t = QInputDialog::getText(this, "Node comment", "Comment:", QLineEdit::Normal, qs(node->compiled().comment), &ok);
+            if (ok) sc->setNodeComment(node->nodeId(), t);
+        } else if (a == open) sc->nodeActivated(node->nodeId());
+        return;
+    }
+    if (auto* link = dynamic_cast<LinkItem*>(under)) {
+        QMenu m;
+        QAction* reroute = m.addAction("Add reroute node");
+        QAction* del = m.addAction("Delete link");
+        QAction* a = m.exec(e->globalPos());
+        if (a == reroute) sc->insertReroute(link->connection(), sp);
+        else if (a == del) { sc->clearSelection(); link->setSelected(true); sc->deleteSelected(); }
+        return;
+    }
+    showPalette(PinRef(), sp, e->globalPos());
+}
+
+// ------------------------------------------------------------------ keyboard
+void GraphView::keyPressEvent(QKeyEvent* e) {
+    GraphScene* sc = graphScene();
+    QPointF cursor = mapToScene(mapFromGlobal(QCursor::pos()));
+    bool ctrl = e->modifiers() & Qt::ControlModifier;
+    if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) { sc->deleteSelected(); e->accept(); return; }
+    if (ctrl && e->key() == Qt::Key_C) { sc->copySelected(); e->accept(); return; }
+    if (ctrl && e->key() == Qt::Key_X) { sc->copySelected(); sc->deleteSelected(); e->accept(); return; }
+    if (ctrl && e->key() == Qt::Key_V) { sc->paste(cursor); e->accept(); return; }
+    if (ctrl && e->key() == Qt::Key_D) { sc->duplicateSelected(); e->accept(); return; }
+    if (ctrl && e->key() == Qt::Key_A) {
+        QPainterPath p;
+        p.addRect(sc->contentRect());
+        sc->setSelectionArea(p);
+        e->accept();
+        return;
+    }
+    if (!ctrl && e->key() == Qt::Key_C) { sc->addComment(cursor); e->accept(); return; }
+    if (e->key() == Qt::Key_Home) { frameAll(); e->accept(); return; }
+    if (e->key() == Qt::Key_F9) {
+        for (auto id : sc->selectedNodeIds()) sc->toggleBreakpoint(id);
+        e->accept();
+        return;
+    }
+    QGraphicsView::keyPressEvent(e);
+}
+
+// ------------------------------------------------------------------ drag & drop of variables
+void GraphView::dragEnterEvent(QDragEnterEvent* e) {
+    if (e->mimeData()->hasFormat(variableMime())) e->acceptProposedAction();
+    else QGraphicsView::dragEnterEvent(e);
+}
+void GraphView::dragMoveEvent(QDragMoveEvent* e) {
+    if (e->mimeData()->hasFormat(variableMime())) e->acceptProposedAction();
+    else QGraphicsView::dragMoveEvent(e);
+}
+
+void GraphView::dropEvent(QDropEvent* e) {
+    if (!e->mimeData()->hasFormat(variableMime())) { QGraphicsView::dropEvent(e); return; }
+    QStringList parts = QString::fromUtf8(e->mimeData()->data(variableMime())).split('|');
+    if (parts.size() < 2) return;
+    QString scope = parts[0], name = parts[1];
+    QPointF sp = mapToScene(e->position().toPoint());
+    bool isSet;
+    if (e->modifiers() & Qt::ControlModifier) isSet = false;
+    else if (e->modifiers() & Qt::AltModifier) isSet = true;
+    else {
+        QMenu m;
+        QAction* g = m.addAction("Get " + name);
+        QAction* s = m.addAction("Set " + name);
+        QAction* a = m.exec(mapToGlobal(e->position().toPoint()));
+        if (!a) return;
+        isSet = a == s;
+        (void)g;
+    }
+    graphScene()->addVariableNode(name, scope, isSet, sp);
+    e->acceptProposedAction();
+}
+
+} // namespace fged

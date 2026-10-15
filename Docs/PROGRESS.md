@@ -31,9 +31,13 @@ Core extras done: Inspect (ValueView tree, globals/frame variables), Intellisens
   Plugins/ExamplePlugin (Counter class, Example.Greet, OnExample event; built to bin/plugins). 19 tests pass.
   Note: plugins link FlowGraphCore statically (same version/compiler as the host required).
 
-## TODO (in order)
-1. Editor (Qt): port FlowGraph visuals (FunctionCallView, LinkView, ScriptableScene) onto the Program model;
-   panels: MyScript (variables/functions/events), Details, palette menu, debug toolbar, log, diagnostics;
-   undo/redo (snapshot), copy/paste, comment boxes, reroute. Apps/Studio main with the dark palette from FGTest.
-   (root CMake skips Editor until Editor/CMakeLists.txt exists)
-2. README and docs.
+Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), GraphScene/NodeItem/LinkItem/CommentItem/
+  GraphView/PalettePopup (reconcile with the compiled graph; link drag, palette, copy/paste, comments, reroute, variable
+  drops), panels (MyScript, Details, Compile Results, Output Log, Debugger), RunController (timer sliced run, breakpoints,
+  stepping, slow motion, link animation), StudioWindow (KDDockWidgets, tabs per graph). FlowGraphEditorTests (offscreen) cover
+  scene / document / run controller logic. README.md documents the use.
+
+## Ideas / not done
+- Details panel: per pin default editing for non-primitive types, node alignment tools, minimap, search in graph.
+- Variable watch editing while paused, hot reload of a running script, save layout of the docks (KDDW LayoutSaver).
+- Plugins link FlowGraphCore statically (works, same version/compiler needed); a shared core would be cleaner.

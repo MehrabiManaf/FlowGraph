@@ -57,7 +57,7 @@ std::string NodeCtx::inString(size_t i) const {
 void NodeCtx::out(size_t i, Value v) {
     size_t idx = static_cast<size_t>(node_->outBase) + i;
     if (i >= node_->dataOut.size()) throw ScriptError("node '" + node_->title + "' has no output " + std::to_string(i));
-    frame_->slots[idx] = std::move(v);
+    frame_->slotValues[idx] = std::move(v);
 }
 void NodeCtx::next(size_t execOut) { action_ = Action::Next; pin_ = execOut; }
 void NodeCtx::end() { action_ = Action::End; }
@@ -132,7 +132,7 @@ std::shared_ptr<Task> Instance::startEvent(const std::string& name, std::vector<
     try {
         for (size_t i = 0; i < en.dataOut.size(); ++i) {
             const CompiledPin& p = en.pins[static_cast<size_t>(en.dataOut[i])];
-            f->slots[static_cast<size_t>(en.outBase) + i] = i < args.size() ? registry().convert(args[i], p.type).deepCopy() : registry().defaultValue(p.type);
+            f->slotValues[static_cast<size_t>(en.outBase) + i] = i < args.size() ? registry().convert(args[i], p.type).deepCopy() : registry().defaultValue(p.type);
         }
     } catch (const ScriptError& e) {
         if (error) *error = e.what();
@@ -218,10 +218,10 @@ Frame* Task::pushFrame(int graphIndex) {
     const CompiledGraph& cg = prog.graphs[static_cast<size_t>(graphIndex)];
     f.graphIndex = graphIndex;
     f.graph = &cg;
-    f.slots.resize(static_cast<size_t>(cg.slotCount));
-    for (size_t i = 0; i < f.slots.size(); ++i) {
+    f.slotValues.resize(static_cast<size_t>(cg.slotCount));
+    for (size_t i = 0; i < f.slotValues.size(); ++i) {
         const TypeDesc* t = cg.slotTypes[i];
-        f.slots[i] = t ? prog.registry->defaultValue(t) : Value();
+        f.slotValues[i] = t ? prog.registry->defaultValue(t) : Value();
     }
     f.stamps.assign(cg.nodes.size(), 0);
     f.epoch = 1;
@@ -397,7 +397,7 @@ Value Task::evalInput(Frame& f, const CompiledNode& n, size_t ordinal) {
     }
     case DataSource::Kind::Slot:
         if (ds.pure) evalPure(f, f.graph->nodes[static_cast<size_t>(ds.node)]);
-        v = f.slots[static_cast<size_t>(ds.slot)];
+        v = f.slotValues[static_cast<size_t>(ds.slot)];
         break;
     case DataSource::Kind::Param: {
         const Cell& c = f.params[static_cast<size_t>(ds.slot)];
@@ -449,11 +449,11 @@ void Task::evalPure(Frame& f, const CompiledNode& n) {
     switch (n.op) {
     case NodeOp::GetVariable: {
         Cell c = cellFor(f, n);
-        f.slots[static_cast<size_t>(n.outBase)] = *c;
+        f.slotValues[static_cast<size_t>(n.outBase)] = *c;
         break;
     }
     case NodeOp::Reroute:
-        f.slots[static_cast<size_t>(n.outBase)] = buf.data[0];
+        f.slotValues[static_cast<size_t>(n.outBase)] = buf.data[0];
         break;
     default:
         if (n.def->run) {
@@ -601,7 +601,7 @@ void Task::callGraph(Frame& f, const CompiledNode& n) {
         nf->pc = entryNode;
         const CompiledNode& en = cg.nodes[static_cast<size_t>(entryNode)];
         for (size_t i = 0; i < en.dataOut.size() && i < values.size(); ++i)
-            nf->slots[static_cast<size_t>(en.outBase) + i] = values[i];
+            nf->slotValues[static_cast<size_t>(en.outBase) + i] = values[i];
     } else {
         nf->params = std::move(cells);
         nf->pc = cg.entry;
@@ -627,7 +627,7 @@ void Task::finishFrame() {
         Frame& caller = *frames_[frames_.size() - 2];
         const CompiledNode& callNode = caller.graph->nodes[static_cast<size_t>(f.callerNode)];
         for (size_t i = 0; i < callNode.dataOut.size() && i < f.results.size(); ++i)
-            caller.slots[static_cast<size_t>(callNode.outBase) + i] = f.results[i];
+            caller.slotValues[static_cast<size_t>(callNode.outBase) + i] = f.results[i];
     }
     popFrame();
 }
@@ -673,14 +673,14 @@ bool Task::pinValue(size_t frameIndex, NodeId node, const std::string& pin, Valu
         size_t ord = static_cast<size_t>(p.ordinal);
         if (p.dir == PinDir::Out) {
             size_t slot = static_cast<size_t>(cn->outBase) + ord;
-            if (slot >= f.slots.size()) return false;
-            out = f.slots[slot];
+            if (slot >= f.slotValues.size()) return false;
+            out = f.slotValues[slot];
             return true;
         }
         const DataSource& ds = cn->inputs[ord];
         switch (ds.kind) {
         case DataSource::Kind::Default: out = p.def; return true;
-        case DataSource::Kind::Slot: out = f.slots[static_cast<size_t>(ds.slot)]; return true;
+        case DataSource::Kind::Slot: out = f.slotValues[static_cast<size_t>(ds.slot)]; return true;
         case DataSource::Kind::Param:
             if (!f.params[static_cast<size_t>(ds.slot)]) return false;
             out = *f.params[static_cast<size_t>(ds.slot)];

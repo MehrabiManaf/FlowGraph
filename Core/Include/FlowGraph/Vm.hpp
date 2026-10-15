@@ -45,7 +45,7 @@ struct Continuation {
 struct Frame {
     int graphIndex = -1;
     const CompiledGraph* graph = nullptr;
-    std::vector<Value> slots;           // outputs of the nodes of this graph
+    std::vector<Value> slotValues;           // outputs of the nodes of this graph
     std::vector<uint32_t> stamps;       // per node: epoch in which a pure node was last evaluated
     uint32_t epoch = 1;
     std::vector<Cell> params;           // by reference parameters alias the caller's variable cell
