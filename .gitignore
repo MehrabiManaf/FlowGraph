@@ -1,0 +1,79 @@
+# ============================================================
+# Qt 6 / CMake / C++
+# ============================================================
+
+# Build directories
+build/
+build-*/
+cmake-build-*/
+out/
+debug/
+release/
+Debug/
+Release/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+Testing/
+
+# Qt generated files
+.qtcreator/
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+.qmake.stash
+.qmake.cache
+
+# Qt Creator
+*.pro.user
+*.pro.user.*
+*.creator.user
+*.creator.user.*
+*.autosave
+*.user
+.qtc_clangd/
+.qtc/
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+
+# Debug symbols
+*.pdb
+*.ilk
+*.dSYM/
+
+# Precompiled headers
+*.gch
+*.pch
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
