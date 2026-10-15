@@ -5,7 +5,11 @@
 #include "Panels/MyScriptPanel.hpp"
 #include "Studio/RunController.hpp"
 
+#include "Graph/GraphView.hpp"
+
 #include <QApplication>
+#include <QMouseEvent>
+#include <QScrollBar>
 #include <QClipboard>
 #include <QElapsedTimer>
 #include <QDir>
@@ -339,6 +343,65 @@ TEST(save_and_load_roundtrip) {
     CHECK_EQ(d2.script().variables.size(), size_t(1));
     CHECK(d2.program()->ok());
     QFile::remove(path);
+}
+
+
+// Simulated mouse interaction on a real view (offscreen).
+struct ViewFixture {
+    fg::Runtime rt;
+    Document doc{rt};
+    GraphScene scene{&doc, "EventGraph"};
+    GraphView view{&scene};
+    ViewFixture() {
+        scene.sync();
+        view.resize(1000, 700);
+        view.show();
+        view.centerOn(150, 50);
+        QCoreApplication::processEvents();
+    }
+    QPoint toView(const QPointF& scenePos) { return view.mapFromScene(scenePos); }
+    QPoint pinPoint(fg::NodeId id, const std::string& pin, fg::PinDir dir) { return toView(scene.nodeItem(id)->pinScenePos(pin, dir)); }
+    void send(QEvent::Type type, QPoint p, Qt::MouseButton button, Qt::MouseButtons buttons) {
+        QMouseEvent e(type, QPointF(p), QPointF(view.viewport()->mapToGlobal(p)), button, buttons, Qt::NoModifier);
+        QApplication::sendEvent(view.viewport(), &e);
+        QCoreApplication::processEvents();
+    }
+    void drag(QPoint from, QPoint to) {
+        send(QEvent::MouseButtonPress, from, Qt::LeftButton, Qt::LeftButton);
+        send(QEvent::MouseMove, (from + to) / 2, Qt::NoButton, Qt::LeftButton);
+        send(QEvent::MouseMove, to, Qt::NoButton, Qt::LeftButton);
+        send(QEvent::MouseButtonRelease, to, Qt::LeftButton, Qt::NoButton);
+    }
+};
+
+TEST(mouse_drag_between_pins_creates_link) {
+    ViewFixture f;
+    auto all = fg::buildPalette(fg::NodeBuildCtx{f.rt.registry(), &f.doc.script(), f.doc.script().findGraph("EventGraph")});
+    fg::NodeId br = f.scene.addNodeFromTemplate(*findTemplate(all, "flow.branch"), QPointF(500, 0));
+    f.scene.sync();
+    QCoreApplication::processEvents();
+    QPoint a = f.pinPoint(2, "Then", fg::PinDir::Out);
+    f.drag(a, f.pinPoint(br, "In", fg::PinDir::In));
+    bool linked = false;
+    for (auto& c : f.doc.graph("EventGraph")->connections) linked |= c.fromNode == 2 && c.toNode == br && c.toPin == "In";
+    CHECK(linked);
+}
+
+TEST(mouse_drag_node_keeps_new_position) {
+    ViewFixture f;
+    NodeItem* n = f.scene.nodeItem(2);
+    QPointF before = n->scenePos();
+    QPoint header = f.toView(n->mapToScene(QPointF(20, 8)));
+    f.drag(header, header + QPoint(120, 80));
+    QCoreApplication::processEvents();
+    f.scene.sync();
+    QPointF after = f.scene.nodeItem(2)->scenePos();
+    CHECK(std::abs(after.x() - before.x()) > 50);
+    CHECK(std::abs(f.doc.graph("EventGraph")->findNode(2)->x - after.x()) < 0.5);
+    // a later structural edit must not move it back
+    f.scene.setPinDefault(2, "String", fg::Value("x"));
+    f.scene.sync();
+    CHECK(std::abs(f.scene.nodeItem(2)->scenePos().x() - after.x()) < 0.5);
 }
 
 int main(int argc, char** argv) {

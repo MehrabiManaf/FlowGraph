@@ -216,6 +216,7 @@ QRectF NodeItem::commentRect() const {
 
 QPainterPath NodeItem::shape() const {
     QPainterPath p;
+    p.setFillRule(Qt::WinFillRule);     // the pin rectangles overlap the body: odd-even filling would punch holes into it
     QRectF body = reroute_ ? QRectF(0, 0, 28, 18) : QRectF(0, 0, titleRect_.width(), bodyBottom_);
     p.addRect(body.united(inputsRect_).united(outputsRect_));
     for (auto* list : {&outExec_, &outData_, &inExec_, &inData_})

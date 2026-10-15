@@ -142,9 +142,13 @@ void GraphScene::sync() {
         if (!item) {
             item = new NodeItem(this, cn.id);
             addItem(item);
-            item->setPos(cn.x, cn.y);
-        } else if (!grabbing && item->pos() != QPointF(cn.x, cn.y)) {
-            item->setPos(cn.x, cn.y);
+            const fg::Node* sn0 = g->findNode(cn.id);
+            item->setPos(sn0 ? QPointF(sn0->x, sn0->y) : QPointF(cn.x, cn.y));
+        } else if (!grabbing) {
+            // positions live in the script (layout edits do not recompile, so the compiled copy can be stale)
+            const fg::Node* sn = g->findNode(cn.id);
+            QPointF want = sn ? QPointF(sn->x, sn->y) : QPointF(cn.x, cn.y);
+            if (item->pos() != want) item->setPos(want);
         }
         bool err = false, warn = false;
         QStringList text;
