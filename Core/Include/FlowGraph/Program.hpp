@@ -102,6 +102,7 @@ struct CompiledGraph {
     std::vector<CompiledParam> inputs, outputs;
     std::vector<CompiledVariable> locals;
     int slotCount = 0;
+    std::vector<const TypeDesc*> slotTypes;   // type of every frame slot (used to initialise frames)
     int entry = -1;                   // function entry node index
     bool hasRefParams = false;
 

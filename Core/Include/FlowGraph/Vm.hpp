@@ -42,18 +42,13 @@ struct Continuation {
     bool loop = false;      // can be unwound by a Break node
 };
 
-struct ParamSlot {
-    Value value;
-    Cell ref;               // when set, the parameter is a view of the caller's variable
-};
-
 struct Frame {
     int graphIndex = -1;
     const CompiledGraph* graph = nullptr;
     std::vector<Value> slots;           // outputs of the nodes of this graph
     std::vector<uint32_t> stamps;       // per node: epoch in which a pure node was last evaluated
     uint32_t epoch = 1;
-    std::vector<ParamSlot> params;
+    std::vector<Cell> params;           // by reference parameters alias the caller's variable cell
     std::vector<Cell> locals;
     std::vector<Continuation> conts;
     std::vector<Value> results;         // function outputs written by Return
@@ -112,6 +107,7 @@ private:
     int64_t state_ = 0;
     Value aux_;
     Action action_ = Action::Default;
+    bool waiting_ = false;
     size_t pin_ = 0;
     double waitSeconds_ = 0;
     std::function<bool(double)> poll_;
@@ -172,14 +168,17 @@ private:
     void popFrame();
     void executeNode(Frame& f, const CompiledNode& n);
     void finishFrame();
-    void continueChain(Frame& f, const CompiledNode& n, NodeCtx& ctx);
+    void follow(Frame& f, const CompiledNode& n, size_t execOut);
     Value evalInput(Frame& f, const CompiledNode& n, size_t ordinal);
     void evalPure(Frame& f, const CompiledNode& n);
     void gatherInputs(Frame& f, const CompiledNode& n, Value* buf);
-    void runNative(Frame& f, const CompiledNode& n, NodeCtx& ctx);
+    void initCtx(NodeCtx& ctx, Frame& f, const CompiledNode& n, Value* in, const Continuation* rc);
     Cell cellFor(Frame& f, const CompiledNode& var);
+    const CompiledNode* originNode(const Frame& f, const CompiledNode& n, size_t ordinal) const;
     void callGraph(Frame& caller, const CompiledNode& n);
     void fail(const std::string& msg, const CompiledNode* at);
+    RunResult makeResult();
+    bool advanceWait(double dt);
 
     Instance* inst_;
     int id_;
@@ -198,6 +197,8 @@ private:
     int pendingNextPin_ = -1;      // exec output to follow when a wait ends
     bool waitingNext_ = false;
     std::weak_ptr<Task> self_;
+    const CompiledNode* active_ = nullptr;   // node being executed / evaluated (error attribution)
+    int evalDepth_ = 0;
 };
 
 // Debugger integration -----------------------------------------------------------------------
@@ -262,7 +263,6 @@ private:
     friend class Task;
     friend class NodeCtx;
     std::shared_ptr<Task> makeTask(std::string name);
-    RunResult finish(const std::shared_ptr<Task>& t, RunResult r);
     void forget(Task* t);
 
     std::shared_ptr<const Program> program_;

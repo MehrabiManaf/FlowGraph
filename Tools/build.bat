@@ -1,10 +1,10 @@
 @echo off
 rem Usage: Tools\build.bat [Debug|Release] [extra cmake --build args]
 setlocal
+set ROOT=%~dp0..
 set CONFIG=%1
 if "%CONFIG%"=="" set CONFIG=Release
 shift
-set ROOT=%~dp0..
 call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" >nul
 set PATH=C:\Qt\Tools\Ninja;C:\Qt\6.9.0\msvc2022_64\bin;%PATH%
 set BUILD=%ROOT%\build\%CONFIG%

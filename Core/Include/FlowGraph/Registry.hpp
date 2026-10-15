@@ -123,7 +123,7 @@ private:
     std::map<std::string, EventDesc*> eventByName_;
     mutable std::map<std::string, std::unique_ptr<NodeDef>> nodes_;
     std::string source_ = "core";
-    mutable std::mutex typeMu_;
+    mutable std::recursive_mutex typeMu_;
     mutable std::atomic<bool> dirty_{true};
 };
 

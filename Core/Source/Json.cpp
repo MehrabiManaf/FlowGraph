@@ -1,7 +1,9 @@
 #include <FlowGraph/Json.hpp>
 
+#include <cctype>
 #include <charconv>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 

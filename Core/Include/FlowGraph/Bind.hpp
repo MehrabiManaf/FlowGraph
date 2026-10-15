@@ -35,14 +35,14 @@ inline constexpr bool IsClassType = std::is_class_v<T> && !std::is_same_v<T, std
 
 // ---------------------------------------------------------------- function traits
 template <class F, class = void> struct FnTraits : FnTraits<decltype(&F::operator())> {};
-#define FG_FN_FREE(NOEXC)                                                                                   \
+#define FG_FN_FREE(NOEXC, UNUSED)                                                                                 \
     template <class R, class... A> struct FnTraits<R (*)(A...) NOEXC, void> {                               \
         using Ret = R;                                                                                      \
         using Args = std::tuple<A...>;                                                                      \
         static constexpr bool isConst = false;                                                              \
     };
-FG_FN_FREE()
-FG_FN_FREE(noexcept)
+FG_FN_FREE(, )
+FG_FN_FREE(noexcept, )
 #define FG_FN_MEM(CV, NOEXC, ISC)                                                                           \
     template <class R, class C, class... A> struct FnTraits<R (C::*)(A...) CV NOEXC, void> {                \
         using Ret = R;                                                                                      \

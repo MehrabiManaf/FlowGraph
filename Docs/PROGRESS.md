@@ -16,17 +16,21 @@ Old bpscript sources for reference: run "git show HEAD:<file>" inside D:\ClaudeP
 - By-ref params alias caller variable Cells; const params checked at compile time.
 - Nodes continue through exec output 0 by default; NodeCtx::next/end/call/breakLoop/wait override.
 
-## Done (headers written, NOT yet compiled)
-Core/Include/FlowGraph: Json, Value, Types, NodeDef, Script, TypeExpr, Registry, Bind, Program, Vm (.hpp)
-Core/Source: Json.cpp, TypeExpr.cpp (check includes <cstdio>, <cctype>)
+## Done (Core compiles; 16 tests pass: Toolsuild.bat Debug, then build\Debugin\FlowGraphTests.exe)
+Core/Include/FlowGraph: Json, Value, Types, NodeDef, Script, TypeExpr, Registry, Bind, Program, Compiler, Vm,
+  Builtins, Plugin, Runtime (.hpp)
+Core/Source: Json, TypeExpr, Value, Types, Registry (types, rules, generated nodes), Script (model + JSON),
+  Compiler (type inference, wiring, const/by-ref checks), Vm (tasks, debugger), Builtins (script nodes, flow, math,
+  strings, containers), Runtime (plugins).
+Tests/Main.cpp: mini runner (loops, functions, by-ref, const, reflection, generics, delay, break, debugger...).
+Script node ids: event.custom(props name), event.call(event), func.entry/return/call(function), var.get/var.set
+  (props name + scope global|local|param), reroute. Generated: fn:/m:/get:/set:/new:/cast:/enum:/event:.
 
 ## TODO (in order)
-1. Core/Source: Value.cpp, Types.cpp (castPtr, isA...), Registry.cpp (types, convert, canConnect, node generation,
-   events), Script.cpp (model + JSON io), Compiler.cpp (+Compiler.hpp: compile(), buildNodePins()), Vm.cpp,
-   Builtins.cpp (flow, math generics, string, containers, variables, print, delay), Runtime.hpp/.cpp (facade, plugins),
-   Inspect, Intellisense (palette query), Plugin.hpp.
-2. Core/CMakeLists.txt, Tests/ (mini test runner), Examples/, Plugins/ExamplePlugin.
-3. Editor (Qt): port FlowGraph visuals (FunctionCallView, LinkView, ScriptableScene) onto the Program model;
+1. Core extras: Inspect (value pretty printing for the debugger), Intellisense (palette query: buildPalette(ctx),
+   filter by dragged pin type) using NodeDef::expand, Examples/ (sample .flow scripts), Plugins/ExamplePlugin.
+2. Editor (Qt): port FlowGraph visuals (FunctionCallView, LinkView, ScriptableScene) onto the Program model;
    panels: MyScript (variables/functions/events), Details, palette menu, debug toolbar, log, diagnostics;
    undo/redo (snapshot), copy/paste, comment boxes, reroute. Apps/Studio main with the dark palette from FGTest.
-4. README and docs.
+   (root CMake skips Editor/Examples/Plugins until their CMakeLists.txt exist)
+3. README and docs.
