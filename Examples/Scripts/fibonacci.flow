@@ -1,0 +1,225 @@
+{
+  "format": "flowgraph",
+  "version": 1,
+  "name": "Fibonacci",
+  "doc": "A recursive function.",
+  "variables": [],
+  "graphs": [
+    {
+      "name": "Fib",
+      "kind": "function",
+      "doc": "Returns the N-th Fibonacci number.",
+      "inputs": [
+        {
+          "name": "N",
+          "type": "int"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Result",
+          "type": "int"
+        }
+      ],
+      "nodes": [
+        {
+          "id": 1,
+          "def": "func.entry",
+          "x": 0.0,
+          "y": 0.0
+        },
+        {
+          "id": 2,
+          "def": "func.return",
+          "x": 1100.0,
+          "y": 0.0
+        },
+        {
+          "id": 3,
+          "def": "cmp.lt",
+          "x": 250.0,
+          "y": 120.0,
+          "defaults": {
+            "B": 2
+          }
+        },
+        {
+          "id": 4,
+          "def": "flow.branch",
+          "x": 450.0,
+          "y": 0.0
+        },
+        {
+          "id": 5,
+          "def": "func.return",
+          "x": 700.0,
+          "y": -120.0
+        },
+        {
+          "id": 6,
+          "def": "math.sub",
+          "x": 450.0,
+          "y": 260.0,
+          "defaults": {
+            "B": 1
+          }
+        },
+        {
+          "id": 7,
+          "def": "math.sub",
+          "x": 450.0,
+          "y": 400.0,
+          "defaults": {
+            "B": 2
+          }
+        },
+        {
+          "id": 8,
+          "def": "func.call",
+          "x": 700.0,
+          "y": 120.0,
+          "props": {
+            "function": "Fib"
+          }
+        },
+        {
+          "id": 9,
+          "def": "func.call",
+          "x": 900.0,
+          "y": 120.0,
+          "props": {
+            "function": "Fib"
+          }
+        },
+        {
+          "id": 10,
+          "def": "math.add",
+          "x": 900.0,
+          "y": 330.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [4, "In"]
+        },
+        {
+          "from": [1, "N"],
+          "to": [3, "A"]
+        },
+        {
+          "from": [3, "Result"],
+          "to": [4, "Condition"]
+        },
+        {
+          "from": [4, "True"],
+          "to": [5, "In"]
+        },
+        {
+          "from": [1, "N"],
+          "to": [5, "Result"]
+        },
+        {
+          "from": [4, "False"],
+          "to": [8, "In"]
+        },
+        {
+          "from": [1, "N"],
+          "to": [6, "A"]
+        },
+        {
+          "from": [1, "N"],
+          "to": [7, "A"]
+        },
+        {
+          "from": [6, "Result"],
+          "to": [8, "N"]
+        },
+        {
+          "from": [8, "Then"],
+          "to": [9, "In"]
+        },
+        {
+          "from": [7, "Result"],
+          "to": [9, "N"]
+        },
+        {
+          "from": [9, "Then"],
+          "to": [2, "In"]
+        },
+        {
+          "from": [8, "Result"],
+          "to": [10, "A"]
+        },
+        {
+          "from": [9, "Result"],
+          "to": [10, "B"]
+        },
+        {
+          "from": [10, "Result"],
+          "to": [2, "Result"]
+        }
+      ]
+    },
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event.custom",
+          "x": 0.0,
+          "y": 0.0,
+          "props": {
+            "name": "Main"
+          }
+        },
+        {
+          "id": 2,
+          "def": "func.call",
+          "x": 250.0,
+          "y": 0.0,
+          "props": {
+            "function": "Fib"
+          },
+          "defaults": {
+            "N": 15
+          }
+        },
+        {
+          "id": 3,
+          "def": "fn:String.Concat",
+          "x": 500.0,
+          "y": 80.0,
+          "defaults": {
+            "A": "Fib(15) = "
+          }
+        },
+        {
+          "id": 4,
+          "def": "util.print",
+          "x": 720.0,
+          "y": 0.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [2, "In"]
+        },
+        {
+          "from": [2, "Then"],
+          "to": [4, "In"]
+        },
+        {
+          "from": [2, "Result"],
+          "to": [3, "B"]
+        },
+        {
+          "from": [3, "Result"],
+          "to": [4, "String"]
+        }
+      ]
+    }
+  ]
+}

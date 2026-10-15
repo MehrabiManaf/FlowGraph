@@ -2,6 +2,7 @@
 #include <FlowGraph/Runtime.hpp>
 
 #include <cstdio>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
@@ -458,7 +459,112 @@ TEST(type_mismatch_is_a_compile_error) {
     (void)ev;
 }
 
-int main() {
+static std::string g_exeDir;
+
+TEST(palette_search_and_pin_filter) {
+    Runtime rt;
+    registerSample(rt);
+    Script s;
+    s.variables.push_back({"Score", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeBuildCtx ctx{rt.registry(), &s, &g};
+    auto all = buildPalette(ctx);
+    CHECK(!all.empty());
+    auto hits = searchPalette(all, "branch");
+    CHECK(!hits.empty() && hits[0].title == "Branch");
+    auto vars = searchPalette(all, "get score");
+    CHECK(!vars.empty() && vars[0].props["name"] == "Score");
+    // dragging an int output: Add must be offered (generic), Branch (bool condition accepts int) too, Print String as well
+    PinFilter f;
+    f.kind = PinKind::Data; f.dir = PinDir::Out; f.type = rt.registry().tInt();
+    auto fit = filterPalette(rt.registry(), all, f);
+    bool hasAdd = false, hasForeach = false;
+    for (auto& t : fit) { hasAdd |= t.defId == "math.add"; hasForeach |= t.defId == "flow.foreach"; }
+    CHECK(hasAdd);
+    CHECK(!hasForeach);                       // needs an array
+    // dragging an exec output: only nodes with an exec input
+    PinFilter e; e.kind = PinKind::Exec; e.dir = PinDir::Out;
+    for (auto& t : filterPalette(rt.registry(), all, e)) CHECK(t.defId != "math.add");
+    // events are not creatable inside a function graph
+    Graph& fn = s.addFunction("F");
+    NodeBuildCtx fctx{rt.registry(), &s, &fn};
+    for (auto& t : buildPalette(fctx)) CHECK(t.defId != "event:Tick" && t.defId != "event.custom");
+    // instantiate applies properties
+    Node& n = instantiate(g, vars[0], 5, 6);
+    CHECK_EQ(n.def, std::string("var.get"));
+    CHECK_EQ(n.prop("name"), std::string("Score"));
+}
+
+TEST(inspect_values_and_frames) {
+    Runtime rt;
+    registerSample(rt);
+    auto dog = std::make_shared<Dog>();
+    dog->name = "Rex";
+    Value v = rt.registry().wrap(dog);
+    auto view = inspect(rt.registry(), v);
+    CHECK_EQ(view.type, std::string("Dog"));
+    bool foundName = false;
+    for (auto& c : view.children) if (c.name == "Name") { foundName = true; CHECK_EQ(c.text, std::string("\"Rex\"")); }
+    CHECK(foundName);
+    auto arr = rt.registry().makeArray(rt.registry().tInt());
+    arr.arrayPtr()->items = {Value(1), Value(2)};
+    auto av = inspect(rt.registry(), arr);
+    CHECK_EQ(av.text, std::string("array[2]"));
+    CHECK_EQ(av.children.size(), size_t(2));
+    auto ev = inspect(rt.registry(), Value(1), rt.registry().findType("Mood"));
+    CHECK_EQ(ev.text, std::string("Sad"));
+
+    Script s;
+    s.variables.push_back({"G", "int", Value(3), "", ""});
+    Graph& f = s.addFunction("F", {{"P", "int", false, false, Value()}});
+    f.locals.push_back({"L", "string", Value("x"), "", ""});
+    f.connections.clear();
+    NodeId entry = f.nodes[0].id;
+    NodeId d = f.addNode("flow.delay").id;
+    link(f, entry, "Then", d, "In");
+    auto prog = build(rt, s);
+    Instance inst(prog);
+    auto g = inspectGlobals(inst);
+    CHECK_EQ(g.size(), size_t(1));
+    CHECK_EQ(g[0].value.text, std::string("3"));
+    auto r = inst.callFunction("F", {Value(9)});
+    CHECK(r.waiting());
+    auto fv = inspectFrame(*r.task, 0);
+    CHECK_EQ(fv.size(), size_t(2));
+    CHECK_EQ(fv[0].value.name, std::string("P"));
+    CHECK_EQ(fv[0].value.text, std::string("9"));
+    CHECK_EQ(fv[1].value.text, std::string("\"x\""));
+}
+
+TEST(plugin_loading) {
+    std::string path = g_exeDir + "/plugins/ExamplePlugin.dll";
+    if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
+    Runtime rt;
+    std::string err;
+    CHECK(rt.loadPlugin(path, &err));
+    if (!err.empty()) std::printf("  %s\n", err.c_str());
+    CHECK(rt.registry().findType("Counter") != nullptr);
+    CHECK(rt.registry().findNode("m:Counter.Increment") != nullptr);
+    CHECK_EQ(rt.registry().findNode("fn:Example.Greet")->source, std::string("ExamplePlugin"));
+    Script s;
+    s.variables.push_back({"Msg", "string", Value(""), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:OnExample").id;
+    NodeId greet = g.addNode("fn:Example.Greet").id;
+    NodeId set = g.addNode("var.set").id;
+    g.findNode(set)->props = {{"name", "Msg"}, {"scope", "global"}};
+    link(g, ev, "Then", set, "In");
+    link(g, ev, "Message", greet, "Name");
+    link(g, greet, "Result", set, "Value");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK(inst.callEvent("OnExample", {Value("plugin")}).ok);
+    CHECK_EQ(inst.getVariable("Msg").toString(), std::string("Hello, plugin!"));
+}
+
+int main(int argc, char** argv) {
+    g_exeDir = std::filesystem::path(argv[0]).parent_path().string();
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     for (auto& t : tests()) {
         int before = g_failures;

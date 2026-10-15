@@ -1,0 +1,91 @@
+{
+  "format": "flowgraph",
+  "version": 1,
+  "name": "Hello",
+  "doc": "Prints a greeting and counts to five.",
+  "variables": [],
+  "graphs": [
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event.custom",
+          "x": 0.0,
+          "y": 0.0,
+          "props": {
+            "name": "Main"
+          }
+        },
+        {
+          "id": 2,
+          "def": "util.print",
+          "x": 250.0,
+          "y": 0.0,
+          "defaults": {
+            "String": "Hello, FlowGraph!"
+          }
+        },
+        {
+          "id": 3,
+          "def": "flow.for",
+          "x": 500.0,
+          "y": 0.0,
+          "defaults": {
+            "First": 1,
+            "Last": 5
+          }
+        },
+        {
+          "id": 4,
+          "def": "fn:String.Concat",
+          "x": 760.0,
+          "y": 100.0,
+          "defaults": {
+            "A": "Count: "
+          }
+        },
+        {
+          "id": 5,
+          "def": "util.print",
+          "x": 980.0,
+          "y": 40.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [2, "In"]
+        },
+        {
+          "from": [2, "Then"],
+          "to": [3, "In"]
+        },
+        {
+          "from": [3, "Loop Body"],
+          "to": [5, "In"]
+        },
+        {
+          "from": [3, "Index"],
+          "to": [4, "B"]
+        },
+        {
+          "from": [4, "Result"],
+          "to": [5, "String"]
+        }
+      ],
+      "comments": [
+        {
+          "id": 1,
+          "text": "Loop",
+          "x": 480.0,
+          "y": -40.0,
+          "w": 700.0,
+          "h": 260.0,
+          "color": 4878245
+        }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,8 @@
 // scripts and creates instances.
 #include <FlowGraph/Builtins.hpp>
 #include <FlowGraph/Compiler.hpp>
+#include <FlowGraph/Inspect.hpp>
+#include <FlowGraph/Intellisense.hpp>
 #include <FlowGraph/Plugin.hpp>
 #include <FlowGraph/Vm.hpp>
 

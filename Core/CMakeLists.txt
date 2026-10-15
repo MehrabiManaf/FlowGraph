@@ -8,6 +8,8 @@ add_library(FlowGraphCore STATIC
     Source/Compiler.cpp
     Source/Vm.cpp
     Source/Builtins.cpp
+    Source/Inspect.cpp
+    Source/Intellisense.cpp
     Source/Runtime.cpp)
 target_include_directories(FlowGraphCore PUBLIC Include)
 target_compile_features(FlowGraphCore PUBLIC cxx_std_20)

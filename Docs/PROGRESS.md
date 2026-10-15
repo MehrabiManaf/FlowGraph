@@ -26,11 +26,14 @@ Tests/Main.cpp: mini runner (loops, functions, by-ref, const, reflection, generi
 Script node ids: event.custom(props name), event.call(event), func.entry/return/call(function), var.get/var.set
   (props name + scope global|local|param), reroute. Generated: fn:/m:/get:/set:/new:/cast:/enum:/event:.
 
+Core extras done: Inspect (ValueView tree, globals/frame variables), Intellisense (buildPalette, filterPalette by
+  dragged pin, searchPalette, instantiate), Examples/ (fgrun runner, fgexamples generator -> Examples/Scripts/*.flow),
+  Plugins/ExamplePlugin (Counter class, Example.Greet, OnExample event; built to bin/plugins). 19 tests pass.
+  Note: plugins link FlowGraphCore statically (same version/compiler as the host required).
+
 ## TODO (in order)
-1. Core extras: Inspect (value pretty printing for the debugger), Intellisense (palette query: buildPalette(ctx),
-   filter by dragged pin type) using NodeDef::expand, Examples/ (sample .flow scripts), Plugins/ExamplePlugin.
-2. Editor (Qt): port FlowGraph visuals (FunctionCallView, LinkView, ScriptableScene) onto the Program model;
+1. Editor (Qt): port FlowGraph visuals (FunctionCallView, LinkView, ScriptableScene) onto the Program model;
    panels: MyScript (variables/functions/events), Details, palette menu, debug toolbar, log, diagnostics;
    undo/redo (snapshot), copy/paste, comment boxes, reroute. Apps/Studio main with the dark palette from FGTest.
-   (root CMake skips Editor/Examples/Plugins until their CMakeLists.txt exist)
-3. README and docs.
+   (root CMake skips Editor until Editor/CMakeLists.txt exists)
+2. README and docs.

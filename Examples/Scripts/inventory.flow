@@ -1,0 +1,308 @@
+{
+  "format": "flowgraph",
+  "version": 1,
+  "name": "Inventory",
+  "doc": "Arrays, maps, by-reference parameters and loops.",
+  "variables": [
+    {
+      "name": "Items",
+      "type": "array<string>",
+      "category": "Inventory",
+      "doc": "Distinct item names"
+    },
+    {
+      "name": "Stock",
+      "type": "map<string,int>",
+      "category": "Inventory",
+      "doc": "Item -> amount"
+    }
+  ],
+  "graphs": [
+    {
+      "name": "AddUnique",
+      "kind": "function",
+      "inputs": [
+        {
+          "name": "List",
+          "type": "array<string>",
+          "byRef": true
+        },
+        {
+          "name": "Name",
+          "type": "string"
+        }
+      ],
+      "outputs": [],
+      "nodes": [
+        {
+          "id": 1,
+          "def": "func.entry",
+          "x": 0.0,
+          "y": 0.0
+        },
+        {
+          "id": 3,
+          "def": "var.get",
+          "x": 250.0,
+          "y": 160.0,
+          "props": {
+            "name": "List",
+            "scope": "param"
+          }
+        },
+        {
+          "id": 4,
+          "def": "array.contains",
+          "x": 450.0,
+          "y": 160.0
+        },
+        {
+          "id": 5,
+          "def": "flow.branch",
+          "x": 700.0,
+          "y": 0.0
+        },
+        {
+          "id": 6,
+          "def": "array.add",
+          "x": 950.0,
+          "y": 60.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [5, "In"]
+        },
+        {
+          "from": [3, "Value"],
+          "to": [4, "Array"]
+        },
+        {
+          "from": [1, "Name"],
+          "to": [4, "Item"]
+        },
+        {
+          "from": [4, "Contains"],
+          "to": [5, "Condition"]
+        },
+        {
+          "from": [5, "False"],
+          "to": [6, "In"]
+        },
+        {
+          "from": [3, "Value"],
+          "to": [6, "Array"]
+        },
+        {
+          "from": [1, "Name"],
+          "to": [6, "Item"]
+        }
+      ]
+    },
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event.custom",
+          "x": 0.0,
+          "y": 0.0,
+          "props": {
+            "name": "Main"
+          }
+        },
+        {
+          "id": 2,
+          "def": "var.get",
+          "x": 250.0,
+          "y": 300.0,
+          "props": {
+            "name": "Items",
+            "scope": "global"
+          }
+        },
+        {
+          "id": 3,
+          "def": "var.get",
+          "x": 250.0,
+          "y": 460.0,
+          "props": {
+            "name": "Stock",
+            "scope": "global"
+          }
+        },
+        {
+          "id": 4,
+          "def": "func.call",
+          "x": 250.0,
+          "y": 0.0,
+          "props": {
+            "function": "AddUnique"
+          },
+          "defaults": {
+            "Name": "apple"
+          }
+        },
+        {
+          "id": 5,
+          "def": "func.call",
+          "x": 480.0,
+          "y": 0.0,
+          "props": {
+            "function": "AddUnique"
+          },
+          "defaults": {
+            "Name": "pear"
+          }
+        },
+        {
+          "id": 6,
+          "def": "func.call",
+          "x": 710.0,
+          "y": 0.0,
+          "props": {
+            "function": "AddUnique"
+          },
+          "defaults": {
+            "Name": "apple"
+          }
+        },
+        {
+          "id": 7,
+          "def": "func.call",
+          "x": 940.0,
+          "y": 0.0,
+          "props": {
+            "function": "AddUnique"
+          },
+          "defaults": {
+            "Name": "fig"
+          }
+        },
+        {
+          "id": 8,
+          "def": "map.set",
+          "x": 1170.0,
+          "y": 0.0,
+          "defaults": {
+            "Key": "apple",
+            "Value": 7
+          }
+        },
+        {
+          "id": 9,
+          "def": "flow.foreach",
+          "x": 1400.0,
+          "y": 0.0
+        },
+        {
+          "id": 10,
+          "def": "map.get",
+          "x": 1400.0,
+          "y": 300.0
+        },
+        {
+          "id": 11,
+          "def": "fn:String.Concat",
+          "x": 1670.0,
+          "y": 220.0,
+          "defaults": {
+            "B": " = "
+          }
+        },
+        {
+          "id": 12,
+          "def": "fn:String.Concat",
+          "x": 1910.0,
+          "y": 220.0
+        },
+        {
+          "id": 13,
+          "def": "util.print",
+          "x": 2150.0,
+          "y": 0.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [4, "In"]
+        },
+        {
+          "from": [2, "Value"],
+          "to": [4, "List"]
+        },
+        {
+          "from": [4, "Then"],
+          "to": [5, "In"]
+        },
+        {
+          "from": [2, "Value"],
+          "to": [5, "List"]
+        },
+        {
+          "from": [5, "Then"],
+          "to": [6, "In"]
+        },
+        {
+          "from": [2, "Value"],
+          "to": [6, "List"]
+        },
+        {
+          "from": [6, "Then"],
+          "to": [7, "In"]
+        },
+        {
+          "from": [2, "Value"],
+          "to": [7, "List"]
+        },
+        {
+          "from": [7, "Then"],
+          "to": [8, "In"]
+        },
+        {
+          "from": [3, "Value"],
+          "to": [8, "Map"]
+        },
+        {
+          "from": [8, "Then"],
+          "to": [9, "In"]
+        },
+        {
+          "from": [2, "Value"],
+          "to": [9, "Array"]
+        },
+        {
+          "from": [3, "Value"],
+          "to": [10, "Map"]
+        },
+        {
+          "from": [9, "Element"],
+          "to": [10, "Key"]
+        },
+        {
+          "from": [9, "Element"],
+          "to": [11, "A"]
+        },
+        {
+          "from": [10, "Value"],
+          "to": [12, "B"]
+        },
+        {
+          "from": [11, "Result"],
+          "to": [12, "A"]
+        },
+        {
+          "from": [12, "Result"],
+          "to": [13, "String"]
+        },
+        {
+          "from": [9, "Loop Body"],
+          "to": [13, "In"]
+        }
+      ]
+    }
+  ]
+}
