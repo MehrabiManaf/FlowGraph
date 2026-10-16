@@ -244,9 +244,9 @@ void registerFlow(Registry& r) {
     {
         NodeDef d = flowNode("flow.for", "For Loop", "Flow");
         d.keywords = "loop repeat for";
-        d.breakPin = 1;
+        d.breakPin = 0;                                    // Break continues with "Completed"
         d.doc = "Runs the loop body for First <= Index < Last (Last itself is not visited).";
-        d.pins = {execIn(), dataIn("First", "int", Value(0)), dataIn("Last", "int", Value(10)), execOut("Loop Body"), execOut("Completed"),
+        d.pins = {execIn(), dataIn("First", "int", Value(0)), dataIn("Last", "int", Value(10)), execOut("Completed"), execOut("Loop Body"),
                   dataOut("Index", "int")};
         d.pins[1].doc = "First index (included)";
         d.pins[2].doc = "Last index (excluded): the loop runs while Index < Last";
@@ -255,17 +255,17 @@ void registerFlow(Registry& r) {
             if (i < c.inInt(1)) {
                 c.state() = i;
                 c.out(0, Value(i));
-                c.call(0);
-            } else c.next(1);
+                c.call(1);
+            } else c.next(0);
         };
         r.addNode(std::move(d));
     }
     {
         NodeDef d = flowNode("flow.foreach", "For Each", "Flow");
         d.keywords = "loop array iterate";
-        d.breakPin = 1;
+        d.breakPin = 0;
         d.typeParams.push_back({"T", {}, "int"});
-        d.pins = {execIn(), dataIn("Array", "array<T>"), execOut("Loop Body"), execOut("Completed"), dataOut("Element", "T"), dataOut("Index", "int")};
+        d.pins = {execIn(), dataIn("Array", "array<T>"), execOut("Completed"), execOut("Loop Body"), dataOut("Element", "T"), dataOut("Index", "int")};
         d.run = [](NodeCtx& c) {
             int64_t i = c.resumed() ? c.state() + 1 : 0;
             auto* a = c.in(0).arrayPtr();
@@ -273,19 +273,19 @@ void registerFlow(Registry& r) {
                 c.state() = i;
                 c.out(0, a->items[static_cast<size_t>(i)]);
                 c.out(1, Value(i));
-                c.call(0);
-            } else c.next(1);
+                c.call(1);
+            } else c.next(0);
         };
         r.addNode(std::move(d));
     }
     {
         NodeDef d = flowNode("flow.while", "While Loop", "Flow");
         d.keywords = "loop while";
-        d.breakPin = 1;
-        d.pins = {execIn(), dataIn("Condition", "bool", Value(false)), execOut("Loop Body"), execOut("Completed")};
+        d.breakPin = 0;
+        d.pins = {execIn(), dataIn("Condition", "bool", Value(false)), execOut("Completed"), execOut("Loop Body")};
         d.run = [](NodeCtx& c) {
-            if (c.inBool(0)) c.call(0);
-            else c.next(1);
+            if (c.inBool(0)) c.call(1);
+            else c.next(0);
         };
         r.addNode(std::move(d));
     }
