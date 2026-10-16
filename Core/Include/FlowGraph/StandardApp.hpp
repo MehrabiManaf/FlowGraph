@@ -4,6 +4,7 @@
 // Exit node. Any script that only uses Main runs in both programs.
 #include <FlowGraph/Json.hpp>
 #include <FlowGraph/Registry.hpp>
+#include <FlowGraph/Script.hpp>
 #include <FlowGraph/Vm.hpp>
 
 #include <map>
@@ -13,6 +14,9 @@
 namespace fg::standard {
 
 inline constexpr const char* kMainEvent = "Main";
+
+// A new script of a standard application: one event graph that handles Main and prints a greeting.
+void createMainTemplate(Script& script, const Registry& reg);
 
 // Declares the event Main(Args: array<string>) and the "Exit" node (category Application).
 void registerStandardApp(Registry& reg);

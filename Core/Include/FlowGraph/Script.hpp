@@ -43,7 +43,6 @@ public:
     std::string comment;                           // text bubble shown above the node
     std::map<std::string, std::string> props;      // node specific settings (variable, function, event name, ...)
     std::map<std::string, std::string> typeArgs;   // resolved type parameters ("T" -> "float")
-    std::vector<ParamDecl> params;                 // signature of custom events
     std::map<std::string, Value> defaults;         // literal values of unconnected input pins (by pin name)
 
     std::string prop(const std::string& k, const std::string& d = "") const {
@@ -116,15 +115,9 @@ public:
     std::string uniqueGraphName(const std::string& base) const;
     std::string uniqueVariableName(const std::string& base) const;
 
-    // Names of custom events defined by event nodes (with their signature).
-    struct EventInfo { std::string name; std::string graph; NodeId node; std::vector<ParamDecl> params; };
-    std::vector<EventInfo> customEvents() const;
-    const EventInfo* findCustomEvent(const std::string& n, std::vector<EventInfo>& storage) const;
-
     // Structural rename helpers: they also update every node that refers to the old name.
     void renameVariable(const std::string& from, const std::string& to);
     void renameFunction(const std::string& from, const std::string& to);
-    void renameEvent(const std::string& from, const std::string& to);
     void renameLocal(const std::string& graph, const std::string& from, const std::string& to);
 
     // ---- serialization (JSON, extension .flow)

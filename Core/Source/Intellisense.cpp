@@ -22,6 +22,12 @@ std::vector<NodeTemplate> buildPalette(const NodeBuildCtx& ctx) {
             if (def->eventGraphOnly && ctx.graph->kind != GraphKind::Event) continue;
             if (def->functionGraphOnly && ctx.graph->kind != GraphKind::Function) continue;
         }
+        if (def->op == NodeOp::Event && ctx.script) {       // an event has one handler: offer only the events that have none yet
+            bool handled = false;
+            for (auto& g : ctx.script->graphs)
+                for (auto& n : g.nodes) handled |= n.def == def->id;
+            if (handled) continue;
+        }
         size_t first = out.size();
         if (def->expand) {
             def->expand(ctx, out);

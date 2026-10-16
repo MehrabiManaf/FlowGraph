@@ -1,5 +1,7 @@
 #include <FlowGraph/StandardApp.hpp>
 
+#include <FlowGraph/Compatibility.hpp>
+
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -23,6 +25,14 @@ void registerStandardApp(Registry& reg) {
     d.run = [](NodeCtx& c) { c.exit(static_cast<int>(c.inInt(0))); };
     reg.addNode(std::move(d));
     reg.endSource();
+}
+
+void createMainTemplate(Script& script, const Registry& reg) {
+    Graph& g = script.addEventGraph("EventGraph");
+    NodeId ev = g.addNode(std::string("event:") + kMainEvent, 0, 0).id;
+    NodeId pr = g.addNode("util.print", 300, 0).id;
+    g.connections.push_back({ev, "Then", pr, "In"});
+    stampHostEvents(script, reg);
 }
 
 Value argsValue(const Registry& reg, const std::vector<std::string>& args) {

@@ -27,16 +27,12 @@ void Document::refresh() {
     emit changed(true);
 }
 
-void Document::newScript() {
+void Document::newScript(const std::function<void(fg::Script&)>& init) {
     script_ = fg::Script();
     script_.name = "Untitled";
-    script_.addEventGraph("EventGraph");
-    {
-        fg::Graph& g = script_.graphs.back();
-        g.addNode("event.custom", 0, 0).props["name"] = "Main";
-        g.addNode("util.print", 300, 0);
-        g.connections.push_back({1, "Then", 2, "In"});
-    }
+    if (init) init(script_);
+    else script_.addEventGraph("EventGraph");
+    fg::stampHostEvents(script_, registry());
     path_.clear();
     undo_.clear(); redo_.clear(); undoLabels_.clear(); redoLabels_.clear();
     debugger_.clearBreakpoints();

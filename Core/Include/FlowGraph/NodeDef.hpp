@@ -69,11 +69,10 @@ enum class NodeStyle : uint8_t { Function, Pure, Event, Flow, Variable, Macro, C
 // Special behaviour implemented by the interpreter itself.
 enum class NodeOp : uint8_t {
     Native,         // def.run
-    Event,          // entry point of an event graph chain
+    Event,          // handler of a host event: the entry point of an event graph chain
     FunctionEntry,  // entry point of a function graph
     Return,         // leaves a function graph
     CallFunction,   // calls a function graph of the script
-    CallEvent,      // calls a custom event of the script
     GetVariable,
     SetVariable,
     Reroute,        // editor helper; passes its input through

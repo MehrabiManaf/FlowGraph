@@ -16,6 +16,7 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
 #include <QMouseEvent>
 #include <QScrollBar>
 #include <QClipboard>
@@ -70,11 +71,19 @@ static const fg::NodeTemplate* findTemplate(const std::vector<fg::NodeTemplate>&
     return nullptr;
 }
 
+// The application of the editor tests is a standard application: it raises Main and a new script handles it.
+struct StandardRuntime : fg::Runtime {
+    StandardRuntime() { fg::standard::registerStandardApp(registry()); }
+};
+
 struct Fixture {
-    fg::Runtime rt;
+    StandardRuntime rt;
     Document doc{rt};
     GraphScene scene{&doc, "EventGraph"};
-    Fixture() { scene.sync(); }
+    Fixture() {
+        doc.newScript([&](fg::Script& s) { fg::standard::createMainTemplate(s, rt.registry()); });
+        scene.sync();
+    }
     std::vector<fg::NodeTemplate> palette() {
         const fg::Script& s = doc.script();
         fg::NodeBuildCtx ctx{rt.registry(), &s, s.findGraph("EventGraph")};
@@ -345,7 +354,7 @@ TEST(save_and_load_roundtrip) {
     QString err;
     CHECK(f.doc.save(path, &err));
     CHECK(!f.doc.isDirty());
-    fg::Runtime rt2;
+    StandardRuntime rt2;
     Document d2(rt2);
     CHECK(d2.load(path, &err));
     CHECK_EQ(d2.script().variables.size(), size_t(1));
@@ -356,11 +365,12 @@ TEST(save_and_load_roundtrip) {
 
 // Simulated mouse interaction on a real view (offscreen).
 struct ViewFixture {
-    fg::Runtime rt;
+    StandardRuntime rt;
     Document doc{rt};
     GraphScene scene{&doc, "EventGraph"};
     GraphView view{&scene};
     ViewFixture() {
+        doc.newScript([&](fg::Script& s) { fg::standard::createMainTemplate(s, rt.registry()); });
         scene.sync();
         view.resize(1000, 700);
         view.show();
@@ -418,10 +428,11 @@ struct TestHost : fged::EditorHost {
     fg::Runtime& rt;
     explicit TestHost(fg::Runtime& r) : rt(r) {}
     fg::Runtime& runtime() override { return rt; }
+    void initializeNewScript(fg::Script& s) override { fg::standard::createMainTemplate(s, rt.registry()); }
 };
 
 struct StudioFixture {
-    fg::Runtime rt;
+    StandardRuntime rt;
     TestHost host{rt};
     fged::ScriptEditor editor{host};
     ScriptEditorWindow& win = *static_cast<ScriptEditorWindow*>(editor.window());
@@ -479,6 +490,52 @@ TEST(studio_window_pin_drag_creates_link) {
     bool linked = false;
     for (auto& c : f.win.document()->graph(sc->graphName())->connections) linked |= c.fromNode == 2 && c.toNode == br && c.toPin == "In";
     CHECK(linked);
+}
+
+TEST(event_list_shows_the_events_of_the_application) {
+    Fixture f;
+    f.rt.registry().addEvent("Tick", {{"DeltaTime", "float"}});
+    f.doc.refresh();
+    MyScriptPanel panel(&f.doc);
+    QCoreApplication::processEvents();
+    auto trees = panel.findChildren<QTreeWidget*>();
+    CHECK(!trees.isEmpty());
+    QTreeWidget* events = trees.front();               // the first section is "Event Graphs"
+    QTreeWidgetItem *main = nullptr, *tick = nullptr;
+    for (QTreeWidgetItemIterator it(events); *it; ++it) {
+        if ((*it)->text(0) == "Main") main = *it;
+        if ((*it)->text(0) == "Tick") tick = *it;
+    }
+    CHECK(main && tick);                               // events are listed whether the script handles them or not
+    if (!main || !tick) return;
+    CHECK(!(main->flags() & Qt::ItemIsEditable));      // ... and cannot be renamed
+    CHECK(tick->text(1).contains("not handled"));
+    CHECK(!main->text(1).contains("not handled"));
+    // double click on an event without handler creates the handler
+    Q_EMIT events->itemDoubleClicked(tick, 0);
+    bool handled = false;
+    for (auto& n : f.graph().nodes) handled |= n.def == "event:Tick";
+    CHECK(handled);
+    CHECK(f.doc.program()->ok());
+    // the new node recorded the signature of the event
+    for (auto& n : f.graph().nodes)
+        if (n.def == "event:Tick") CHECK_EQ(n.prop("sig"), std::string("(DeltaTime: float)"));
+    // palette: both events are handled now, neither is offered again
+    for (auto& t : fg::buildPalette(fg::NodeBuildCtx{f.rt.registry(), &f.doc.script(), f.doc.script().findGraph("EventGraph")}))
+        CHECK(t.defId != "event:Main" && t.defId != "event:Tick");
+}
+
+TEST(copying_nodes_never_duplicates_an_event_handler) {
+    Fixture f;
+    f.scene.clearSelection();
+    f.scene.nodeItem(1)->setSelected(true);            // the Main handler
+    f.scene.nodeItem(2)->setSelected(true);
+    f.scene.copySelected();
+    f.scene.paste(QPointF(0, 400));
+    int handlers = 0;
+    for (auto& n : f.graph().nodes) handlers += n.def == "event:Main";
+    CHECK_EQ(handlers, 1);
+    CHECK(f.doc.program()->ok());
 }
 
 TEST(backspace_in_pin_editor_does_not_delete_the_node) {

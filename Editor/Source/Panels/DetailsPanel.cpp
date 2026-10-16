@@ -1,6 +1,8 @@
 #include "DetailsPanel.hpp"
 #include "../Graph/Style.hpp"
 #include "../Studio/RunController.hpp"
+
+#include <FlowGraph/Compatibility.hpp>
 #include "TypeEdit.hpp"
 #include "TypeSpec.hpp"
 
@@ -35,9 +37,8 @@ QLabel* dim(const QString& t) {
     return l;
 }
 
-// After a parameter of a function / event was renamed, the pins of the nodes that use it must follow.
-void renamePins(fg::Script& s, const std::string& graphName, bool isFunction, bool isInput, const std::string& from, const std::string& to,
-                const std::string& eventName = "") {
+// After a parameter of a function was renamed, the pins of the nodes that use it must follow.
+void renamePins(fg::Script& s, const std::string& graphName, bool isInput, const std::string& from, const std::string& to) {
     auto renameOnNode = [&](fg::Graph& g, fg::NodeId nodeId, bool asOutput) {
         for (auto& c : g.connections) {
             if (asOutput && c.fromNode == nodeId && c.fromPin == from) c.fromPin = to;
@@ -49,21 +50,15 @@ void renamePins(fg::Script& s, const std::string& graphName, bool isFunction, bo
                 if (it != n->defaults.end()) { n->defaults[to] = it->second; n->defaults.erase(from); }
             }
     };
-    for (auto& g : s.graphs) {
+    for (auto& g : s.graphs)
         for (auto& n : g.nodes) {
-            if (isFunction) {
-                if (g.name == graphName && isInput && n.def == "func.entry") renameOnNode(g, n.id, true);
-                if (g.name == graphName && !isInput && n.def == "func.return") renameOnNode(g, n.id, false);
-                if (n.def == "func.call" && n.prop("function") == graphName) renameOnNode(g, n.id, !isInput);
-            } else {
-                if (n.def == "event.custom" && n.prop("name") == eventName) renameOnNode(g, n.id, true);
-                if (n.def == "event.call" && n.prop("event") == eventName) renameOnNode(g, n.id, false);
-            }
+            if (g.name == graphName && isInput && n.def == "func.entry") renameOnNode(g, n.id, true);
+            if (g.name == graphName && !isInput && n.def == "func.return") renameOnNode(g, n.id, false);
+            if (n.def == "func.call" && n.prop("function") == graphName) renameOnNode(g, n.id, !isInput);
         }
-    }
 }
 
-void removePins(fg::Script& s, const std::string& graphName, bool isFunction, bool isInput, const std::string& pin, const std::string& eventName = "") {
+void removePins(fg::Script& s, const std::string& graphName, bool isInput, const std::string& pin) {
     auto dropOnNode = [&](fg::Graph& g, fg::NodeId id, bool asOutput) {
         auto& v = g.connections;
         v.erase(std::remove_if(v.begin(), v.end(), [&](const fg::Connection& c) {
@@ -72,14 +67,9 @@ void removePins(fg::Script& s, const std::string& graphName, bool isFunction, bo
     };
     for (auto& g : s.graphs)
         for (auto& n : g.nodes) {
-            if (isFunction) {
-                if (g.name == graphName && isInput && n.def == "func.entry") dropOnNode(g, n.id, true);
-                if (g.name == graphName && !isInput && n.def == "func.return") dropOnNode(g, n.id, false);
-                if (n.def == "func.call" && n.prop("function") == graphName) dropOnNode(g, n.id, !isInput);
-            } else {
-                if (n.def == "event.custom" && n.prop("name") == eventName) dropOnNode(g, n.id, true);
-                if (n.def == "event.call" && n.prop("event") == eventName) dropOnNode(g, n.id, false);
-            }
+            if (g.name == graphName && isInput && n.def == "func.entry") dropOnNode(g, n.id, true);
+            if (g.name == graphName && !isInput && n.def == "func.return") dropOnNode(g, n.id, false);
+            if (n.def == "func.call" && n.prop("function") == graphName) dropOnNode(g, n.id, !isInput);
         }
 }
 
@@ -365,7 +355,7 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
                 auto& dst = inputs ? gr->inputs : gr->outputs;
                 if (oldCopy.size() == np.size())
                     for (size_t i = 0; i < np.size(); ++i)
-                        if (oldCopy[i].name != np[i].name) renamePins(s, ss(gname), true, inputs, oldCopy[i].name, np[i].name);
+                        if (oldCopy[i].name != np[i].name) renamePins(s, ss(gname), inputs, oldCopy[i].name, np[i].name);
                 dst = np;
             });
         };
@@ -402,7 +392,7 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
                 if (!gr) return;
                 auto& dst = inputs ? gr->inputs : gr->outputs;
                 if (size_t(row) >= dst.size()) return;
-                removePins(s, ss(gname), true, inputs, dst[size_t(row)].name);
+                removePins(s, ss(gname), inputs, dst[size_t(row)].name);
                 dst.erase(dst.begin() + row);
             }, QString(), true);
         });
@@ -411,70 +401,6 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
     };
     section(true);
     section(false);
-}
-
-// ------------------------------------------------------------------ custom event parameters
-void DetailsPanel::buildEventParams(const fg::Node& node) {
-    form_->addRow(heading("Event parameters"));
-    QString graph = owner_;
-    fg::NodeId id = node.id;
-    std::string eventName = node.prop("name");
-    auto apply = [this, graph, id, eventName](std::vector<fg::ParamDecl> np) {
-        std::set<std::string> names;
-        for (auto& p : np)
-            if (p.name.empty() || !names.insert(p.name).second) {
-                QMessageBox::warning(this, "Parameters", "Parameter names must be unique and not empty.");
-                QTimer::singleShot(0, this, [this] { rebuild(); });
-                return;
-            }
-        edit("Edit event parameters", [&](fg::Script& s) {
-            auto* g = s.findGraph(ss(graph));
-            auto* n = g ? g->findNode(id) : nullptr;
-            if (!n) return;
-            if (n->params.size() == np.size())
-                for (size_t i = 0; i < np.size(); ++i)
-                    if (n->params[i].name != np[i].name) renamePins(s, "", false, false, n->params[i].name, np[i].name, eventName);
-            n->params = np;
-        });
-    };
-    auto* table = buildParamTable(false, node.params, apply);
-    auto* buttons = new QWidget;
-    auto* bl = new QHBoxLayout(buttons);
-    bl->setContentsMargins(0, 0, 0, 0);
-    auto* add = new QPushButton("Add");
-    auto* del = new QPushButton("Remove");
-    bl->addWidget(add);
-    bl->addWidget(del);
-    bl->addStretch(1);
-    connect(add, &QPushButton::clicked, this, [this, graph, id] {
-        edit("Add event parameter", [&](fg::Script& s) {
-            auto* g = s.findGraph(ss(graph));
-            auto* n = g ? g->findNode(id) : nullptr;
-            if (!n) return;
-            std::string name = "Param";
-            for (int i = 1;; ++i) {
-                bool used = false;
-                for (auto& p : n->params) used |= p.name == name;
-                if (!used) break;
-                name = "Param" + std::to_string(i);
-            }
-            n->params.push_back({name, "int", false, false, fg::Value()});
-        }, QString(), true);
-    });
-    connect(del, &QPushButton::clicked, this, [this, graph, id, table, eventName] {
-        int row = table->currentRow();
-        if (row < 0) row = table->rowCount() - 1;
-        if (row < 0) return;
-        edit("Remove event parameter", [&](fg::Script& s) {
-            auto* g = s.findGraph(ss(graph));
-            auto* n = g ? g->findNode(id) : nullptr;
-            if (!n || size_t(row) >= n->params.size()) return;
-            removePins(s, "", false, false, n->params[size_t(row)].name, eventName);
-            n->params.erase(n->params.begin() + row);
-        }, QString(), true);
-    });
-    form_->addRow(table);
-    form_->addRow(buttons);
 }
 
 // ------------------------------------------------------------------ nodes
@@ -513,17 +439,13 @@ void DetailsPanel::buildNodes() {
         }, key);
     };
 
-    if (cn->defId == "event.custom") {
-        auto* nameEdit = new QLineEdit(qs(node->prop("name")));
-        connect(nameEdit, &QLineEdit::editingFinished, this, [=] {
-            QString nn = nameEdit->text().trimmed(), old = qs(node->prop("name"));
-            if (nn.isEmpty() || nn == old) { nameEdit->setText(old); return; }
-            for (auto& e : doc_->script().customEvents())
-                if (qs(e.name) == nn) { QMessageBox::warning(this, "Rename", "An event with that name exists."); nameEdit->setText(old); return; }
-            edit("Rename event", [&](fg::Script& s) { s.renameEvent(ss(old), ss(nn)); }, QString(), true);
-        });
-        form_->addRow("Event name", nameEdit);
-        buildEventParams(*node);
+    if (cn->op == fg::NodeOp::Event) {
+        // events belong to the application: they can be handled (or not), but never created, renamed or changed
+        const fg::EventDesc* ev = cn->defId.rfind("event:", 0) == 0 ? doc_->registry().findEvent(cn->defId.substr(6)) : nullptr;
+        form_->addRow("Event", new QLabel(ev ? qs(ev->name) : qs(cn->defId.substr(6))));
+        form_->addRow("Arguments", new QLabel(ev ? qs(fg::describeParams(*ev)) : QString("unknown")));
+        if (ev && !ev->doc.empty()) form_->addRow(dim(qs(ev->doc)));
+        form_->addRow(dim("This event is raised by the application. A script can only handle it."));
     }
     if (cn->op == fg::NodeOp::GetVariable || cn->op == fg::NodeOp::SetVariable)
         form_->addRow("Variable", new QLabel(qs(node->prop("name")) + "  (" + qs(node->prop("scope")) + ")"));

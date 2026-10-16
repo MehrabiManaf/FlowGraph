@@ -99,7 +99,7 @@ ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, Q
     connect(&run_, &RunController::finished, this, [this] { clearDebugMarks(); });
     connect(&run_, &RunController::stateChanged, this, [this](RunController::State s) { if (s == RunController::State::Idle) clearDebugMarks(); });
 
-    doc_.newScript();
+    doc_.newScript([this](fg::Script& s) { host_.initializeNewScript(s); });
     openGraph(qs(doc_.script().graphs.front().name));
     updateTitle();
     updateEditActions();
@@ -347,10 +347,6 @@ GraphView* ScriptEditorWindow::openGraph(const QString& name) {
         const fg::Node* n = g ? g->findNode(id) : nullptr;
         if (!n) return;
         if (n->def == "func.call") openGraph(qs(n->prop("function")));
-        else if (n->def == "event.call") {
-            for (auto& e : doc_.script().customEvents())
-                if (e.name == n->prop("event")) focusNode(qs(e.graph), e.node);
-        }
     });
     scene->sync();
     bool isFn = doc_.graph(name)->kind == fg::GraphKind::Function;
@@ -447,7 +443,7 @@ void ScriptEditorWindow::fileNew() {
 void ScriptEditorWindow::newScript() {
     run_.stop();
     while (tabs_->count()) closeTab(0);
-    doc_.newScript();
+    doc_.newScript([this](fg::Script& s) { host_.initializeNewScript(s); });
     host_.scriptChanged(facade_, ScriptChange::Created);
     emit facade_.scriptChanged();
 }
@@ -464,7 +460,7 @@ bool ScriptEditorWindow::openFile(const QString& path) {
     while (tabs_->count()) closeTab(0);
     if (!doc_.load(path, &err)) {
         QMessageBox::critical(this, "Open script", "Cannot open '" + path + "':\n" + err);
-        doc_.newScript();
+        doc_.newScript([this](fg::Script& s) { host_.initializeNewScript(s); });
         host_.scriptChanged(facade_, ScriptChange::Created);
         emit facade_.scriptChanged();
         return false;

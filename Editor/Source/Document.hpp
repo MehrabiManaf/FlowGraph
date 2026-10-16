@@ -33,7 +33,8 @@ public:
 
     // Compiles again (the application added plugins or events after the script was opened).
     void refresh();
-    void newScript();
+    // An empty script with one event graph, or what `init` builds (a template of the application).
+    void newScript(const std::function<void(fg::Script&)>& init = {});
     bool load(const QString& path, QString* error = nullptr);
     bool save(const QString& path = QString(), QString* error = nullptr);
 

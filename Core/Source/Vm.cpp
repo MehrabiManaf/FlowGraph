@@ -535,7 +535,6 @@ void Task::executeNode(Frame& f, const CompiledNode& n) {
         return;
     }
     case NodeOp::CallFunction:
-    case NodeOp::CallEvent:
         callGraph(f, n);
         return;
     case NodeOp::Native:
@@ -600,52 +599,29 @@ void Task::executeNode(Frame& f, const CompiledNode& n) {
 void Task::callGraph(Frame& f, const CompiledNode& n) {
     if (frames_.size() >= inst_->maxDepth_) throw ScriptError("call stack overflow (recursion too deep?)");
     const Program& prog = inst_->program();
-    const bool isEvent = n.op == NodeOp::CallEvent;
-    int gi = -1, entryNode = -1;
-    if (isEvent) {
-        auto it = prog.events.find(n.prop("event"));
-        if (it == prog.events.end()) throw ScriptError("unknown event '" + n.prop("event") + "'");
-        gi = it->second.first;
-        entryNode = it->second.second;
-    } else {
-        gi = n.resolved;
-        if (gi < 0) throw ScriptError("unknown function '" + n.prop("function") + "'");
-    }
+    int gi = n.resolved;
+    if (gi < 0) throw ScriptError("unknown function '" + n.prop("function") + "'");
     const CompiledGraph& cg = prog.graphs[static_cast<size_t>(gi)];
 
-    std::vector<Cell> cells;
-    std::vector<Value> values;
-    if (isEvent) {
-        for (size_t i = 0; i < n.dataIn.size(); ++i) values.push_back(evalInput(f, n, i).deepCopy());
-    } else {
-        cells.resize(n.dataIn.size());
-        for (size_t i = 0; i < n.dataIn.size(); ++i) {
-            const CompiledPin& p = n.pins[static_cast<size_t>(n.dataIn[i])];
-            if (p.byRef) {
-                const CompiledNode* src = originNode(f, n, i);
-                if (src && src->op == NodeOp::GetVariable) {
-                    cells[i] = cellFor(f, *src);
-                    continue;
-                }
+    std::vector<Cell> cells(n.dataIn.size());
+    for (size_t i = 0; i < n.dataIn.size(); ++i) {
+        const CompiledPin& p = n.pins[static_cast<size_t>(n.dataIn[i])];
+        if (p.byRef) {
+            const CompiledNode* src = originNode(f, n, i);
+            if (src && src->op == NodeOp::GetVariable) {
+                cells[i] = cellFor(f, *src);
+                continue;
             }
-            Value v = evalInput(f, n, i);
-            cells[i] = std::make_shared<Value>(p.isConst ? std::move(v) : v.deepCopy());
         }
+        Value v = evalInput(f, n, i);
+        cells[i] = std::make_shared<Value>(p.isConst ? std::move(v) : v.deepCopy());
     }
 
     follow(f, n, 0);                       // the caller continues here once the callee is done
     Frame* nf = pushFrame(gi);
     nf->callerNode = n.index;
-    if (isEvent) {
-        nf->isEvent = true;
-        nf->pc = entryNode;
-        const CompiledNode& en = cg.nodes[static_cast<size_t>(entryNode)];
-        for (size_t i = 0; i < en.dataOut.size() && i < values.size(); ++i)
-            nf->slotValues[static_cast<size_t>(en.outBase) + i] = values[i];
-    } else {
-        nf->params = std::move(cells);
-        nf->pc = cg.entry;
-    }
+    nf->params = std::move(cells);
+    nf->pc = cg.entry;
 }
 
 void Task::finishFrame() {

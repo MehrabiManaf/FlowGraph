@@ -33,7 +33,6 @@ private:
     void buildGraph();
     void buildGraphFor(const QString& graphName);
     void buildNodes();
-    void buildEventParams(const fg::Node& node);
     QTableWidget* buildParamTable(bool inputs, const std::vector<fg::ParamDecl>& params, std::function<void(std::vector<fg::ParamDecl>)> apply);
 
     Document* doc_;

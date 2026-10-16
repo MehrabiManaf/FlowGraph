@@ -100,6 +100,11 @@ fg::Instance instance(program);
 instance.callEvent("Tick", {0.016});                 // synchronous: runs until done, or until a Delay / breakpoint
 ```
 
+* **Events belong to the application.** `registry.addEvent("Tick", {{"DeltaTime", "float"}})` declares a connection point
+  between the application and its scripts. Scripts cannot declare, rename, change or delete events: they only *handle* them
+  (one `event:Tick` node per event, offered once in the node palette; the editor lists every event of the application in
+  *My Script > Event Graphs*, dimmed when the script has no handler yet - double click creates it). Think of events as
+  compiled into the application, whereas functions are the script's own.
 * **Compatibility.** A script refers to the events of the application it was made for. `loadScript` /
   `fg::checkCompatibility` list everything this application lacks: events it never raises, events whose arguments changed
   (the script records the signature of the host events it handles), classes / functions / enums of missing plugins and
@@ -176,8 +181,8 @@ function blocks; editing the script stops the run. `Apps/Studio` (`flowstudio`) 
 ## Script file format
 
 `.flow` files are JSON (`Script::toJson`): variables, and graphs of nodes with connections
-(`{"from": [nodeId, "Pin"], "to": [nodeId, "Pin"]}`). Script level node ids: `event.custom`, `event.call`, `func.entry`,
-`func.return`, `func.call`, `var.get`, `var.set`, `reroute`. Nodes of host events (`event:Name`) carry `props.sig`, the
+(`{"from": [nodeId, "Pin"], "to": [nodeId, "Pin"]}`). Script level node ids: `func.entry`, `func.return`, `func.call`, `var.get`,
+`var.set`, `reroute`; events are `event:<Name>`. Nodes of host events (`event:Name`) carry `props.sig`, the
 signature of the event when the script was made.
 
 Developer aids of flowstudio: `FG_STUDIO_SCREENSHOT=file.png` (screenshot and quit), `FG_STUDIO_RUN=Main`,

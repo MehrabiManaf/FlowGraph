@@ -128,23 +128,6 @@ std::string Script::uniqueVariableName(const std::string& base) const {
     return uniqueName(base, [&](const std::string& n) { return variableIndex(n) >= 0; });
 }
 
-std::vector<Script::EventInfo> Script::customEvents() const {
-    std::vector<EventInfo> out;
-    for (auto& g : graphs) {
-        if (g.kind != GraphKind::Event) continue;
-        for (auto& n : g.nodes)
-            if (n.def == "event.custom" && !n.prop("name").empty()) out.push_back({n.prop("name"), g.name, n.id, n.params});
-    }
-    return out;
-}
-
-const Script::EventInfo* Script::findCustomEvent(const std::string& n, std::vector<EventInfo>& storage) const {
-    storage = customEvents();
-    for (auto& e : storage)
-        if (e.name == n) return &e;
-    return nullptr;
-}
-
 void Script::renameVariable(const std::string& from, const std::string& to) {
     if (from == to) return;
     if (auto* v = findVariable(from)) v->name = to;
@@ -164,15 +147,6 @@ void Script::renameFunction(const std::string& from, const std::string& to) {
     for (auto& g : graphs)
         for (auto& n : g.nodes)
             if (n.def == "func.call" && n.prop("function") == from) n.props["function"] = to;
-}
-
-void Script::renameEvent(const std::string& from, const std::string& to) {
-    if (from == to) return;
-    for (auto& g : graphs)
-        for (auto& n : g.nodes) {
-            if (n.def == "event.custom" && n.prop("name") == from) n.props["name"] = to;
-            else if (n.def == "event.call" && n.prop("event") == from) n.props["event"] = to;
-        }
 }
 
 void Script::renameLocal(const std::string& graph, const std::string& from, const std::string& to) {
@@ -292,11 +266,6 @@ Json nodeToJson(const Node& n) {
     if (!n.comment.empty()) j.set("comment", n.comment);
     if (!n.props.empty()) j.set("props", stringMapToJson(n.props));
     if (!n.typeArgs.empty()) j.set("typeArgs", stringMapToJson(n.typeArgs));
-    if (!n.params.empty()) {
-        Json a = Json::array();
-        for (auto& p : n.params) a.push(paramToJson(p));
-        j.set("params", std::move(a));
-    }
     if (!n.defaults.empty()) {
         Json o = Json::object();
         for (auto& [k, v] : n.defaults) o.set(k, valueToJson(v));
@@ -313,7 +282,6 @@ Node nodeFromJson(const Json& j) {
     n.comment = j["comment"].asString();
     stringMapFromJson(j["props"], n.props);
     stringMapFromJson(j["typeArgs"], n.typeArgs);
-    for (auto& p : j["params"].items()) n.params.push_back(paramFromJson(p));
     for (auto& [k, v] : j["defaults"].members()) n.defaults[k] = jsonToValue(v);
     return n;
 }

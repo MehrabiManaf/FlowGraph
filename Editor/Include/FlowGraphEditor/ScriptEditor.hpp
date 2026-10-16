@@ -70,6 +70,10 @@ public:
     virtual void aboutToRun(const LaunchSpec&) {}
     virtual void runFinished() {}
 
+    // Fill a new script: add the event handlers (and whatever else) a new script of this application starts with.
+    // The script already has no graphs; call script.addEventGraph() first. Default: one empty event graph.
+    virtual void initializeNewScript(fg::Script& script) { script.addEventGraph("EventGraph"); }
+
     // Called once when the editor window exists: add your own menus and toolbar buttons here.
     virtual void attached(ScriptEditor&) {}
     // Called after a script was created, opened (before it is checked) or saved (possibly under a new name).

@@ -93,8 +93,6 @@ CompatibilityReport checkCompatibility(const Script& script, const Registry& reg
                         add(CompatibilityIssue::Kind::EventSignatureChanged, g.name, n.id, ev->name, "the event '" + ev->name + "' changed: " + why);
                 }
             }
-            for (auto& p : n.params)
-                if (!isHostEventDef(n.def)) checkType(g.name, "parameter '" + p.name + "' of an event", p.type);
         }
     }
     return rep;

@@ -14,12 +14,9 @@ void link(Graph& g, NodeId a, const std::string& ap, NodeId b, const std::string
 
 NodeId add(Graph& g, const char* def, double x, double y) { return g.addNode(def, x, y).id; }
 
-// Main is the event of the standard application (Main(Args: array<string>)); other names are custom events.
+// Events belong to the application: a script only handles them. Main is the event of the standard application.
 NodeId event(Graph& g, const char* name, double x = 0, double y = 0) {
-    if (std::string(name) == "Main") return g.addNode("event:Main", x, y).id;
-    Node& n = g.addNode("event.custom", x, y);
-    n.props["name"] = name;
-    return n.id;
+    return g.addNode(std::string("event:") + name, x, y).id;
 }
 
 fg::Runtime* g_runtime = nullptr;

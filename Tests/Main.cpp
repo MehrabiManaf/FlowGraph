@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <filesystem>
 #include <functional>
@@ -13,6 +14,17 @@
 #include <vector>
 
 using namespace fg;
+
+// A runtime whose application raises the events the test scripts handle.
+struct TestRuntime : Runtime {
+    TestRuntime() {
+        registry().addEvent("Count");
+        registry().addEvent("Go");
+        registry().addEvent("OnExample");
+        registry().addEvent("Other");
+        registry().addEvent("Run");
+    }
+};
 
 
 struct TestCase { const char* name; std::function<void()> fn; };
@@ -79,7 +91,7 @@ TEST(json_roundtrip) {
 }
 
 TEST(type_parse) {
-    Runtime rt;
+    TestRuntime rt;
     auto* t = rt.registry().findType("map<string,array<float>>");
     CHECK(t && t->kind == TypeKind::Map);
     CHECK(t && t->elem->kind == TypeKind::Array);
@@ -87,12 +99,11 @@ TEST(type_parse) {
 }
 
 TEST(for_loop_sums_into_variable) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"Total", "int", Value(0), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom", 0, 0).id;
-    g.findNode(ev)->props["name"] = "Run";
+    NodeId ev = g.addNode("event:Run").id;
     NodeId loop = g.addNode("flow.for").id;
     g.findNode(loop)->defaults["First"] = Value(1);
     g.findNode(loop)->defaults["Last"] = Value(11);       // Last is exclusive: 1..10
@@ -115,12 +126,11 @@ TEST(for_loop_sums_into_variable) {
 }
 
 TEST(for_loop_last_index_is_exclusive) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"Count", "int", Value(0), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId loop = g.addNode("flow.for").id;
     g.findNode(loop)->defaults["First"] = Value(2);
     g.findNode(loop)->defaults["Last"] = Value(5);
@@ -147,7 +157,7 @@ TEST(for_loop_last_index_is_exclusive) {
 }
 
 TEST(enum_values_variables_and_names) {
-    Runtime rt;
+    TestRuntime rt;
     registerSample(rt);
     // registered through registerEnum<Mood>: lookups by name, by value and by C++ type
     const TypeDesc* mood = rt.registry().findType("Mood");
@@ -158,8 +168,7 @@ TEST(enum_values_variables_and_names) {
     Script s;
     s.variables.push_back({"Current", "Mood", Value("Sad"), "", ""});             // default given by name
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId pr = g.addNode("util.print").id;
     NodeId get = g.addNode("var.get").id;
     g.findNode(get)->props = {{"name", "Current"}, {"scope", "global"}};
@@ -181,8 +190,39 @@ TEST(enum_values_variables_and_names) {
     CHECK_EQ(entries, 2);
 }
 
+// ---- events belong to the application -------------------------------------------------------------------------
+TEST(events_come_from_the_application_only) {
+    TestRuntime rt;                                   // provides Go, Run, ... but scripts cannot declare events of their own
+    Script s;
+    Graph& g = s.addEventGraph();
+    g.addNode("event.custom").props["name"] = "Mine";   // the old way of declaring an event
+    auto rep = checkCompatibility(s, rt.registry());
+    CHECK(!rep.ok());
+    CHECK(rep.issues[0].kind == CompatibilityIssue::Kind::MissingNode);
+    CHECK(!rt.compile(s)->ok());
+    CHECK(rt.registry().findNode("event.custom") == nullptr);
+    CHECK(rt.registry().findNode("event:Go") != nullptr);
+}
+
+TEST(palette_offers_only_events_that_are_not_handled_yet) {
+    TestRuntime rt;
+    Script s;
+    Graph& g = s.addEventGraph();
+    g.addNode("event:Go");
+    Graph& f = s.addFunction("Fn");
+    auto ids = [&](const Graph* graph) {
+        std::set<std::string> out;
+        for (auto& t : buildPalette(NodeBuildCtx{rt.registry(), &s, graph})) out.insert(t.defId);
+        return out;
+    };
+    auto inEvents = ids(&s.graphs[0]);
+    CHECK(!inEvents.count("event:Go"));               // already handled
+    CHECK(inEvents.count("event:Run"));               // still available
+    CHECK(!ids(&f).count("event:Run"));               // handlers live in event graphs
+}
+
 TEST(function_call_with_return) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     Graph& f = s.addFunction("Mul3", {{"X", "float", false, false, Value()}}, {{"Out", "float", false, false, Value()}});
     NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
@@ -201,7 +241,7 @@ TEST(function_call_with_return) {
 }
 
 TEST(by_ref_parameter_writes_through) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"Counter", "int", Value(5), "", ""});
     Graph& f = s.addFunction("Bump", {{"V", "int", true, false, Value()}});
@@ -222,8 +262,7 @@ TEST(by_ref_parameter_writes_through) {
     link(f, setp, "Then", ret, "In");
 
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId var = g.addNode("var.get").id;
     g.findNode(var)->props = {{"name", "Counter"}, {"scope", "global"}};
     NodeId call = g.addNode("func.call").id;
@@ -238,12 +277,11 @@ TEST(by_ref_parameter_writes_through) {
 }
 
 TEST(by_ref_requires_variable) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.addFunction("Bump", {{"V", "int", true, false, Value()}});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId call = g.addNode("func.call").id;
     g.findNode(call)->props["function"] = "Bump";
     link(g, ev, "Then", call, "In");
@@ -252,7 +290,7 @@ TEST(by_ref_requires_variable) {
 }
 
 TEST(const_param_cannot_be_modified) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     Graph& f = s.addFunction("Bad", {{"A", "array<int>", false, true, Value()}});
     NodeId entry = f.nodes[0].id;
@@ -266,14 +304,13 @@ TEST(const_param_cannot_be_modified) {
 }
 
 TEST(reflection_methods_properties_and_inheritance) {
-    Runtime rt;
+    TestRuntime rt;
     registerSample(rt);
     Script s;
     s.variables.push_back({"Pet", "Dog", Value(), "", ""});
     s.variables.push_back({"Said", "string", Value(""), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId mk = g.addNode("new:Dog").id;
     NodeId setPet = g.addNode("var.set").id;
     g.findNode(setPet)->props = {{"name", "Pet"}, {"scope", "global"}};
@@ -303,7 +340,7 @@ TEST(reflection_methods_properties_and_inheritance) {
 }
 
 TEST(host_event_with_arguments_and_generics) {
-    Runtime rt;
+    TestRuntime rt;
     registerSample(rt);
     Script s;
     s.variables.push_back({"Acc", "float", Value(0.0), "", ""});
@@ -328,12 +365,11 @@ TEST(host_event_with_arguments_and_generics) {
 }
 
 TEST(delay_suspends_until_tick) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"Done", "bool", Value(false), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId delay = g.addNode("flow.delay").id;
     g.findNode(delay)->defaults["Duration"] = Value(1.0);
     NodeId set = g.addNode("var.set").id;
@@ -354,12 +390,11 @@ TEST(delay_suspends_until_tick) {
 }
 
 TEST(break_exits_loop) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"N", "int", Value(0), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId loop = g.addNode("flow.for").id;
     g.findNode(loop)->defaults["Last"] = Value(100);
     NodeId gt = g.addNode("cmp.ge").id;
@@ -388,13 +423,12 @@ TEST(break_exits_loop) {
 }
 
 TEST(containers_and_foreach) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"List", "array<int>", Value(), "", ""});
     s.variables.push_back({"Sum", "int", Value(0), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId getL = g.addNode("var.get").id;
     g.findNode(getL)->props = {{"name", "List"}, {"scope", "global"}};
     NodeId a1 = g.addNode("array.add").id;
@@ -426,12 +460,12 @@ TEST(containers_and_foreach) {
 }
 
 TEST(script_json_roundtrip) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"X", "int", Value(7), "Cat", "doc"});
     s.addFunction("F", {{"A", "int", true, false, Value(1)}}, {{"R", "int", false, false, Value()}});
     Graph& g = s.addEventGraph();
-    g.addNode("event.custom").props["name"] = "Go";
+    g.addNode("event:Go");
     g.addComment(1, 2).text = "hello";
     Script t = Script::parse(s.toText());
     CHECK_EQ(t.toText(), s.toText());
@@ -440,11 +474,10 @@ TEST(script_json_roundtrip) {
 }
 
 TEST(runtime_error_is_reported_with_node) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId pr = g.addNode("util.print").id;
     NodeId div = g.addNode("math.div").id;
     g.findNode(div)->defaults["A"] = Value(1);
@@ -461,11 +494,10 @@ TEST(runtime_error_is_reported_with_node) {
 }
 
 TEST(debugger_breakpoint_and_step) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId p1 = g.addNode("util.print").id;
     NodeId p2 = g.addNode("util.print").id;
     link(g, ev, "Then", p1, "In");
@@ -501,11 +533,10 @@ TEST(debugger_breakpoint_and_step) {
 }
 
 TEST(infinite_loop_is_stopped) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId w = g.addNode("flow.while").id;
     g.findNode(w)->defaults["Condition"] = Value(true);
     link(g, ev, "Then", w, "In");
@@ -518,12 +549,11 @@ TEST(infinite_loop_is_stopped) {
 }
 
 TEST(type_mismatch_is_a_compile_error) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"Arr", "array<int>", Value(), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId get = g.addNode("var.get").id;
     g.findNode(get)->props = {{"name", "Arr"}, {"scope", "global"}};
     NodeId pr = g.addNode("math.add").id;
@@ -536,7 +566,7 @@ TEST(type_mismatch_is_a_compile_error) {
 static std::string g_exeDir;
 
 TEST(palette_search_and_pin_filter) {
-    Runtime rt;
+    TestRuntime rt;
     registerSample(rt);
     Script s;
     s.variables.push_back({"Score", "int", Value(0), "", ""});
@@ -562,7 +592,7 @@ TEST(palette_search_and_pin_filter) {
     // events are not creatable inside a function graph
     Graph& fn = s.addFunction("F");
     NodeBuildCtx fctx{rt.registry(), &s, &fn};
-    for (auto& t : buildPalette(fctx)) CHECK(t.defId != "event:Tick" && t.defId != "event.custom");
+    for (auto& t : buildPalette(fctx)) CHECK(t.defId != "event:Tick");
     // instantiate applies properties
     Node& n = instantiate(g, vars[0], 5, 6);
     CHECK_EQ(n.def, std::string("var.get"));
@@ -570,7 +600,7 @@ TEST(palette_search_and_pin_filter) {
 }
 
 TEST(inspect_values_and_frames) {
-    Runtime rt;
+    TestRuntime rt;
     registerSample(rt);
     auto dog = std::make_shared<Dog>();
     dog->name = "Rex";
@@ -613,7 +643,7 @@ TEST(inspect_values_and_frames) {
 TEST(plugin_loading) {
     std::string path = g_exeDir + "/plugins/ExamplePlugin.dll";
     if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
-    Runtime rt;
+    TestRuntime rt;
     std::string err;
     CHECK(rt.loadPlugin(path, &err));
     if (!err.empty()) std::printf("  %s\n", err.c_str());
@@ -651,8 +681,7 @@ static void registerTestExit(Runtime& rt) {
 static Script printScript(double delay, const char* text) {
     Script s;
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Go";
+    NodeId ev = g.addNode("event:Go").id;
     NodeId pr = g.addNode("util.print").id;
     g.findNode(pr)->defaults["String"] = Value(text);
     if (delay >= 0) {
@@ -665,7 +694,7 @@ static Script printScript(double delay, const char* text) {
 }
 
 TEST(exit_node_ends_the_task_with_a_code) {
-    Runtime rt;
+    TestRuntime rt;
     registerTestExit(rt);
     Script s = printScript(-1, "before");
     Graph& g = s.graphs[0];
@@ -690,7 +719,7 @@ TEST(exit_node_ends_the_task_with_a_code) {
 }
 
 TEST(executor_pump_advances_delays_without_blocking) {
-    Runtime rt;
+    TestRuntime rt;
     auto prog = build(rt, printScript(0.2, "late"));
     Executor ex(prog);
     std::vector<std::string> log;
@@ -714,12 +743,11 @@ TEST(executor_pump_advances_delays_without_blocking) {
 }
 
 TEST(executor_runs_several_tasks_fairly) {
-    Runtime rt;
+    TestRuntime rt;
     Script s;
     s.variables.push_back({"A", "int", Value(0), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event.custom").id;
-    g.findNode(ev)->props["name"] = "Count";
+    NodeId ev = g.addNode("event:Count").id;
     NodeId loop = g.addNode("flow.for").id;
     g.findNode(loop)->defaults["Last"] = Value(5000);
     link(g, ev, "Then", loop, "In");
@@ -736,7 +764,7 @@ TEST(executor_runs_several_tasks_fairly) {
 }
 
 TEST(async_executor_runs_on_its_own_thread) {
-    Runtime rt;
+    TestRuntime rt;
     auto prog = build(rt, printScript(0.1, "async"));
     std::mutex mu;
     std::vector<std::string> log;
@@ -771,7 +799,7 @@ TEST(async_executor_runs_on_its_own_thread) {
 }
 
 TEST(async_executor_pause_inspect_resume_and_stop) {
-    Runtime rt;
+    TestRuntime rt;
     Script s = printScript(-1, "one");
     Graph& g = s.graphs[0];
     NodeId second = g.addNode("util.print").id;
@@ -832,7 +860,7 @@ static Script scriptWithHostEvent(const char* event) {
 }
 
 TEST(compatibility_reports_what_the_application_lacks) {
-    Runtime rt;                                              // knows neither Tick nor any plugin
+    TestRuntime rt;                                              // knows neither Tick nor any plugin
     Script s = scriptWithHostEvent("Tick");
     s.variables.push_back({"Hero", "Ghost", Value(), "", ""});
     s.graphs[0].addNode("fn:Nope.Missing");
@@ -883,7 +911,7 @@ TEST(changed_event_signature_is_detected) {
 }
 
 TEST(standard_app_runs_main_with_arguments_and_exit_code) {
-    Runtime rt;
+    TestRuntime rt;
     standard::registerStandardApp(rt.registry());
     Script s;
     Graph& g = s.addEventGraph();
@@ -910,7 +938,7 @@ TEST(standard_app_runs_main_with_arguments_and_exit_code) {
     CHECK_EQ(log.empty() ? std::string() : log[0], std::string("alpha"));
     // a script without Main cannot be run as a standard application
     Script empty;
-    empty.addEventGraph().addNode("event.custom").props["name"] = "Other";
+    empty.addEventGraph().addNode("event:Other");
     Instance inst2(build(rt, empty));
     auto bad = standard::runMain(inst2, {});
     CHECK(!bad.ok);
@@ -918,7 +946,7 @@ TEST(standard_app_runs_main_with_arguments_and_exit_code) {
 }
 
 TEST(standard_app_runtime_error_gives_exit_code_one) {
-    Runtime rt;
+    TestRuntime rt;
     standard::registerStandardApp(rt.registry());
     Script s;
     Graph& g = s.addEventGraph();
@@ -937,7 +965,7 @@ TEST(standard_app_runtime_error_gives_exit_code_one) {
 }
 
 TEST(standard_app_main_really_sleeps_for_delays) {
-    Runtime rt;
+    TestRuntime rt;
     standard::registerStandardApp(rt.registry());
     Script s;
     Graph& g = s.addEventGraph();
@@ -988,7 +1016,7 @@ TEST(launch_file_roundtrip_and_defaults) {
 }
 
 TEST(runtime_load_script_reports_problems) {
-    Runtime rt;
+    TestRuntime rt;
     auto missing = rt.loadScript("no/such/file.flow");
     CHECK(!missing.ok());
     CHECK(!missing.error.empty());
@@ -1006,7 +1034,7 @@ TEST(runtime_load_script_reports_problems) {
 TEST(plugin_path_lists_load_each_plugin_once) {
     std::string dir = g_exeDir + "/plugins";
     if (!std::filesystem::exists(dir)) { std::printf("  (skipped: no plugins directory)\n"); return; }
-    Runtime rt;
+    TestRuntime rt;
 #if defined(_WIN32)
     std::string list = dir + ";" + dir + ";" + "does/not/exist";
 #else

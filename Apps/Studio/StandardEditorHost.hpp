@@ -20,6 +20,7 @@ public:
     bool prepareLaunch(const fged::LaunchEntry& entry, fged::LaunchSpec& spec, QWidget* parent) override;
     void aboutToRun(const fged::LaunchSpec& spec) override;
     void runFinished() override;
+    void initializeNewScript(fg::Script& script) override { fg::standard::createMainTemplate(script, rt_.registry()); }
     void attached(fged::ScriptEditor& editor) override;
     void scriptChanged(fged::ScriptEditor& editor, fged::ScriptChange why) override;
     QString preferredEntry() const override { return QString::fromStdString(launch_.selected); }

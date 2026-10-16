@@ -71,3 +71,7 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
   RunController now runs scripts on an AsyncExecutor (GUI never blocks); the debug panel reads state through AsyncExecutor::inspect.
 - Interpreter speed: InputBuf only constructs the inputs a node needs (3M loop iterations 1.9 s -> 1.05 s in Release).
 - Ideas: profile the VM further (NodeCtx / Continuation per node), save the dock layout, per-script plugin requirements in the file.
+- Events are application-owned: custom events (event.custom / event.call, Script::customEvents, renameEvent, NodeOp::CallEvent) were
+  removed from core, editor and tests. Scripts only handle `event:<Name>` nodes; the palette offers each event once; My Script lists all
+  events of the app (dimmed = not handled, double click adds the handler); Details shows an event read-only; copy/paste never
+  duplicates a handler. Hosts decide what a new script contains (EditorHost::initializeNewScript, standard::createMainTemplate).

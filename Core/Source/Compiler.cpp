@@ -268,7 +268,6 @@ struct GraphCompiler {
             cn.comment = n.comment;
             cn.props = n.props;
             cn.typeArgs = w.args;
-            cn.params = n.params;
             cn.title = nodeTitle(n, w.def);
             if (w.def && w.def->op == NodeOp::FunctionEntry) cn.title = g.name;       // the entry node is named after its function
             if (w.def) {
@@ -355,17 +354,16 @@ struct GraphCompiler {
                 }
                 break;
             case NodeOp::Event: {
-                std::string name = cn.defId == "event.custom" ? cn.prop("name") : cn.defId.rfind("event:", 0) == 0 ? cn.defId.substr(6) : std::string();
+                // events are provided by the application (event:Name); a script only handles them
+                std::string name = cn.defId.rfind("event:", 0) == 0 ? cn.defId.substr(6) : std::string();
                 if (name.empty()) {
                     diag(Severity::Error, g.name, cn.id, "Event has no name");
                     break;
                 }
-                if (cn.defId.rfind("event:", 0) == 0) {
-                    std::string why;
-                    if (const EventDesc* ev = reg.findEvent(name))
-                        if (!hostEventSignatureMatches(*script.findGraph(g.name)->findNode(cn.id), *ev, reg, &why))
-                            diag(Severity::Error, g.name, cn.id, "The event '" + name + "' changed: " + why);
-                }
+                std::string why;
+                if (const EventDesc* ev = reg.findEvent(name))
+                    if (!hostEventSignatureMatches(*script.findGraph(g.name)->findNode(cn.id), *ev, reg, &why))
+                        diag(Severity::Error, g.name, cn.id, "The event '" + name + "' changed: " + why);
                 if (prog.events.count(name)) diag(Severity::Error, g.name, cn.id, "Event '" + name + "' is already handled elsewhere");
                 else prog.events[name] = {static_cast<int>(gi), cn.index};
                 break;
@@ -490,9 +488,7 @@ struct GraphCompiler {
 // ---------------------------------------------------------------------------- public API
 std::string nodeTitle(const Node& n, const NodeDef* def) {
     if (def) {
-        if (def->id == "event.custom") return n.prop("name").empty() ? "Custom Event" : n.prop("name");
         if (def->op == NodeOp::CallFunction) return n.prop("function").empty() ? def->title : n.prop("function");
-        if (def->op == NodeOp::CallEvent) return "Call " + n.prop("event");
         if (def->op == NodeOp::GetVariable) return "Get " + n.prop("name");
         if (def->op == NodeOp::SetVariable) return "Set " + n.prop("name");
         return def->title;
@@ -525,11 +521,6 @@ std::shared_ptr<Program> compile(const Script& script, const Registry& reg) {
     GraphCompiler gc{script, reg, *prog};
     gc.declare();
     for (size_t i = 0; i < script.graphs.size(); ++i) gc.compileGraph(i);
-    // events declared by custom event nodes must be resolvable from every call site
-    for (size_t gi = 0; gi < prog->graphs.size(); ++gi)
-        for (auto& cn : prog->graphs[gi].nodes)
-            if (cn.op == NodeOp::CallEvent && !prog->events.count(cn.prop("event")))
-                gc.diag(Severity::Error, prog->graphs[gi].name, cn.id, "Unknown event '" + cn.prop("event") + "'");
     return prog;
 }
 

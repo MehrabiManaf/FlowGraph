@@ -33,16 +33,6 @@ protected:
     }
 };
 
-std::string uniqueEventName(const fg::Script& s, const std::string& base) {
-    auto events = s.customEvents();
-    auto taken = [&](const std::string& n) {
-        for (auto& e : events) if (e.name == n) return true;
-        return false;
-    };
-    if (!taken(base)) return base;
-    for (int i = 1;; ++i)
-        if (!taken(base + "_" + std::to_string(i))) return base + "_" + std::to_string(i);
-}
 } // namespace
 
 GraphScene::GraphScene(Document* doc, const QString& graphName, QObject* parent) : QGraphicsScene(parent), doc_(doc), name_(graphName) {
@@ -511,7 +501,6 @@ fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPoi
         if (!g) return;
         fg::Node& n = fg::instantiate(*g, t, pos.x(), pos.y());
         newId = n.id;
-        if (n.def == "event.custom") n.props["name"] = uniqueEventName(s, n.prop("name", "NewEvent"));
         if (connect) {
             fg::Connection c = from->dir == fg::PinDir::Out ? fg::Connection{from->node, from->pin, newId, pinName}
                                                             : fg::Connection{newId, pinName, from->node, from->pin};
@@ -581,7 +570,7 @@ void GraphScene::copySelected() {
     std::set<fg::NodeId> ids;
     for (auto id : selectedNodeIds()) {
         NodeItem* n = nodeItem(id);
-        if (n && n->compiled().op != fg::NodeOp::FunctionEntry) ids.insert(id);
+        if (n && n->compiled().op != fg::NodeOp::FunctionEntry && n->compiled().op != fg::NodeOp::Event) ids.insert(id);
     }
     QByteArray data = buildClip(ids);
     if (data.isEmpty()) return;
@@ -616,16 +605,22 @@ void GraphScene::pasteClip(const QByteArray& data, const QPointF& at, bool keepO
         if (!g) return;
         std::map<fg::NodeId, fg::NodeId> remap;
         for (auto n : src.nodes) {
+            if (n.def.rfind("event:", 0) == 0) {                 // an event has one handler only
+                bool exists = false;
+                for (auto& gr : s.graphs)
+                    for (auto& o : gr.nodes) exists |= o.def == n.def;
+                if (exists) continue;
+            }
             fg::NodeId old = n.id;
             n.id = g->nextId++;
             n.x += delta.x();
             n.y += delta.y();
-            if (n.def == "event.custom") n.props["name"] = uniqueEventName(s, n.prop("name", "NewEvent"));
-            remap[old] = n.id;
+                remap[old] = n.id;
             created.push_back(n.id);
             g->nodes.push_back(std::move(n));
         }
         for (auto c : src.connections) {
+            if (!remap.count(c.fromNode) || !remap.count(c.toNode)) continue;
             c.fromNode = remap[c.fromNode];
             c.toNode = remap[c.toNode];
             g->connections.push_back(std::move(c));
@@ -640,7 +635,7 @@ void GraphScene::duplicateSelected() {
     std::set<fg::NodeId> ids;
     for (auto id : selectedNodeIds()) {
         NodeItem* n = nodeItem(id);
-        if (n && n->compiled().op != fg::NodeOp::FunctionEntry) ids.insert(id);
+        if (n && n->compiled().op != fg::NodeOp::FunctionEntry && n->compiled().op != fg::NodeOp::Event) ids.insert(id);
     }
     QByteArray data = buildClip(ids);
     if (!data.isEmpty()) pasteClip(data, QPointF(40, 40), true);

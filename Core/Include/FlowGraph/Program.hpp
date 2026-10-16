@@ -58,7 +58,6 @@ struct CompiledNode {
     std::string comment;
     std::map<std::string, std::string> props;
     std::map<std::string, std::string> typeArgs;   // resolved type parameters
-    std::vector<ParamDecl> params;                 // custom event signature
     std::vector<CompiledPin> pins;
 
     // execution tables

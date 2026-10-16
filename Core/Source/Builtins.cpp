@@ -90,63 +90,6 @@ void signaturePins(const Graph& g, std::vector<PinDef>& pins) {
 void registerScriptNodes(Registry& r) {
     {
         NodeDef d;
-        d.id = "event.custom";
-        d.title = "Custom Event";
-        d.category = "Events";
-        d.style = NodeStyle::Event;
-        d.op = NodeOp::Event;
-        d.eventGraphOnly = true;
-        d.pins.push_back(execOut());
-        d.dynamicPins = [](const Node& n, const NodeBuildCtx&, std::vector<PinDef>& pins) {
-            for (auto& p : n.params) pins.push_back(dataOut(p.name, p.type));
-        };
-        d.expand = [](const NodeBuildCtx&, std::vector<NodeTemplate>& out) {
-            NodeTemplate t;
-            t.defId = "event.custom";
-            t.props["name"] = "NewEvent";
-            t.title = "Add Custom Event...";
-            t.category = "Events";
-            t.style = NodeStyle::Event;
-            t.pins.push_back(execOut());
-            out.push_back(std::move(t));
-        };
-        r.addNode(std::move(d));
-    }
-    {
-        NodeDef d;
-        d.id = "event.call";
-        d.title = "Call Event";
-        d.category = "Events";
-        d.op = NodeOp::CallEvent;
-        d.eventGraphOnly = false;
-        d.pins.push_back(execIn());
-        d.pins.push_back(execOut());
-        d.dynamicPins = [](const Node& n, const NodeBuildCtx& c, std::vector<PinDef>& pins) {
-            if (!c.script) return;
-            for (auto& e : c.script->customEvents())
-                if (e.name == n.prop("event")) {
-                    for (auto& p : e.params) pins.push_back(dataIn(p.name, p.type, p.def));
-                    break;
-                }
-        };
-        d.expand = [](const NodeBuildCtx& c, std::vector<NodeTemplate>& out) {
-            if (!c.script) return;
-            for (auto& e : c.script->customEvents()) {
-                NodeTemplate t;
-                t.defId = "event.call";
-                t.props["event"] = e.name;
-                t.title = "Call " + e.name;
-                t.category = "Events";
-                t.pins.push_back(execIn());
-                t.pins.push_back(execOut());
-                for (auto& p : e.params) t.pins.push_back(dataIn(p.name, p.type, p.def));
-                out.push_back(std::move(t));
-            }
-        };
-        r.addNode(std::move(d));
-    }
-    {
-        NodeDef d;
         d.id = "func.entry";
         d.title = "Function Entry";
         d.category = "Functions";
