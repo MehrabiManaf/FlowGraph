@@ -51,6 +51,7 @@ public:
     const TypeDesc* resolveType(const TypeExpr& e) const;
     const TypeDesc* typeOrAny(const std::string& expr) const;            // unknown => any
     const TypeDesc* findTypeByCpp(std::type_index idx) const;
+    uint64_t uid() const { return uid_; }                                // never reused by another registry of this process
     std::vector<const TypeDesc*> types() const;                          // non container types
     std::vector<const TypeDesc*> derivedTypes(const TypeDesc* base) const;  // direct children
     void setTypeColor(const std::string& typeName, uint32_t rgb);
@@ -108,6 +109,7 @@ public:
     const TypeDesc* wrapType(std::type_index staticType, std::type_index dynamicType) const;
 
 private:
+    const uint64_t uid_;
     void ensureBuilt() const;
     void rebuildGenerated() const;
     TypeDesc* newType(const std::string& name);

@@ -1047,6 +1047,726 @@ TEST(plugin_path_lists_load_each_plugin_once) {
     CHECK_EQ(rt.loadedPlugins().size(), size_t(1));
 }
 
+// ---- interpreter fast paths ---------------------------------------------------------------------------
+// The interpreter evaluates math, comparisons, branches, loops, variables and the array / map nodes inline. These tests pin down
+// that the results, the error messages and the debugger's view are exactly what the node implementations define.
+static NodeId fpNode(Graph& g, const char* def) { return g.addNode(def).id; }
+static NodeId fpNode(Graph& g, const char* def, const char* pin, Value v) {
+    Node& n = g.addNode(def);
+    n.defaults[pin] = std::move(v);
+    return n.id;
+}
+static NodeId fpVar(Graph& g, const char* kind, const char* name, const char* scope = "global") {
+    Node& n = g.addNode(kind);
+    n.props = {{"name", name}, {"scope", scope}};
+    return n.id;
+}
+static NodeId fpCall(Graph& g, const char* fn) {
+    Node& n = g.addNode("func.call");
+    n.props["function"] = fn;
+    return n.id;
+}
+static void fpDefault(Graph& g, NodeId n, const char* pin, Value v) { g.findNode(n)->defaults[pin] = std::move(v); }
+static NodeId fpLoop(Graph& g, NodeId prev, const char* prevPin, int64_t first, int64_t last) {
+    NodeId l = fpNode(g, "flow.for");
+    fpDefault(g, l, "First", Value(first));
+    fpDefault(g, l, "Last", Value(last));
+    link(g, prev, prevPin, l, "In");
+    return l;
+}
+// var = var + src.pin, executed after execFrom.execPin
+static NodeId fpAccumulate(Graph& g, const char* var, NodeId src, const char* pin, NodeId execFrom, const char* execPin) {
+    NodeId get = fpVar(g, "var.get", var), sum = fpNode(g, "math.add"), set = fpVar(g, "var.set", var);
+    link(g, get, "Value", sum, "A");
+    link(g, src, pin, sum, "B");
+    link(g, sum, "Result", set, "Value");
+    link(g, execFrom, execPin, set, "In");
+    return set;
+}
+
+TEST(fast_paths_nested_loops_and_break) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"acc", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId outer = fpLoop(g, ev, "Then", 0, 5);
+    NodeId inner = fpLoop(g, outer, "Loop Body", 0, 10);
+    NodeId eq = fpNode(g, "cmp.eq", "B", Value(3)), br = fpNode(g, "flow.branch"), brk = fpNode(g, "flow.break");
+    link(g, inner, "Index", eq, "A");
+    link(g, eq, "Result", br, "Condition");
+    link(g, inner, "Loop Body", br, "In");
+    link(g, br, "True", brk, "In");
+    NodeId mul = fpNode(g, "math.mul", "B", Value(10)), idx = fpNode(g, "math.add");
+    link(g, outer, "Index", mul, "A");
+    link(g, mul, "Result", idx, "A");
+    link(g, inner, "Index", idx, "B");
+    fpAccumulate(g, "acc", idx, "Result", br, "False");
+    // after the outer loop: acc = acc * 2
+    NodeId done = fpVar(g, "var.set", "acc"), get = fpVar(g, "var.get", "acc"), dbl = fpNode(g, "math.mul", "B", Value(2));
+    link(g, get, "Value", dbl, "A");
+    link(g, dbl, "Result", done, "Value");
+    link(g, outer, "Completed", done, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("acc").toInt(), int64_t(630));      // 2 * sum over i < 5 of (30 i + 3)
+}
+
+TEST(fast_paths_while_and_for_each_with_break) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"i", "int", Value(0), "", ""});
+    s.variables.push_back({"acc", "int", Value(0), "", ""});
+    s.variables.push_back({"arr", "array<int>", Value(), "", ""});
+    s.variables.push_back({"seen", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    // while (i < 100) { i = i + 1; if (i >= 7) break; acc += i } ; then acc += 1000
+    NodeId wh = fpNode(g, "flow.while");
+    link(g, ev, "Then", wh, "In");
+    NodeId geti = fpVar(g, "var.get", "i"), lt = fpNode(g, "cmp.lt", "B", Value(100));
+    link(g, geti, "Value", lt, "A");
+    link(g, lt, "Result", wh, "Condition");
+    NodeId geti2 = fpVar(g, "var.get", "i"), inc = fpNode(g, "math.add", "B", Value(1)), seti = fpVar(g, "var.set", "i");
+    link(g, geti2, "Value", inc, "A");
+    link(g, inc, "Result", seti, "Value");
+    link(g, wh, "Loop Body", seti, "In");
+    NodeId geti3 = fpVar(g, "var.get", "i"), ge = fpNode(g, "cmp.ge", "B", Value(7)), br = fpNode(g, "flow.branch"), brk = fpNode(g, "flow.break");
+    link(g, geti3, "Value", ge, "A");
+    link(g, ge, "Result", br, "Condition");
+    link(g, seti, "Then", br, "In");
+    link(g, br, "True", brk, "In");
+    NodeId geti4 = fpVar(g, "var.get", "i");
+    fpAccumulate(g, "acc", geti4, "Value", br, "False");
+    NodeId thousand = fpNode(g, "math.add", "A", Value(1000));
+    NodeId after = fpAccumulate(g, "acc", thousand, "Result", wh, "Completed");
+    // arr = squares of 0..5; for each element: if (e > 10) break; seen += e
+    NodeId fill = fpLoop(g, after, "Then", 0, 6);
+    NodeId garr = fpVar(g, "var.get", "arr"), push = fpNode(g, "array.add"), sq = fpNode(g, "math.mul");
+    link(g, garr, "Value", push, "Array");
+    link(g, fill, "Index", sq, "A");
+    link(g, fill, "Index", sq, "B");
+    link(g, sq, "Result", push, "Item");
+    link(g, fill, "Loop Body", push, "In");
+    NodeId each = fpNode(g, "flow.foreach"), garr2 = fpVar(g, "var.get", "arr");
+    link(g, fill, "Completed", each, "In");
+    link(g, garr2, "Value", each, "Array");
+    NodeId gt = fpNode(g, "cmp.gt", "B", Value(10)), br2 = fpNode(g, "flow.branch"), brk2 = fpNode(g, "flow.break");
+    link(g, each, "Element", gt, "A");
+    link(g, gt, "Result", br2, "Condition");
+    link(g, each, "Loop Body", br2, "In");
+    link(g, br2, "True", brk2, "In");
+    fpAccumulate(g, "seen", each, "Element", br2, "False");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("i").toInt(), int64_t(7));
+    CHECK_EQ(inst.getVariable("acc").toInt(), int64_t(21 + 1000));  // i = 1..6 were added, Break continues with Completed
+    CHECK_EQ(inst.getVariable("arr").toString(), std::string("[0, 1, 4, 9, 16, 25]"));
+    CHECK_EQ(inst.getVariable("seen").toInt(), int64_t(14));       // 0 + 1 + 4 + 9, stopped at 16
+}
+
+TEST(fast_paths_loop_bound_is_read_every_iteration) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"limit", "int", Value(3), "", ""});
+    s.variables.push_back({"acc", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId l = fpNode(g, "flow.for");
+    fpDefault(g, l, "First", Value(0));
+    NodeId lim = fpVar(g, "var.get", "limit");
+    link(g, lim, "Value", l, "Last");
+    link(g, ev, "Then", l, "In");
+    // body: while limit < 8 { limit += 1 }; acc += Index   (the loop keeps growing until limit reaches 8)
+    NodeId getl = fpVar(g, "var.get", "limit"), lt = fpNode(g, "cmp.lt", "B", Value(8)), br = fpNode(g, "flow.branch");
+    link(g, getl, "Value", lt, "A");
+    link(g, lt, "Result", br, "Condition");
+    link(g, l, "Loop Body", br, "In");
+    NodeId getl2 = fpVar(g, "var.get", "limit"), inc = fpNode(g, "math.add", "B", Value(1)), setl = fpVar(g, "var.set", "limit");
+    link(g, getl2, "Value", inc, "A");
+    link(g, inc, "Result", setl, "Value");
+    link(g, br, "True", setl, "In");
+    NodeId a = fpAccumulate(g, "acc", l, "Index", setl, "Then");
+    link(g, br, "False", a, "In");
+    auto prog = build(rt, s);
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("limit").toInt(), int64_t(8));
+    CHECK_EQ(inst.getVariable("acc").toInt(), int64_t(28));        // Index 0..7
+}
+
+TEST(fast_paths_sequence_and_delay_resume_loops) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"acc", "int", Value(0), "", ""});
+    s.variables.push_back({"slow", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId seq = fpNode(g, "flow.sequence");
+    g.findNode(seq)->props["count"] = "4";
+    link(g, ev, "Then", seq, "In");
+    for (int k = 0; k < 3; ++k) {
+        NodeId l = fpLoop(g, seq, ("Then " + std::to_string(k)).c_str(), 0, 3 + k);
+        fpAccumulate(g, "acc", l, "Index", l, "Loop Body");
+    }
+    // a loop whose body waits: the loop continues after each tick
+    NodeId l = fpLoop(g, seq, "Then 3", 0, 3);
+    NodeId d = fpNode(g, "flow.delay", "Duration", Value(0.0));
+    link(g, l, "Loop Body", d, "In");
+    fpAccumulate(g, "slow", l, "Index", d, "Then");
+    auto prog = build(rt, s);
+    Instance inst(prog);
+    auto r = inst.callEvent("Go");
+    CHECK(r.waiting());
+    for (int k = 0; k < 10 && inst.pendingTaskCount() > 0; ++k) inst.tick(0.5);
+    CHECK_EQ(inst.pendingTaskCount(), size_t(0));
+    CHECK_EQ(inst.getVariable("acc").toInt(), int64_t(3 + 6 + 10));
+    CHECK_EQ(inst.getVariable("slow").toInt(), int64_t(0 + 1 + 2));
+}
+
+TEST(fast_paths_numbers_and_conversions) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"f", "float", Value(0.0), "", ""});
+    s.variables.push_back({"i", "int", Value(0), "", ""});
+    s.variables.push_back({"b", "bool", Value(false), "", ""});
+    s.variables.push_back({"t", "string", Value(""), "", ""});
+    s.variables.push_back({"sa", "string", Value("apple"), "", ""});
+    s.variables.push_back({"sb", "string", Value("banana"), "", ""});
+    s.variables.push_back({"fl", "float", Value(2.5), "", ""});
+    s.variables.push_back({"n", "int", Value(9), "", ""});
+    s.variables.push_back({"mix", "float", Value(0.0), "", ""});
+    s.variables.push_back({"root", "float", Value(0.0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    // f = 7 / 2 + 0.5 * 3  (connected to a float Add, the Divide becomes a float division: 3.5 + 1.5)
+    NodeId d = fpNode(g, "math.div", "A", Value(7)), half = fpNode(g, "math.mul", "A", Value(0.5)), fsum = fpNode(g, "math.add");
+    fpDefault(g, d, "B", Value(2));
+    fpDefault(g, half, "B", Value(3));
+    link(g, d, "Result", fsum, "A");
+    link(g, half, "Result", fsum, "B");
+    NodeId setf = fpVar(g, "var.set", "f");
+    link(g, fsum, "Result", setf, "Value");
+    link(g, ev, "Then", setf, "In");
+    // i = 7 mod 4 + min(3, 9)
+    NodeId m = fpNode(g, "math.mod", "A", Value(7)), mn = fpNode(g, "math.min", "A", Value(3)), isum = fpNode(g, "math.add");
+    fpDefault(g, m, "B", Value(4));
+    fpDefault(g, mn, "B", Value(9));
+    link(g, m, "Result", isum, "A");
+    link(g, mn, "Result", isum, "B");
+    NodeId seti = fpVar(g, "var.set", "i");
+    link(g, isum, "Result", seti, "Value");
+    link(g, setf, "Then", seti, "In");
+    // b = (f > i) xor (i == 6.0)
+    NodeId getf = fpVar(g, "var.get", "f"), geti = fpVar(g, "var.get", "i");
+    NodeId gt = fpNode(g, "cmp.gt"), eq = fpNode(g, "cmp.eq", "B", Value(6.0)), xr = fpNode(g, "logic.xor");
+    link(g, getf, "Value", gt, "A");
+    link(g, geti, "Value", gt, "B");
+    link(g, geti, "Value", eq, "A");
+    link(g, gt, "Result", xr, "A");
+    link(g, eq, "Result", xr, "B");
+    NodeId setb = fpVar(g, "var.set", "b");
+    link(g, xr, "Result", setb, "Value");
+    link(g, seti, "Then", setb, "In");
+    // t = sa < sb ? "yes" : "no"  (strings compare as strings)
+    NodeId lt = fpNode(g, "cmp.lt"), sel = fpNode(g, "flow.select"), gsa = fpVar(g, "var.get", "sa"), gsb = fpVar(g, "var.get", "sb");
+    link(g, gsa, "Value", lt, "A");
+    link(g, gsb, "Value", lt, "B");
+    fpDefault(g, sel, "A", Value("yes"));
+    fpDefault(g, sel, "B", Value("no"));
+    link(g, lt, "Result", sel, "Condition");
+    NodeId sett = fpVar(g, "var.set", "t");
+    link(g, sel, "Result", sett, "Value");
+    link(g, setb, "Then", sett, "In");
+    // a float variable plus an int variable (the int input is converted), and Sqrt of an int
+    NodeId gfl = fpVar(g, "var.get", "fl"), gn = fpVar(g, "var.get", "n"), sum = fpNode(g, "math.add");
+    link(g, gfl, "Value", sum, "A");
+    link(g, gn, "Value", sum, "B");
+    NodeId setm = fpVar(g, "var.set", "mix");
+    link(g, sum, "Result", setm, "Value");
+    link(g, sett, "Then", setm, "In");
+    NodeId gn2 = fpVar(g, "var.get", "n"), sq = fpNode(g, "fn:Math.Sqrt");
+    link(g, gn2, "Value", sq, "X");
+    NodeId setr = fpVar(g, "var.set", "root");
+    link(g, sq, "Result", setr, "Value");
+    link(g, setm, "Then", setr, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("f").toFloat(), 5.0);
+    CHECK_EQ(inst.getVariable("i").toInt(), int64_t(6));
+    CHECK_EQ(inst.getVariable("b").toBool(), true);               // (5.0 > 6) is false, (6 == 6.0) is true
+    CHECK_EQ(inst.getVariable("t").toString(), std::string("yes"));
+    CHECK_EQ(inst.getVariable("mix").toFloat(), 11.5);
+    CHECK_EQ(inst.getVariable("root").toFloat(), 3.0);
+}
+
+TEST(fast_paths_integer_division_and_modulo) {
+    TestRuntime rt;
+    Script s;
+    {
+        Graph& f = s.addFunction("Calc", {{"A", "int", false, false, Value()}, {"B", "int", false, false, Value()}},
+                                 {{"Q", "int", false, false, Value()}, {"R", "int", false, false, Value()}});
+        f.connections.clear();
+        NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
+        NodeId dv = fpNode(f, "math.div"), md = fpNode(f, "math.mod");
+        link(f, entry, "A", dv, "A");
+        link(f, entry, "B", dv, "B");
+        link(f, entry, "A", md, "A");
+        link(f, entry, "B", md, "B");
+        link(f, dv, "Result", ret, "Q");
+        link(f, md, "Result", ret, "R");
+        link(f, entry, "Then", ret, "In");
+    }
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    const std::vector<std::pair<int64_t, int64_t>> cases = {
+        {7, 2}, {-7, 2}, {7, -2}, {-7, -2}, {0, 5}, {5, 5}, {1, 7}, {4294967295LL, 2}, {4294967296LL, 3}, {4294967295LL, 4294967295LL},
+        {(1LL << 40), 7}, {(1LL << 40) + 5, (1LL << 33)}, {123456789012345LL, 1000003}, {-(1LL << 40), 9}, {9, 4294967296LL}};
+    for (auto [a, b] : cases) {
+        auto r = inst.callFunction("Calc", {Value(a), Value(b)});
+        CHECK(r.ok);
+        CHECK_EQ(r.returns.size(), size_t(2));
+        if (r.returns.size() == 2) {
+            CHECK_EQ(r.returns[0].toInt(), a / b);
+            CHECK_EQ(r.returns[1].toInt(), a % b);
+        }
+    }
+}
+
+TEST(fast_paths_errors_name_the_failing_node) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"i", "int", Value(5), "", ""});
+    s.variables.push_back({"arr", "array<int>", Value(), "", ""});
+    s.variables.push_back({"r", "int", Value(0), "", ""});
+    {
+        Graph& f = s.addFunction("Boom", {{"D", "int", false, false, Value()}}, {{"Result", "int", false, false, Value()}});
+        f.connections.clear();
+        NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
+        NodeId dv = fpNode(f, "math.div", "A", Value(1));
+        link(f, entry, "D", dv, "B");
+        link(f, dv, "Result", ret, "Result");
+        link(f, entry, "Then", ret, "In");
+    }
+    {
+        Graph& f = s.addFunction("Id", {{"V", "int", false, false, Value()}}, {{"Result", "int", false, false, Value()}});
+        f.connections.clear();
+        NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
+        link(f, entry, "V", ret, "Result");
+        link(f, entry, "Then", ret, "In");
+    }
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    // 1. a call whose argument fails (1 / (2 - 2)): the error belongs to the caller
+    NodeId dv = fpNode(g, "math.div", "A", Value(1)), zero = fpNode(g, "math.sub", "A", Value(2));
+    fpDefault(g, zero, "B", Value(2));
+    link(g, zero, "Result", dv, "B");
+    NodeId id = fpCall(g, "Id");
+    link(g, dv, "Result", id, "V");
+    link(g, ev, "Then", id, "In");
+    // 2. an error inside a function
+    NodeId boom = fpCall(g, "Boom");
+    fpDefault(g, boom, "D", Value(0));
+    link(g, id, "Then", boom, "In");
+    // 3. modulo by zero
+    NodeId md = fpNode(g, "math.mod", "A", Value(10)), zero2 = fpNode(g, "math.sub", "A", Value(3));
+    fpDefault(g, zero2, "B", Value(3));
+    link(g, zero2, "Result", md, "B");
+    NodeId set = fpVar(g, "var.set", "i");
+    link(g, md, "Result", set, "Value");
+    link(g, boom, "Then", set, "In");
+    // 4. an array index out of range
+    NodeId garr = fpVar(g, "var.get", "arr"), push = fpNode(g, "array.add", "Item", Value(41));
+    link(g, garr, "Value", push, "Array");
+    link(g, set, "Then", push, "In");
+    NodeId garr2 = fpVar(g, "var.get", "arr"), bad = fpNode(g, "array.get", "Index", Value(1));
+    link(g, garr2, "Value", bad, "Array");
+    NodeId setr = fpVar(g, "var.set", "r");
+    link(g, bad, "Item", setr, "Value");
+    link(g, push, "Then", setr, "In");
+
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    inst.setLogHandler([](LogLevel, const std::string&) {});
+    auto run = [&]() {
+        auto r = inst.callEvent("Go");
+        CHECK(!r.ok);
+        CHECK_EQ(r.state, TaskState::Failed);
+        return r;
+    };
+    auto r = run();
+    CHECK_EQ(r.error, std::string("division by zero"));
+    CHECK_EQ(r.errorGraph, g.name);
+    CHECK_EQ(r.errorNode, dv);
+    r = run();                                           // frames of the failed run are recycled
+    CHECK_EQ(r.errorNode, dv);
+    // let the argument evaluate, then each following error in turn
+    fpDefault(g, zero, "B", Value(1));
+    prog = build(rt, s);
+    Instance inst2(prog);
+    inst2.setLogHandler([](LogLevel, const std::string&) {});
+    r = inst2.callEvent("Go");
+    CHECK_EQ(r.error, std::string("division by zero"));
+    CHECK_EQ(r.errorGraph, std::string("Boom"));
+    fpDefault(g, boom, "D", Value(1));
+    prog = build(rt, s);
+    Instance inst3(prog);
+    inst3.setLogHandler([](LogLevel, const std::string&) {});
+    r = inst3.callEvent("Go");
+    CHECK_EQ(r.error, std::string("division by zero"));
+    CHECK_EQ(r.errorGraph, g.name);
+    CHECK_EQ(r.errorNode, md);
+    fpDefault(g, zero2, "B", Value(7));
+    prog = build(rt, s);
+    Instance inst4(prog);
+    inst4.setLogHandler([](LogLevel, const std::string&) {});
+    r = inst4.callEvent("Go");
+    CHECK_EQ(r.error, std::string("index 1 is out of range (size 1)"));
+    CHECK_EQ(r.errorNode, bad);
+    CHECK_EQ(inst4.getVariable("arr").toString(), std::string("[41]"));
+}
+
+TEST(fast_paths_arrays_and_maps) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"arr", "array<int>", Value(), "", ""});
+    s.variables.push_back({"copy", "array<int>", Value(), "", ""});
+    s.variables.push_back({"m", "map<string,int>", Value(), "", ""});
+    s.variables.push_back({"x", "int", Value(0), "", ""});
+    s.variables.push_back({"a", "int", Value(0), "", ""});
+    s.variables.push_back({"b", "int", Value(-1), "", ""});
+    s.variables.push_back({"found", "bool", Value(true), "", ""});
+    s.variables.push_back({"has", "bool", Value(false), "", ""});
+    s.variables.push_back({"mlen", "int", Value(0), "", ""});
+    s.variables.push_back({"empty", "int", Value(-1), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId prev = ev;
+    for (int k = 0; k < 3; ++k) {                         // arr = [0, 10, 20]
+        NodeId ga = fpVar(g, "var.get", "arr"), p = fpNode(g, "array.add", "Item", Value(k * 10));
+        link(g, ga, "Value", p, "Array");
+        link(g, prev, "Then", p, "In");
+        prev = p;
+    }
+    NodeId ga = fpVar(g, "var.get", "arr"), st = fpNode(g, "array.set", "Index", Value(1));       // arr[1] = 99
+    fpDefault(g, st, "Item", Value(99));
+    link(g, ga, "Value", st, "Array");
+    link(g, prev, "Then", st, "In");
+    NodeId ga2 = fpVar(g, "var.get", "arr"), setCopy = fpVar(g, "var.set", "copy");               // copy = arr (a copy)
+    link(g, ga2, "Value", setCopy, "Value");
+    link(g, st, "Then", setCopy, "In");
+    NodeId ga3 = fpVar(g, "var.get", "arr"), push = fpNode(g, "array.add", "Item", Value(7));      // arr.add(7): copy is unchanged
+    link(g, ga3, "Value", push, "Array");
+    link(g, setCopy, "Then", push, "In");
+    NodeId ga4 = fpVar(g, "var.get", "arr"), get = fpNode(g, "array.get", "Index", Value(1)), len = fpNode(g, "array.length"), sum = fpNode(g, "math.add");
+    link(g, ga4, "Value", get, "Array");
+    link(g, ga4, "Value", len, "Array");
+    link(g, get, "Item", sum, "A");
+    link(g, len, "Length", sum, "B");
+    NodeId setx = fpVar(g, "var.set", "x");                                                        // x = arr[1] + arr.length = 99 + 4
+    link(g, sum, "Result", setx, "Value");
+    link(g, push, "Then", setx, "In");
+    // maps
+    NodeId m1 = fpVar(g, "var.get", "m"), s1 = fpNode(g, "map.set", "Key", Value("x"));
+    fpDefault(g, s1, "Value", Value(7));
+    link(g, m1, "Value", s1, "Map");
+    link(g, setx, "Then", s1, "In");
+    NodeId m2 = fpVar(g, "var.get", "m"), s2 = fpNode(g, "map.set", "Key", Value("y"));
+    fpDefault(g, s2, "Value", Value(8));
+    link(g, m2, "Value", s2, "Map");
+    link(g, s1, "Then", s2, "In");
+    NodeId m3 = fpVar(g, "var.get", "m"), g1 = fpNode(g, "map.get", "Key", Value("x")), g2 = fpNode(g, "map.get", "Key", Value("zzz"));
+    link(g, m3, "Value", g1, "Map");
+    link(g, m3, "Value", g2, "Map");
+    NodeId seta = fpVar(g, "var.set", "a"), setb = fpVar(g, "var.set", "b"), setf = fpVar(g, "var.set", "found");
+    link(g, g1, "Value", seta, "Value");
+    link(g, g2, "Value", setb, "Value");                  // missing key: the default of the value type
+    link(g, g2, "Found", setf, "Value");
+    link(g, s2, "Then", seta, "In");
+    link(g, seta, "Then", setb, "In");
+    link(g, setb, "Then", setf, "In");
+    NodeId m4 = fpVar(g, "var.get", "m"), has = fpNode(g, "map.contains", "Key", Value("y")), mlen = fpNode(g, "map.length");
+    link(g, m4, "Value", has, "Map");
+    link(g, m4, "Value", mlen, "Map");
+    NodeId seth = fpVar(g, "var.set", "has"), setl = fpVar(g, "var.set", "mlen");
+    link(g, has, "Contains", seth, "Value");
+    link(g, mlen, "Length", setl, "Value");
+    link(g, setf, "Then", seth, "In");
+    link(g, seth, "Then", setl, "In");
+    // an input that is not connected uses the (empty) default container
+    NodeId elen = fpNode(g, "array.length"), sete = fpVar(g, "var.set", "empty");
+    link(g, elen, "Length", sete, "Value");
+    link(g, setl, "Then", sete, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("arr").toString(), std::string("[0, 99, 20, 7]"));
+    CHECK_EQ(inst.getVariable("copy").toString(), std::string("[0, 99, 20]"));
+    CHECK_EQ(inst.getVariable("x").toInt(), int64_t(103));
+    CHECK_EQ(inst.getVariable("m").toString(), std::string("{\"x\": 7, \"y\": 8}"));
+    CHECK_EQ(inst.getVariable("a").toInt(), int64_t(7));
+    CHECK_EQ(inst.getVariable("b").toInt(), int64_t(0));
+    CHECK_EQ(inst.getVariable("found").toBool(), false);
+    CHECK_EQ(inst.getVariable("has").toBool(), true);
+    CHECK_EQ(inst.getVariable("mlen").toInt(), int64_t(2));
+    CHECK_EQ(inst.getVariable("empty").toInt(), int64_t(0));
+}
+
+TEST(fast_paths_calls_recycle_frames) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"r", "int", Value(0), "", ""});
+    s.variables.push_back({"counter", "int", Value(0), "", ""});
+    s.variables.push_back({"a", "array<int>", Value(), "", ""});
+    s.variables.push_back({"len", "int", Value(0), "", ""});
+    {   // Fact(N) = N < 2 ? 1 : N * Fact(N - 1)
+        Graph& f = s.addFunction("Fact", {{"N", "int", false, false, Value()}}, {{"Result", "int", false, false, Value()}});
+        f.connections.clear();
+        NodeId entry = f.nodes[0].id, retRec = f.nodes[1].id;
+        NodeId lt = fpNode(f, "cmp.lt", "B", Value(2)), br = fpNode(f, "flow.branch"), retBase = fpNode(f, "func.return");
+        fpDefault(f, retBase, "Result", Value(1));
+        NodeId sub = fpNode(f, "math.sub", "B", Value(1)), c = fpCall(f, "Fact"), mul = fpNode(f, "math.mul");
+        link(f, entry, "Then", br, "In");
+        link(f, entry, "N", lt, "A");
+        link(f, lt, "Result", br, "Condition");
+        link(f, br, "True", retBase, "In");
+        link(f, br, "False", c, "In");
+        link(f, entry, "N", sub, "A");
+        link(f, sub, "Result", c, "N");
+        link(f, entry, "N", mul, "A");
+        link(f, c, "Result", mul, "B");
+        link(f, mul, "Result", retRec, "Result");
+        link(f, c, "Then", retRec, "In");
+    }
+    {   // Bump(ref Count, const Step) -> Twice: Count += Step; the local doubles from 5 every call
+        Graph& f = s.addFunction("Bump", {{"Count", "int", true, false, Value()}, {"Step", "int", false, true, Value()}}, {{"Twice", "int", false, false, Value()}});
+        f.locals.push_back({"tmp", "int", Value(5), "", ""});
+        f.connections.clear();
+        NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
+        NodeId gc = fpVar(f, "var.get", "Count", "param"), gs = fpVar(f, "var.get", "Step", "param"), sum = fpNode(f, "math.add");
+        link(f, gc, "Value", sum, "A");
+        link(f, gs, "Value", sum, "B");
+        NodeId setc = fpVar(f, "var.set", "Count", "param");
+        link(f, sum, "Result", setc, "Value");
+        link(f, entry, "Then", setc, "In");
+        NodeId gt = fpVar(f, "var.get", "tmp", "local"), dbl = fpNode(f, "math.mul", "B", Value(2)), sett = fpVar(f, "var.set", "tmp", "local");
+        link(f, gt, "Value", dbl, "A");
+        link(f, dbl, "Result", sett, "Value");
+        link(f, setc, "Then", sett, "In");
+        NodeId gt2 = fpVar(f, "var.get", "tmp", "local");
+        link(f, gt2, "Value", ret, "Twice");
+        link(f, sett, "Then", ret, "In");
+    }
+    {   // Grow(A: array) -> Len: the array is passed by value
+        Graph& f = s.addFunction("Grow", {{"A", "array<int>", false, false, Value()}}, {{"Len", "int", false, false, Value()}});
+        f.connections.clear();
+        NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
+        NodeId ga = fpVar(f, "var.get", "A", "param"), p = fpNode(f, "array.add", "Item", Value(5)), ga2 = fpVar(f, "var.get", "A", "param"), ln = fpNode(f, "array.length");
+        link(f, ga, "Value", p, "Array");
+        link(f, entry, "Then", p, "In");
+        link(f, ga2, "Value", ln, "Array");
+        link(f, ln, "Length", ret, "Len");
+        link(f, p, "Then", ret, "In");
+    }
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId c1 = fpCall(g, "Fact");
+    fpDefault(g, c1, "N", Value(10));
+    link(g, ev, "Then", c1, "In");
+    NodeId setr = fpVar(g, "var.set", "r");
+    link(g, c1, "Result", setr, "Value");
+    link(g, c1, "Then", setr, "In");
+    NodeId prev = setr;
+    for (int k = 0; k < 3; ++k) {
+        NodeId b = fpCall(g, "Bump");
+        NodeId gv = fpVar(g, "var.get", "counter");
+        link(g, gv, "Value", b, "Count");
+        fpDefault(g, b, "Step", Value(k + 1));
+        link(g, prev, "Then", b, "In");
+        prev = b;
+    }
+    NodeId setc = fpVar(g, "var.set", "counter");
+    link(g, prev, "Twice", setc, "Value");
+    link(g, prev, "Then", setc, "In");
+    NodeId ga = fpVar(g, "var.get", "a"), grow = fpCall(g, "Grow"), grow2 = fpCall(g, "Grow");
+    link(g, ga, "Value", grow, "A");
+    link(g, ga, "Value", grow2, "A");
+    link(g, setc, "Then", grow, "In");
+    link(g, grow, "Then", grow2, "In");
+    NodeId setl = fpVar(g, "var.set", "len");
+    link(g, grow2, "Len", setl, "Value");
+    link(g, grow2, "Then", setl, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    for (int round = 0; round < 3; ++round) {             // the second and third run use recycled frames
+        inst.resetVariables();
+        CHECK(inst.callEvent("Go").ok);
+        CHECK_EQ(inst.getVariable("r").toInt(), int64_t(3628800));
+        CHECK_EQ(inst.getVariable("counter").toInt(), int64_t(10));    // 0 + 1 + 2 + 3 = 6 went through the reference, then Twice = 10
+        CHECK_EQ(inst.getVariable("a").toString(), std::string("[]"));
+        CHECK_EQ(inst.getVariable("len").toInt(), int64_t(1));
+    }
+    // host calls, many times
+    int64_t acc = 0;
+    for (int64_t i = 1; i <= 200; ++i) {
+        auto r = inst.callFunction("Fact", {Value(i % 12)});
+        CHECK(r.ok);
+        int64_t want = 1;
+        for (int64_t k = 2; k <= i % 12; ++k) want *= k;
+        CHECK_EQ(r.returns.at(0).toInt(), want);
+        acc += want;
+    }
+    CHECK(acc > 0);
+}
+
+TEST(fast_paths_strings_are_used_in_place) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"t", "string", Value(""), "", ""});
+    s.variables.push_back({"u", "string", Value(""), "", ""});
+    s.variables.push_back({"len", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId l = fpLoop(g, ev, "Then", 0, 4);
+    NodeId gt = fpVar(g, "var.get", "t"), cat = fpNode(g, "fn:String.Concat"), cat2 = fpNode(g, "fn:String.Concat", "B", Value("-")), set = fpVar(g, "var.set", "t");
+    link(g, gt, "Value", cat, "A");
+    link(g, l, "Index", cat, "B");                         // int -> string conversion on the way in
+    link(g, cat, "Result", cat2, "A");
+    link(g, cat2, "Result", set, "Value");
+    link(g, l, "Loop Body", set, "In");
+    NodeId gt2 = fpVar(g, "var.get", "t"), ln = fpNode(g, "fn:String.Length"), setl = fpVar(g, "var.set", "len");
+    link(g, gt2, "Value", ln, "String");
+    link(g, ln, "Result", setl, "Value");
+    link(g, l, "Completed", setl, "In");
+    NodeId up = fpNode(g, "fn:String.To Upper", "String", Value("hello")), cat3 = fpNode(g, "fn:String.Concat");
+    link(g, up, "Result", cat3, "A");
+    fpDefault(g, cat3, "B", Value(42));                    // default literal converted at compile time
+    NodeId setu = fpVar(g, "var.set", "u");
+    link(g, cat3, "Result", setu, "Value");
+    link(g, setl, "Then", setu, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("t").toString(), std::string("0-1-2-3-"));
+    CHECK_EQ(inst.getVariable("len").toInt(), int64_t(8));
+    CHECK_EQ(inst.getVariable("u").toString(), std::string("HELLO42"));
+}
+
+TEST(fast_paths_debugger_sees_the_values_of_pure_nodes) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"acc", "int", Value(0), "", ""});
+    s.variables.push_back({"mark", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId l = fpLoop(g, ev, "Then", 0, 3);
+    NodeId get = fpVar(g, "var.get", "acc"), sum = fpNode(g, "math.add"), set = fpVar(g, "var.set", "acc"), tail = fpVar(g, "var.set", "mark");
+    link(g, get, "Value", sum, "A");
+    link(g, l, "Index", sum, "B");
+    link(g, sum, "Result", set, "Value");
+    link(g, l, "Loop Body", set, "In");
+    link(g, l, "Index", tail, "Value");
+    link(g, set, "Then", tail, "In");
+    auto prog = build(rt, s);
+    Instance inst(prog);
+    Debugger dbg;
+    std::vector<std::string> links;
+    dbg.linkFired = [&](const std::string&, NodeId from, int out, NodeId to) { links.push_back(std::to_string(from) + "." + std::to_string(out) + "->" + std::to_string(to)); };
+    inst.setDebugHooks(&dbg);
+    // without a breakpoint the debugger stays out of the way
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("acc").toInt(), int64_t(3));
+    CHECK_EQ(links.size(), size_t(1 + 3 + 3));                  // Go -> loop, loop -> body (3x), Set -> Set mark (3x)
+    // stop after the Set node of the third iteration: the pure nodes it evaluated show their values
+    inst.resetVariables();
+    dbg.setBreakpoint(g.name, tail, true);
+    auto r = inst.callEvent("Go");
+    CHECK(r.paused());
+    r = r.task->run();                                    // second stop (Index = 1)
+    CHECK(r.paused());
+    r = r.task->run();                                    // third stop (Index = 2); acc was 1 before the Set node ran
+    CHECK(r.paused());
+    CHECK_EQ(r.task->currentNode(), tail);
+    Value v;
+    CHECK(r.task->pinValue(0, get, "Value", v));
+    CHECK_EQ(v.toInt(), int64_t(1));                       // the variable as the Set node read it
+    CHECK(r.task->pinValue(0, sum, "Result", v));
+    CHECK_EQ(v.toInt(), int64_t(3));
+    CHECK(r.task->pinValue(0, sum, "B", v));
+    CHECK_EQ(v.toInt(), int64_t(2));
+    CHECK(r.task->pinValue(0, l, "Index", v));
+    CHECK_EQ(v.toInt(), int64_t(2));
+    dbg.setBreakpoint(g.name, tail, false);
+    r = r.task->run();
+    CHECK(r.ok);
+    CHECK_EQ(inst.getVariable("acc").toInt(), int64_t(3));
+    // breakpoints and steps still work after a run in which nothing was armed
+    dbg.clearBreakpoints();
+    dbg.setBreakpoint(g.name, set, true);
+    inst.resetVariables();
+    r = inst.callEvent("Go");
+    CHECK(r.paused());
+    CHECK_EQ(r.task->currentNode(), set);
+    r.task->abort();
+}
+
+TEST(fast_paths_step_limit_and_stack_overflow_are_reported) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"i", "int", Value(0), "", ""});
+    s.variables.push_back({"r", "int", Value(0), "", ""});
+    {
+        Graph& f = s.addFunction("Down", {{"N", "int", false, false, Value()}}, {{"Result", "int", false, false, Value()}});
+        f.connections.clear();
+        NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
+        NodeId c = fpCall(f, "Down"), add1 = fpNode(f, "math.add", "B", Value(1));
+        link(f, entry, "N", add1, "A");
+        link(f, add1, "Result", c, "N");
+        link(f, entry, "Then", c, "In");
+        link(f, c, "Result", ret, "Result");
+        link(f, c, "Then", ret, "In");
+    }
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId wh = fpNode(g, "flow.while", "Condition", Value(true));
+    link(g, ev, "Then", wh, "In");
+    NodeId get = fpVar(g, "var.get", "i"), inc = fpNode(g, "math.add", "B", Value(1)), set = fpVar(g, "var.set", "i");
+    link(g, get, "Value", inc, "A");
+    link(g, inc, "Result", set, "Value");
+    link(g, wh, "Loop Body", set, "In");
+    Graph& g2 = s.addEventGraph("Second");
+    NodeId ev2 = fpNode(g2, "event:Run");
+    NodeId c = fpCall(g2, "Down");
+    link(g2, ev2, "Then", c, "In");
+    NodeId setr = fpVar(g2, "var.set", "r");
+    link(g2, c, "Result", setr, "Value");
+    link(g2, c, "Then", setr, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    inst.setLogHandler([](LogLevel, const std::string&) {});
+    inst.setStepLimit(10000);
+    auto r = inst.callEvent("Go");
+    CHECK(!r.ok);
+    CHECK_EQ(r.error, std::string("Step limit exceeded (infinite loop?)"));
+    CHECK_EQ(r.errorNode, set);
+    auto r2 = inst.callEvent("Run");
+    CHECK(!r2.ok);
+    CHECK_EQ(r2.error, std::string("call stack overflow (recursion too deep?)"));
+    CHECK_EQ(r2.errorGraph, std::string("Down"));
+}
+
 int main(int argc, char** argv) {
     g_exeDir = std::filesystem::path(argv[0]).parent_path().string();
     std::setvbuf(stdout, nullptr, _IONBF, 0);

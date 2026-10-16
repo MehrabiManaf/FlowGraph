@@ -78,3 +78,53 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
 - flowstudio: the entries box is a *Launch configuration* selector (EditorHost::launchLabel/launchEntrySelected, ScriptEditor::addToLaunchSelector for the Configure... button); Event Graphs lists only the events the script handles and has no + button; event graphs cannot be created from it and are not listed (only their events).
 - Event nodes are undeletable in the editor (GraphScene::deleteSelected skips them and reports it; "Remove handler" is gone; event graphs with events cannot be deleted).
 - Side docks (My Script / Details / Debugger) have no maximum width any more, so they follow their dock; ScriptEditorWindow::applyInitialSizes sets My Script ~300 px and Details ~360 px the first time the window is shown (KDDockWidgets ignores InitialOption sizes).
+
+## Interpreter speed, round 2 (Core, synchronous runs)
+Measured with `FlowGraphBench` (Tests/Bench.cpp; `FlowGraphBench --stable --runs 9 [--debugger] [--scale F] [filter]`), Release /O2, best of
+N runs, original Core vs this one, binaries run alternately. Total of the 13 benchmarks: 4997 ms -> 1079 ms (4.6x, geometric mean 4.5x).
+
+| benchmark | before ms | after ms | speedup |
+|---|---|---|---|
+| For loop `acc = acc + i` (2M) | 590 | 83 | 7.2x |
+| For loop `((acc + i) * 3) % 1000003` (1M) | 541 | 81 | 6.7x |
+| For loop, float math (1M) | 427 | 54 | 7.9x |
+| While loop (1M) | 470 | 57 | 8.2x |
+| For loop with Branch (1M) | 632 | 109 | 5.8x |
+| Recursive Fib(27), 832k calls | 466 | 122 | 3.8x |
+| Array Add + For Each (500k) | 312 | 68 | 4.6x |
+| Map Set + Get (150k each) | 191 | 62 | 3.1x |
+| String Concat in a loop (300k) | 170 | 116 | 1.5x |
+| Empty For loop (3M) | 220 | 45 | 4.9x |
+| Array Get Item / Set Item (500k) | 469 | 74 | 6.3x |
+| Reflected object: method call + property read (200k) | 141 | 44 | 3.2x |
+| C++ -> script function call, 200k `callFunction` | 369 | 163 | 2.3x |
+
+With a Debugger attached (how the editor runs a script, `--debugger`): 5743 ms -> 1386 ms (4.1x).
+
+What changed (all in Core, no API or file format change):
+- Intrinsics (`NodeDef::intrinsic`, copied to `CompiledNode::fast`): math, comparisons, logic, Branch, For / ForEach / While, Get Variable and the
+  array / map nodes (get, set, add, length, contains, map get/set) run inline in `Task::evalNode` / `Task::execFast` - no NodeCtx, no std::function,
+  no copies of the inputs. They mirror the `run` functions in Builtins.cpp exactly (results, error messages, evaluation order); when an input
+  cannot be read in place (type conversion, container default literal) the node falls back to `run`.
+- `Task::peek` reads an input in place. The compiler classifies every input (`DataSource::Mode`: constant, slot, pure slot, parameter, global /
+  local / parameter variable). Without a debugger a Get Variable node feeding an intrinsic is not evaluated at all - the variable is read directly;
+  with DebugHooks installed the node is evaluated as before, so pins still show their values.
+- Loops keep their continuation on `Frame::conts` and update it in place (no pop / push per iteration); `Frame::resuming` means "the top
+  continuation belongs to `pc`". Generic nodes still take it off the stack (`execGeneric`).
+- Frames are recycled per Instance (`Instance::spareFrames_`): slot values, stamps (the epoch keeps counting, so stale stamps never match), parameter
+  and local cells are reused; arguments are evaluated straight into the callee's cells. Task + control block are one allocation.
+- Smaller things: `Value` assignment / `setInt` inlined, `==` and `ValueLess` have int fast paths, `const std::string&` parameters of reflected
+  functions use the script's string in place (`StringRefArg`), `registeredTypeOf<T>` caches the C++ type lookup (it took a mutex and hashed a
+  type_info on every call that passes an object), 32 bit division when both operands are small and non-negative, cold throw paths moved out of the hot
+  functions (std::string temporaries there gave them stack cookies), `Debugger::shouldBreak` returns at once when nothing is armed.
+
+Rules to keep it correct:
+- An intrinsic must stay identical to the `run` of its node; a NodeDef copied from a built-in one keeps the intrinsic (reset it when replacing `run`).
+- A pointer from `peek` is only valid until the node that asked for it is done. Pure nodes never change variables or containers, and exec nodes
+  read all their inputs before they change anything - keep it that way.
+- Cells of a popped frame are cleared (`popFrame`), shared ones are dropped; do not keep `Cell`s of a frame beyond its life.
+- Tests: `fast_paths_*` in Tests/Main.cpp pin the behaviour (they also pass on the pre-optimization Core). A differential run of many scripts
+  against the old Core (results, errors, log, debugger pins and link events) gave identical output, and the suite is clean under AddressSanitizer.
+- Plugins and hosts must be rebuilt with these headers (Registry, NodeCtx, Value and Frame layouts changed).
+- Ideas left: pooling Task objects for host calls (~9 allocations per `callFunction`), compiling pure expression trees to flat code, a call path
+  for reflected functions without NodeCtx, a smaller Value (16 bytes) with an intrusive reference count.

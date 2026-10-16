@@ -1,3 +1,5 @@
 add_executable(FlowGraphTests Main.cpp)
 target_link_libraries(FlowGraphTests PRIVATE FlowGraphCore)
 add_test(NAME FlowGraphTests COMMAND FlowGraphTests)
+add_executable(FlowGraphBench Bench.cpp)
+target_link_libraries(FlowGraphBench PRIVATE FlowGraphCore)

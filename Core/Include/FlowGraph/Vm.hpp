@@ -16,6 +16,7 @@ namespace fg {
 
 class Instance;
 class Task;
+class DebugHooks;
 struct Frame;
 
 enum class LogLevel : uint8_t { Info, Warning, Error };
@@ -49,6 +50,7 @@ struct Frame {
     std::vector<Value> slotValues;           // outputs of the nodes of this graph
     std::vector<uint32_t> stamps;       // per node: epoch in which a pure node was last evaluated
     uint32_t epoch = 1;
+    int stampGraph = -1;                // graph the stamps were last used with (they stay valid across activations of it)
     std::vector<Cell> params;           // by reference parameters alias the caller's variable cell
     std::vector<Cell> locals;
     std::vector<Continuation> conts;
@@ -114,8 +116,14 @@ private:
     int exitCode_ = 0;
     size_t pin_ = 0;
     double waitSeconds_ = 0;
-    std::function<bool(double)> poll_;
+    std::unique_ptr<std::function<bool(double)>> poll_;   // rarely used: kept out of line so a NodeCtx stays cheap to build
+    [[noreturn]] void outOfRange(size_t i) const;
 };
+
+inline void NodeCtx::out(size_t i, Value v) {
+    if (i >= node_->dataOut.size()) outOfRange(i);
+    frame_->slotValues[static_cast<size_t>(node_->outBase) + i] = std::move(v);
+}
 
 struct RunResult {
     bool ok = false;                    // finished without error
@@ -174,16 +182,27 @@ public:
     // The first frame's graph / node (the event or function that started the task).
     std::vector<Value> results() const { return results_; }
 
-private:
+protected:
     friend class Instance;
     Task(Instance& inst, int id, std::string name);
+
+private:
     Frame* pushFrame(int graphIndex);
     void popFrame();
     void executeNode(Frame& f, const CompiledNode& n);
     void finishFrame();
     void follow(Frame& f, const CompiledNode& n, size_t execOut);
     Value evalInput(Frame& f, const CompiledNode& n, size_t ordinal);
+    const Value* peek(Frame& f, const CompiledNode& n, size_t ordinal);      // input without a copy; null = take the slow path
+    const Value* peekRare(Frame& f, const DataSource& ds);
+    Value* cellPtr(Frame& f, const CompiledNode& var);
     void evalPure(Frame& f, const CompiledNode& n);
+    void evalNode(Frame& f, const CompiledNode& n);
+    void evalGeneric(Frame& f, const CompiledNode& n);
+    bool execFast(Frame& f, const CompiledNode& n, bool resumed);
+    void execGeneric(Frame& f, const CompiledNode& n, bool resumed);
+    void setVariableSlow(Frame& f, const CompiledNode& n);
+    void returnSlow(Frame& f, const CompiledNode& n);
     void gatherInputs(Frame& f, const CompiledNode& n, Value* buf);
     void initCtx(NodeCtx& ctx, Frame& f, const CompiledNode& n, Value* in, const Continuation* rc);
     Cell cellFor(Frame& f, const CompiledNode& var);
@@ -198,7 +217,6 @@ private:
     std::string name_;
     TaskState state_ = TaskState::Ready;
     std::vector<std::unique_ptr<Frame>> frames_;
-    std::vector<std::unique_ptr<Frame>> pool_;
     std::string error_;
     std::string errorGraph_;
     NodeId errorNode_ = 0;
@@ -214,6 +232,7 @@ private:
     std::weak_ptr<Task> self_;
     const CompiledNode* active_ = nullptr;   // node being executed / evaluated (error attribution)
     int evalDepth_ = 0;
+    DebugHooks* hooks_ = nullptr;            // the instance's hooks while run() executes
 };
 
 // Debugger integration -----------------------------------------------------------------------
@@ -288,6 +307,7 @@ private:
     std::shared_ptr<const Program> program_;
     std::vector<Cell> globals_;
     std::vector<std::shared_ptr<Task>> tasks_;     // waiting or paused tasks started through callEvent/callFunction
+    std::vector<std::unique_ptr<Frame>> spareFrames_;   // frames of finished calls, reused by the next ones (see Task::pushFrame)
     LogHandler log_;
     DebugHooks* hooks_ = nullptr;
     uint64_t stepLimit_ = 50'000'000;
@@ -325,10 +345,12 @@ public:
 
 private:
     struct Step { Command cmd = Command::Continue; size_t depth = 0; };
+    void updateArmed();               // call with mu_ held
     mutable std::mutex mu_;
     std::set<std::pair<std::string, NodeId>> breakpoints_;
     std::map<const Task*, Step> steps_;
     std::atomic<bool> pauseAll_{false};
+    std::atomic<size_t> armed_{0};    // breakpoints + stepping tasks: shouldBreak() returns at once when nothing is armed
 };
 
 } // namespace fg

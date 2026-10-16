@@ -28,7 +28,14 @@ uint32_t hashColor(const std::string& name) {
 
 } // namespace
 
-Registry::Registry() { registerBuiltinTypes(); }
+namespace {
+uint64_t nextRegistryUid() {
+    static std::atomic<uint64_t> next{1};
+    return next++;
+}
+} // namespace
+
+Registry::Registry() : uid_(nextRegistryUid()) { registerBuiltinTypes(); }
 Registry::~Registry() = default;
 
 // ------------------------------------------------------------------ types

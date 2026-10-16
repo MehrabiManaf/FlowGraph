@@ -78,11 +78,27 @@ enum class NodeOp : uint8_t {
     Reroute,        // editor helper; passes its input through
 };
 
+// Built-in nodes the interpreter evaluates inline: it reads the inputs in place and skips the NodeCtx and the std::function call.
+// An intrinsic mirrors the node's `run` function exactly (results, errors, order of evaluation) and declines whatever it cannot
+// read in place (conversions, container defaults); `run` then does the work, so it must stay in sync with the intrinsic.
+// A NodeDef copied from a built-in one keeps its intrinsic: reset it when `run` is replaced.
+enum class Intrinsic : uint8_t {
+    None,
+    GetVar,                                      // reads a variable (set by the compiler for NodeOp::GetVariable)
+    Add, Sub, Mul, Div, Mod, Min, Max,          // math, two inputs
+    Eq, Ne, Lt, Le, Gt, Ge,                      // comparisons
+    And, Or, Xor, Not,                           // logic
+    Branch, For, ForEach, While,                 // flow
+    ArrayGet, ArraySet, ArrayAdd, ArrayLength,   // containers
+    MapGet, MapSet, MapContains, MapLength,
+};
+
 struct NodeDef {
     std::string id;                   // unique, e.g. "flow.branch", "fn:Math.Sin", "m:Actor.Move"
     std::string title, category, doc, keywords, source;
     NodeStyle style = NodeStyle::Function;
     NodeOp op = NodeOp::Native;
+    Intrinsic intrinsic = Intrinsic::None;
     bool pure = false;                // evaluated lazily when an output is pulled; no exec pins
     bool eventGraphOnly = false;
     bool functionGraphOnly = false;

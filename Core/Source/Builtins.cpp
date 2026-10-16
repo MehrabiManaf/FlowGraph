@@ -218,6 +218,7 @@ void registerScriptNodes(Registry& r) {
 void registerFlow(Registry& r) {
     {
         NodeDef d = flowNode("flow.branch", "Branch", "Flow");
+        d.intrinsic = Intrinsic::Branch;
         d.keywords = "if else condition";
         d.pins = {execIn(), dataIn("Condition", "bool", Value(false)), execOut("True"), execOut("False")};
         d.run = [](NodeCtx& c) { c.next(c.inBool(0) ? 0 : 1); };
@@ -243,6 +244,7 @@ void registerFlow(Registry& r) {
     }
     {
         NodeDef d = flowNode("flow.for", "For Loop", "Flow");
+        d.intrinsic = Intrinsic::For;
         d.keywords = "loop repeat for";
         d.breakPin = 0;                                    // Break continues with "Completed"
         d.doc = "Runs the loop body for First <= Index < Last (Last itself is not visited).";
@@ -262,6 +264,7 @@ void registerFlow(Registry& r) {
     }
     {
         NodeDef d = flowNode("flow.foreach", "For Each", "Flow");
+        d.intrinsic = Intrinsic::ForEach;
         d.keywords = "loop array iterate";
         d.breakPin = 0;
         d.typeParams.push_back({"T", {}, "int"});
@@ -280,6 +283,7 @@ void registerFlow(Registry& r) {
     }
     {
         NodeDef d = flowNode("flow.while", "While Loop", "Flow");
+        d.intrinsic = Intrinsic::While;
         d.keywords = "loop while";
         d.breakPin = 0;
         d.pins = {execIn(), dataIn("Condition", "bool", Value(false)), execOut("Completed"), execOut("Loop Body")};
@@ -336,8 +340,9 @@ void registerFlow(Registry& r) {
 // ------------------------------------------------------------------ math / logic
 void registerMath(Registry& r) {
     auto numeric = [](NodeDef& d) { d.typeParams.push_back({"T", {"int", "float"}, "int"}); };
-    auto binary = [&](const char* id, const char* title, const char* kw, auto opInt, auto opFloat) {
+    auto binary = [&](const char* id, Intrinsic fast, const char* title, const char* kw, auto opInt, auto opFloat) {
         NodeDef d = pureNode(id, title, "Math");
+        d.intrinsic = fast;
         d.keywords = kw;
         numeric(d);
         d.pins = {dataIn("A", "T", Value(0)), dataIn("B", "T", Value(0)), dataOut("Result", "T")};
@@ -348,17 +353,17 @@ void registerMath(Registry& r) {
         };
         r.addNode(std::move(d));
     };
-    binary("math.add", "Add", "+ plus sum", [](NodeCtx&, int64_t a, int64_t b) { return a + b; }, [](double a, double b) { return a + b; });
-    binary("math.sub", "Subtract", "- minus", [](NodeCtx&, int64_t a, int64_t b) { return a - b; }, [](double a, double b) { return a - b; });
-    binary("math.mul", "Multiply", "* times", [](NodeCtx&, int64_t a, int64_t b) { return a * b; }, [](double a, double b) { return a * b; });
-    binary("math.div", "Divide", "/ over",
+    binary("math.add", Intrinsic::Add, "Add", "+ plus sum", [](NodeCtx&, int64_t a, int64_t b) { return a + b; }, [](double a, double b) { return a + b; });
+    binary("math.sub", Intrinsic::Sub, "Subtract", "- minus", [](NodeCtx&, int64_t a, int64_t b) { return a - b; }, [](double a, double b) { return a - b; });
+    binary("math.mul", Intrinsic::Mul, "Multiply", "* times", [](NodeCtx&, int64_t a, int64_t b) { return a * b; }, [](double a, double b) { return a * b; });
+    binary("math.div", Intrinsic::Div, "Divide", "/ over",
            [](NodeCtx& c, int64_t a, int64_t b) -> int64_t { if (b == 0) c.error("division by zero"); return a / b; },
            [](double a, double b) { return a / b; });
-    binary("math.mod", "Modulo", "% remainder",
+    binary("math.mod", Intrinsic::Mod, "Modulo", "% remainder",
            [](NodeCtx& c, int64_t a, int64_t b) -> int64_t { if (b == 0) c.error("division by zero"); return a % b; },
            [](double a, double b) { return std::fmod(a, b); });
-    binary("math.min", "Min", "smaller", [](NodeCtx&, int64_t a, int64_t b) { return std::min(a, b); }, [](double a, double b) { return std::min(a, b); });
-    binary("math.max", "Max", "larger", [](NodeCtx&, int64_t a, int64_t b) { return std::max(a, b); }, [](double a, double b) { return std::max(a, b); });
+    binary("math.min", Intrinsic::Min, "Min", "smaller", [](NodeCtx&, int64_t a, int64_t b) { return std::min(a, b); }, [](double a, double b) { return std::min(a, b); });
+    binary("math.max", Intrinsic::Max, "Max", "larger", [](NodeCtx&, int64_t a, int64_t b) { return std::max(a, b); }, [](double a, double b) { return std::max(a, b); });
     {
         NodeDef d = pureNode("math.abs", "Abs", "Math");
         numeric(d);
@@ -392,8 +397,9 @@ void registerMath(Registry& r) {
     }
 
     // comparisons
-    auto compare = [&](const char* id, const char* title, const char* kw, bool ordered, auto fn) {
+    auto compare = [&](const char* id, Intrinsic fast, const char* title, const char* kw, bool ordered, auto fn) {
         NodeDef d = pureNode(id, title, "Math|Comparison");
+        d.intrinsic = fast;
         d.keywords = kw;
         if (ordered) d.typeParams.push_back({"T", {"int", "float", "string"}, "int"});
         else d.typeParams.push_back({"T", {}, "int"});
@@ -402,26 +408,28 @@ void registerMath(Registry& r) {
         r.addNode(std::move(d));
     };
     ValueLess less;
-    compare("cmp.eq", "Equal", "==", false, [](const Value& a, const Value& b) { return a == b; });
-    compare("cmp.ne", "Not Equal", "!=", false, [](const Value& a, const Value& b) { return a != b; });
-    compare("cmp.lt", "Less", "<", true, [less](const Value& a, const Value& b) { return less(a, b); });
-    compare("cmp.le", "Less Or Equal", "<=", true, [less](const Value& a, const Value& b) { return !less(b, a); });
-    compare("cmp.gt", "Greater", ">", true, [less](const Value& a, const Value& b) { return less(b, a); });
-    compare("cmp.ge", "Greater Or Equal", ">=", true, [less](const Value& a, const Value& b) { return !less(a, b); });
+    compare("cmp.eq", Intrinsic::Eq, "Equal", "==", false, [](const Value& a, const Value& b) { return a == b; });
+    compare("cmp.ne", Intrinsic::Ne, "Not Equal", "!=", false, [](const Value& a, const Value& b) { return a != b; });
+    compare("cmp.lt", Intrinsic::Lt, "Less", "<", true, [less](const Value& a, const Value& b) { return less(a, b); });
+    compare("cmp.le", Intrinsic::Le, "Less Or Equal", "<=", true, [less](const Value& a, const Value& b) { return !less(b, a); });
+    compare("cmp.gt", Intrinsic::Gt, "Greater", ">", true, [less](const Value& a, const Value& b) { return less(b, a); });
+    compare("cmp.ge", Intrinsic::Ge, "Greater Or Equal", ">=", true, [less](const Value& a, const Value& b) { return !less(a, b); });
 
     // logic
-    auto logic = [&](const char* id, const char* title, const char* kw, auto fn) {
+    auto logic = [&](const char* id, Intrinsic fast, const char* title, const char* kw, auto fn) {
         NodeDef d = pureNode(id, title, "Math|Logic");
+        d.intrinsic = fast;
         d.keywords = kw;
         d.pins = {dataIn("A", "bool", Value(false)), dataIn("B", "bool", Value(false)), dataOut("Result", "bool")};
         d.run = [fn](NodeCtx& c) { c.out(0, Value(fn(c.inBool(0), c.inBool(1)))); };
         r.addNode(std::move(d));
     };
-    logic("logic.and", "And", "&&", [](bool a, bool b) { return a && b; });
-    logic("logic.or", "Or", "||", [](bool a, bool b) { return a || b; });
-    logic("logic.xor", "Xor", "^", [](bool a, bool b) { return a != b; });
+    logic("logic.and", Intrinsic::And, "And", "&&", [](bool a, bool b) { return a && b; });
+    logic("logic.or", Intrinsic::Or, "Or", "||", [](bool a, bool b) { return a || b; });
+    logic("logic.xor", Intrinsic::Xor, "Xor", "^", [](bool a, bool b) { return a != b; });
     {
         NodeDef d = pureNode("logic.not", "Not", "Math|Logic");
+        d.intrinsic = Intrinsic::Not;
         d.keywords = "!";
         d.pins = {dataIn("Value", "bool", Value(false)), dataOut("Result", "bool")};
         d.run = [](NodeCtx& c) { c.out(0, Value(!c.inBool(0))); };
@@ -484,8 +492,9 @@ void registerStrings(Registry& r) {
 
 // ------------------------------------------------------------------ containers
 void registerContainers(Registry& r) {
-    auto arrayNode = [&](const char* id, const char* title, bool pure, bool mutates, std::vector<PinDef> pins, std::function<void(NodeCtx&)> run) {
+    auto arrayNode = [&](const char* id, Intrinsic fast, const char* title, bool pure, bool mutates, std::vector<PinDef> pins, std::function<void(NodeCtx&)> run) {
         NodeDef d = pure ? pureNode(id, title, "Containers|Array") : execNode(id, title, "Containers|Array");
+        d.intrinsic = fast;
         d.typeParams.push_back({"T", {}, "int"});
         for (auto& p : pins) d.pins.push_back(std::move(p));
         d.mutatesFirstInput = mutates;
@@ -493,33 +502,33 @@ void registerContainers(Registry& r) {
         d.run = std::move(run);
         r.addNode(std::move(d));
     };
-    arrayNode("array.add", "Add", false, true, {dataIn("Array", "array<T>"), dataIn("Item", "T")},
+    arrayNode("array.add", Intrinsic::ArrayAdd, "Add", false, true, {dataIn("Array", "array<T>"), dataIn("Item", "T")},
               [](NodeCtx& c) { arrayArg(c, 0).items.push_back(c.in(1).deepCopy()); });
-    arrayNode("array.insert", "Insert", false, true, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataIn("Item", "T")}, [](NodeCtx& c) {
+    arrayNode("array.insert", Intrinsic::None, "Insert", false, true, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataIn("Item", "T")}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         int64_t i = checkIndex(c, c.inInt(1), a.items.size(), true);
         a.items.insert(a.items.begin() + i, c.in(2).deepCopy());
     });
-    arrayNode("array.set", "Set Item", false, true, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataIn("Item", "T")}, [](NodeCtx& c) {
+    arrayNode("array.set", Intrinsic::ArraySet, "Set Item", false, true, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataIn("Item", "T")}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         a.items[static_cast<size_t>(checkIndex(c, c.inInt(1), a.items.size()))] = c.in(2).deepCopy();
     });
-    arrayNode("array.remove", "Remove At", false, true, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0))}, [](NodeCtx& c) {
+    arrayNode("array.remove", Intrinsic::None, "Remove At", false, true, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0))}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         a.items.erase(a.items.begin() + checkIndex(c, c.inInt(1), a.items.size()));
     });
-    arrayNode("array.clear", "Clear", false, true, {dataIn("Array", "array<T>")}, [](NodeCtx& c) { arrayArg(c, 0).items.clear(); });
-    arrayNode("array.get", "Get Item", true, false, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataOut("Item", "T")}, [](NodeCtx& c) {
+    arrayNode("array.clear", Intrinsic::None, "Clear", false, true, {dataIn("Array", "array<T>")}, [](NodeCtx& c) { arrayArg(c, 0).items.clear(); });
+    arrayNode("array.get", Intrinsic::ArrayGet, "Get Item", true, false, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataOut("Item", "T")}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         c.out(0, a.items[static_cast<size_t>(checkIndex(c, c.inInt(1), a.items.size()))]);
     });
-    arrayNode("array.length", "Length", true, false, {dataIn("Array", "array<T>"), dataOut("Length", "int")},
+    arrayNode("array.length", Intrinsic::ArrayLength, "Length", true, false, {dataIn("Array", "array<T>"), dataOut("Length", "int")},
               [](NodeCtx& c) { c.out(0, Value(static_cast<int64_t>(arrayArg(c, 0).items.size()))); });
-    arrayNode("array.contains", "Contains", true, false, {dataIn("Array", "array<T>"), dataIn("Item", "T"), dataOut("Contains", "bool")}, [](NodeCtx& c) {
+    arrayNode("array.contains", Intrinsic::None, "Contains", true, false, {dataIn("Array", "array<T>"), dataIn("Item", "T"), dataOut("Contains", "bool")}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         c.out(0, Value(std::find(a.items.begin(), a.items.end(), c.in(1)) != a.items.end()));
     });
-    arrayNode("array.find", "Find", true, false, {dataIn("Array", "array<T>"), dataIn("Item", "T"), dataOut("Index", "int")}, [](NodeCtx& c) {
+    arrayNode("array.find", Intrinsic::None, "Find", true, false, {dataIn("Array", "array<T>"), dataIn("Item", "T"), dataOut("Index", "int")}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         auto it = std::find(a.items.begin(), a.items.end(), c.in(1));
         c.out(0, Value(it == a.items.end() ? int64_t(-1) : static_cast<int64_t>(it - a.items.begin())));
@@ -544,8 +553,9 @@ void registerContainers(Registry& r) {
         r.addNode(std::move(d));
     }
 
-    auto mapNode = [&](const char* id, const char* title, bool pure, bool mutates, std::vector<PinDef> pins, std::function<void(NodeCtx&)> run) {
+    auto mapNode = [&](const char* id, Intrinsic fast, const char* title, bool pure, bool mutates, std::vector<PinDef> pins, std::function<void(NodeCtx&)> run) {
         NodeDef d = pure ? pureNode(id, title, "Containers|Map") : execNode(id, title, "Containers|Map");
+        d.intrinsic = fast;
         d.typeParams.push_back({"K", {}, "string"});
         d.typeParams.push_back({"V", {}, "int"});
         for (auto& p : pins) d.pins.push_back(std::move(p));
@@ -554,28 +564,28 @@ void registerContainers(Registry& r) {
         d.run = std::move(run);
         r.addNode(std::move(d));
     };
-    mapNode("map.set", "Set Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataIn("Value", "V")},
+    mapNode("map.set", Intrinsic::MapSet, "Set Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataIn("Value", "V")},
             [](NodeCtx& c) { mapArg(c, 0).items[c.in(1)] = c.in(2).deepCopy(); });
-    mapNode("map.remove", "Remove Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K")}, [](NodeCtx& c) { mapArg(c, 0).items.erase(c.in(1)); });
-    mapNode("map.clear", "Clear", false, true, {dataIn("Map", "map<K,V>")}, [](NodeCtx& c) { mapArg(c, 0).items.clear(); });
-    mapNode("map.get", "Get Entry", true, false, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataOut("Value", "V"), dataOut("Found", "bool")}, [](NodeCtx& c) {
+    mapNode("map.remove", Intrinsic::None, "Remove Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K")}, [](NodeCtx& c) { mapArg(c, 0).items.erase(c.in(1)); });
+    mapNode("map.clear", Intrinsic::None, "Clear", false, true, {dataIn("Map", "map<K,V>")}, [](NodeCtx& c) { mapArg(c, 0).items.clear(); });
+    mapNode("map.get", Intrinsic::MapGet, "Get Entry", true, false, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataOut("Value", "V"), dataOut("Found", "bool")}, [](NodeCtx& c) {
         auto& m = mapArg(c, 0);
         auto it = m.items.find(c.in(1));
         c.out(0, it == m.items.end() ? c.registry().defaultValue(m.val) : it->second);
         c.out(1, Value(it != m.items.end()));
     });
-    mapNode("map.contains", "Contains Key", true, false, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataOut("Contains", "bool")},
+    mapNode("map.contains", Intrinsic::MapContains, "Contains Key", true, false, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataOut("Contains", "bool")},
             [](NodeCtx& c) { c.out(0, Value(mapArg(c, 0).items.count(c.in(1)) > 0)); });
-    mapNode("map.length", "Length", true, false, {dataIn("Map", "map<K,V>"), dataOut("Length", "int")},
+    mapNode("map.length", Intrinsic::MapLength, "Length", true, false, {dataIn("Map", "map<K,V>"), dataOut("Length", "int")},
             [](NodeCtx& c) { c.out(0, Value(static_cast<int64_t>(mapArg(c, 0).items.size()))); });
-    mapNode("map.keys", "Keys", true, false, {dataIn("Map", "map<K,V>"), dataOut("Keys", "array<K>")}, [](NodeCtx& c) {
+    mapNode("map.keys", Intrinsic::None, "Keys", true, false, {dataIn("Map", "map<K,V>"), dataOut("Keys", "array<K>")}, [](NodeCtx& c) {
         auto& m = mapArg(c, 0);
         auto a = std::make_shared<ArrayData>();
         a->elem = m.key;
         for (auto& [k, v] : m.items) a->items.push_back(k);
         c.out(0, Value(std::move(a)));
     });
-    mapNode("map.values", "Values", true, false, {dataIn("Map", "map<K,V>"), dataOut("Values", "array<V>")}, [](NodeCtx& c) {
+    mapNode("map.values", Intrinsic::None, "Values", true, false, {dataIn("Map", "map<K,V>"), dataOut("Values", "array<V>")}, [](NodeCtx& c) {
         auto& m = mapArg(c, 0);
         auto a = std::make_shared<ArrayData>();
         a->elem = m.val;

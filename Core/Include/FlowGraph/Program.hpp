@@ -42,6 +42,11 @@ struct DataSource {
     bool convert = false;             // value must be converted (types differ)
     const TypeDesc* from = nullptr;
     const TypeDesc* to = nullptr;
+    // How the interpreter reads the value in place (see Task::peek); decided by the compiler.
+    // VarGlobal / VarLocal / VarParam: the source is a Get Variable node; without a debugger the variable is read in place.
+    enum class Mode : uint8_t { Slow, Const, Slot, PureSlot, Param, VarGlobal, VarLocal, VarParam } mode = Mode::Slow;
+    int varIndex = -1;                // Mode::Var*: index of the variable
+    Value constant;                   // Mode::Const: the default literal
 };
 
 enum class VarScope : uint8_t { Global, Local, Param };
@@ -52,6 +57,7 @@ struct CompiledNode {
     std::string defId;
     const NodeDef* def = nullptr;     // null when the definition is unknown (e.g. missing plugin)
     NodeOp op = NodeOp::Native;
+    Intrinsic fast = Intrinsic::None; // inline evaluation used by the interpreter (copied from the definition)
     bool pure = false;
     double x = 0, y = 0;
     std::string title;                // display title (function name, variable name, ...)
@@ -102,6 +108,7 @@ struct CompiledGraph {
     std::vector<CompiledVariable> locals;
     int slotCount = 0;
     std::vector<const TypeDesc*> slotTypes;   // type of every frame slot (used to initialise frames)
+    std::vector<Value> slotInit;              // initial value of every slot (containers: a fresh one is made per frame)
     int entry = -1;                   // function entry node index
     bool hasRefParams = false;
 

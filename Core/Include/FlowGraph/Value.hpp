@@ -11,6 +11,14 @@
 #include <type_traits>
 #include <vector>
 
+#if defined(_MSC_VER)
+#define FG_FORCEINLINE __forceinline
+#define FG_NOINLINE __declspec(noinline)
+#else
+#define FG_FORCEINLINE inline __attribute__((always_inline))
+#define FG_NOINLINE __attribute__((noinline))
+#endif
+
 namespace fg {
 
 struct TypeDesc;
@@ -46,6 +54,20 @@ public:
     enum class Kind : uint8_t { Null, Bool, Int, Float, String, Object, Array, Map };
 
     Value() = default;
+    Value(const Value&) = default;
+    Value(Value&&) noexcept = default;
+    FG_FORCEINLINE Value& operator=(const Value& o) {
+        kind_ = o.kind_;
+        u_ = o.u_;
+        if (ref_ || o.ref_) ref_ = o.ref_;
+        return *this;
+    }
+    FG_FORCEINLINE Value& operator=(Value&& o) noexcept {
+        kind_ = o.kind_;
+        u_ = o.u_;
+        if (ref_ || o.ref_) ref_ = std::move(o.ref_);
+        return *this;
+    }
     Value(bool b) : kind_(Kind::Bool) { u_.i = b ? 1 : 0; }
     template <class T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool>, int> = 0>
     Value(T i) : kind_(Kind::Int) { u_.i = static_cast<int64_t>(i); }
@@ -86,16 +108,29 @@ public:
     ArrayRef array() const { return kind_ == Kind::Array ? std::static_pointer_cast<ArrayData>(ref_) : ArrayRef{}; }
     MapRef map() const { return kind_ == Kind::Map ? std::static_pointer_cast<MapData>(ref_) : MapRef{}; }
 
+    // In place assignment of a plain value (no temporary, no reference count traffic for the common case).
+    FG_FORCEINLINE void setBool(bool b) { if (ref_) ref_.reset(); kind_ = Kind::Bool; u_.i = b ? 1 : 0; }
+    FG_FORCEINLINE void setInt(int64_t i) { if (ref_) ref_.reset(); kind_ = Kind::Int; u_.i = i; }
+    FG_FORCEINLINE void setFloat(double d) { if (ref_) ref_.reset(); kind_ = Kind::Float; u_.d = d; }
+    // Arrays and maps have reference semantics (see deepCopy).
+    bool isContainer() const { return kind_ == Kind::Array || kind_ == Kind::Map; }
+    // Valid for Kind::Int / Kind::Bool only.
+    int64_t rawInt() const { return u_.i; }
+
     // Copies containers (recursively); every other kind is returned as is.
     Value deepCopy() const { return (kind_ == Kind::Array || kind_ == Kind::Map) ? deepCopySlow() : *this; }
 
     // Identity of the referenced storage (used to detect aliasing); null for plain values.
     const void* identity() const { return ref_.get(); }
 
-    friend bool operator==(const Value& a, const Value& b);
+    friend bool operator==(const Value& a, const Value& b) {
+        if (a.kind_ == Kind::Int && b.kind_ == Kind::Int) return a.u_.i == b.u_.i;
+        return equalsSlow(a, b);
+    }
     friend bool operator!=(const Value& a, const Value& b) { return !(a == b); }
 
 private:
+    static bool equalsSlow(const Value& a, const Value& b);
     bool toBoolSlow() const;
     int64_t toIntSlow() const;
     double toFloatSlow() const;
@@ -112,7 +147,11 @@ private:
 
 // Total order used for map keys (null < bool < numbers < strings < objects).
 struct ValueLess {
-    bool operator()(const Value& a, const Value& b) const;
+    bool operator()(const Value& a, const Value& b) const {
+        if (a.isInt() && b.isInt()) return a.rawInt() < b.rawInt();
+        return slow(a, b);
+    }
+    static bool slow(const Value& a, const Value& b);
 };
 
 struct ArrayData {

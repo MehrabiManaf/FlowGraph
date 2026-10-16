@@ -272,6 +272,7 @@ struct GraphCompiler {
             if (w.def && w.def->op == NodeOp::FunctionEntry) cn.title = g.name;       // the entry node is named after its function
             if (w.def) {
                 cn.op = w.def->op;
+                cn.fast = cn.op == NodeOp::GetVariable ? Intrinsic::GetVar : w.def->intrinsic;
                 cn.pure = w.def->pure;
                 for (auto& tp : w.def->typeParams) {
                     auto it = w.args.find(tp.name);
@@ -297,6 +298,9 @@ struct GraphCompiler {
             }
         }
         cg.slotCount = slot;
+        for (const TypeDesc* t : cg.slotTypes) {
+            cg.slotInit.push_back(t ? reg.defaultValue(t) : Value());
+        }
 
         // ---- wire
         for (auto& l : links) {
@@ -335,6 +339,34 @@ struct GraphCompiler {
         }
 
         resolveReferences(gi);
+
+        // ---- how the interpreter reads every input
+        for (auto& cn : cg.nodes) {
+            for (size_t i = 0; i < cn.inputs.size(); ++i) {
+                DataSource& ds = cn.inputs[i];
+                if (ds.kind == DataSource::Kind::Default) {
+                    const Value& def = cn.pins[static_cast<size_t>(cn.dataIn[i])].def;
+                    if (!def.isContainer()) {
+                        ds.mode = DataSource::Mode::Const;
+                        ds.constant = def;
+                    }
+                } else if (!ds.convert) {
+                    ds.mode = ds.kind == DataSource::Kind::Param ? DataSource::Mode::Param
+                              : ds.pure                          ? DataSource::Mode::PureSlot
+                                                                 : DataSource::Mode::Slot;
+                    if (ds.kind == DataSource::Kind::Slot) {
+                        const CompiledNode& src = cg.nodes[static_cast<size_t>(ds.node)];
+                        if (src.op == NodeOp::GetVariable && src.def && src.resolved >= 0) {
+                            ds.varIndex = src.resolved;
+                            ds.mode = src.scope == VarScope::Global  ? DataSource::Mode::VarGlobal
+                                      : src.scope == VarScope::Local ? DataSource::Mode::VarLocal
+                                                                     : DataSource::Mode::VarParam;
+                        }
+                    }
+                }
+            }
+        }
+
         validate(gi);
     }
 

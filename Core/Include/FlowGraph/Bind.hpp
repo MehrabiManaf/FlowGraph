@@ -79,8 +79,23 @@ FG_MEMBER_CALLER(const, noexcept)
 #undef FG_MEMBER_CALLER
 
 // ---------------------------------------------------------------- C++ type <-> script value
-template <class T> const TypeDesc* classTypeOf(const Registry& r) {
+// The registered type of a C++ type, or null. A C++ type is registered once and keeps its TypeDesc, so the answer is remembered per
+// thread (for the last registry asked): the lookup takes a lock and hashes a type_info, and every call of a reflected function
+// that takes an object would pay for it.
+template <class T> const TypeDesc* registeredTypeOf(const Registry& r) {
+    struct Cache {
+        uint64_t registry = 0;
+        const TypeDesc* type = nullptr;
+    };
+    static thread_local Cache cache;
+    if (cache.registry == r.uid()) return cache.type;
     const TypeDesc* t = r.findTypeByCpp(typeid(std::remove_cv_t<T>));
+    if (t) cache = {r.uid(), t};
+    return t;
+}
+
+template <class T> const TypeDesc* classTypeOf(const Registry& r) {
+    const TypeDesc* t = registeredTypeOf<T>(r);
     if (!t) throw std::logic_error(std::string("C++ type '") + typeid(T).name() + "' is not registered with the script registry");
     return t;
 }
@@ -204,11 +219,19 @@ template <class T> struct Conv<T, std::enable_if_t<IsClassType<T> && !std::is_en
 };
 
 // ---------------------------------------------------------------- arguments and results
+// A `const std::string&` parameter reads the script's string in place; only a value that is not a string is converted.
+struct StringRefArg {
+    const std::string* ref = nullptr;
+    std::string own;
+    const std::string& get() const { return ref ? *ref : own; }
+};
+
 // P is the declared C++ parameter type.
 template <class P> struct Arg {
     using D = std::decay_t<P>;
     static constexpr bool refToClass = std::is_lvalue_reference_v<P> && IsClassType<D>;
-    using Store = std::conditional_t<refToClass, D*, D>;
+    static constexpr bool constStringRef = std::is_same_v<P, const std::string&>;
+    using Store = std::conditional_t<refToClass, D*, std::conditional_t<constStringRef, StringRefArg, D>>;
 
     static const TypeDesc* type(const Registry& r) {
         if constexpr (refToClass) return Conv<D*>::type(r);
@@ -216,10 +239,17 @@ template <class P> struct Arg {
     }
     static Store load(const Registry& r, const Value& v) {
         if constexpr (refToClass) return Conv<D*>::from(r, v);
-        else return Conv<D>::from(r, v);
+        else if constexpr (constStringRef) {
+            StringRefArg a;
+            if (v.isString()) a.ref = &v.str();
+            else a.own = r.toString(v);
+            return a;
+        } else return Conv<D>::from(r, v);
     }
     static decltype(auto) pass(Store& s) {
-        if constexpr (refToClass) {
+        if constexpr (constStringRef) {
+            return static_cast<const std::string&>(s.get());
+        } else if constexpr (refToClass) {
             if (!s) throw ScriptError("null object reference");
             return static_cast<P>(*s);
         } else if constexpr (std::is_lvalue_reference_v<P>) {
@@ -326,7 +356,7 @@ template <class T> Value Registry::wrap(std::shared_ptr<T> sp) const {
         td = wrapType(typeid(B), typeid(*sp));
         if (td && td->cpp != std::type_index(typeid(B))) most = dynamic_cast<void*>(const_cast<B*>(sp.get()));
     } else {
-        td = findTypeByCpp(typeid(B));
+        td = detail::registeredTypeOf<B>(*this);
     }
     if (!td) throw ScriptError(std::string("C++ type '") + typeid(B).name() + "' is not registered with the script registry");
     auto h = std::make_shared<ObjectHandle>();
@@ -344,7 +374,7 @@ template <class T> Value Registry::wrapPtr(T* p) const {
         td = wrapType(typeid(B), typeid(*p));
         if (td && td->cpp != std::type_index(typeid(B))) most = dynamic_cast<void*>(const_cast<B*>(p));
     } else {
-        td = findTypeByCpp(typeid(B));
+        td = detail::registeredTypeOf<B>(*this);
     }
     if (!td) throw ScriptError(std::string("C++ type '") + typeid(B).name() + "' is not registered with the script registry");
     auto h = std::make_shared<ObjectHandle>();
@@ -358,7 +388,7 @@ template <class T> Value Registry::wrapRef(T& ref) const { return wrapPtr(&ref);
 template <class T> std::shared_ptr<T> Registry::unwrap(const Value& v) const {
     auto* h = v.objectPtr();
     if (!h) return nullptr;
-    const TypeDesc* target = findTypeByCpp(typeid(std::remove_cv_t<T>));
+    const TypeDesc* target = detail::registeredTypeOf<T>(*this);
     if (!target) return nullptr;
     void* p = castPtr(*h, target);
     if (!p) return nullptr;

@@ -140,7 +140,7 @@ Value Value::deepCopySlow() const {
     return Value(std::move(dst));
 }
 
-bool operator==(const Value& a, const Value& b) {
+bool Value::equalsSlow(const Value& a, const Value& b) {
     if (a.isNumber() && b.isNumber()) {
         if (a.isInt() && b.isInt()) return a.u_.i == b.u_.i;
         return a.toFloat() == b.toFloat();
@@ -179,7 +179,7 @@ bool operator==(const Value& a, const Value& b) {
     }
 }
 
-bool ValueLess::operator()(const Value& a, const Value& b) const {
+bool ValueLess::slow(const Value& a, const Value& b) {
     int ra = rank(a), rb = rank(b);
     if (ra != rb) return ra < rb;
     switch (a.kind()) {
