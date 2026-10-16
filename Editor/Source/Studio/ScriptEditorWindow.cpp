@@ -192,6 +192,9 @@ void ScriptEditorWindow::createActions() {
     actNew_ = act("&New", QKeySequence::New);
     actOpen_ = act("&Open...", QKeySequence::Open);
     actSave_ = act("&Save", QKeySequence::Save);
+    actNew_->setIcon(QIcon(":/Icons/new.svg"));
+    actOpen_->setIcon(QIcon(":/Icons/open.svg"));
+    actSave_->setIcon(QIcon(":/Icons/save.svg"));
     actSaveAs_ = act("Save &As...", QKeySequence("Ctrl+Shift+S"));
     actExit_ = act("E&xit");
     actUndo_ = act("&Undo", QKeySequence::Undo);
