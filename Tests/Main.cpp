@@ -89,7 +89,7 @@ TEST(for_loop_sums_into_variable) {
     g.findNode(ev)->props["name"] = "Run";
     NodeId loop = g.addNode("flow.for").id;
     g.findNode(loop)->defaults["First"] = Value(1);
-    g.findNode(loop)->defaults["Last"] = Value(10);
+    g.findNode(loop)->defaults["Last"] = Value(11);       // Last is exclusive: 1..10
     NodeId get = g.addNode("var.get").id;
     g.findNode(get)->props = {{"name", "Total"}, {"scope", "global"}};
     NodeId add = g.addNode("math.add").id;
@@ -106,6 +106,73 @@ TEST(for_loop_sums_into_variable) {
     auto r = inst.callEvent("Run");
     CHECK(r.ok);
     CHECK_EQ(inst.getVariable("Total").toInt(), int64_t(55));
+}
+
+TEST(for_loop_last_index_is_exclusive) {
+    Runtime rt;
+    Script s;
+    s.variables.push_back({"Count", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event.custom").id;
+    g.findNode(ev)->props["name"] = "Go";
+    NodeId loop = g.addNode("flow.for").id;
+    g.findNode(loop)->defaults["First"] = Value(2);
+    g.findNode(loop)->defaults["Last"] = Value(5);
+    NodeId getC = g.addNode("var.get").id;
+    g.findNode(getC)->props = {{"name", "Count"}, {"scope", "global"}};
+    NodeId add = g.addNode("math.add").id;
+    g.findNode(add)->defaults["B"] = Value(1);
+    NodeId setC = g.addNode("var.set").id;
+    g.findNode(setC)->props = {{"name", "Count"}, {"scope", "global"}};
+    link(g, ev, "Then", loop, "In");
+    link(g, loop, "Loop Body", setC, "In");
+    link(g, getC, "Value", add, "A");
+    link(g, add, "Result", setC, "Value");
+    auto prog = build(rt, s);
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("Count").toInt(), int64_t(3));          // indices 2, 3, 4
+    // an empty range runs nothing
+    g.findNode(loop)->defaults["Last"] = Value(2);
+    auto prog2 = build(rt, s);
+    Instance inst2(prog2);
+    CHECK(inst2.callEvent("Go").ok);
+    CHECK_EQ(inst2.getVariable("Count").toInt(), int64_t(0));
+}
+
+TEST(enum_values_variables_and_names) {
+    Runtime rt;
+    registerSample(rt);
+    // registered through registerEnum<Mood>: lookups by name, by value and by C++ type
+    const TypeDesc* mood = rt.registry().findType("Mood");
+    CHECK(mood && mood->isEnum());
+    CHECK_EQ(mood->enumName(1), std::string("Sad"));
+    CHECK(rt.registry().findTypeByCpp(typeid(Mood)) == mood);
+    CHECK_EQ(rt.registry().convert(Value("Sad"), mood).toInt(), int64_t(1));      // names convert to values
+    Script s;
+    s.variables.push_back({"Current", "Mood", Value("Sad"), "", ""});             // default given by name
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event.custom").id;
+    g.findNode(ev)->props["name"] = "Go";
+    NodeId pr = g.addNode("util.print").id;
+    NodeId get = g.addNode("var.get").id;
+    g.findNode(get)->props = {{"name", "Current"}, {"scope", "global"}};
+    link(g, ev, "Then", pr, "In");
+    link(g, get, "Value", pr, "String");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    std::vector<std::string> log;
+    inst.setLogHandler([&](LogLevel, const std::string& m) { log.push_back(m); });
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(log.size(), size_t(1));
+    CHECK_EQ(log.empty() ? std::string() : log[0], std::string("Sad"));            // printed with its name
+    // the generated "enum:Mood" node and its palette entries exist
+    CHECK(rt.registry().findNode("enum:Mood") != nullptr);
+    fg::NodeBuildCtx ctx{rt.registry(), &s, s.findGraph("EventGraph")};
+    int entries = 0;
+    for (auto& t : fg::buildPalette(ctx)) entries += t.defId == "enum:Mood";
+    CHECK_EQ(entries, 2);
 }
 
 TEST(function_call_with_return) {

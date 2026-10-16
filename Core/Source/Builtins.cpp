@@ -302,11 +302,14 @@ void registerFlow(Registry& r) {
         NodeDef d = flowNode("flow.for", "For Loop", "Flow");
         d.keywords = "loop repeat for";
         d.breakPin = 1;
-        d.pins = {execIn(), dataIn("First", "int", Value(0)), dataIn("Last", "int", Value(9)), execOut("Loop Body"), execOut("Completed"),
+        d.doc = "Runs the loop body for First <= Index < Last (Last itself is not visited).";
+        d.pins = {execIn(), dataIn("First", "int", Value(0)), dataIn("Last", "int", Value(10)), execOut("Loop Body"), execOut("Completed"),
                   dataOut("Index", "int")};
+        d.pins[1].doc = "First index (included)";
+        d.pins[2].doc = "Last index (excluded): the loop runs while Index < Last";
         d.run = [](NodeCtx& c) {
             int64_t i = c.resumed() ? c.state() + 1 : c.inInt(0);
-            if (i <= c.inInt(1)) {
+            if (i < c.inInt(1)) {
                 c.state() = i;
                 c.out(0, Value(i));
                 c.call(0);

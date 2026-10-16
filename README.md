@@ -52,6 +52,10 @@ instance.tick(0.016);                              // advances latent nodes
 
 * Classes, enums, methods, properties, constructors, free functions and events become nodes automatically
   (`fn:`, `m:`, `get:`/`set:`, `new:`, `cast:`, `enum:`, `event:` node ids). Inheritance (also multiple) is honoured.
+* Enums are registered the same way as classes: `registry.registerEnum<Mood>("Mood").value("Happy", Mood::Happy).value("Sad", Mood::Sad);`
+  The enum becomes a pin / variable / parameter type (pins show a drop-down, values print by name), gets one palette entry per value
+  (`enum:Mood` nodes), converts to and from int, and may be given by name in script defaults (`"default": "Sad"`).
+* The For Loop node visits `First <= Index < Last` (Last is excluded), like a C++ `for (i = First; i < Last; ++i)`.
 * Nodes are generic where it makes sense (`T` in Add / Select / For Each / array and map nodes); the type is
   inferred from the connections.
 * Function parameters can be passed by value, by reference (`List: array<string>&`) or as const; const

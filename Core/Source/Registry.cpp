@@ -251,8 +251,13 @@ Value Registry::convert(const Value& v, const TypeDesc* to) const {
     case TypeKind::Void: return Value();
     case TypeKind::Any: return v;
     case TypeKind::Bool: return v.isBool() ? v : Value(v.toBool());
-    case TypeKind::Int:
-    case TypeKind::Enum: return v.isInt() ? v : Value(v.toInt());
+    case TypeKind::Int: return v.isInt() ? v : Value(v.toInt());
+    case TypeKind::Enum:
+        if (v.isString()) {                                    // scripts may name the value: "Happy"
+            for (auto& e : to->enumValues)
+                if (e.name == v.str()) return Value(e.value);
+        }
+        return v.isInt() ? v : Value(v.toInt());
     case TypeKind::Float: return v.isFloat() ? v : Value(v.toFloat());
     case TypeKind::String: return v.isString() ? v : Value(toString(v));
     case TypeKind::Class: {

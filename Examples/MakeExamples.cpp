@@ -53,7 +53,7 @@ void hello(const std::string& dir) {
     NodeId hi = print(g, 250, 0, "Hello, FlowGraph!");
     NodeId loop = add(g, "flow.for", 500, 0);
     g.findNode(loop)->defaults["First"] = Value(1);
-    g.findNode(loop)->defaults["Last"] = Value(5);
+    g.findNode(loop)->defaults["Last"] = Value(6);        // Last is exclusive: counts 1..5
     NodeId msg = concat(g, "Count: ", 760, 100);
     NodeId pr = print(g, 980, 40);
     link(g, ev, "Then", hi, "In");
