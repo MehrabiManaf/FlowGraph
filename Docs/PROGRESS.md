@@ -140,3 +140,6 @@ Rules to keep it correct:
   Expansion, loaded elements and the watch list survive every refresh (each debugger step rebuilds the trees); watches are stored in the
   user's settings per script path (QSettings "FlowGraph" / "FlowGraph Studio"). RunController::evaluate runs the expressions on the worker.
 - Tests: inspect_* / evaluate_expression_* (Tests/Main.cpp), debugger_panel_pages_big_arrays_and_evaluates_watches (Tests/EditorTests.cpp).
+- Details panel, function Inputs / Outputs tables: no header and no widgets in the cells. The column names are in the tooltip of every cell
+  ("Type: int ..."); Ref / Const are centered check marks; a ParamDelegate creates the editors only on a double click or F2 (types: editable
+  combo with the registry's types, container: a list that opens at once, names: line edit); the Key cell is editable only for maps.

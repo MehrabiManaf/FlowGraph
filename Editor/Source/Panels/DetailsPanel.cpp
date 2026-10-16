@@ -7,8 +7,17 @@
 #include "TypeEdit.hpp"
 #include "TypeSpec.hpp"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QCompleter>
 #include <QComboBox>
+#include <QKeyEvent>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QSignalBlocker>
+#include <QStyle>
+#include <QStyleOptionButton>
+#include <QStyledItemDelegate>
 #include <QHBoxLayout>
 #include <set>
 #include <QFormLayout>
@@ -220,27 +229,162 @@ void DetailsPanel::buildVariable() {
 }
 
 // ------------------------------------------------------------------ parameter tables
+namespace {
+
+enum ParamColumn { ColName, ColType, ColContainer, ColKey, ColRef, ColConst, ColCount };
+
+// What the table shows for a parameter and what it says about it in its tooltip (the table has no header: the tooltip names the column).
+const char* const kContainerNames[] = {"Single", "Array", "Map"};
+
+QString columnTip(int col, const QString& value) {
+    switch (col) {
+    case ColName: return "<b>Name</b>: " + value.toHtmlEscaped();
+    case ColType: return "<b>Type</b>: " + value.toHtmlEscaped() + "<br><i>Double-click to change it.</i>";
+    case ColContainer: return "<b>Container</b>: " + value + "<br>A single value, an array of it, or a map from a key type to it.<br><i>Double-click to change it.</i>";
+    case ColKey: return "<b>Key</b>: " + value.toHtmlEscaped() + "<br>The key type of a map; only used when the container is a Map.";
+    case ColRef: return "<b>Ref</b>: " + value + "<br>Passed by reference: the function reads and writes the caller's variable.";
+    default: return "<b>Const</b>: " + value + "<br>The function may not modify the parameter (a const reference needs no variable and makes no copy).";
+    }
+}
+
+// Edits the cells of a parameter table. Nothing but text is in the cells until the user asks to edit one: then a combo box (types,
+// containers) or a line edit (names) appears, and the check columns toggle on a click.
+class ParamDelegate : public QStyledItemDelegate {
+public:
+    ParamDelegate(const fg::Registry& reg, QObject* parent) : QStyledItemDelegate(parent), reg_(reg) {}
+
+    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        switch (index.column()) {
+        case ColType: return typeEditor(parent);
+        case ColKey:
+            if (index.sibling(index.row(), ColContainer).data(Qt::DisplayRole).toString() != kContainerNames[2]) return nullptr;
+            return typeEditor(parent);
+        case ColContainer: {
+            auto* box = new QComboBox(parent);
+            for (auto* n : kContainerNames) box->addItem(n);
+            QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { finish(box); });
+            QTimer::singleShot(0, box, &QComboBox::showPopup);          // the choice is made right away, like a menu
+            return box;
+        }
+        case ColRef:
+        case ColConst: return nullptr;
+        default: return QStyledItemDelegate::createEditor(parent, option, index);
+        }
+    }
+
+    void setEditorData(QWidget* editor, const QModelIndex& index) const override {
+        if (auto* box = qobject_cast<QComboBox*>(editor)) {
+            QString text = index.data(Qt::DisplayRole).toString();
+            if (box->isEditable()) box->setCurrentText(text);
+            else box->setCurrentIndex(std::max(0, box->findText(text)));
+            if (box->isEditable()) box->lineEdit()->selectAll();
+        } else {
+            QStyledItemDelegate::setEditorData(editor, index);
+        }
+    }
+
+    void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override {
+        auto* box = qobject_cast<QComboBox*>(editor);
+        if (!box) return QStyledItemDelegate::setModelData(editor, model, index);
+        QString text = box->currentText().trimmed();
+        if (box->isEditable() && !reg_.findType(ss(text))) return;       // only types the registry knows
+        model->setData(index, text, Qt::EditRole);
+    }
+
+    void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const override { editor->setGeometry(option.rect); }
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        if (index.column() < ColRef) return QStyledItemDelegate::paint(painter, option, index);
+        // a check box centered in its cell
+        QStyleOptionViewItem o = option;
+        initStyleOption(&o, index);
+        const bool checked = o.checkState == Qt::Checked;
+        o.features &= ~QStyleOptionViewItem::HasCheckIndicator;
+        o.text.clear();
+        QStyle* style = o.widget ? o.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &o, painter, o.widget);
+        QStyleOptionButton b;
+        const int w = style->pixelMetric(QStyle::PM_IndicatorWidth, &o, o.widget), h = style->pixelMetric(QStyle::PM_IndicatorHeight, &o, o.widget);
+        b.rect = QRect(o.rect.center().x() - w / 2, o.rect.center().y() - h / 2, w, h);
+        b.state = (o.state & QStyle::State_Enabled) | (checked ? QStyle::State_On : QStyle::State_Off);
+        b.palette = o.palette;
+        style->drawPrimitive(QStyle::PE_IndicatorCheckBox, &b, painter, o.widget);
+    }
+
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        QSize s = QStyledItemDelegate::sizeHint(option, index);
+        if (index.column() == ColType || index.column() == ColKey) s.setWidth(std::max(s.width() + 8, 64));
+        return s;
+    }
+
+    bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index) override {
+        if (index.column() < ColRef || !(index.flags() & Qt::ItemIsUserCheckable) || !(index.flags() & Qt::ItemIsEnabled))
+            return QStyledItemDelegate::editorEvent(event, model, option, index);
+        bool toggle = false;
+        if (event->type() == QEvent::MouseButtonRelease) toggle = static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton && option.rect.contains(static_cast<QMouseEvent*>(event)->pos());
+        else if (event->type() == QEvent::KeyPress) toggle = static_cast<QKeyEvent*>(event)->key() == Qt::Key_Space || static_cast<QKeyEvent*>(event)->key() == Qt::Key_Select;
+        if (!toggle) return event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick;
+        bool on = index.data(Qt::CheckStateRole).toInt() == Qt::Checked;
+        return model->setData(index, on ? Qt::Unchecked : Qt::Checked, Qt::CheckStateRole);
+    }
+
+private:
+    QComboBox* typeEditor(QWidget* parent) const {
+        auto* box = new QComboBox(parent);
+        box->setEditable(true);
+        box->setInsertPolicy(QComboBox::NoInsert);
+        for (auto* t : reg_.types()) box->addItem(qs(t->name));
+        if (box->completer()) box->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+        QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { finish(box); });
+        QObject::connect(box->lineEdit(), &QLineEdit::editingFinished, box, [this, box] { finish(box); });
+        return box;
+    }
+    void finish(QWidget* editor) const {
+        auto* self = const_cast<ParamDelegate*>(this);
+        emit self->commitData(editor);
+        emit self->closeEditor(editor, QAbstractItemDelegate::NoHint);
+    }
+    const fg::Registry& reg_;
+};
+
+// Tooltips (they replace the header) and the look of the Key cell, which only means something for maps.
+void styleParamRow(QTableWidget* table, int r) {
+    const bool isMap = table->item(r, ColContainer)->text() == kContainerNames[2];
+    QSignalBlocker block(table);
+    const QColor dimColor = table->palette().color(QPalette::PlaceholderText);
+    for (int c = 0; c < ColCount; ++c) {
+        QTableWidgetItem* it = table->item(r, c);
+        if (!it) continue;
+        QString value = c >= ColRef ? (it->checkState() == Qt::Checked ? "yes" : "no") : it->text();
+        it->setToolTip(columnTip(c, value));
+    }
+    QTableWidgetItem* key = table->item(r, ColKey);
+    key->setFlags(isMap ? (key->flags() | Qt::ItemIsEditable) : (key->flags() & ~Qt::ItemIsEditable));
+    key->setForeground(isMap ? table->palette().color(QPalette::Text) : dimColor);
+}
+
+} // namespace
+
 QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::ParamDecl>& params, std::function<void(std::vector<fg::ParamDecl>)> apply) {
-    enum { ColName, ColType, ColContainer, ColKey, ColRef, ColConst };
-    auto* table = new QTableWidget(int(params.size()), inputs ? 6 : 4);
-    QStringList headers{"Name", "Type", "Container", "Key"};
-    if (inputs) headers << "Ref" << "Const";
-    table->setHorizontalHeaderLabels(headers);
+    constexpr int kRowHeight = 24;
+    const int columns = inputs ? ColCount : ColRef;
+    auto* table = new QTableWidget(int(params.size()), columns);
+    table->setItemDelegate(new ParamDelegate(doc_->registry(), table));
+    table->horizontalHeader()->hide();                  // the column names are in the tooltips of the cells
     table->verticalHeader()->hide();
+    table->verticalHeader()->setDefaultSectionSize(kRowHeight);
+    table->horizontalHeader()->setMinimumSectionSize(28);
     table->horizontalHeader()->setStretchLastSection(false);
     table->horizontalHeader()->setSectionResizeMode(ColName, QHeaderView::Stretch);
-    table->horizontalHeader()->setSectionResizeMode(ColType, QHeaderView::ResizeToContents);
-    table->horizontalHeader()->setSectionResizeMode(ColContainer, QHeaderView::ResizeToContents);
-    table->horizontalHeader()->setSectionResizeMode(ColKey, QHeaderView::ResizeToContents);
-    if (inputs) {
-        table->horizontalHeader()->setSectionResizeMode(ColRef, QHeaderView::ResizeToContents);
-        table->horizontalHeader()->setSectionResizeMode(ColConst, QHeaderView::ResizeToContents);
-    }
+    for (int c = ColType; c < columns; ++c) table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
+    table->setShowGrid(false);
+    table->setAlternatingRowColors(true);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);
-    table->setMinimumHeight(40 + int(params.size()) * 28);
-    table->setMaximumHeight(40 + int(params.size()) * 28 + 4);
+    table->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);       // editors only on request
     table->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    table->setFixedHeight(std::max<int>(int(params.size()), 1) * kRowHeight + 2 * table->frameWidth() + 2);
 
     auto collect = [table, inputs]() {
         std::vector<fg::ParamDecl> out;
@@ -248,13 +392,13 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
             fg::ParamDecl p;
             p.name = ss(table->item(r, ColName)->text().trimmed());
             TypeSpec spec;
-            spec.value = static_cast<TypeEdit*>(table->cellWidget(r, ColType))->type();
-            spec.container = TypeSpec::Container(static_cast<QComboBox*>(table->cellWidget(r, ColContainer))->currentIndex());
-            spec.key = static_cast<TypeEdit*>(table->cellWidget(r, ColKey))->type();
+            spec.value = table->item(r, ColType)->text();
+            spec.container = TypeSpec::Container(std::max(0, int(QStringList{kContainerNames[0], kContainerNames[1], kContainerNames[2]}.indexOf(table->item(r, ColContainer)->text()))));
+            spec.key = table->item(r, ColKey)->text();
             p.type = ss(spec.str());
             if (inputs) {
-                p.byRef = static_cast<QCheckBox*>(table->cellWidget(r, ColRef))->isChecked();
-                p.isConst = static_cast<QCheckBox*>(table->cellWidget(r, ColConst))->isChecked();
+                p.byRef = table->item(r, ColRef)->checkState() == Qt::Checked;
+                p.isConst = table->item(r, ColConst)->checkState() == Qt::Checked;
             }
             out.push_back(std::move(p));
         }
@@ -263,38 +407,30 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
     for (int r = 0; r < table->rowCount(); ++r) {
         const fg::ParamDecl& p = params[size_t(r)];
         TypeSpec spec = TypeSpec::parse(qs(p.type));
-        table->setItem(r, ColName, new QTableWidgetItem(qs(p.name)));
-        auto* te = new TypeEdit(doc_->registry());
-        te->setType(spec.value);
-        te->setMinimumWidth(110);
-        table->setCellWidget(r, ColType, te);
-        auto* cont = new QComboBox;
-        cont->addItems({"Single", "Array", "Map"});
-        cont->setCurrentIndex(int(spec.container));
-        table->setCellWidget(r, ColContainer, cont);
-        auto* key = new TypeEdit(doc_->registry());
-        key->setType(spec.key);
-        key->setMinimumWidth(90);
-        key->setEnabled(spec.container == TypeSpec::Container::Map);
-        table->setCellWidget(r, ColKey, key);
-        connect(te, &TypeEdit::typeEdited, this, [=] { apply(collect()); });
-        connect(key, &TypeEdit::typeEdited, this, [=] { apply(collect()); });
-        connect(cont, qOverload<int>(&QComboBox::activated), this, [=](int) {
-            key->setEnabled(cont->currentIndex() == int(TypeSpec::Container::Map));
-            apply(collect());
-        });
+        const Qt::ItemFlags editable = Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable;
+        auto text = [&](int col, const QString& s) {
+            auto* it = new QTableWidgetItem(s);
+            it->setFlags(editable);
+            table->setItem(r, col, it);
+        };
+        text(ColName, qs(p.name));
+        text(ColType, spec.value);
+        text(ColContainer, kContainerNames[int(spec.container)]);
+        text(ColKey, spec.key);
         if (inputs) {
-            auto* ref = new QCheckBox;
-            ref->setChecked(p.byRef);
-            auto* cst = new QCheckBox;
-            cst->setChecked(p.isConst);
-            table->setCellWidget(r, ColRef, ref);
-            table->setCellWidget(r, ColConst, cst);
-            connect(ref, &QCheckBox::toggled, this, [=] { apply(collect()); });
-            connect(cst, &QCheckBox::toggled, this, [=] { apply(collect()); });
+            for (int col : {int(ColRef), int(ColConst)}) {
+                auto* it = new QTableWidgetItem;
+                it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+                it->setCheckState((col == ColRef ? p.byRef : p.isConst) ? Qt::Checked : Qt::Unchecked);
+                table->setItem(r, col, it);
+            }
         }
+        styleParamRow(table, r);
     }
-    connect(table, &QTableWidget::itemChanged, this, [=](QTableWidgetItem*) { apply(collect()); });
+    connect(table, &QTableWidget::itemChanged, this, [=](QTableWidgetItem* it) {
+        styleParamRow(table, it->row());
+        apply(collect());
+    });
     return table;
 }
 

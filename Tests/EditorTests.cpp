@@ -28,6 +28,8 @@
 #include <QScrollBar>
 #include <QClipboard>
 #include <QElapsedTimer>
+#include <QComboBox>
+#include <QHeaderView>
 #include <QTimer>
 #include <QDir>
 #include <QEventLoop>
@@ -493,6 +495,102 @@ TEST(debugger_panel_pages_big_arrays_and_evaluates_watches) {
     panel.removeWatch("Missing");
     CHECK_EQ(watches->topLevelItemCount(), 3);
     CHECK_EQ(panel.watchExpressions().size(), 3);
+}
+
+// The inputs / outputs tables of a function have no header (the tooltips name the columns) and no widgets in their cells: a combo box
+// appears only while the user edits a cell.
+TEST(details_parameter_tables_edit_through_a_delegate) {
+    Fixture f;
+    f.doc.edit("Function", [&](fg::Script& s) {
+        s.addFunction("Add", {{"A", "int", false, false, fg::Value()}, {"Items", "array<string>", true, false, fg::Value()}},
+                      {{"Sum", "map<string,float>", false, false, fg::Value()}});
+    });
+    auto settle = [] {      // closed editors are deleted later
+        QCoreApplication::processEvents();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QCoreApplication::processEvents();
+    };
+    DetailsPanel details(&f.doc);
+    details.showGraph("Add");
+    details.resize(420, 600);
+    details.show();
+    QCoreApplication::processEvents();
+    auto tables = [&] { return details.findChildren<QTableWidget*>(); };
+    CHECK_EQ(tables().size(), 2);
+    if (tables().size() != 2) return;
+    QTableWidget* in = tables()[0];
+    QTableWidget* out = tables()[1];
+    CHECK(in->horizontalHeader()->isHidden());
+    CHECK(out->horizontalHeader()->isHidden());
+    CHECK_EQ(in->columnCount(), 6);
+    CHECK_EQ(out->columnCount(), 4);
+    for (int r = 0; r < in->rowCount(); ++r)
+        for (int c = 0; c < in->columnCount(); ++c) CHECK(in->cellWidget(r, c) == nullptr);     // plain cells, no widgets
+    CHECK(details.findChildren<QComboBox*>().isEmpty());
+
+    // the tooltip of every cell names its column
+    CHECK(in->item(0, 0)->toolTip().contains("Name"));
+    CHECK(in->item(0, 1)->toolTip().contains("Type") && in->item(0, 1)->toolTip().contains("int"));
+    CHECK(in->item(1, 2)->toolTip().contains("Container") && in->item(1, 2)->toolTip().contains("Array"));
+    CHECK(in->item(1, 4)->toolTip().contains("Ref") && in->item(1, 4)->toolTip().contains("yes"));
+    CHECK(in->item(0, 5)->toolTip().contains("Const") && in->item(0, 5)->toolTip().contains("no"));
+    CHECK(out->item(0, 3)->toolTip().contains("Key") && out->item(0, 3)->toolTip().contains("string"));
+    CHECK(!(in->item(0, 3)->flags() & Qt::ItemIsEditable));                                    // the key of a non-map is not editable
+
+    auto param = [&](bool inputs, size_t i) {
+        const fg::Graph* g = f.doc.graph("Add");
+        return inputs ? g->inputs[i] : g->outputs[i];
+    };
+
+    // editing the Type cell shows an (editable) combo box with the types, and only until the edit ends
+    in->setCurrentCell(0, 1);
+    in->editItem(in->item(0, 1));
+    QCoreApplication::processEvents();
+    auto boxes = details.findChildren<QComboBox*>();
+    CHECK_EQ(boxes.size(), 1);
+    if (boxes.size() != 1) return;
+    CHECK(boxes[0]->isEditable());
+    CHECK(boxes[0]->findText("float") >= 0);
+    boxes[0]->setCurrentText("float");
+    emit boxes[0]->lineEdit()->editingFinished();
+    QCoreApplication::processEvents();
+    CHECK_EQ(param(true, 0).type, std::string("float"));
+    settle();
+    CHECK(details.findChildren<QComboBox*>().isEmpty());                                        // the editor is gone again
+
+    // a type the registry does not know is refused
+    tables()[0]->editItem(tables()[0]->item(0, 1));
+    QCoreApplication::processEvents();
+    boxes = details.findChildren<QComboBox*>();
+    CHECK_EQ(boxes.size(), 1);
+    if (boxes.size() != 1) return;
+    boxes[0]->setCurrentText("nonsense");
+    emit boxes[0]->lineEdit()->editingFinished();
+    settle();
+    CHECK_EQ(param(true, 0).type, std::string("float"));
+    CHECK(details.findChildren<QComboBox*>().isEmpty());
+
+    // the container is chosen from a list; a Map makes the Key cell editable
+    in = tables()[0];
+    in->editItem(in->item(0, 2));
+    QCoreApplication::processEvents();
+    boxes = details.findChildren<QComboBox*>();
+    CHECK_EQ(boxes.size(), 1);
+    if (boxes.size() != 1) return;
+    CHECK(!boxes[0]->isEditable());
+    CHECK_EQ(boxes[0]->count(), 3);
+    boxes[0]->setCurrentIndex(2);
+    emit boxes[0]->activated(2);
+    settle();
+    CHECK_EQ(param(true, 0).type, std::string("map<string,float>"));
+    in = tables()[0];
+    CHECK(in->item(0, 3)->flags() & Qt::ItemIsEditable);
+
+    // Ref and Const are check marks in the cell
+    in->item(0, 5)->setCheckState(Qt::Checked);
+    settle();
+    CHECK(param(true, 0).isConst);
+    CHECK(in->item(0, 5)->toolTip().contains("yes"));
 }
 
 TEST(editing_stops_a_running_script) {
