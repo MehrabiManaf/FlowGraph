@@ -41,3 +41,11 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
 - Details panel: per pin default editing for non-primitive types, node alignment tools, minimap, search in graph.
 - Variable watch editing while paused, hot reload of a running script, save layout of the docks (KDDW LayoutSaver).
 - Plugins link FlowGraphCore statically (works, same version/compiler needed); a shared core would be cleaner.
+
+## Status (latest)
+- Core + editor build and pass tests (Debug verified after the last fixes; Release verified before them).
+- Fixed: pin hit-testing (odd-even shape) and node positions reverting after a move (scene read stale compiled positions).
+- Editor tests include simulated mouse drags (ViewFixture in Tests/EditorTests.cpp). Untested by hand: context menus,
+  palette popup, rubber-band select, panning/zoom.
+- Gotchas: the bash tool turns backslash-n inside string literals into real newlines (use %c,10 or the Edit tool);
+  Qt's `slots` macro clashes with member names; QTest::mouseMove sends no buttons (use QMouseEvent + sendEvent).
