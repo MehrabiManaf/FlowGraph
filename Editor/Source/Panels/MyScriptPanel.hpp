@@ -14,7 +14,7 @@ class FitTree;
 class MyScriptPanel : public QWidget {
     Q_OBJECT
 public:
-    enum class Kind { None, EventGraph, Function, Variable, Local, Event };
+    enum class Kind { None, Function, Variable, Local, Event };
 
     explicit MyScriptPanel(Document* doc, QWidget* parent = nullptr);
     void setCurrentGraph(const QString& name);
@@ -23,7 +23,7 @@ signals:
     void openGraph(const QString& name);
     void eventSelected(const QString& graph, int node);     // click on an event: select its node (shows its details)
     void eventActivated(const QString& graph, int node);    // double click: also bring it into view
-    // Kind::Variable -> owner empty; Kind::Local -> owner is the function; Kind::Function/EventGraph -> name is the graph
+    // Kind::Variable -> owner empty; Kind::Local -> owner is the function; Kind::Function -> name is the graph
     void selectionChanged(int kind, const QString& owner, const QString& name);
     void graphRenamed(const QString& from, const QString& to);
 
@@ -42,7 +42,6 @@ private:
     void onItemChanged(FitTree* tree, QTreeWidgetItem* item);
     void onSelection(FitTree* tree);
     void contextMenu(FitTree* tree, const QPoint& pos);
-    void addGraph();
     void addFunction();
     void addVariable();
     void addLocal();

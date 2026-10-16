@@ -169,8 +169,7 @@ void ScriptEditorWindow::createDocks() {
         switch (K(kind)) {
         case K::Variable: details_->showVariable("", name); break;
         case K::Local: details_->showVariable(owner, name); break;
-        case K::Function:
-        case K::EventGraph: details_->showGraph(name); break;
+        case K::Function: details_->showGraph(name); break;
         default: details_->showNothing(); break;
         }
     });

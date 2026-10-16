@@ -545,6 +545,14 @@ TEST(event_list_shows_only_the_events_the_script_handles) {
     int plus = 0;
     for (auto* b : panel.findChildren<QToolButton*>()) plus += b->text() == "+";
     CHECK_EQ(plus, 3);
+    // a second event graph (made by a file or a host) is not listed: the section holds events only, and there is no
+    // way to create event graphs from it
+    f.doc.edit("Second event graph", [](fg::Script& sc) { sc.addEventGraph("Other"); });
+    QCoreApplication::processEvents();
+    CHECK(find("Other") == nullptr);
+    CHECK(find("EventGraph") == nullptr);
+    for (QTreeWidgetItemIterator it(events); *it; ++it) CHECK((*it)->parent() == nullptr);
+    CHECK_EQ(events->topLevelItemCount(), 2);          // Main and Tick
 }
 
 TEST(copying_nodes_never_duplicates_an_event_handler) {

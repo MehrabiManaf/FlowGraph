@@ -75,6 +75,6 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
   removed from core, editor and tests. Scripts only handle `event:<Name>` nodes; the palette offers each event once; My Script lists all
   events of the app (dimmed = not handled, double click adds the handler); Details shows an event read-only; copy/paste never
   duplicates a handler. Hosts decide what a new script contains (EditorHost::initializeNewScript, standard::createMainTemplate).
-- flowstudio: the entries box is a *Launch configuration* selector (EditorHost::launchLabel/launchEntrySelected, ScriptEditor::addToLaunchSelector for the Configure... button); Event Graphs lists only the events the script handles and has no + button (context menu: New event graph).
+- flowstudio: the entries box is a *Launch configuration* selector (EditorHost::launchLabel/launchEntrySelected, ScriptEditor::addToLaunchSelector for the Configure... button); Event Graphs lists only the events the script handles and has no + button; event graphs cannot be created from it and are not listed (only their events).
 - Event nodes are undeletable in the editor (GraphScene::deleteSelected skips them and reports it; "Remove handler" is gone; event graphs with events cannot be deleted).
 - Side docks (My Script / Details / Debugger) have no maximum width any more, so they follow their dock; ScriptEditorWindow::applyInitialSizes sets My Script ~300 px and Details ~360 px the first time the window is shown (KDDockWidgets ignores InitialOption sizes).
