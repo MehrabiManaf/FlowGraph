@@ -44,10 +44,10 @@ inline qint64 nowMicros() {
 
 // The connector of a data pin, drawn around `center` (12 x 12, an array 16 x 12 - see kArrayConnector):
 //   a single value is a circle,
-//   an array is a bracket frame with its items in a row   [ o o o ]   (the items have the color of the element type),
-//   a map is a matrix of 3 rows x 2 columns: the left column has the color of the key type, the right one that of the value type.
+//   an array is a bracket frame with two items in a row   [ o o ]   (the items have the color of the element type),
+//   a map is a matrix of 2 x 2 items: the left column has the color of the key type, the right one that of the value type.
 // A reference has diamonds instead of circles. Items are filled when the pin is connected and hollow otherwise.
-inline constexpr double kArrayConnectorWidth = 16.0;
+inline constexpr double kArrayConnectorWidth = 15.0;
 
 struct PinGlyph {
     int container = 0;          // 0 = single value, 1 = array, 2 = map

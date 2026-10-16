@@ -21,7 +21,7 @@ struct Metrics {
     double pinSpacing = 5.0;
     double sideSpacing = 14.0;
     QSizeF dataConnector{12.0, 12.0};
-    QSizeF arrayConnector{kArrayConnectorWidth, 12.0};      // [ o o o ] is wider than the other connectors
+    QSizeF arrayConnector{kArrayConnectorWidth, 12.0};      // [ o o ] is wider than the other connectors
     QSizeF execConnector{12.0, 15.0};
     double pinHeight = 0;
     double editorMin = 22.0, editorMax = 400.0;

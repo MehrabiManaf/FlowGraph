@@ -3,13 +3,14 @@
 namespace fged {
 
 namespace {
-// One item of a connector: a circle of radius r, or a diamond of about the same weight.
-void glyphItem(QPainter* p, const QPointF& c, double r, bool diamond) {
+// One item of a connector: a circle of radius r, or a diamond of about the same weight (`reach`: how far its tips are from the center,
+// in units of r).
+void glyphItem(QPainter* p, const QPointF& c, double r, bool diamond, double reach = 1.35) {
     if (!diamond) {
         p->drawEllipse(c, r, r);
         return;
     }
-    const double d = r * 1.35;
+    const double d = r * reach;
     const QPointF pts[4] = {{c.x(), c.y() - d}, {c.x() + d, c.y()}, {c.x(), c.y() + d}, {c.x() - d, c.y()}};
     p->drawPolygon(pts, 4);
 }
@@ -19,26 +20,26 @@ void drawPinGlyph(QPainter* p, const QPointF& c, const PinGlyph& g) {
     p->save();
     auto fill = [&](const QColor& col) { return g.connected ? col : g.hollow; };
     switch (g.container) {
-    case 1: {                                               // array: [ o o o ]
+    case 1: {                                               // array: [ o o ]
         p->setPen(QPen(g.color, 1.2));
         p->setBrush(Qt::NoBrush);
         for (int side : {-1, 1}) {
-            const double x = c.x() + side * 7.4, serif = c.x() + side * 5.6;
+            const double x = c.x() + side * 6.6, serif = c.x() + side * 4.9;
             p->drawLine(QPointF(x, c.y() - 4.6), QPointF(x, c.y() + 4.6));
             p->drawLine(QPointF(x, c.y() - 4.6), QPointF(serif, c.y() - 4.6));
             p->drawLine(QPointF(x, c.y() + 4.6), QPointF(serif, c.y() + 4.6));
         }
         p->setPen(QPen(g.color, 0.9));
         p->setBrush(fill(g.color));
-        for (int i = -1; i <= 1; ++i) glyphItem(p, QPointF(c.x() + i * 4.2, c.y()), 1.15, g.byRef);
+        for (int side : {-1, 1}) glyphItem(p, QPointF(c.x() + side * 2.9, c.y()), 1.8, g.byRef, 1.25);
         break;
     }
-    case 2: {                                               // map: 3 x 2, keys on the left, values on the right
+    case 2: {                                               // map: 2 x 2, keys on the left, values on the right
         for (int col = 0; col < 2; ++col) {
             const QColor& color = col == 0 ? g.keyColor : g.color;
             p->setPen(QPen(color, 0.9));
             p->setBrush(fill(color));
-            for (int row = -1; row <= 1; ++row) glyphItem(p, QPointF(c.x() + (col == 0 ? -3.0 : 3.0), c.y() + row * 4.4), 1.15, g.byRef);
+            for (int row = -1; row <= 1; row += 2) glyphItem(p, QPointF(c.x() + (col == 0 ? -3.0 : 3.0), c.y() + row * 3.0), 1.8, g.byRef, 1.25);
         }
         break;
     }
