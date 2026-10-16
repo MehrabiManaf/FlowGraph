@@ -214,11 +214,11 @@ void ScriptEditorWindow::createActions() {
     actSnap_->setCheckable(true);
     actSnap_->setChecked(snapToGrid_);
     actSnap_->setToolTip("Nodes you move or place land on the grid. Hold Alt while dragging to move freely.");
-    actRun_ = new QAction(QIcon(":/Icons/attach.svg"), "Run", this);
+    actRun_ = new QAction(QIcon(":/Icons/continue.svg"), "Run", this);       // Run and Continue are the same action: the same icon
     actRun_->setShortcut(QKeySequence(Qt::Key_F5));
     actPause_ = new QAction(QIcon(":/Icons/interrupt.svg"), "Pause", this);
     actPause_->setShortcut(QKeySequence(Qt::Key_F6));
-    actStop_ = new QAction(QIcon(":/Icons/detach.svg"), "Stop", this);
+    actStop_ = new QAction(QIcon(":/Icons/stop.svg"), "Stop", this);
     actStop_->setShortcut(QKeySequence("Shift+F5"));
     actStepOver_ = new QAction(QIcon(":/Icons/step-over.svg"), "Step Over", this);
     actStepOver_->setShortcut(QKeySequence(Qt::Key_F10));
@@ -599,7 +599,6 @@ void ScriptEditorWindow::updateRunActions() {
     using S = RunController::State;
     S s = run_.state();
     actRun_->setText(s == S::Paused ? "Continue" : "Run");
-    actRun_->setIcon(QIcon(s == S::Paused ? ":/Icons/continue.svg" : ":/Icons/attach.svg"));
     actRun_->setEnabled(s == S::Idle || s == S::Paused);
     actPause_->setEnabled(s == S::Running || s == S::Waiting);
     actStop_->setEnabled(s != S::Idle);

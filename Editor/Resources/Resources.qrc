@@ -2,6 +2,7 @@
     <qresource prefix="/Icons">
         <file alias="continue.svg">Icons/continue.svg</file>
         <file alias="interrupt.svg">Icons/interrupt.svg</file>
+        <file alias="stop.svg">Icons/stop.svg</file>
         <file alias="step-into.svg">Icons/step-into.svg</file>
         <file alias="step-out.svg">Icons/step-out.svg</file>
         <file alias="step-over.svg">Icons/step-over.svg</file>

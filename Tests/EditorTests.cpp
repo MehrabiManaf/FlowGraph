@@ -1463,6 +1463,30 @@ TEST(debugger_panel_forgets_the_previous_script_when_another_is_opened) {
     QFile::remove(fileA);
 }
 
+// Run is the same action as Continue and has its icon; Stop has its own (a red square) - the attach / detach icons are for attaching a debugger.
+TEST(run_and_stop_have_their_own_icons) {
+    StudioFixture f;
+    QAction* run = nullptr;
+    QAction* stop = nullptr;
+    for (auto* a : f.win.findChildren<QAction*>()) {
+        if (a->text() == "Run") run = a;
+        if (a->text() == "Stop") stop = a;
+    }
+    CHECK(run && stop);
+    if (!run || !stop) return;
+    auto image = [](const QIcon& icon) { return icon.pixmap(32, 32).toImage(); };
+    CHECK(!image(run->icon()).isNull() && !image(stop->icon()).isNull());
+    CHECK(image(run->icon()) == image(QIcon(":/Icons/continue.svg")));
+    CHECK(image(stop->icon()) == image(QIcon(":/Icons/stop.svg")));
+    CHECK(image(stop->icon()) != image(QIcon(":/Icons/detach.svg")));
+    CHECK(image(run->icon()) != image(QIcon(":/Icons/attach.svg")));
+    // a red square: the middle of the icon is red, its corners are not
+    QImage stopImage = image(stop->icon());
+    QColor middle = stopImage.pixelColor(16, 16);
+    CHECK(middle.red() > 200 && middle.green() < 130 && middle.blue() < 150);
+    CHECK(stopImage.pixelColor(2, 2).alpha() < 20);
+}
+
 int main(int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     qputenv("QT_QPA_PLATFORM", "offscreen");
