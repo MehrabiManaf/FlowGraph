@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
 #include <QMouseEvent>
@@ -492,7 +493,7 @@ TEST(studio_window_pin_drag_creates_link) {
     CHECK(linked);
 }
 
-TEST(event_list_shows_the_events_of_the_application) {
+TEST(event_list_shows_only_the_events_the_script_handles) {
     Fixture f;
     f.rt.registry().addEvent("Tick", {{"DeltaTime", "float"}});
     f.doc.refresh();
@@ -501,28 +502,24 @@ TEST(event_list_shows_the_events_of_the_application) {
     auto trees = panel.findChildren<QTreeWidget*>();
     CHECK(!trees.isEmpty());
     QTreeWidget* events = trees.front();               // the first section is "Event Graphs"
-    QTreeWidgetItem *main = nullptr, *tick = nullptr;
-    for (QTreeWidgetItemIterator it(events); *it; ++it) {
-        if ((*it)->text(0) == "Main") main = *it;
-        if ((*it)->text(0) == "Tick") tick = *it;
-    }
-    CHECK(main && tick);                               // events are listed whether the script handles them or not
-    if (!main || !tick) return;
-    CHECK(!(main->flags() & Qt::ItemIsEditable));      // ... and cannot be renamed
-    CHECK(tick->text(1).contains("not handled"));
-    CHECK(!main->text(1).contains("not handled"));
-    // double click on an event without handler creates the handler
-    Q_EMIT events->itemDoubleClicked(tick, 0);
-    bool handled = false;
-    for (auto& n : f.graph().nodes) handled |= n.def == "event:Tick";
-    CHECK(handled);
-    CHECK(f.doc.program()->ok());
-    // the new node recorded the signature of the event
-    for (auto& n : f.graph().nodes)
-        if (n.def == "event:Tick") CHECK_EQ(n.prop("sig"), std::string("(DeltaTime: float)"));
-    // palette: both events are handled now, neither is offered again
-    for (auto& t : fg::buildPalette(fg::NodeBuildCtx{f.rt.registry(), &f.doc.script(), f.doc.script().findGraph("EventGraph")}))
-        CHECK(t.defId != "event:Main" && t.defId != "event:Tick");
+    auto find = [&](const QString& name) -> QTreeWidgetItem* {
+        for (QTreeWidgetItemIterator it(events); *it; ++it)
+            if ((*it)->text(0) == name) return *it;
+        return nullptr;
+    };
+    QTreeWidgetItem* main = find("Main");
+    CHECK(main != nullptr);
+    CHECK(find("Tick") == nullptr);                    // the application raises Tick, but this script does not handle it
+    if (main) CHECK(!(main->flags() & Qt::ItemIsEditable));      // events cannot be renamed
+    // handling Tick (a node of the event appears in a graph) lists it
+    f.doc.edit("Handle Tick", [](fg::Script& s) { s.graphs[0].addNode("event:Tick", 0, 300); });
+    QCoreApplication::processEvents();
+    CHECK(find("Tick") != nullptr);
+    if (auto* tick = find("Tick")) CHECK(tick->text(1).contains("DeltaTime"));
+    // the section has no "+" button (functions, variables and local variables have one)
+    int plus = 0;
+    for (auto* b : panel.findChildren<QToolButton*>()) plus += b->text() == "+";
+    CHECK_EQ(plus, 3);
 }
 
 TEST(copying_nodes_never_duplicates_an_event_handler) {
@@ -668,6 +665,7 @@ TEST(standard_host_offers_main_per_launch_configuration) {
     CHECK_EQ(entries.size(), size_t(2));
     CHECK_EQ(entries[0].id, QString("A"));
     CHECK_EQ(entries[0].entry, QString("Main"));
+    CHECK(entries[0].title.startsWith("A"));                       // the selector shows the configuration, not the event
 
     fged::LaunchSpec spec;
     CHECK(host.prepareLaunch(entries[0], spec, nullptr));

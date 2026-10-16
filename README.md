@@ -75,7 +75,7 @@ stored next to the script as `script.flowlaunch` (JSON; *Run > Launch Configurat
     { "name": "Verbose", "args": ["-v", "input.txt"], "cwd": "work", "env": { "MODE": "debug" },
       "pluginPaths": ["plugins"], "stepDelayMs": 0 } ] }
 ```
-Every configuration shows up in the toolbar as `Main - <name>`. `args` become `Args` of `Main`; `env` and `cwd` apply
+The toolbar of flowstudio has a **Launch configuration** selector (and a *Configure...* button) instead of an event box: Main is the only event, so the choice is how to launch it. `args` become `Args` of `Main`; `env` and `cwd` apply
 while the script runs (`cwd` and `pluginPaths` are relative to the script's folder); `stepDelayMs` is the slow motion
 used while debugging. `flow --launch Verbose script.flow` uses the same file.
 
@@ -102,8 +102,8 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
 
 * **Events belong to the application.** `registry.addEvent("Tick", {{"DeltaTime", "float"}})` declares a connection point
   between the application and its scripts. Scripts cannot declare, rename, change or delete events: they only *handle* them
-  (one `event:Tick` node per event, offered once in the node palette; the editor lists every event of the application in
-  *My Script > Event Graphs*, dimmed when the script has no handler yet - double click creates it). Think of events as
+  (one `event:Tick` node per event, offered once in the node palette; *My Script > Event Graphs* lists the events the script
+  handles). Think of events as
   compiled into the application, whereas functions are the script's own.
 * **Compatibility.** A script refers to the events of the application it was made for. `loadScript` /
   `fg::checkCompatibility` list everything this application lacks: events it never raises, events whose arguments changed

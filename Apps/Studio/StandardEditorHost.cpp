@@ -50,10 +50,16 @@ std::vector<fged::LaunchEntry> StandardEditorHost::launchEntries(const fg::Progr
         e.id = q(c.name);
         e.entry = fg::standard::kMainEvent;
         QString args = toLines(c.args).join(' ');
-        e.title = "Main  -  " + q(c.name) + (args.isEmpty() ? QString() : "  (" + args + ")");
+        e.title = q(c.name) + (args.isEmpty() ? QString() : "  (" + args + ")");
         out.push_back(std::move(e));
     }
     return out;
+}
+
+void StandardEditorHost::launchEntrySelected(const QString& id) {
+    if (launch_.selected == s(id) || !launch_.find(s(id))) return;
+    launch_.selected = s(id);
+    saveLaunchFile();                                      // remembered next to the script
 }
 
 bool StandardEditorHost::prepareLaunch(const fged::LaunchEntry& entry, fged::LaunchSpec& spec, QWidget*) {
@@ -104,6 +110,11 @@ void StandardEditorHost::attached(fged::ScriptEditor& editor) {
     run->addSeparator();
     QAction* a = run->addAction("Launch &Configurations...");
     QObject::connect(a, &QAction::triggered, &editor, [this] { editConfigurations(); });
+    // a button next to the selector of the toolbar
+    QAction* configure = new QAction("Configure...", &editor);
+    configure->setToolTip("Edit the launch configurations of this script");
+    QObject::connect(configure, &QAction::triggered, &editor, [this] { editConfigurations(); });
+    editor.addToLaunchSelector(configure);
 }
 
 void StandardEditorHost::loadPluginPaths(const LaunchConfig& cfg) {

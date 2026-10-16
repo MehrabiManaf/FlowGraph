@@ -28,10 +28,10 @@ signals:
     void graphRenamed(const QString& from, const QString& to);
 
 private:
-    // Events belong to the application: the list shows every event it raises and whether the script handles it.
+    // Events belong to the application; the list shows the ones this script handles.
     struct EventEntry {
         QString graph, name, params, doc;
-        int node = 0;             // the handler node (0 = the script does not handle the event)
+        int node = 0;             // the handler node
         bool missing = false;     // the script handles an event this application does not provide
     };
 
@@ -43,13 +43,11 @@ private:
     void onSelection(FitTree* tree);
     void contextMenu(FitTree* tree, const QPoint& pos);
     void addGraph();
-    void addHandler(const QString& event);
     void removeHandler(const QString& graph, int node);
     void addFunction();
     void addVariable();
     void addLocal();
     void beginRename(FitTree* tree, const QString& name);
-    QString targetEventGraph() const;
 
     Document* doc_;
     QString current_;

@@ -24,6 +24,9 @@ public:
     void attached(fged::ScriptEditor& editor) override;
     void scriptChanged(fged::ScriptEditor& editor, fged::ScriptChange why) override;
     QString preferredEntry() const override { return QString::fromStdString(launch_.selected); }
+    QString launchLabel() const override { return QStringLiteral("Launch configuration:"); }
+    QString launchToolTip() const override { return QStringLiteral("How the script is launched: arguments, environment, working directory"); }
+    void launchEntrySelected(const QString& id) override;
 
     fg::standard::LaunchFile& launchFile() { return launch_; }
 

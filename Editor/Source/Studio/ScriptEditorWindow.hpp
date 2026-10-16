@@ -41,6 +41,7 @@ public:
     bool maybeSave();
     QMenu* menuNamed(const QString& title);
     QToolBar* mainToolBar() const { return toolBar_; }
+    void addToLaunchSelector(QAction* action);
     void refreshEntries();
     void log(int level, const QString& text);
     Document* document() { return &doc_; }

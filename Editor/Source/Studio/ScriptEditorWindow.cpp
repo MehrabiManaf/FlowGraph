@@ -303,10 +303,13 @@ void ScriptEditorWindow::createToolBar() {
     tb->setIconSize(QSize(22, 22));
     tb->addActions({actNew_, actOpen_, actSave_});
     tb->addSeparator();
+    auto* launchLabel = new QLabel(host_.launchLabel() + " ", tb);
+    tb->addWidget(launchLabel);
     entryCombo_ = new QComboBox(tb);
-    entryCombo_->setMinimumWidth(220);
-    entryCombo_->setToolTip("Event or function to run");
+    entryCombo_->setMinimumWidth(200);
+    entryCombo_->setToolTip(host_.launchToolTip());
     tb->addWidget(entryCombo_);
+    connect(entryCombo_, qOverload<int>(&QComboBox::activated), this, [this](int) { host_.launchEntrySelected(entryCombo_->currentData().toString()); });
     tb->addActions({actRun_, actPause_, actStop_});
     tb->addSeparator();
     tb->addActions({actStepOver_, actStepInto_, actStepOut_});
@@ -317,6 +320,10 @@ QMenu* ScriptEditorWindow::menuNamed(const QString& title) {
     for (QAction* a : menuBar()->actions())
         if (a->menu() && QString(a->menu()->title()).remove('&') == wanted) return a->menu();
     return menuBar()->addMenu(title);
+}
+
+void ScriptEditorWindow::addToLaunchSelector(QAction* action) {
+    toolBar_->insertAction(actRun_, action);        // between the entries box and the Run button
 }
 
 // ------------------------------------------------------------------ graph tabs

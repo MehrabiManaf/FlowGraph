@@ -41,7 +41,7 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(2);
     lay->setAlignment(Qt::AlignTop);
-    graphs_ = makeSection("Event Graphs", true, graphsPanel_);
+    graphs_ = makeSection("Event Graphs", false, graphsPanel_);       // no "+": events are not created here
     graphs_->setRootIsDecorated(true);
     functions_ = makeSection("Functions", true, functionsPanel_);
     vars_ = makeSection("Variables", true, varsPanel_);
@@ -55,7 +55,6 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     locals_->setDragEnabled(true);
     locals_->setDragMimeType(GraphView::variableMime());
 
-    connect(graphsPanel_, &CCollapsiblePanel::PlusButtonClicked, this, [this] { addGraph(); });
     connect(functionsPanel_, &CCollapsiblePanel::PlusButtonClicked, this, [this] { addFunction(); });
     connect(varsPanel_, &CCollapsiblePanel::PlusButtonClicked, this, [this] { addVariable(); });
     connect(localsPanel_, &CCollapsiblePanel::PlusButtonClicked, this, [this] { addLocal(); });
@@ -81,10 +80,8 @@ FitTree* MyScriptPanel::makeSection(const QString& title, bool plus, CCollapsibl
         QString name = it->data(0, kName).toString();
         if (tree == functions_) emit openGraph(name);
         else if (tree == graphs_) {
-            if (it->data(0, kKind).toInt() == int(Kind::Event)) {
-                if (it->data(0, kNode).toInt()) emit eventActivated(it->data(0, kMime).toString(), it->data(0, kNode).toInt());
-                else addHandler(name);                  // not handled yet: create the handler
-            } else if (it->data(0, kKind).toInt() == int(Kind::EventGraph)) emit openGraph(name);
+            if (it->data(0, kKind).toInt() == int(Kind::Event)) emit eventActivated(it->data(0, kMime).toString(), it->data(0, kNode).toInt());
+            else if (it->data(0, kKind).toInt() == int(Kind::EventGraph)) emit openGraph(name);
         }
     });
     connect(tree, &QWidget::customContextMenuRequested, this, [this, tree](const QPoint& p) { contextMenu(tree, p); });
@@ -109,37 +106,29 @@ void MyScriptPanel::scheduleRefresh() {
     });
 }
 
+// The events the script handles (the application owns the events; the script only has handlers for them).
 std::vector<MyScriptPanel::EventEntry> MyScriptPanel::collectEvents() const {
     std::vector<EventEntry> out;
     const fg::Registry& reg = doc_->registry();
-    std::map<std::string, EventEntry> byName;
-    for (auto* ev : reg.events()) {
-        EventEntry e;
-        e.name = qs(ev->name);
-        e.params = qs(fg::describeParams(*ev));
-        e.doc = qs(ev->doc);
-        byName[ev->name] = std::move(e);
-    }
     for (auto& g : doc_->script().graphs) {
         if (g.kind != fg::GraphKind::Event) continue;
         for (auto& n : g.nodes) {
             if (n.def.rfind("event:", 0) != 0) continue;
-            std::string name = n.def.substr(6);
-            auto it = byName.find(name);
-            if (it == byName.end()) {
-                EventEntry e;
-                e.name = qs(name);
+            EventEntry e;
+            e.graph = qs(g.name);
+            e.node = n.id;
+            e.name = qs(n.def.substr(6));
+            if (const fg::EventDesc* ev = reg.findEvent(n.def.substr(6))) {
+                e.params = qs(fg::describeParams(*ev));
+                e.doc = qs(ev->doc);
+            } else {
                 e.params = qs(n.prop("sig"));
                 e.missing = true;
-                it = byName.emplace(name, std::move(e)).first;
             }
-            if (it->second.node == 0) {
-                it->second.graph = qs(g.name);
-                it->second.node = n.id;
-            }
+            out.push_back(std::move(e));
         }
     }
-    for (auto& [name, e] : byName) out.push_back(std::move(e));
+    std::sort(out.begin(), out.end(), [](const EventEntry& a, const EventEntry& b) { return a.name < b.name; });
     return out;
 }
 
@@ -192,29 +181,13 @@ void MyScriptPanel::refresh() {
             graphItems[qs(g.name)] = mk(graphs_, nullptr, qs(g.name), "", Kind::EventGraph, true);
         }
     }
-    QTreeWidgetItem* available = nullptr;           // folder of the events nobody handles (several graphs only)
     for (auto& e : events) {
-        QTreeWidgetItem* parent = nullptr;
-        if (eventGraphCount > 1) {
-            if (e.node) parent = graphItems[e.graph];
-            else {
-                if (!available) {
-                    available = new QTreeWidgetItem(graphs_);
-                    available->setText(0, "Available events");
-                    available->setFlags(Qt::ItemIsEnabled);
-                    available->setForeground(0, qApp->palette().color(QPalette::PlaceholderText));
-                }
-                parent = available;
-            }
-        }
-        QString type = e.missing ? "not provided by this application" : (e.node ? e.params : e.params + "  - not handled");
-        auto* it = mk(graphs_, parent, e.name, type, Kind::Event, false);
+        QTreeWidgetItem* parent = eventGraphCount > 1 ? graphItems[e.graph] : nullptr;
+        auto* it = mk(graphs_, parent, e.name, e.missing ? e.params + "  - not provided by this application" : e.params, Kind::Event, false);
         it->setData(0, kMime, e.graph);
         it->setData(0, kNode, e.node);
         it->setToolTip(0, e.doc);
-        if (e.missing) it->setForeground(0, QColor(255, 120, 120));
-        else if (!e.node) it->setForeground(0, qApp->palette().color(QPalette::PlaceholderText));
-        else it->setForeground(0, qApp->palette().color(QPalette::Link));
+        it->setForeground(0, e.missing ? QColor(255, 120, 120) : qApp->palette().color(QPalette::Link));
     }
     graphs_->expandAll();
     for (auto& v : s.variables) {
@@ -250,10 +223,8 @@ void MyScriptPanel::onSelection(FitTree* tree) {
     QString name = it->data(0, kName).toString();
     if (tree == graphs_) {
         if (!localsGraph_.isEmpty()) { localsGraph_.clear(); scheduleRefresh(); }
-        if (it->data(0, kKind).toInt() == int(Kind::Event)) {
-            if (it->data(0, kNode).toInt()) emit eventSelected(it->data(0, kMime).toString(), it->data(0, kNode).toInt());
-            else emit selectionChanged(int(Kind::None), "", "");
-        } else if (it->data(0, kKind).toInt() == int(Kind::EventGraph)) emit selectionChanged(int(Kind::EventGraph), "", name);
+        if (it->data(0, kKind).toInt() == int(Kind::Event)) emit eventSelected(it->data(0, kMime).toString(), it->data(0, kNode).toInt());
+        else if (it->data(0, kKind).toInt() == int(Kind::EventGraph)) emit selectionChanged(int(Kind::EventGraph), "", name);
         else emit selectionChanged(int(Kind::None), "", "");
     } else if (tree == functions_) {
         if (localsGraph_ != name) { localsGraph_ = name; scheduleRefresh(); }
@@ -317,22 +288,26 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     QString graph = item->data(0, kMime).toString();
     int node = item->data(0, kNode).toInt();
     QMenu m;
-    QAction *open = nullptr, *add = nullptr, *remove = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr;
+    QAction *open = nullptr, *remove = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr, *newGraph = nullptr;
     if (isEvent) {
-        if (node) { open = m.addAction("Go to handler"); remove = m.addAction("Remove handler"); }
-        else add = m.addAction("Add handler");
+        open = m.addAction("Go to handler");
+        remove = m.addAction("Remove handler");
     } else {
         open = m.addAction("Open");
         rename = m.addAction("Rename");
         if (tree == functions_) dup = m.addAction("Duplicate");
         del = m.addAction("Delete");
     }
+    if (tree == graphs_) {
+        m.addSeparator();
+        newGraph = m.addAction("New event graph");
+    }
     QAction* a = m.exec(tree->viewport()->mapToGlobal(pos));
     if (!a) return;
     if (a == open) {
         if (isEvent) emit eventActivated(graph, node);
         else emit openGraph(name);
-    } else if (a == add) addHandler(name);
+    } else if (a == newGraph) addGraph();
     else if (a == remove) removeHandler(graph, node);
     else if (a == rename) tree->editItem(item, 0);
     else if (a == dup) {
@@ -355,29 +330,6 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
                     g->locals.erase(std::remove_if(g->locals.begin(), g->locals.end(), [&](const fg::VariableDecl& v) { return v.name == ss(name); }), g->locals.end());
         });
     }
-}
-
-QString MyScriptPanel::targetEventGraph() const {
-    const fg::Script& s = doc_->script();
-    if (const fg::Graph* g = s.findGraph(ss(current_)); g && g->kind == fg::GraphKind::Event) return current_;
-    for (auto& g : s.graphs)
-        if (g.kind == fg::GraphKind::Event) return qs(g.name);
-    return QString();
-}
-
-// The script handles `event` from now on: a node of the event appears in the (active) event graph.
-void MyScriptPanel::addHandler(const QString& event) {
-    QString graph = targetEventGraph();
-    int node = 0;
-    doc_->edit("Add event handler", [&](fg::Script& s) {
-        if (graph.isEmpty()) { s.addEventGraph("EventGraph"); graph = qs(s.graphs.back().name); }
-        fg::Graph* g = s.findGraph(ss(graph));
-        double y = 0;
-        for (auto& n : g->nodes) y = std::max(y, n.y + 140);
-        node = g->addNode("event:" + ss(event), 0, y).id;
-    });
-    emit openGraph(graph);
-    emit eventActivated(graph, node);
 }
 
 void MyScriptPanel::removeHandler(const QString& graph, int node) {

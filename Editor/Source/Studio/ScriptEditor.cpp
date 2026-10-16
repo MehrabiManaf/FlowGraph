@@ -150,6 +150,7 @@ QString ScriptEditor::path() const { return window_->document()->path(); }
 bool ScriptEditor::isModified() const { return window_->document()->isDirty(); }
 QMenu* ScriptEditor::menu(const QString& title) { return window_->menuNamed(title); }
 QToolBar* ScriptEditor::toolBar() { return window_->mainToolBar(); }
+void ScriptEditor::addToLaunchSelector(QAction* a) { window_->addToLaunchSelector(a); }
 void ScriptEditor::refreshLaunchEntries() { window_->refreshEntries(); }
 void ScriptEditor::refreshScript() { window_->document()->refresh(); }
 void ScriptEditor::log(int level, const QString& text) { window_->log(level, text); }

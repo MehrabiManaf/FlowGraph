@@ -75,3 +75,4 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
   removed from core, editor and tests. Scripts only handle `event:<Name>` nodes; the palette offers each event once; My Script lists all
   events of the app (dimmed = not handled, double click adds the handler); Details shows an event read-only; copy/paste never
   duplicates a handler. Hosts decide what a new script contains (EditorHost::initializeNewScript, standard::createMainTemplate).
+- flowstudio: the entries box is a *Launch configuration* selector (EditorHost::launchLabel/launchEntrySelected, ScriptEditor::addToLaunchSelector for the Configure... button); Event Graphs lists only the events the script handles and has no + button (context menu: New event graph).
