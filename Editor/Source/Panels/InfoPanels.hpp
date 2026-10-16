@@ -61,6 +61,7 @@ private:
     QString settingsKey() const;
     void saveWatches();
     void onDocumentPath();
+    void onScriptOpened();
 
     Document* doc_;
     RunController* run_;

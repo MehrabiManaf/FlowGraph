@@ -81,6 +81,7 @@ private:
     void onTaskState(fg::TaskState st);
     void onCompleted(bool ok, bool exited, int exitCode, const QString& error, const QString& returns);
     void onDocumentChanged(bool structural);
+    void onScriptOpened();
 
     // The worker reports log lines and fired links through these buffers; the GUI thread empties them every few milliseconds
     // (and before it handles any other report), so a script that executes millions of nodes per second cannot flood the event queue.

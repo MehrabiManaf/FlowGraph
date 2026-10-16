@@ -1404,6 +1404,65 @@ TEST(view_menu_snap_to_grid_switches_every_graph) {
     snap->setChecked(initial);
 }
 
+// Opening another script starts the debugger panel afresh: the variables of the previous run and the watches belong to the old script.
+TEST(debugger_panel_forgets_the_previous_script_when_another_is_opened) {
+    Fixture f;
+    const QString fileA = QDir::temp().filePath("fg_debugger_reset_a.flow");
+    QString error;
+    CHECK(f.doc.save(fileA, &error));                          // a file to open later (no watches stored for it)
+    f.doc.newScript([&](fg::Script& s) { fg::standard::createMainTemplate(s, f.rt.registry()); });
+    f.doc.edit("Variable", [&](fg::Script& s) { s.variables.push_back({"Total", "int", fg::Value(7), "", ""}); });
+
+    RunController run(&f.doc);
+    DebugPanel panel(&f.doc, &run);
+    QTreeWidget* vars = nullptr;
+    QTreeWidget* watches = nullptr;
+    for (auto* t : panel.findChildren<QTreeWidget*>()) {
+        if (t->headerItem()->text(0) == "Variable") vars = t;
+        if (t->headerItem()->text(0) == "Watch") watches = t;
+    }
+    CHECK(vars && watches);
+    if (!vars || !watches) return;
+    auto hasVariable = [&](const QString& name) {
+        for (int i = 0; i < vars->topLevelItemCount(); ++i)
+            for (int c = 0; c < vars->topLevelItem(i)->childCount(); ++c)
+                if (vars->topLevelItem(i)->child(c)->text(0) == name) return true;
+        return false;
+    };
+    bool finished = false;
+    QObject::connect(&run, &RunController::finished, [&](bool, const QString&) { finished = true; });
+    panel.addWatch("Total");                                   // an unsaved script: the watch lives in the window only
+    CHECK(run.start("Main", {}));
+    CHECK(spinUntil([&] { return finished; }));
+    QCoreApplication::processEvents();
+    CHECK(hasVariable("Total"));
+    CHECK_EQ(watches->topLevelItemCount(), 1);
+    CHECK_EQ(watches->topLevelItem(0)->text(1), QString("7"));
+
+    // opening a file: neither the variables of the run nor the watch are carried over
+    CHECK(f.doc.load(fileA, &error));
+    QCoreApplication::processEvents();
+    CHECK(!hasVariable("Total"));
+    CHECK_EQ(vars->topLevelItemCount(), 0);                    // nothing ran in this script
+    CHECK_EQ(watches->topLevelItemCount(), 0);
+    CHECK(panel.watchExpressions().isEmpty());
+    CHECK(run.state() == RunController::State::Idle);
+
+    // the same for a new script, and a run that is still active is stopped
+    panel.addWatch("Other");                                   // a script with a path: stored for that file ...
+    CHECK_EQ(watches->topLevelItemCount(), 1);
+    f.doc.newScript([&](fg::Script& s) { fg::standard::createMainTemplate(s, f.rt.registry()); });
+    QCoreApplication::processEvents();
+    CHECK_EQ(watches->topLevelItemCount(), 0);                 // ... not for the new one
+    CHECK_EQ(vars->topLevelItemCount(), 0);
+    f.doc.load(fileA);                                         // and it is back with its own file
+    QCoreApplication::processEvents();
+    CHECK_EQ(watches->topLevelItemCount(), 1);
+    CHECK_EQ(watches->topLevelItem(0)->text(0), QString("Other"));
+    panel.removeWatch("Other");                                // leave nothing in the user's settings
+    QFile::remove(fileA);
+}
+
 int main(int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     qputenv("QT_QPA_PLATFORM", "offscreen");

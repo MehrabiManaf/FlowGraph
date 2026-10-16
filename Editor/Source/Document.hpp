@@ -62,6 +62,7 @@ signals:
     void changed(bool structural);          // after every edit / undo / redo / load
     void compiled();                        // a new Program is available
     void scriptReplaced();                  // load / new / undo / redo: graph objects may have changed identity
+    void scriptOpened();                    // load / new: a different script, not an edit of the same one (emitted before it is compiled)
     void titleChanged();
     void undoStateChanged();
 

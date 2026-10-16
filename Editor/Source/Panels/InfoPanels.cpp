@@ -225,6 +225,7 @@ DebugPanel::DebugPanel(Document* doc, RunController* run, QWidget* parent) : QWi
     });
     watches_->addAction(removeKey);
 
+    connect(doc_, &Document::scriptOpened, this, [this] { onScriptOpened(); });
     connect(doc_, &Document::titleChanged, this, [this] { onDocumentPath(); });
     onDocumentPath();
 }
@@ -422,7 +423,20 @@ QString DebugPanel::settingsKey() const { return "debugger/watches/" + QString::
 
 void DebugPanel::saveWatches() {
     if (watchesFor_.isEmpty()) return;                     // an unsaved script: the watches live as long as the window
-    QSettings("FlowGraph", "FlowGraph Studio").setValue(settingsKey(), watchList_);
+    QSettings settings("FlowGraph", "FlowGraph Studio");
+    if (watchList_.isEmpty()) settings.remove(settingsKey());          // no watches: leave nothing behind
+    else settings.setValue(settingsKey(), watchList_);
+}
+
+// Another script: its own watches (those stored for its file), and nothing that was opened, loaded or shown for the previous one.
+void DebugPanel::onScriptOpened() {
+    expanded_.clear();
+    loaded_.clear();
+    seenWatches_.clear();
+    watchesFor_ = doc_->path();
+    watchList_.clear();
+    if (!watchesFor_.isEmpty()) watchList_ = QSettings("FlowGraph", "FlowGraph Studio").value(settingsKey()).toStringList();
+    refresh();
 }
 
 void DebugPanel::onDocumentPath() {

@@ -36,6 +36,7 @@ void Document::newScript(const std::function<void(fg::Script&)>& init) {
     path_.clear();
     undo_.clear(); redo_.clear(); undoLabels_.clear(); redoLabels_.clear();
     debugger_.clearBreakpoints();
+    emit scriptOpened();
     recompile();
     markDirty(false);
     emit scriptReplaced();
@@ -54,6 +55,7 @@ bool Document::load(const QString& path, QString* error) {
     path_ = path;
     undo_.clear(); redo_.clear(); undoLabels_.clear(); redoLabels_.clear();
     debugger_.clearBreakpoints();
+    emit scriptOpened();
     recompile();
     markDirty(false);
     emit scriptReplaced();

@@ -7,6 +7,7 @@ namespace fged {
 
 RunController::RunController(Document* doc, QObject* parent) : QObject(parent), doc_(doc) {
     connect(doc_, &Document::changed, this, [this](bool structural) { onDocumentChanged(structural); });
+    connect(doc_, &Document::scriptOpened, this, [this] { onScriptOpened(); });
     pendingTimer_.setInterval(30);
     connect(&pendingTimer_, &QTimer::timeout, this, [this] { drainPending(); });
 }
@@ -194,6 +195,17 @@ void RunController::onCompleted(bool ok, bool exited, int exitCode, const QStrin
         emit logMessage(int(fg::LogLevel::Error), "--- failed: " + error + " ---");
     }
     emit finished(ok, error);
+}
+
+// Another script was loaded (or a new one made): nothing of the previous run - its variables, its call stack - belongs to it.
+void RunController::onScriptOpened() {
+    if (isActive()) stop();
+    ax_.reset();
+    ++generation_;
+    clearPending();
+    pendingTimer_.stop();
+    frame_ = 0;
+    handle_ = 0;
 }
 
 void RunController::onDocumentChanged(bool structural) {
