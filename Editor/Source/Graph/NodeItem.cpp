@@ -14,6 +14,11 @@ namespace fged {
 
 namespace {
 
+// A reroute is a small pill: an input circle, a stretch of body that can be grabbed to move it, and an output circle.
+constexpr double kRerouteWidth = 36.0, kRerouteHeight = 18.0;
+constexpr double kRerouteCenterOffset = 10.0;            // distance of the circles from the ends
+constexpr double kRerouteHitRadius = 5.5;                // only the circles start a link; the rest of the pill moves the node
+
 struct Metrics {
     QFont font, bold;
     QMarginsF titleMargins{10.0, 6.0, 10.0, 6.0};
@@ -206,19 +211,20 @@ void NodeItem::layout() {
 
 void NodeItem::layoutReroute() {
     const Metrics& M = metrics();
-    (void)M;
     titleRect_ = QRectF(0, 0, 0, 0);
-    inputsRect_ = QRectF(0, 0, 14, 18);
-    outputsRect_ = QRectF(14, 0, 14, 18);
-    bodyBottom_ = 18;
-    if (!inData_.empty()) inData_[0].connector = QRectF(2, 3, 12, 12);
-    if (!outData_.empty()) outData_[0].connector = QRectF(14, 3, 12, 12);
+    inputsRect_ = QRectF(0, 0, kRerouteWidth / 2, kRerouteHeight);
+    outputsRect_ = QRectF(kRerouteWidth / 2, 0, kRerouteWidth / 2, kRerouteHeight);
+    bodyBottom_ = kRerouteHeight;
+    const QSizeF cs = M.dataConnector;
+    const double cy = kRerouteHeight / 2;
+    if (!inData_.empty()) inData_[0].connector = QRectF(QPointF(kRerouteCenterOffset - cs.width() / 2, cy - cs.height() / 2), cs);
+    if (!outData_.empty()) outData_[0].connector = QRectF(QPointF(kRerouteWidth - kRerouteCenterOffset - cs.width() / 2, cy - cs.height() / 2), cs);
     for (auto* list : {&inData_, &outData_})
         for (auto& v : *list) { v.label.clear(); v.labelRect = QRectF(); v.editor = Editor::None; }
 }
 
 QRectF NodeItem::boundingRect() const {
-    QRectF r = reroute_ ? QRectF(0, 0, 28, 18) : QRectF(0, 0, titleRect_.width(), bodyBottom_);
+    QRectF r = reroute_ ? QRectF(0, 0, kRerouteWidth, kRerouteHeight) : QRectF(0, 0, titleRect_.width(), bodyBottom_);
     r = r.united(inputsRect_).united(outputsRect_);
     for (auto* list : {&outExec_, &outData_, &inExec_, &inData_})
         for (auto& v : *list) r = r.united(v.connector.adjusted(-4, -4, 4, 4));
@@ -235,7 +241,7 @@ QRectF NodeItem::commentRect() const {
 QPainterPath NodeItem::shape() const {
     QPainterPath p;
     p.setFillRule(Qt::WindingFill);     // the pin rectangles overlap the body: odd-even filling would punch holes into it
-    QRectF body = reroute_ ? QRectF(0, 0, 28, 18) : QRectF(0, 0, titleRect_.width(), bodyBottom_);
+    QRectF body = reroute_ ? QRectF(0, 0, kRerouteWidth, kRerouteHeight) : QRectF(0, 0, titleRect_.width(), bodyBottom_);
     p.addRect(body.united(inputsRect_).united(outputsRect_));
     for (auto* list : {&outExec_, &outData_, &inExec_, &inData_})
         for (auto& v : *list) p.addRect(v.connector.adjusted(-3, -3, 3, 3));
@@ -252,7 +258,7 @@ std::vector<NodeItem::PinView*> NodeItem::allPins() {
 NodeItem::PinView* NodeItem::pinViewAt(const QPointF& local) {
     for (PinView* v : allPins()) {
         QRectF hit = v->connector.united(v->labelRect);
-        if (reroute_) hit = v->connector.adjusted(-3, -3, 3, 3);
+        if (reroute_) hit = QRectF(v->connector.center() - QPointF(kRerouteHitRadius, kRerouteHitRadius), QSizeF(2 * kRerouteHitRadius, 2 * kRerouteHitRadius));
         if (hit.contains(local)) return v;
     }
     return nullptr;
@@ -353,7 +359,7 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
         QColor c = outData_.empty() ? QColor(150, 150, 150) : outData_[0].color;
         p->setPen(QPen(border, bw));
         p->setBrush(pal.window().color());
-        p->drawRoundedRect(QRectF(0, 0, 28, 18), 9, 9);
+        p->drawRoundedRect(QRectF(0, 0, kRerouteWidth, kRerouteHeight), kRerouteHeight / 2, kRerouteHeight / 2);
         for (auto* list : {&inData_, &outData_})
             for (auto& v : *list) {
                 p->setPen(v.hovered ? pal.highlight().color() : c);

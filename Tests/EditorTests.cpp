@@ -857,6 +857,52 @@ TEST(pin_editor_follows_its_node_when_the_node_is_dragged) {
     CHECK(std::abs(f.scene.inplaceEditorPos().x() - n->editorSceneRect("String").left()) < 1.0);
 }
 
+TEST(reroute_nodes_can_be_moved_and_still_start_links) {
+    ViewFixture f;
+    auto all = fg::buildPalette(fg::NodeBuildCtx{f.rt.registry(), &f.doc.script(), f.doc.script().findGraph("EventGraph")});
+    fg::NodeId a = f.scene.addNodeFromTemplate(*findTemplate(all, "math.add"), QPointF(260, 150));
+    fg::NodeId b = f.scene.addNodeFromTemplate(*findTemplate(all, "math.add"), QPointF(560, 170));
+    fg::Connection link{a, "Result", b, "A"};
+    f.doc.edit("Link", [&](fg::Script& s) { s.graphs[0].connections.push_back(link); });
+    f.scene.sync();
+    f.scene.insertReroute(link, QPointF(440, 175));
+    f.scene.sync();
+    QCoreApplication::processEvents();
+    fg::NodeId rr = 0;
+    for (auto& n : f.doc.graph("EventGraph")->nodes)
+        if (n.def == "reroute") rr = n.id;
+    CHECK(rr != 0);
+    NodeItem* item = f.scene.nodeItem(rr);
+    CHECK(item != nullptr && item->isReroute());
+    if (!item) return;
+    const size_t links = f.doc.graph("EventGraph")->connections.size();
+
+    // pressing on the pill (between the two circles) and dragging moves it - it does not start a link
+    QPointF before = item->scenePos();
+    QPoint body = f.toView(item->mapToScene(QPointF(18, 9)));
+    f.drag(body, body + QPoint(70, 45));
+    QCoreApplication::processEvents();
+    item = f.scene.nodeItem(rr);
+    CHECK(std::abs(item->scenePos().x() - before.x()) > 50);
+    CHECK(std::abs(item->scenePos().y() - before.y()) > 30);
+    CHECK(!f.scene.isLinkDragging());
+    CHECK_EQ(f.doc.graph("EventGraph")->connections.size(), links);
+    CHECK(std::abs(f.doc.graph("EventGraph")->findNode(rr)->x - item->scenePos().x()) < 0.5);     // the new position was stored
+
+    // pressing on its output circle still drags a link out of it
+    QPoint out = f.pinPoint(rr, "Out", fg::PinDir::Out);
+    f.send(QEvent::MouseMove, out, Qt::NoButton, Qt::NoButton);
+    f.send(QEvent::MouseButtonPress, out, Qt::LeftButton, Qt::LeftButton);
+    CHECK(f.scene.isLinkDragging());
+    QPoint target = f.pinPoint(b, "B", fg::PinDir::In);
+    f.send(QEvent::MouseMove, (out + target) / 2, Qt::NoButton, Qt::LeftButton);
+    f.send(QEvent::MouseMove, target, Qt::NoButton, Qt::LeftButton);
+    f.send(QEvent::MouseButtonRelease, target, Qt::LeftButton, Qt::NoButton);
+    bool linked = false;
+    for (auto& c : f.doc.graph("EventGraph")->connections) linked |= c.fromNode == rr && c.fromPin == "Out" && c.toNode == b && c.toPin == "B";
+    CHECK(linked);
+}
+
 // The same interactions inside the real main window (docking, tabs, refresh on every edit).
 struct TestHost : fged::EditorHost {
     fg::Runtime& rt;
