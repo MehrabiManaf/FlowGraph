@@ -10,6 +10,7 @@
 #include <thread>
 #include <filesystem>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -491,6 +492,84 @@ TEST(runtime_error_is_reported_with_node) {
     CHECK(!r.ok);
     CHECK(r.state == TaskState::Failed);
     CHECK_EQ(r.errorNode, div);
+}
+
+// Scripts must not be able to end the host process: each of these used to kill it (hardware trap, stack overflow, std::terminate).
+TEST(int64_min_divided_by_minus_one_does_not_trap) {
+    for (const char* op : {"math.div", "math.mod"}) {
+        TestRuntime rt;
+        Script s;
+        s.variables.push_back({"R", "int", Value(7), "", ""});
+        Graph& g = s.addEventGraph();
+        NodeId ev = g.addNode("event:Go").id;
+        NodeId n = g.addNode(op).id;
+        g.findNode(n)->defaults["A"] = Value(std::numeric_limits<int64_t>::min());
+        g.findNode(n)->defaults["B"] = Value(-1);
+        NodeId set = g.addNode("var.set").id;
+        g.findNode(set)->props = {{"name", "R"}, {"scope", "global"}};
+        link(g, ev, "Then", set, "In");
+        link(g, n, "Result", set, "Value");
+        auto prog = build(rt, s);
+        Instance inst(prog);
+        CHECK(inst.callEvent("Go").ok);
+        CHECK_EQ(inst.getVariable("R").toInt(), std::string(op) == "math.div" ? std::numeric_limits<int64_t>::min() : int64_t(0));
+    }
+    CHECK_EQ(divideInt(std::numeric_limits<int64_t>::min(), -1), std::numeric_limits<int64_t>::min());
+    CHECK_EQ(divideInt(7, -1), int64_t(-7));
+    CHECK_EQ(moduloInt(std::numeric_limits<int64_t>::min(), -1), int64_t(0));
+    CHECK_EQ(moduloInt(-7, 3), int64_t(-1));
+}
+
+TEST(deeply_nested_containers_are_a_script_error) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"Cur", "any", Value(), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Go").id;
+    NodeId loop = g.addNode("flow.for").id;
+    g.findNode(loop)->defaults["Last"] = Value(100000);
+    NodeId get = g.addNode("var.get").id;
+    g.findNode(get)->props = {{"name", "Cur"}, {"scope", "global"}};
+    NodeId mk = g.addNode("array.make").id;
+    g.findNode(mk)->props["count"] = "1";
+    g.findNode(mk)->typeArgs["T"] = "any";
+    NodeId set = g.addNode("var.set").id;
+    g.findNode(set)->props = {{"name", "Cur"}, {"scope", "global"}};
+    link(g, ev, "Then", loop, "In");
+    link(g, loop, "Loop Body", set, "In");
+    link(g, get, "Value", mk, "[0]");
+    link(g, mk, "Array", set, "Value");
+    auto prog = build(rt, s);
+    Instance inst(prog);
+    auto r = inst.callEvent("Go");
+    CHECK(!r.ok);
+    CHECK(r.error.find("nested too deeply") != std::string::npos);
+    CHECK_EQ(r.errorNode, set);     // storing into the variable copies the container
+    // the data built so far is still a valid, droppable value
+    Value v = inst.getVariable("Cur");
+    int depth = 0;
+    for (const Value* p = &v; p->isArray() && !p->arrayPtr()->items.empty(); p = &p->arrayPtr()->items[0]) ++depth;
+    CHECK(depth > 100 && depth <= Value::kMaxContainerDepth + 1);
+}
+
+TEST(unknown_native_exception_is_a_script_error) {
+    TestRuntime rt;
+    rt.registry().addFunction("Test.ThrowsInt", []() -> int { throw 42; }).makePure();
+    Script s;
+    s.variables.push_back({"X", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Go").id;
+    NodeId t = g.addNode("fn:Test.ThrowsInt").id;
+    NodeId set = g.addNode("var.set").id;
+    g.findNode(set)->props = {{"name", "X"}, {"scope", "global"}};
+    link(g, ev, "Then", set, "In");
+    link(g, t, "Result", set, "Value");
+    auto prog = build(rt, s);
+    Instance inst(prog);
+    auto r = inst.callEvent("Go");
+    CHECK(!r.ok);
+    CHECK(r.state == TaskState::Failed);
+    CHECK(r.error.find("unknown exception") != std::string::npos);
 }
 
 TEST(debugger_breakpoint_and_step) {

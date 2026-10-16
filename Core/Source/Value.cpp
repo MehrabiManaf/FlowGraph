@@ -123,20 +123,26 @@ double Value::toFloatSlow() const {
     }
 }
 
-Value Value::deepCopySlow() const {
+Value Value::deepCopySlow() const { return deepCopyAt(0); }
+
+// Containers are copied whenever they are stored into another container, so limiting the depth of a copy limits how deep a script can
+// nest them. Copying, comparing, printing and destroying are recursive: unbounded nesting would overflow the stack and end the process.
+Value Value::deepCopyAt(int depth) const {
+    if (!isContainer()) return *this;
+    if (depth >= kMaxContainerDepth) throw ScriptError("containers are nested too deeply (limit " + std::to_string(kMaxContainerDepth) + ")");
     if (kind_ == Kind::Array) {
         auto src = arrayPtr();
         auto dst = std::make_shared<ArrayData>();
         dst->elem = src->elem;
         dst->items.reserve(src->items.size());
-        for (auto& e : src->items) dst->items.push_back(e.deepCopy());
+        for (auto& e : src->items) dst->items.push_back(e.deepCopyAt(depth + 1));
         return Value(std::move(dst));
     }
     auto src = mapPtr();
     auto dst = std::make_shared<MapData>();
     dst->key = src->key;
     dst->val = src->val;
-    for (auto& [k, v] : src->items) dst->items.emplace(k, v.deepCopy());
+    for (auto& [k, v] : src->items) dst->items.emplace(k, v.deepCopyAt(depth + 1));
     return Value(std::move(dst));
 }
 

@@ -357,10 +357,10 @@ void registerMath(Registry& r) {
     binary("math.sub", Intrinsic::Sub, "Subtract", "- minus", [](NodeCtx&, int64_t a, int64_t b) { return a - b; }, [](double a, double b) { return a - b; });
     binary("math.mul", Intrinsic::Mul, "Multiply", "* times", [](NodeCtx&, int64_t a, int64_t b) { return a * b; }, [](double a, double b) { return a * b; });
     binary("math.div", Intrinsic::Div, "Divide", "/ over",
-           [](NodeCtx& c, int64_t a, int64_t b) -> int64_t { if (b == 0) c.error("division by zero"); return a / b; },
+           [](NodeCtx& c, int64_t a, int64_t b) -> int64_t { if (b == 0) c.error("division by zero"); return divideInt(a, b); },
            [](double a, double b) { return a / b; });
     binary("math.mod", Intrinsic::Mod, "Modulo", "% remainder",
-           [](NodeCtx& c, int64_t a, int64_t b) -> int64_t { if (b == 0) c.error("division by zero"); return a % b; },
+           [](NodeCtx& c, int64_t a, int64_t b) -> int64_t { if (b == 0) c.error("division by zero"); return moduloInt(a, b); },
            [](double a, double b) { return std::fmod(a, b); });
     binary("math.min", Intrinsic::Min, "Min", "smaller", [](NodeCtx&, int64_t a, int64_t b) { return std::min(a, b); }, [](double a, double b) { return std::min(a, b); });
     binary("math.max", Intrinsic::Max, "Max", "larger", [](NodeCtx&, int64_t a, int64_t b) { return std::max(a, b); }, [](double a, double b) { return std::max(a, b); });

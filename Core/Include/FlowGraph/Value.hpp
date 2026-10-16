@@ -117,6 +117,9 @@ public:
     // Valid for Kind::Int / Kind::Bool only.
     int64_t rawInt() const { return u_.i; }
 
+    // Containers nested deeper than this cannot be copied (ScriptError).
+    static constexpr int kMaxContainerDepth = 256;
+
     // Copies containers (recursively); every other kind is returned as is.
     Value deepCopy() const { return (kind_ == Kind::Array || kind_ == Kind::Map) ? deepCopySlow() : *this; }
 
@@ -135,6 +138,7 @@ private:
     int64_t toIntSlow() const;
     double toFloatSlow() const;
     Value deepCopySlow() const;
+    Value deepCopyAt(int depth) const;
 
     Kind kind_ = Kind::Null;
     union Payload {
@@ -153,6 +157,20 @@ struct ValueLess {
     }
     static bool slow(const Value& a, const Value& b);
 };
+
+// Integer division that cannot trap (the caller rejects y == 0). INT64_MIN / -1 wraps around, like + - * do, and INT64_MIN % -1 is 0:
+// the hardware raises an exception for both, which would end the whole process.
+// 64 bit division is slow on many CPUs; when both operands are non-negative and fit 32 bits the 32 bit one gives the same result.
+FG_FORCEINLINE int64_t divideInt(int64_t x, int64_t y) {
+    if (((static_cast<uint64_t>(x) | static_cast<uint64_t>(y)) >> 32) == 0) return static_cast<uint32_t>(x) / static_cast<uint32_t>(y);
+    if (y == -1) return static_cast<int64_t>(0 - static_cast<uint64_t>(x));
+    return x / y;
+}
+FG_FORCEINLINE int64_t moduloInt(int64_t x, int64_t y) {
+    if (((static_cast<uint64_t>(x) | static_cast<uint64_t>(y)) >> 32) == 0) return static_cast<uint32_t>(x) % static_cast<uint32_t>(y);
+    if (y == -1) return 0;
+    return x % y;
+}
 
 struct ArrayData {
     const TypeDesc* elem = nullptr;     // element type (null = unconstrained)

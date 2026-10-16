@@ -37,16 +37,6 @@ struct InputBuf {
 };
 
 // Cold paths of the interpreter loop. They are separate functions so that the hot ones hold no std::string temporaries.
-// 64 bit division is slow on many CPUs; when both operands are non-negative and fit 32 bits the 32 bit one gives the same result.
-FG_FORCEINLINE int64_t divideInt(int64_t x, int64_t y) {
-    if (((static_cast<uint64_t>(x) | static_cast<uint64_t>(y)) >> 32) == 0) return static_cast<uint32_t>(x) / static_cast<uint32_t>(y);
-    return x / y;
-}
-FG_FORCEINLINE int64_t moduloInt(int64_t x, int64_t y) {
-    if (((static_cast<uint64_t>(x) | static_cast<uint64_t>(y)) >> 32) == 0) return static_cast<uint32_t>(x) % static_cast<uint32_t>(y);
-    return x % y;
-}
-
 [[noreturn]] FG_NOINLINE void throwUnknownNode(const CompiledNode& n) { throw ScriptError("unknown node '" + n.defId + "'"); }
 [[noreturn]] FG_NOINLINE void throwUnknownVariable(const CompiledNode& var) { throw ScriptError("unknown variable '" + var.prop("name") + "'"); }
 [[noreturn]] FG_NOINLINE void throwDivisionByZero() { throw ScriptError("division by zero"); }
@@ -413,6 +403,8 @@ RunResult Task::run(uint64_t maxNodes) {
         fail(e.what(), active_);
     } catch (const std::exception& e) {
         fail(std::string("internal error: ") + e.what(), active_);
+    } catch (...) {                        // a native function may throw anything; it must not end the host process
+        fail("internal error: a native function threw an unknown exception", active_);
     }
     if (done()) inst_->forget(this);
     if (hooks && state_ != TaskState::Ready) hooks->onTaskStateChanged(*this);
