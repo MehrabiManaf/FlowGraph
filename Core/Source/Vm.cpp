@@ -2,6 +2,7 @@
 #include <FlowGraph/Vm.hpp>
 
 #include <algorithm>
+#include <new>
 #include <cstdio>
 #include <exception>
 
@@ -16,16 +17,26 @@ struct CurrentScope {
     ~CurrentScope() { g_current = prev; }
 };
 
-// Value buffer that lives on the stack for the common case of a few inputs.
+// Value buffer for the inputs of one node: lives on the stack, and only the values that are needed are constructed.
 struct InputBuf {
     static constexpr size_t N = 8;
-    Value small[N];
+    alignas(Value) unsigned char raw[N * sizeof(Value)];
     std::vector<Value> big;
     Value* data;
-    explicit InputBuf(size_t n) {
+    size_t count;
+    explicit InputBuf(size_t n) : count(n) {
         if (n > N) { big.resize(n); data = big.data(); }
-        else data = small;
+        else {
+            data = reinterpret_cast<Value*>(raw);
+            for (size_t i = 0; i < n; ++i) new (data + i) Value();
+        }
     }
+    ~InputBuf() {
+        if (count <= N)
+            for (size_t i = 0; i < count; ++i) data[i].~Value();
+    }
+    InputBuf(const InputBuf&) = delete;
+    InputBuf& operator=(const InputBuf&) = delete;
 };
 
 const std::string& emptyString() {
@@ -64,6 +75,7 @@ void NodeCtx::end() { action_ = Action::End; }
 void NodeCtx::call(size_t execOut) { action_ = Action::Call; pin_ = execOut; }
 void NodeCtx::breakLoop() { action_ = Action::Break; }
 void NodeCtx::wait(double seconds) { waiting_ = true; waitSeconds_ = seconds; poll_ = nullptr; }
+void NodeCtx::exit(int code) { exit_ = true; exitCode_ = code; }
 void NodeCtx::waitFor(std::function<bool(double)> poll) { waiting_ = true; waitSeconds_ = 0; poll_ = std::move(poll); }
 const std::string& NodeCtx::prop(const std::string& key) const {
     auto it = node_->props.find(key);
@@ -199,6 +211,24 @@ void Instance::tick(double dt) {
         if (t->state() == TaskState::Waiting && t->advanceWait(dt)) t->run();
 }
 
+std::vector<std::shared_ptr<Task>> Instance::advanceWaits(double dt) {
+    std::vector<std::shared_ptr<Task>> ready;
+    auto copy = tasks_;
+    for (auto& t : copy)
+        if (t->state() == TaskState::Waiting && t->advanceWait(dt)) ready.push_back(t);
+    return ready;
+}
+
+double Instance::nextWakeIn() const {
+    double best = -1;
+    for (auto& t : tasks_)
+        if (t->state() == TaskState::Waiting) {
+            double w = t->waitRemaining();
+            if (best < 0 || w < best) best = w;
+        }
+    return best;
+}
+
 void Instance::abortAll() {
     auto copy = tasks_;
     for (auto& t : copy) t->abort();
@@ -262,6 +292,8 @@ RunResult Task::makeResult() {
     r.error = error_;
     r.errorGraph = errorGraph_;
     r.errorNode = errorNode_;
+    r.exited = exited_;
+    r.exitCode = exitCode_;
     r.returns = results_;
     r.refResults = refResults_;
     r.task = self_.lock();
@@ -297,7 +329,7 @@ RunResult Task::run(uint64_t maxNodes) {
     DebugHooks* hooks = inst_->debugHooks();
     state_ = TaskState::Running;
     const bool explicitLimit = maxNodes != 0;
-    const uint64_t limit = explicitLimit ? maxNodes : inst_->stepLimit_;
+    const uint64_t limit = explicitLimit ? maxNodes : (inst_->stepLimit_ ? inst_->stepLimit_ : UINT64_MAX);
     uint64_t count = 0;
     try {
         while (true) {
@@ -515,6 +547,14 @@ void Task::executeNode(Frame& f, const CompiledNode& n) {
     NodeCtx ctx;
     initCtx(ctx, f, n, buf.data, resumed ? &rc : nullptr);
     if (n.def->run) n.def->run(ctx);
+    if (ctx.exit_) {                      // Exit: unwind everything, the task ends successfully with a code
+        exited_ = true;
+        exitCode_ = ctx.exitCode_;
+        results_.clear();
+        frames_.clear();
+        state_ = TaskState::Finished;
+        return;
+    }
 
     using A = NodeCtx::Action;
     switch (ctx.action_) {
@@ -692,21 +732,33 @@ bool Task::pinValue(size_t frameIndex, NodeId node, const std::string& pin, Valu
 
 // ================================================================== Debugger
 void Debugger::setBreakpoint(const std::string& graph, NodeId node, bool on) {
+    std::lock_guard lk(mu_);
     if (on) breakpoints_.insert({graph, node});
     else breakpoints_.erase({graph, node});
 }
-bool Debugger::hasBreakpoint(const std::string& graph, NodeId node) const { return breakpoints_.count({graph, node}) > 0; }
+bool Debugger::hasBreakpoint(const std::string& graph, NodeId node) const {
+    std::lock_guard lk(mu_);
+    return breakpoints_.count({graph, node}) > 0;
+}
+void Debugger::clearBreakpoints() {
+    std::lock_guard lk(mu_);
+    breakpoints_.clear();
+}
+std::set<std::pair<std::string, NodeId>> Debugger::breakpoints() const {
+    std::lock_guard lk(mu_);
+    return breakpoints_;
+}
 
 void Debugger::command(Task& task, Command cmd) {
+    size_t depth = task.depth();
+    std::lock_guard lk(mu_);
     if (cmd == Command::Continue) steps_.erase(&task);
-    else steps_[&task] = Step{cmd, task.depth()};
+    else steps_[&task] = Step{cmd, depth};
 }
 
 bool Debugger::shouldBreak(Task& task, const CompiledGraph& graph, const CompiledNode& node) {
-    if (pauseAll_) {
-        pauseAll_ = false;
-        return true;
-    }
+    if (pauseAll_.exchange(false)) return true;
+    std::lock_guard lk(mu_);
     auto it = steps_.find(&task);
     if (it != steps_.end()) {
         Step s = it->second;
@@ -731,7 +783,10 @@ void Debugger::onExecLink(Task&, const CompiledGraph& graph, int fromNode, int e
 }
 
 void Debugger::onTaskStateChanged(Task& task) {
-    if (task.done()) steps_.erase(&task);
+    if (task.done()) {
+        std::lock_guard lk(mu_);
+        steps_.erase(&task);
+    }
     if (taskStateChanged) taskStateChanged(task);
 }
 

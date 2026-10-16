@@ -1,53 +1,15 @@
 #include "RunController.hpp"
 #include "../Graph/Style.hpp"
 
+#include <QMetaObject>
+
 namespace fged {
 
 RunController::RunController(Document* doc, QObject* parent) : QObject(parent), doc_(doc) {
-    connect(&timer_, &QTimer::timeout, this, [this] { tick(); });
     connect(doc_, &Document::changed, this, [this](bool structural) { onDocumentChanged(structural); });
-    fg::Debugger& dbg = doc_->debugger();
-    dbg.linkFired = [this](const std::string& g, fg::NodeId from, int out, fg::NodeId to) {
-        emit linkFired(qs(g), from, out, to);
-    };
 }
 
-std::vector<RunController::Entry> RunController::entries() const {
-    std::vector<Entry> out;
-    auto prog = doc_->program();
-    if (!prog) return out;
-    const fg::Script& script = doc_->script();
-    for (auto& [name, loc] : prog->events) {
-        Entry e;
-        e.name = qs(name);
-        e.isEvent = true;
-        const fg::CompiledNode& n = prog->graphs[size_t(loc.first)].nodes[size_t(loc.second)];
-        QStringList sig;
-        for (int pi : n.dataOut) {
-            const fg::CompiledPin& p = n.pins[size_t(pi)];
-            e.params.push_back({p.name, p.type ? p.type->name : "any", false, false, fg::Value()});
-            sig << qs(p.name) + ": " + (p.type ? qs(p.type->name) : "any");
-        }
-        e.signature = e.name + "(" + sig.join(", ") + ")";
-        out.push_back(std::move(e));
-    }
-    for (auto& g : script.graphs) {
-        if (g.kind != fg::GraphKind::Function) continue;
-        Entry e;
-        e.name = qs(g.name);
-        e.isEvent = false;
-        e.params = g.inputs;
-        QStringList sig;
-        for (auto& p : g.inputs) sig << qs(p.name) + ": " + qs(p.type);
-        e.signature = e.name + "(" + sig.join(", ") + ")";
-        out.push_back(std::move(e));
-    }
-    std::sort(out.begin(), out.end(), [](const Entry& a, const Entry& b) {
-        if (a.isEvent != b.isEvent) return a.isEvent;
-        return a.name < b.name;
-    });
-    return out;
-}
+RunController::~RunController() { ax_.reset(); }
 
 fg::Value RunController::parseArgument(const fg::Registry& reg, const fg::TypeDesc* type, const QString& text) {
     if (!type) return fg::Value(ss(text));
@@ -73,147 +35,167 @@ void RunController::setState(State s) {
     emit stateChanged(s);
 }
 
+// Callbacks run on the worker thread: hand them to the GUI thread, dropping those of a previous run.
+void RunController::post(uint64_t generation, std::function<void()> fn) {
+    QMetaObject::invokeMethod(this, [this, generation, fn = std::move(fn)] {
+        if (generation == generation_) fn();
+    }, Qt::QueuedConnection);
+}
+
+void RunController::setStepDelay(int ms) {
+    delayMs_ = ms;
+    if (ax_) ax_->setStepDelay(ms);
+}
+
 bool RunController::start(const QString& entry, const std::vector<fg::Value>& args) {
     if (isActive()) stop();
-    program_ = doc_->program();
-    if (!program_ || program_->hasErrors) {
+    auto program = doc_->program();
+    if (!program || program->hasErrors) {
         emit logMessage(int(fg::LogLevel::Error), "Cannot run: the script has compile errors (see Compile Results).");
         return false;
     }
-    instance_ = std::make_shared<fg::Instance>(program_);
-    instance_->setLogHandler([this](fg::LogLevel l, const std::string& m) { emit logMessage(int(l), qs(m)); });
-    instance_->setDebugHooks(&doc_->debugger());
-    doc_->debugger().taskStateChanged = nullptr;
-    std::string err;
-    std::string name = ss(entry);
-    task_ = program_->events.count(name) ? instance_->startEvent(name, args, &err) : instance_->startFunction(name, args, &err);
-    if (!task_) {
-        emit logMessage(int(fg::LogLevel::Error), "Cannot start '" + entry + "': " + qs(err));
-        instance_.reset();
-        return false;
-    }
+    ax_.reset();
+    const uint64_t gen = ++generation_;
+    fg::AsyncExecutor::Callbacks cb;
+    cb.log = [this, gen](fg::LogLevel l, const std::string& m) {
+        QString text = qs(m);
+        post(gen, [this, l, text] { emit logMessage(int(l), text); });
+    };
+    cb.linkFired = [this, gen](const std::string& g, fg::NodeId from, int out, fg::NodeId to) {
+        QString graph = qs(g);
+        post(gen, [this, graph, from, out, to] { emit linkFired(graph, from, out, to); });
+    };
+    cb.taskState = [this, gen](fg::AsyncExecutor::Handle, fg::TaskState st) {
+        post(gen, [this, st] { onTaskState(st); });
+    };
+    cb.completed = [this, gen](const fg::Executor::Completion& c) {
+        QStringList rs;
+        for (auto& r : c.result.returns) rs << qs(r.toString());
+        bool ok = c.result.state == fg::TaskState::Finished;
+        bool exited = c.result.exited;
+        int code = c.result.exitCode;
+        QString err = qs(c.result.error);
+        QString returns = rs.join(", ");
+        post(gen, [this, ok, exited, code, err, returns] { onCompleted(ok, exited, code, err, returns); });
+    };
+    ax_ = std::make_unique<fg::AsyncExecutor>(program, cb, &doc_->debugger());
+    ax_->setStepDelay(delayMs_);
     emit logMessage(int(fg::LogLevel::Info), "--- running " + entry + " ---");
     frame_ = 0;
-    pendingPause_ = false;
-    clock_.restart();
     setState(State::Running);
-    timer_.start(delayMs_ > 0 ? delayMs_ : 0);
+    handle_ = program->events.count(ss(entry)) ? ax_->postEvent(ss(entry), args) : ax_->postFunction(ss(entry), args);
     return true;
 }
 
 void RunController::stop() {
-    if (!isActive()) return;
-    timer_.stop();
-    if (task_) task_->abort();
-    if (instance_) instance_->abortAll();
+    if (!isActive() || !ax_) return;
+    ax_->abortAll();
+    if (!ax_->waitIdle(2000)) ax_.reset();         // a native function that never returns: abandon the worker
+    ++generation_;                                  // ignore whatever the stopped run still reports
     setState(State::Idle);
     emit logMessage(int(fg::LogLevel::Info), "--- stopped ---");
     emit finished(false, "stopped");
 }
 
 void RunController::pause() {
-    if (state_ == State::Running || state_ == State::Waiting) {
-        doc_->debugger().command(*task_, fg::Debugger::Command::Pause);
-        pendingPause_ = true;
-    }
+    if ((state_ == State::Running || state_ == State::Waiting) && ax_) ax_->pause(handle_);
 }
 
 void RunController::resume() {
-    if (state_ != State::Paused) return;
-    doc_->debugger().command(*task_, fg::Debugger::Command::Continue);
+    if (state_ != State::Paused || !ax_) return;
     emit resumed();
     setState(State::Running);
-    clock_.restart();
-    timer_.start(delayMs_ > 0 ? delayMs_ : 0);
+    ax_->resume(handle_);
 }
 
 void RunController::step(fg::Debugger::Command c) {
-    if (state_ != State::Paused) return;
-    doc_->debugger().command(*task_, c);
+    if (state_ != State::Paused || !ax_) return;
     emit resumed();
     setState(State::Running);
-    clock_.restart();
-    timer_.start(0);
+    ax_->step(handle_, c);
 }
 
-void RunController::tick() {
-    if (!task_) { timer_.stop(); return; }
-    double dt = clock_.restart() / 1000.0;
-    fg::TaskState st = task_->state();
-    if (st == fg::TaskState::Waiting) {
-        setState(State::Waiting);
-        timer_.setInterval(16);
-        instance_->tick(dt);      // runs the task when the wait is over
-        st = task_->state();
-    } else if (st == fg::TaskState::Ready || st == fg::TaskState::Paused) {
-        setState(State::Running);
-        task_->run(delayMs_ > 0 ? 1 : 4000);
-        st = task_->state();
-    }
+void RunController::onTaskState(fg::TaskState st) {
     switch (st) {
-    case fg::TaskState::Ready:
-        timer_.setInterval(delayMs_ > 0 ? delayMs_ : 0);
-        break;
-    case fg::TaskState::Running: break;
-    case fg::TaskState::Waiting:
-        setState(State::Waiting);
-        timer_.setInterval(16);
-        break;
     case fg::TaskState::Paused: {
-        timer_.stop();
+        QString graph;
+        int node = 0;
+        if (ax_) ax_->inspect([&](fg::Executor& ex) {
+            if (auto t = ex.task(handle_)) { graph = qs(t->currentGraph()); node = t->currentNode(); }
+        });
         frame_ = 0;
         setState(State::Paused);
-        emit paused(qs(task_->currentGraph()), task_->currentNode());
+        emit paused(graph, node);
         break;
     }
-    case fg::TaskState::Finished:
-    case fg::TaskState::Failed:
-    case fg::TaskState::Aborted: finishRun(); break;
+    case fg::TaskState::Waiting: setState(State::Waiting); break;
+    case fg::TaskState::Running: setState(State::Running); break;
+    default: break;                       // end states are reported by onCompleted
     }
 }
 
-void RunController::finishRun() {
-    timer_.stop();
-    bool ok = task_ && task_->state() == fg::TaskState::Finished;
-    QString msg = task_ ? qs(task_->error()) : QString();
-    std::vector<fg::Value> results = task_ ? task_->results() : std::vector<fg::Value>();
-    QStringList rs;
-    for (auto& r : results) rs << qs(r.toString());
+void RunController::onCompleted(bool ok, bool exited, int exitCode, const QString& error, const QString& returns) {
     setState(State::Idle);
-    if (ok) emit logMessage(int(fg::LogLevel::Info), rs.isEmpty() ? "--- finished ---" : "--- finished, returned " + rs.join(", ") + " ---");
-    else emit logMessage(int(fg::LogLevel::Error), "--- failed: " + msg + " ---");
-    emit finished(ok, msg);
+    if (ok) {
+        QString text = "--- finished";
+        if (exited) text += ", exit code " + QString::number(exitCode);
+        else if (!returns.isEmpty()) text += ", returned " + returns;
+        emit logMessage(int(fg::LogLevel::Info), text + " ---");
+    } else {
+        emit logMessage(int(fg::LogLevel::Error), "--- failed: " + error + " ---");
+    }
+    emit finished(ok, error);
 }
 
 void RunController::onDocumentChanged(bool structural) {
     if (structural && isActive()) {
-        timer_.stop();
-        if (task_) task_->abort();
-        if (instance_) instance_->abortAll();
-        setState(State::Idle);
+        stop();
         emit logMessage(int(fg::LogLevel::Warning), "The script was modified: the run was stopped.");
-        emit finished(false, "script modified");
     }
 }
 
-bool RunController::pinText(const QString& graph, fg::NodeId node, const std::string& pin, QString& out) const {
-    if (!task_ || state_ != State::Paused) return false;
-    std::string g = ss(graph);
-    for (size_t i = task_->depth(); i-- > 0;) {
-        if (task_->frame(i).graph->name != g) continue;
-        fg::Value v;
-        if (!task_->pinValue(i, node, pin, v)) return false;
-        const fg::CompiledNode* cn = task_->frame(i).graph->findNode(node);
-        const fg::TypeDesc* t = nullptr;
-        if (cn) {
-            int pi = cn->findPinIndex(pin, fg::PinDir::Out);
-            if (pi < 0) pi = cn->findPinIndex(pin, fg::PinDir::In);
-            if (pi >= 0) t = cn->pins[size_t(pi)].type;
+bool RunController::snapshot(DebugSnapshot& out) const {
+    if (!ax_) return false;
+    const bool paused = state_ == State::Paused;
+    const int frameSel = frame_;
+    return ax_->inspect([&](fg::Executor& ex) {
+        if (paused) {
+            if (auto t = ex.task(handle_)) {
+                for (auto& e : t->callStack()) out.stack.push_back({qs(e.graph), e.node, e.isEvent});
+                if (t->depth() > 0) {
+                    size_t idx = t->depth() - 1 - size_t(std::min<int>(frameSel, int(t->depth()) - 1));
+                    out.frameVariables = fg::inspectFrame(*t, idx);
+                }
+            }
         }
-        out = qs(fg::inspect(instance_->registry(), v, t).text);
-        return true;
-    }
-    return false;
+        out.globals = fg::inspectGlobals(ex.instance());
+    });
+}
+
+bool RunController::pinText(const QString& graph, fg::NodeId node, const std::string& pin, QString& out) const {
+    if (!ax_ || state_ != State::Paused) return false;
+    std::string g = ss(graph);
+    bool found = false;
+    ax_->inspect([&](fg::Executor& ex) {
+        auto task = ex.task(handle_);
+        if (!task) return;
+        for (size_t i = task->depth(); i-- > 0;) {
+            if (task->frame(i).graph->name != g) continue;
+            fg::Value v;
+            if (!task->pinValue(i, node, pin, v)) return;
+            const fg::CompiledNode* cn = task->frame(i).graph->findNode(node);
+            const fg::TypeDesc* t = nullptr;
+            if (cn) {
+                int pi = cn->findPinIndex(pin, fg::PinDir::Out);
+                if (pi < 0) pi = cn->findPinIndex(pin, fg::PinDir::In);
+                if (pi >= 0) t = cn->pins[size_t(pi)].type;
+            }
+            out = qs(fg::inspect(ex.instance().registry(), v, t).text);
+            found = true;
+            return;
+        }
+    });
+    return found;
 }
 
 } // namespace fged

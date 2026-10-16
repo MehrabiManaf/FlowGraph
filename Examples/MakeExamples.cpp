@@ -14,10 +14,18 @@ void link(Graph& g, NodeId a, const std::string& ap, NodeId b, const std::string
 
 NodeId add(Graph& g, const char* def, double x, double y) { return g.addNode(def, x, y).id; }
 
+// Main is the event of the standard application (Main(Args: array<string>)); other names are custom events.
 NodeId event(Graph& g, const char* name, double x = 0, double y = 0) {
+    if (std::string(name) == "Main") return g.addNode("event:Main", x, y).id;
     Node& n = g.addNode("event.custom", x, y);
     n.props["name"] = name;
     return n.id;
+}
+
+fg::Runtime* g_runtime = nullptr;
+void saveScript(Script& s, const std::string& path) {
+    stampHostEvents(s, g_runtime->registry());       // remember the signature of the events the script handles
+    s.save(path);
 }
 
 NodeId var(Graph& g, const char* kind, const char* name, const char* scope, double x, double y) {
@@ -62,7 +70,7 @@ void hello(const std::string& dir) {
     link(g, loop, "Index", msg, "B");
     link(g, msg, "Result", pr, "String");
     g.addComment(480, -40, 700, 260).text = "Loop";
-    s.save(dir + "/hello.flow");
+    saveScript(s, dir + "/hello.flow");
 }
 
 void fibonacci(const std::string& dir) {
@@ -111,7 +119,7 @@ void fibonacci(const std::string& dir) {
     link(g, c, "Then", pr, "In");
     link(g, c, "Result", msg, "B");
     link(g, msg, "Result", pr, "String");
-    s.save(dir + "/fibonacci.flow");
+    saveScript(s, dir + "/fibonacci.flow");
 }
 
 void inventory(const std::string& dir) {
@@ -176,12 +184,15 @@ void inventory(const std::string& dir) {
     link(g, label, "Result", label2, "A");
     link(g, label2, "Result", pr, "String");
     link(g, each, "Loop Body", pr, "In");
-    s.save(dir + "/inventory.flow");
+    saveScript(s, dir + "/inventory.flow");
 }
 
 } // namespace
 
 int main(int argc, char** argv) {
+    fg::Runtime runtime;
+    fg::standard::registerStandardApp(runtime.registry());
+    g_runtime = &runtime;
     std::string dir = argc > 1 ? argv[1] : ".";
     std::filesystem::create_directories(dir);
     hello(dir);

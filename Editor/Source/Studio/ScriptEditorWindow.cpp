@@ -1,4 +1,4 @@
-#include "StudioWindow.hpp"
+#include "ScriptEditorWindow.hpp"
 #include "../Common/CustomViewFactory/DockWidget.hpp"
 #include "../Graph/GraphScene.hpp"
 #include "../Graph/GraphView.hpp"
@@ -40,11 +40,16 @@ namespace {
 const char* kFilter = "FlowGraph scripts (*.flow);;All files (*)";
 }
 
-StudioWindow::StudioWindow(fg::Runtime& rt, QWidget* parent)
-    : KDDockWidgets::QtWidgets::MainWindow("FlowGraphStudio", KDDockWidgets::MainWindowOption_HasCentralWidget, parent), rt_(rt), doc_(rt), run_(&doc_) {
+namespace {
+int g_windowCounter = 0;
+}
+
+ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, QWidget* parent)
+    : KDDockWidgets::QtWidgets::MainWindow(QString("ScriptEditor%1").arg(g_windowCounter++), KDDockWidgets::MainWindowOption_HasCentralWidget, parent),
+      host_(host), facade_(facade), rt_(host.runtime()), doc_(host.runtime()), run_(&doc_) {
     setMinimumSize(QSize(900, 520));
     resize(QSize(1500, 900));
-    setAffinities(QStringList{"FlowGraphStudio"});
+    setAffinities(QStringList{windowTitle().isEmpty() ? QString("ScriptEditor") : QString("ScriptEditor")});
 
     tabs_ = new QTabWidget(this);
     tabs_->setTabsClosable(true);
@@ -71,7 +76,10 @@ StudioWindow::StudioWindow(fg::Runtime& rt, QWidget* parent)
     connect(&run_, &RunController::stateChanged, this, [this] { updateRunActions(); });
     connect(&run_, &RunController::stateChanged, this, [this](RunController::State s) {
         if (s == RunController::State::Running && logDock_ && !runShown_) { logDock_->raise(); runShown_ = true; }
-        if (s == RunController::State::Idle) runShown_ = false;
+        if (s == RunController::State::Idle) {
+            runShown_ = false;
+            if (runPending_) { runPending_ = false; host_.runFinished(); }
+        }
     });
     connect(&run_, &RunController::logMessage, this, [this](int l, const QString& t) { log(l, t); });
     connect(&run_, &RunController::linkFired, this, [this](const QString& g, int from, int out, int to) {
@@ -99,7 +107,7 @@ StudioWindow::StudioWindow(fg::Runtime& rt, QWidget* parent)
     refreshEntries();
 }
 
-StudioWindow::~StudioWindow() {
+ScriptEditorWindow::~ScriptEditorWindow() {
     run_.stop();
     // the scenes and views are children of the tab widget / owned here
     for (auto& [v, s] : views_) {
@@ -111,7 +119,7 @@ StudioWindow::~StudioWindow() {
 }
 
 // ------------------------------------------------------------------ construction
-void StudioWindow::createDocks() {
+void ScriptEditorWindow::createDocks() {
     KDDockWidgets::DockWidgetOptions opts = KDDockWidgets::DockWidgetOption_None;
     KDDockWidgets::LayoutSaverOptions lopts = KDDockWidgets::LayoutSaverOption::None;
     auto makeDock = [&](const QString& title, QWidget* w, bool scroll, int maxWidth = 0) {
@@ -175,7 +183,7 @@ void StudioWindow::createDocks() {
     connect(debug_, &DebugPanel::locationActivated, this, [this](const QString& g, int n) { focusNode(g, n); });
 }
 
-void StudioWindow::createActions() {
+void ScriptEditorWindow::createActions() {
     auto act = [this](const QString& text, const QKeySequence& key = QKeySequence()) {
         auto* a = new QAction(text, this);
         if (!key.isEmpty()) a->setShortcut(key);
@@ -210,7 +218,7 @@ void StudioWindow::createActions() {
     actStepOut_ = new QAction(QIcon(":/Icons/step-out.svg"), "Step Out", this);
     actStepOut_->setShortcut(QKeySequence("Shift+F11"));
     actBreakpoint_ = act("Toggle &Breakpoint", QKeySequence(Qt::Key_F9));
-    actAbout_ = act("&About FlowGraph Studio");
+    actAbout_ = act("&About " + host_.applicationName());
 
     connect(actNew_, &QAction::triggered, this, [this] { fileNew(); });
     connect(actOpen_, &QAction::triggered, this, [this] { fileOpen(); });
@@ -243,13 +251,13 @@ void StudioWindow::createActions() {
         if (auto* s = currentScene()) for (auto id : s->selectedNodeIds()) s->toggleBreakpoint(id);
     });
     connect(actAbout_, &QAction::triggered, this, [this] {
-        QMessageBox::about(this, "FlowGraph Studio",
-                           "<b>FlowGraph Studio</b><br>Visual scripting editor for the FlowGraph runtime.<br><br>"
+        QMessageBox::about(this, host_.applicationName(),
+                           "<b>" + host_.applicationName().toHtmlEscaped() + "</b><br>Visual scripting editor built on FlowGraph.<br><br>"
                            "Right-click or drag from a pin to add nodes, F5 to run, F9 for breakpoints.");
     });
 }
 
-void StudioWindow::createMenus() {
+void ScriptEditorWindow::createMenus() {
     QMenu* file = menuBar()->addMenu("&File");
     file->addActions({actNew_, actOpen_, actSave_, actSaveAs_});
     file->addSeparator();
@@ -288,8 +296,9 @@ void StudioWindow::createMenus() {
     help->addAction(actAbout_);
 }
 
-void StudioWindow::createToolBar() {
+void ScriptEditorWindow::createToolBar() {
     auto* tb = addToolBar("Main");
+    toolBar_ = tb;
     tb->setObjectName("MainToolBar");
     tb->setIconSize(QSize(22, 22));
     tb->addActions({actNew_, actOpen_, actSave_});
@@ -303,15 +312,22 @@ void StudioWindow::createToolBar() {
     tb->addActions({actStepOver_, actStepInto_, actStepOut_});
 }
 
+QMenu* ScriptEditorWindow::menuNamed(const QString& title) {
+    QString wanted = QString(title).remove('&');
+    for (QAction* a : menuBar()->actions())
+        if (a->menu() && QString(a->menu()->title()).remove('&') == wanted) return a->menu();
+    return menuBar()->addMenu(title);
+}
+
 // ------------------------------------------------------------------ graph tabs
-GraphView* StudioWindow::viewAt(int index) const { return index < 0 ? nullptr : qobject_cast<GraphView*>(tabs_->widget(index)); }
-GraphView* StudioWindow::currentView() const { return viewAt(tabs_->currentIndex()); }
-GraphScene* StudioWindow::currentScene() const {
+GraphView* ScriptEditorWindow::viewAt(int index) const { return index < 0 ? nullptr : qobject_cast<GraphView*>(tabs_->widget(index)); }
+GraphView* ScriptEditorWindow::currentView() const { return viewAt(tabs_->currentIndex()); }
+GraphScene* ScriptEditorWindow::currentScene() const {
     auto* v = currentView();
     return v ? v->graphScene() : nullptr;
 }
 
-GraphView* StudioWindow::openGraph(const QString& name) {
+GraphView* ScriptEditorWindow::openGraph(const QString& name) {
     for (auto& [v, s] : views_)
         if (s->graphName() == name) {
             tabs_->setCurrentWidget(v);
@@ -344,7 +360,7 @@ GraphView* StudioWindow::openGraph(const QString& name) {
     return view;
 }
 
-void StudioWindow::closeTab(int index) {
+void ScriptEditorWindow::closeTab(int index) {
     GraphView* v = viewAt(index);
     if (!v) return;
     GraphScene* s = views_[v];
@@ -354,7 +370,7 @@ void StudioWindow::closeTab(int index) {
     delete s;
 }
 
-void StudioWindow::syncScenes() {
+void ScriptEditorWindow::syncScenes() {
     // detect a renamed graph: exactly one open scene lost its graph and exactly one graph is not open
     std::vector<GraphView*> missing;
     std::set<QString> open;
@@ -387,7 +403,7 @@ void StudioWindow::syncScenes() {
     if (auto* s = currentScene()) myScript_->setCurrentGraph(s->graphName());
 }
 
-void StudioWindow::focusNode(const QString& graph, int node) {
+void ScriptEditorWindow::focusNode(const QString& graph, int node) {
     GraphView* v = openGraph(graph);
     if (!v) return;
     v->graphScene()->selectOnly(node);
@@ -395,12 +411,12 @@ void StudioWindow::focusNode(const QString& graph, int node) {
     v->setFocus();
 }
 
-void StudioWindow::onSelectionNodes(GraphScene* scene, const QList<int>& ids) {
+void ScriptEditorWindow::onSelectionNodes(GraphScene* scene, const QList<int>& ids) {
     if (scene != currentScene()) return;
     details_->showNodes(scene->graphName(), ids);
 }
 
-void StudioWindow::onCurrentTabChanged() {
+void ScriptEditorWindow::onCurrentTabChanged() {
     GraphScene* s = currentScene();
     if (!s) return;
     myScript_->setCurrentGraph(s->graphName());
@@ -409,47 +425,67 @@ void StudioWindow::onCurrentTabChanged() {
     if (!ids.isEmpty()) details_->showNodes(s->graphName(), ids);
 }
 
-void StudioWindow::clearDebugMarks() {
+void ScriptEditorWindow::clearDebugMarks() {
     for (auto& [v, s] : views_) s->setDebugNode(0);
 }
 
 // ------------------------------------------------------------------ files
-bool StudioWindow::maybeSave() {
+bool ScriptEditorWindow::maybeSave() {
     if (!doc_.isDirty()) return true;
-    auto r = QMessageBox::question(this, "FlowGraph Studio", "Save changes to '" + doc_.displayName().remove('*') + "'?",
+    auto r = QMessageBox::question(this, host_.applicationName(), "Save changes to '" + doc_.displayName().remove('*') + "'?",
                                    QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
     if (r == QMessageBox::Cancel) return false;
     if (r == QMessageBox::Save) return fileSave();
     return true;
 }
 
-void StudioWindow::fileNew() {
+void ScriptEditorWindow::fileNew() {
     if (!maybeSave()) return;
+    newScript();
+}
+
+void ScriptEditorWindow::newScript() {
     run_.stop();
     while (tabs_->count()) closeTab(0);
     doc_.newScript();
+    host_.scriptChanged(facade_, ScriptChange::Created);
+    emit facade_.scriptChanged();
 }
 
-void StudioWindow::fileOpen() {
+void ScriptEditorWindow::fileOpen() {
     if (!maybeSave()) return;
     QString path = QFileDialog::getOpenFileName(this, "Open script", QString(), kFilter, nullptr, QFileDialog::DontUseNativeDialog);
     if (!path.isEmpty()) openFile(path);
 }
 
-bool StudioWindow::openFile(const QString& path) {
+bool ScriptEditorWindow::openFile(const QString& path) {
     run_.stop();
     QString err;
     while (tabs_->count()) closeTab(0);
     if (!doc_.load(path, &err)) {
         QMessageBox::critical(this, "Open script", "Cannot open '" + path + "':\n" + err);
         doc_.newScript();
+        host_.scriptChanged(facade_, ScriptChange::Created);
+        emit facade_.scriptChanged();
         return false;
     }
     log(int(fg::LogLevel::Info), "Opened " + path);
+    host_.scriptChanged(facade_, ScriptChange::Opened);   // a host may load plugins / launch files for this script
+    auto report = fg::checkCompatibility(doc_.script(), rt_.registry());
+    if (!report.ok()) {
+        // the editor still opens it so that it can be repaired, but it cannot run here
+        QString text = qs(report.toText());
+        log(int(fg::LogLevel::Warning), "This script was made for another application:\n" + text.trimmed());
+        statusBar()->showMessage("This script needs things " + host_.applicationName() + " does not provide - see the Output Log", 8000);
+        auto* box = new QMessageBox(QMessageBox::Warning, host_.applicationName(), "This script cannot run in " + host_.applicationName() + ":\n\n" + text, QMessageBox::Ok, this);
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();                                    // non modal for the program flow
+    }
+    emit facade_.scriptChanged();
     return true;
 }
 
-bool StudioWindow::fileSave() {
+bool ScriptEditorWindow::fileSave() {
     if (doc_.path().isEmpty()) return fileSaveAs();
     QString err;
     if (!doc_.save(QString(), &err)) {
@@ -457,10 +493,12 @@ bool StudioWindow::fileSave() {
         return false;
     }
     statusBar()->showMessage("Saved " + doc_.path(), 3000);
+    host_.scriptChanged(facade_, ScriptChange::Saved);
+    emit facade_.scriptChanged();
     return true;
 }
 
-bool StudioWindow::fileSaveAs() {
+bool ScriptEditorWindow::fileSaveAs() {
     QString sel = kFilter;
     QString path = QFileDialog::getSaveFileName(this, "Save script", doc_.path(), kFilter, &sel, QFileDialog::DontUseNativeDialog);
     if (path.isEmpty()) return false;
@@ -471,26 +509,28 @@ bool StudioWindow::fileSaveAs() {
         return false;
     }
     statusBar()->showMessage("Saved " + path, 3000);
+    host_.scriptChanged(facade_, ScriptChange::Saved);
+    emit facade_.scriptChanged();
     return true;
 }
 
-void StudioWindow::closeEvent(QCloseEvent* e) {
+void ScriptEditorWindow::closeEvent(QCloseEvent* e) {
     if (!maybeSave()) { e->ignore(); return; }
     run_.stop();
     KDDockWidgets::QtWidgets::MainWindow::closeEvent(e);
 }
 
 // ------------------------------------------------------------------ state
-void StudioWindow::updateTitle() { setWindowTitle(doc_.displayName() + " - FlowGraph Studio"); }
+void ScriptEditorWindow::updateTitle() { setWindowTitle(doc_.displayName() + " - " + host_.applicationName()); }
 
-void StudioWindow::updateEditActions() {
+void ScriptEditorWindow::updateEditActions() {
     actUndo_->setEnabled(doc_.canUndo());
     actRedo_->setEnabled(doc_.canRedo());
     actUndo_->setText(doc_.canUndo() ? "&Undo " + doc_.undoLabel() : "&Undo");
     actRedo_->setText(doc_.canRedo() ? "&Redo " + doc_.redoLabel() : "&Redo");
 }
 
-void StudioWindow::updateRunActions() {
+void ScriptEditorWindow::updateRunActions() {
     using S = RunController::State;
     S s = run_.state();
     actRun_->setText(s == S::Paused ? "Continue" : "Run");
@@ -504,65 +544,52 @@ void StudioWindow::updateRunActions() {
     entryCombo_->setEnabled(s == S::Idle);
 }
 
-void StudioWindow::refreshEntries() {
+void ScriptEditorWindow::refreshEntries() {
     QString keep = entryCombo_->currentData().toString();
+    entries_.clear();
+    auto program = doc_.program();
+    if (program) entries_ = host_.launchEntries(*program);
     entryCombo_->blockSignals(true);
     entryCombo_->clear();
-    for (auto& e : run_.entries()) entryCombo_->addItem((e.isEvent ? "Event  " : "Function  ") + e.signature, e.name);
+    for (auto& e : entries_) entryCombo_->addItem(e.title, e.id);
     int idx = entryCombo_->findData(keep);
-    if (idx < 0) idx = entryCombo_->findData("Main");
+    if (idx < 0) idx = entryCombo_->findData(host_.preferredEntry());
     if (idx >= 0) entryCombo_->setCurrentIndex(idx);
     entryCombo_->blockSignals(false);
 }
 
-void StudioWindow::runOrContinue() {
+void ScriptEditorWindow::runOrContinue() {
     if (run_.state() == RunController::State::Paused) { run_.resume(); return; }
     if (run_.state() != RunController::State::Idle) return;
-    QString name = entryCombo_->currentData().toString();
-    if (name.isEmpty()) {
-        log(int(fg::LogLevel::Warning), "Nothing to run: add an event (e.g. a Custom Event named Main) to a graph.");
+    QString id = entryCombo_->currentData().toString();
+    for (auto& e : entries_) {
+        if (e.id != id) continue;
+        LaunchSpec spec;
+        spec.entry = e.entry;
+        if (!host_.prepareLaunch(e, spec, this)) return;
+        if (spec.stepDelayMs >= 0) run_.setStepDelay(spec.stepDelayMs);
+        host_.aboutToRun(spec);
+        runPending_ = true;
+        if (!run_.start(spec.entry, spec.args) && runPending_) { runPending_ = false; host_.runFinished(); }
         return;
     }
-    for (auto& e : run_.entries()) {
-        if (e.name != name) continue;
-        std::vector<fg::Value> args;
-        if (!e.params.empty()) {
-            QDialog dlg(this);
-            dlg.setWindowTitle("Arguments for " + name);
-            auto* form = new QFormLayout(&dlg);
-            std::vector<QLineEdit*> edits;
-            for (auto& p : e.params) {
-                auto* le = new QLineEdit(&dlg);
-                edits.push_back(le);
-                form->addRow(qs(p.name) + " (" + qs(p.type) + ")", le);
-            }
-            auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-            form->addRow(bb);
-            connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-            connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-            if (dlg.exec() != QDialog::Accepted) return;
-            for (size_t i = 0; i < e.params.size(); ++i)
-                args.push_back(RunController::parseArgument(doc_.registry(), doc_.registry().findType(e.params[i].type), edits[i]->text()));
-        }
-        run_.start(name, args);
-        return;
-    }
+    log(int(fg::LogLevel::Warning), "Nothing to run: add an event to a graph (this application offers: " + QString::number(entries_.size()) + " entries).");
 }
 
-void StudioWindow::runEntry(const QString& entry) {
+void ScriptEditorWindow::runEntry(const QString& entry) {
     int idx = entryCombo_->findData(entry);
     if (idx >= 0) entryCombo_->setCurrentIndex(idx);
-    run_.start(entry, {});
+    runOrContinue();
 }
 
-void StudioWindow::devSelect(const QString& spec) {
+void ScriptEditorWindow::devSelect(const QString& spec) {
     QStringList p = spec.split(':');
     if (p.size() == 3 && p[0] == "node") focusNode(p[1], p[2].toInt());
     else if (p.size() == 2 && p[0] == "var") details_->showVariable("", p[1]);
     else if (p.size() == 2 && p[0] == "graph") { openGraph(p[1]); details_->showGraph(p[1]); }
 }
 
-void StudioWindow::devProbe(const QString& file, bool coordinates) {
+void ScriptEditorWindow::devProbe(const QString& file, bool coordinates) {
     QFile f(file);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
     QTextStream out(&f);
@@ -593,7 +620,7 @@ void StudioWindow::devProbe(const QString& file, bool coordinates) {
     }
 }
 
-void StudioWindow::devSceneShot(const QString& file) {
+void ScriptEditorWindow::devSceneShot(const QString& file) {
     GraphScene* sc = currentScene();
     if (!sc) return;
     QRectF r = sc->contentRect().adjusted(-40, -40, 40, 40);
@@ -606,6 +633,6 @@ void StudioWindow::devSceneShot(const QString& file) {
     img.save(file);
 }
 
-void StudioWindow::log(int level, const QString& text) { log_->append(level, text); }
+void ScriptEditorWindow::log(int level, const QString& text) { log_->append(level, text); }
 
 } // namespace fged

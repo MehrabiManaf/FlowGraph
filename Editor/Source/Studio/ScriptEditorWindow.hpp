@@ -2,6 +2,8 @@
 #include "../Document.hpp"
 #include "RunController.hpp"
 
+#include <FlowGraphEditor/ScriptEditor.hpp>
+
 #include <kddockwidgets/MainWindow.h>
 
 #include <QActionGroup>
@@ -11,6 +13,8 @@ class CDockWidget;
 class QAction;
 class QComboBox;
 class QLabel;
+class QMenu;
+class QToolBar;
 class QTabWidget;
 
 namespace fged {
@@ -24,13 +28,21 @@ class LogPanel;
 class DebugPanel;
 
 // The FlowGraph Studio main window: docked panels around a tab widget of graph editors.
-class StudioWindow : public KDDockWidgets::QtWidgets::MainWindow {
+class ScriptEditorWindow : public KDDockWidgets::QtWidgets::MainWindow {
     Q_OBJECT
 public:
-    explicit StudioWindow(fg::Runtime& rt, QWidget* parent = nullptr);
-    ~StudioWindow() override;
+    ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, QWidget* parent = nullptr);
+    ~ScriptEditorWindow() override;
 
     bool openFile(const QString& path);
+    void newScript();
+    bool fileSave();
+    bool fileSaveAs();
+    bool maybeSave();
+    QMenu* menuNamed(const QString& title);
+    QToolBar* mainToolBar() const { return toolBar_; }
+    void refreshEntries();
+    void log(int level, const QString& text);
     Document* document() { return &doc_; }
     // Selects `entry` in the toolbar and starts it (as the Run button would, but without the argument dialog).
     void runEntry(const QString& entry);
@@ -61,19 +73,19 @@ private:
     void onCurrentTabChanged();
     void clearDebugMarks();
 
-    bool maybeSave();
     void fileNew();
     void fileOpen();
-    bool fileSave();
-    bool fileSaveAs();
     void updateTitle();
     void updateEditActions();
     void updateRunActions();
-    void refreshEntries();
     void runOrContinue();
-    void log(int level, const QString& text);
 
+    EditorHost& host_;
+    ScriptEditor& facade_;
     fg::Runtime& rt_;
+    std::vector<LaunchEntry> entries_;
+    QToolBar* toolBar_ = nullptr;
+    bool runPending_ = false;           // EditorHost::runFinished() is still owed for the current run
     Document doc_;
     RunController run_;
 

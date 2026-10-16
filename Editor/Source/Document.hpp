@@ -31,6 +31,8 @@ public:
     bool isDirty() const { return dirty_; }
     QString displayName() const;
 
+    // Compiles again (the application added plugins or events after the script was opened).
+    void refresh();
     void newScript();
     bool load(const QString& path, QString* error = nullptr);
     bool save(const QString& path = QString(), QString* error = nullptr);

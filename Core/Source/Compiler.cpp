@@ -1,4 +1,5 @@
 #include <FlowGraph/Compiler.hpp>
+#include <FlowGraph/Compatibility.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -195,7 +196,8 @@ struct GraphCompiler {
             w.def = reg.findNode(n.def);
             w.args = n.typeArgs;
             if (!w.def) {
-                diag(Severity::Error, g.name, n.id, "Unknown node type '" + n.def + "' (missing plugin?)");
+                if (n.def.rfind("event:", 0) == 0) diag(Severity::Error, g.name, n.id, "This application does not provide the event '" + n.def.substr(6) + "'");
+                else diag(Severity::Error, g.name, n.id, "Unknown node type '" + n.def + "' (missing plugin?)");
             } else {
                 w.raw = collectPinDefs(n, *w.def, reg, &script, &g);
                 if (w.def->eventGraphOnly && g.kind != GraphKind::Event)
@@ -357,6 +359,12 @@ struct GraphCompiler {
                 if (name.empty()) {
                     diag(Severity::Error, g.name, cn.id, "Event has no name");
                     break;
+                }
+                if (cn.defId.rfind("event:", 0) == 0) {
+                    std::string why;
+                    if (const EventDesc* ev = reg.findEvent(name))
+                        if (!hostEventSignatureMatches(*script.findGraph(g.name)->findNode(cn.id), *ev, reg, &why))
+                            diag(Severity::Error, g.name, cn.id, "The event '" + name + "' changed: " + why);
                 }
                 if (prog.events.count(name)) diag(Severity::Error, g.name, cn.id, "Event '" + name + "' is already handled elsewhere");
                 else prog.events[name] = {static_cast<int>(gi), cn.index};

@@ -1,13 +1,19 @@
 // Minimal test runner: TEST(name) { CHECK(cond); }
 #include <FlowGraph/Runtime.hpp>
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
+#include <filesystem>
+#include <mutex>
+#include <thread>
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
 
 using namespace fg;
+
 
 struct TestCase { const char* name; std::function<void()> fn; };
 static std::vector<TestCase>& tests() { static std::vector<TestCase> t; return t; }
@@ -629,6 +635,388 @@ TEST(plugin_loading) {
     Instance inst(prog);
     CHECK(inst.callEvent("OnExample", {Value("plugin")}).ok);
     CHECK_EQ(inst.getVariable("Msg").toString(), std::string("Hello, plugin!"));
+}
+
+// ---- Exit, Executor, AsyncExecutor -------------------------------------------------------------------
+static void registerTestExit(Runtime& rt) {
+    NodeDef d;
+    d.id = "test.exit";
+    d.title = "Exit";
+    d.pins = {execIn(), dataIn("Code", "int", Value(0))};
+    d.run = [](NodeCtx& c) { c.exit(static_cast<int>(c.inInt(0))); };
+    rt.registry().addNode(std::move(d));
+}
+
+// event "Go": [Delay seconds] -> Print "<text>"   (delay < 0 = no delay)
+static Script printScript(double delay, const char* text) {
+    Script s;
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event.custom").id;
+    g.findNode(ev)->props["name"] = "Go";
+    NodeId pr = g.addNode("util.print").id;
+    g.findNode(pr)->defaults["String"] = Value(text);
+    if (delay >= 0) {
+        NodeId d = g.addNode("flow.delay").id;
+        g.findNode(d)->defaults["Duration"] = Value(delay);
+        link(g, ev, "Then", d, "In");
+        link(g, d, "Then", pr, "In");
+    } else link(g, ev, "Then", pr, "In");
+    return s;
+}
+
+TEST(exit_node_ends_the_task_with_a_code) {
+    Runtime rt;
+    registerTestExit(rt);
+    Script s = printScript(-1, "before");
+    Graph& g = s.graphs[0];
+    NodeId ex = g.addNode("test.exit").id;
+    g.findNode(ex)->defaults["Code"] = Value(7);
+    NodeId after = g.addNode("util.print").id;
+    g.findNode(after)->defaults["String"] = Value("after");
+    link(g, 2, "Then", ex, "In");           // Print "before" -> Exit(7) -> Print "after" (never reached)
+    link(g, ex, "Then", after, "In");
+    // Exit has no exec output pin: the line above is dropped by the compiler warning only when pins exist, so build it by hand
+    g.connections.pop_back();
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    std::vector<std::string> log;
+    inst.setLogHandler([&](LogLevel, const std::string& m) { log.push_back(m); });
+    auto r = inst.callEvent("Go");
+    CHECK(r.ok);
+    CHECK(r.exited);
+    CHECK_EQ(r.exitCode, 7);
+    CHECK_EQ(log.size(), size_t(1));
+}
+
+TEST(executor_pump_advances_delays_without_blocking) {
+    Runtime rt;
+    auto prog = build(rt, printScript(0.2, "late"));
+    Executor ex(prog);
+    std::vector<std::string> log;
+    ex.instance().setLogHandler([&](LogLevel, const std::string& m) { log.push_back(m); });
+    int completions = 0;
+    ex.setCompletionHandler([&](const Executor::Completion& c) { ++completions; CHECK(c.result.ok); CHECK_EQ(c.name, std::string("Go")); });
+    std::string err;
+    CHECK(ex.postEvent("Go", {}, &err) != 0);
+    auto st = ex.pump(0.0);
+    CHECK_EQ(st.waiting, size_t(1));
+    CHECK(st.nextWake > 0.15 && st.nextWake <= 0.2);
+    CHECK(log.empty());
+    CHECK(!ex.idle());
+    st = ex.pump(0.1);
+    CHECK(log.empty());
+    st = ex.pump(0.15);                     // total 0.25 s of script time, no real waiting
+    CHECK_EQ(log.size(), size_t(1));
+    CHECK_EQ(completions, 1);
+    CHECK(ex.idle());
+    CHECK(ex.postEvent("Nope", {}, &err) == 0 && !err.empty());
+}
+
+TEST(executor_runs_several_tasks_fairly) {
+    Runtime rt;
+    Script s;
+    s.variables.push_back({"A", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event.custom").id;
+    g.findNode(ev)->props["name"] = "Count";
+    NodeId loop = g.addNode("flow.for").id;
+    g.findNode(loop)->defaults["Last"] = Value(5000);
+    link(g, ev, "Then", loop, "In");
+    auto prog = build(rt, s);
+    Executor ex(prog);
+    int done = 0;
+    ex.setCompletionHandler([&](const Executor::Completion&) { ++done; });
+    ex.postEvent("Count");
+    ex.postEvent("Count");
+    int pumps = 0;
+    while (!ex.idle() && pumps < 100) { ex.pump(0, 300); ++pumps; }      // small slices: both tasks advance together
+    CHECK_EQ(done, 2);
+    CHECK(pumps > 2);
+}
+
+TEST(async_executor_runs_on_its_own_thread) {
+    Runtime rt;
+    auto prog = build(rt, printScript(0.1, "async"));
+    std::mutex mu;
+    std::vector<std::string> log;
+    std::thread::id logThread;
+    std::atomic<int> completed{0};
+    bool okResult = false;
+    AsyncExecutor::Callbacks cb;
+    cb.log = [&](LogLevel, const std::string& m) { std::lock_guard lk(mu); log.push_back(m); logThread = std::this_thread::get_id(); };
+    cb.completed = [&](const Executor::Completion& c) { okResult = c.result.ok; ++completed; };
+    AsyncExecutor ax(prog, cb);
+    auto t0 = std::chrono::steady_clock::now();
+    auto h = ax.postEvent("Go");
+    CHECK(h != 0);
+    auto postTime = std::chrono::steady_clock::now() - t0;
+    CHECK(std::chrono::duration<double>(postTime).count() < 0.05);       // posting never blocks on the script
+    CHECK(ax.waitIdle(3000));
+    CHECK_EQ(completed.load(), 1);
+    CHECK(okResult);
+    {
+        std::lock_guard lk(mu);
+        CHECK_EQ(log.size(), size_t(1));
+        CHECK(logThread != std::this_thread::get_id());
+    }
+    // unknown events are reported, not thrown
+    std::string failure;
+    AsyncExecutor::Callbacks cb2;
+    cb2.completed = [&](const Executor::Completion& c) { failure = c.result.error; };
+    AsyncExecutor ax2(prog, cb2);
+    ax2.postEvent("Missing");
+    CHECK(ax2.waitIdle(3000));
+    CHECK(!failure.empty());
+}
+
+TEST(async_executor_pause_inspect_resume_and_stop) {
+    Runtime rt;
+    Script s = printScript(-1, "one");
+    Graph& g = s.graphs[0];
+    NodeId second = g.addNode("util.print").id;
+    g.findNode(second)->defaults["String"] = Value("two");
+    link(g, 2, "Then", second, "In");
+    auto prog = build(rt, s);
+    std::atomic<int> paused{0}, completed{0};
+    std::mutex mu;
+    std::vector<std::string> log;
+    AsyncExecutor::Callbacks cb;
+    cb.taskState = [&](AsyncExecutor::Handle, TaskState st) { if (st == TaskState::Paused) ++paused; };
+    cb.completed = [&](const Executor::Completion&) { ++completed; };
+    cb.log = [&](LogLevel, const std::string& m) { std::lock_guard lk(mu); log.push_back(m); };
+    AsyncExecutor ax(prog, cb);
+    ax.debugger().setBreakpoint("EventGraph", second, true);
+    auto h = ax.postEvent("Go");
+    for (int i = 0; i < 300 && paused.load() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    CHECK_EQ(paused.load(), 1);
+    NodeId at = 0;
+    CHECK(ax.inspect([&](Executor& ex) { if (auto t = ex.task(h)) at = t->currentNode(); }));
+    CHECK_EQ(at, second);
+    {
+        std::lock_guard lk(mu);
+        CHECK_EQ(log.size(), size_t(1));       // "one" was printed, "two" is held back by the breakpoint
+    }
+    ax.debugger().setBreakpoint("EventGraph", second, false);
+    ax.resume(h);
+    CHECK(ax.waitIdle(3000));
+    CHECK_EQ(completed.load(), 1);
+    {
+        std::lock_guard lk(mu);
+        CHECK_EQ(log.size(), size_t(2));
+    }
+    // stopping interrupts a script that waits for a long time
+    AsyncExecutor::Callbacks cb2;
+    TaskState endState = TaskState::Ready;
+    cb2.completed = [&](const Executor::Completion& c) { endState = c.result.state; };
+    auto prog2 = build(rt, printScript(60.0, "never"));
+    {
+        AsyncExecutor slow(prog2, cb2);
+        slow.postEvent("Go");
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        auto t0 = std::chrono::steady_clock::now();
+        slow.stop();
+        CHECK(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 2.0);
+    }
+    CHECK(endState == TaskState::Aborted);
+}
+
+// ---- compatibility, standard application, launch files ---------------------------------------------------------
+static Script scriptWithHostEvent(const char* event) {
+    Script s;
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode(std::string("event:") + event).id;
+    NodeId pr = g.addNode("util.print").id;
+    link(g, ev, "Then", pr, "In");
+    return s;
+}
+
+TEST(compatibility_reports_what_the_application_lacks) {
+    Runtime rt;                                              // knows neither Tick nor any plugin
+    Script s = scriptWithHostEvent("Tick");
+    s.variables.push_back({"Hero", "Ghost", Value(), "", ""});
+    s.graphs[0].addNode("fn:Nope.Missing");
+    auto rep = checkCompatibility(s, rt.registry());
+    CHECK(!rep.ok());
+    CHECK_EQ(rep.missingEvents().size(), size_t(1));
+    CHECK_EQ(rep.missingEvents()[0], std::string("Tick"));
+    bool node = false, type = false;
+    for (auto& i : rep.issues) {
+        node |= i.kind == CompatibilityIssue::Kind::MissingNode;
+        type |= i.kind == CompatibilityIssue::Kind::UnknownType;
+    }
+    CHECK(node);
+    CHECK(type);
+    CHECK(rep.toText().find("Tick") != std::string::npos);
+    // an application that provides the event accepts the script (the other problems stay)
+    Runtime other;
+    other.registry().addEvent("Tick", {{"DeltaTime", "float"}});
+    CHECK(checkCompatibility(scriptWithHostEvent("Tick"), other.registry()).ok());
+    // compiling reports the missing event too
+    auto prog = rt.compile(scriptWithHostEvent("Tick"));
+    CHECK(!prog->ok());
+    bool mentions = false;
+    for (auto& d : prog->diagnostics) mentions |= d.message.find("does not provide the event 'Tick'") != std::string::npos;
+    CHECK(mentions);
+}
+
+TEST(changed_event_signature_is_detected) {
+    Runtime a;
+    a.registry().addEvent("Hit", {{"Damage", "int"}});
+    Script s = scriptWithHostEvent("Hit");
+    stampHostEvents(s, a.registry());
+    CHECK_EQ(s.graphs[0].nodes[0].prop("sig"), std::string("(Damage: int)"));
+    CHECK(checkCompatibility(s, a.registry()).ok());
+    CHECK(a.compile(s)->ok());
+    // the signature survives saving
+    Script loaded = Script::parse(s.toText());
+    CHECK_EQ(loaded.graphs[0].nodes[0].prop("sig"), std::string("(Damage: int)"));
+    // another application raises Hit with different arguments
+    Runtime b;
+    b.registry().addEvent("Hit", {{"Damage", "float"}, {"Source", "string"}});
+    auto rep = checkCompatibility(loaded, b.registry());
+    CHECK(!rep.ok());
+    CHECK(rep.issues[0].kind == CompatibilityIssue::Kind::EventSignatureChanged);
+    CHECK(!b.compile(loaded)->ok());
+    // scripts without a recorded signature are accepted as before
+    CHECK(checkCompatibility(scriptWithHostEvent("Hit"), b.registry()).ok());
+}
+
+TEST(standard_app_runs_main_with_arguments_and_exit_code) {
+    Runtime rt;
+    standard::registerStandardApp(rt.registry());
+    Script s;
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Main").id;
+    NodeId each = g.addNode("flow.foreach").id;
+    NodeId pr = g.addNode("util.print").id;
+    NodeId ex = g.addNode("std.exit").id;
+    g.findNode(ex)->defaults["Exit Code"] = Value(3);
+    link(g, ev, "Then", each, "In");
+    link(g, ev, "Args", each, "Array");
+    link(g, each, "Loop Body", pr, "In");
+    link(g, each, "Element", pr, "String");
+    link(g, each, "Completed", ex, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    std::vector<std::string> log;
+    inst.setLogHandler([&](LogLevel, const std::string& m) { log.push_back(m); });
+    auto out = standard::runMain(inst, {"alpha", "beta"});
+    CHECK(out.ok);
+    CHECK(out.exited);
+    CHECK_EQ(out.exitCode, 3);
+    CHECK_EQ(log.size(), size_t(2));
+    CHECK_EQ(log.empty() ? std::string() : log[0], std::string("alpha"));
+    // a script without Main cannot be run as a standard application
+    Script empty;
+    empty.addEventGraph().addNode("event.custom").props["name"] = "Other";
+    Instance inst2(build(rt, empty));
+    auto bad = standard::runMain(inst2, {});
+    CHECK(!bad.ok);
+    CHECK_EQ(bad.exitCode, 1);
+}
+
+TEST(standard_app_runtime_error_gives_exit_code_one) {
+    Runtime rt;
+    standard::registerStandardApp(rt.registry());
+    Script s;
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Main").id;
+    NodeId div = g.addNode("math.div").id;
+    g.findNode(div)->defaults["B"] = Value(0);
+    NodeId pr = g.addNode("util.print").id;
+    link(g, ev, "Then", pr, "In");
+    link(g, div, "Result", pr, "String");
+    Instance inst(build(rt, s));
+    inst.setLogHandler([](LogLevel, const std::string&) {});
+    auto out = standard::runMain(inst, {});
+    CHECK(!out.ok);
+    CHECK_EQ(out.exitCode, 1);
+    CHECK(!out.error.empty());
+}
+
+TEST(standard_app_main_really_sleeps_for_delays) {
+    Runtime rt;
+    standard::registerStandardApp(rt.registry());
+    Script s;
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Main").id;
+    NodeId d = g.addNode("flow.delay").id;
+    g.findNode(d)->defaults["Duration"] = Value(0.12);
+    NodeId pr = g.addNode("util.print").id;
+    link(g, ev, "Then", d, "In");
+    link(g, d, "Then", pr, "In");
+    Instance inst(build(rt, s));
+    int lines = 0;
+    inst.setLogHandler([&](LogLevel, const std::string&) { ++lines; });
+    auto t0 = std::chrono::steady_clock::now();
+    auto out = standard::runMain(inst, {});
+    double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    CHECK(out.ok);
+    CHECK_EQ(lines, 1);
+    CHECK(took >= 0.1 && took < 1.0);
+}
+
+TEST(launch_file_roundtrip_and_defaults) {
+    std::string path = standard::LaunchFile::pathFor("some/dir/script.flow");
+    CHECK(path.size() > 10 && path.substr(path.size() - 11) == "script.flowlaunch" || path.find("script.flowlaunch") != std::string::npos);
+    auto missing = standard::LaunchFile::load("definitely/not/there.flowlaunch");
+    CHECK_EQ(missing.configs.size(), size_t(1));          // a missing file yields one default configuration
+    CHECK_EQ(missing.current().name, std::string("Default"));
+    standard::LaunchFile f;
+    standard::LaunchConfig c;
+    c.name = "Verbose";
+    c.args = {"-v", "input.txt"};
+    c.cwd = "work";
+    c.env["MODE"] = "debug";
+    c.pluginPaths = {"plugins"};
+    c.stepDelayMs = 250;
+    f.configs.push_back(c);
+    f.configs.push_back({});
+    f.selected = "Verbose";
+    std::string tmp = (std::filesystem::temp_directory_path() / "fg_test.flowlaunch").string();
+    f.save(tmp);
+    auto g = standard::LaunchFile::load(tmp);
+    std::filesystem::remove(tmp);
+    CHECK_EQ(g.configs.size(), size_t(2));
+    CHECK_EQ(g.current().name, std::string("Verbose"));
+    CHECK_EQ(g.current().args.size(), size_t(2));
+    CHECK_EQ(g.current().env["MODE"], std::string("debug"));
+    CHECK_EQ(g.current().stepDelayMs, 250);
+    CHECK_EQ(g.current().pluginPaths[0], std::string("plugins"));
+}
+
+TEST(runtime_load_script_reports_problems) {
+    Runtime rt;
+    auto missing = rt.loadScript("no/such/file.flow");
+    CHECK(!missing.ok());
+    CHECK(!missing.error.empty());
+    std::string path = (std::filesystem::temp_directory_path() / "fg_load_test.flow").string();
+    scriptWithHostEvent("Tick").save(path);
+    auto lacking = rt.loadScript(path);
+    CHECK(lacking.error.empty());
+    CHECK(!lacking.ok());
+    CHECK(lacking.explanation().find("Tick") != std::string::npos);
+    rt.registry().addEvent("Tick", {});
+    CHECK(rt.loadScript(path).ok());
+    std::filesystem::remove(path);
+}
+
+TEST(plugin_path_lists_load_each_plugin_once) {
+    std::string dir = g_exeDir + "/plugins";
+    if (!std::filesystem::exists(dir)) { std::printf("  (skipped: no plugins directory)\n"); return; }
+    Runtime rt;
+#if defined(_WIN32)
+    std::string list = dir + ";" + dir + ";" + "does/not/exist";
+#else
+    std::string list = dir + ":" + dir + ":" + "does/not/exist";
+#endif
+    std::vector<std::string> errors;
+    rt.loadPluginsFromPathList(list, &errors);
+    CHECK(errors.empty());
+    CHECK(rt.registry().findType("Counter") != nullptr);
+    CHECK_EQ(rt.loadedPlugins().size(), size_t(1));
 }
 
 int main(int argc, char** argv) {

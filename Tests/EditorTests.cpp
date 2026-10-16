@@ -6,8 +6,9 @@
 #include "Panels/MyScriptPanel.hpp"
 #include "Panels/TypeSpec.hpp"
 #include "Studio/RunController.hpp"
-#include "Studio/StudioWindow.hpp"
-#include <FlowGraphEditor/Studio.hpp>
+#include "Studio/ScriptEditorWindow.hpp"
+#include "StandardEditorHost.hpp"
+#include <FlowGraphEditor/ScriptEditor.hpp>
 
 #include "Graph/GraphView.hpp"
 
@@ -413,9 +414,17 @@ TEST(mouse_drag_node_keeps_new_position) {
 
 
 // The same interactions inside the real main window (docking, tabs, refresh on every edit).
+struct TestHost : fged::EditorHost {
+    fg::Runtime& rt;
+    explicit TestHost(fg::Runtime& r) : rt(r) {}
+    fg::Runtime& runtime() override { return rt; }
+};
+
 struct StudioFixture {
     fg::Runtime rt;
-    StudioWindow win{rt};
+    TestHost host{rt};
+    fged::ScriptEditor editor{host};
+    ScriptEditorWindow& win = *static_cast<ScriptEditorWindow*>(editor.window());
     GraphView* view = nullptr;
     StudioFixture() {
         win.show();
@@ -560,6 +569,96 @@ TEST(type_spec_splits_containers) {
     CHECK_EQ(m.str(), QString("map<string,array<int>>"));
     TypeSpec s = TypeSpec::parse("Actor");
     CHECK(s.container == TypeSpec::Container::Single && s.str() == "Actor");
+}
+
+// ---- the editor of the standard applications --------------------------------------------------------------
+TEST(standard_host_offers_main_per_launch_configuration) {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "fg_standard_host";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "sub");
+    fg::Runtime rt;
+    fg::standard::registerStandardApp(rt.registry());
+    fg::Script script;
+    {
+        fg::Graph& g = script.addEventGraph();
+        fg::NodeId ev = g.addNode("event:Main").id;
+        fg::NodeId pr = g.addNode("util.print").id;
+        g.connections.push_back({ev, "Then", pr, "In"});
+        fg::stampHostEvents(script, rt.registry());
+    }
+    std::string path = (dir / "tool.flow").string();
+    script.save(path);
+    fg::standard::LaunchFile lf;
+    fg::standard::LaunchConfig a;
+    a.name = "A";
+    a.args = {"x", "y z"};
+    a.env["FG_HOST_TEST"] = "1";
+    a.cwd = "sub";
+    a.stepDelayMs = 40;
+    fg::standard::LaunchConfig b;
+    b.name = "B";
+    lf.configs = {a, b};
+    lf.selected = "B";
+    lf.save(fg::standard::LaunchFile::pathFor(path));
+
+    flowstudio::StandardEditorHost host(rt);
+    fged::ScriptEditor editor(host);
+    CHECK(editor.open(QString::fromStdString(path)));           // loads tool.flowlaunch through scriptChanged
+    CHECK_EQ(host.preferredEntry(), QString("B"));
+    auto program = rt.compile(script);
+    auto entries = host.launchEntries(*program);
+    CHECK_EQ(entries.size(), size_t(2));
+    CHECK_EQ(entries[0].id, QString("A"));
+    CHECK_EQ(entries[0].entry, QString("Main"));
+
+    fged::LaunchSpec spec;
+    CHECK(host.prepareLaunch(entries[0], spec, nullptr));
+    CHECK_EQ(spec.entry, QString("Main"));
+    CHECK_EQ(spec.args.size(), size_t(1));
+    CHECK(spec.args[0].isArray() && spec.args[0].arrayPtr()->items.size() == 2);
+    CHECK_EQ(spec.args[0].arrayPtr()->items[1].toString(), std::string("y z"));
+    CHECK_EQ(spec.stepDelayMs, 40);
+    CHECK_EQ(host.launchFile().selected, std::string("A"));        // the choice is remembered
+
+    QString before = QDir::currentPath();
+    qunsetenv("FG_HOST_TEST");
+    host.aboutToRun(spec);
+    CHECK_EQ(qgetenv("FG_HOST_TEST"), QByteArray("1"));
+    CHECK(QDir::currentPath().endsWith("sub"));
+    host.runFinished();
+    CHECK(!qEnvironmentVariableIsSet("FG_HOST_TEST"));
+    CHECK_EQ(QDir::currentPath(), before);
+    // the remembered selection was written next to the script
+    CHECK_EQ(fg::standard::LaunchFile::load(fg::standard::LaunchFile::pathFor(path)).selected, std::string("A"));
+    fs::remove_all(dir);
+}
+
+TEST(editor_reports_scripts_that_need_missing_events) {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "fg_incompatible";
+    fs::create_directories(dir);
+    fg::Runtime other;                                            // an application with its own event
+    other.registry().addEvent("OnHit", {{"Damage", "int"}});
+    fg::Script s;
+    fg::Graph& g = s.addEventGraph();
+    g.addNode("event:OnHit");
+    fg::stampHostEvents(s, other.registry());
+    std::string path = (dir / "game.flow").string();
+    s.save(path);
+
+    fg::Runtime rt;                                               // standard applications know Main only
+    fg::standard::registerStandardApp(rt.registry());
+    // a runtime-only application refuses it ...
+    auto loaded = rt.loadScript(path);
+    CHECK(!loaded.ok());
+    CHECK(loaded.explanation().find("OnHit") != std::string::npos);
+    // ... the editor opens it anyway so that it can be repaired, and says why it cannot run
+    TestHost host(rt);
+    fged::ScriptEditor editor(host);
+    CHECK(editor.open(QString::fromStdString(path)));
+    CHECK(!static_cast<ScriptEditorWindow*>(editor.window())->document()->program()->ok());
+    fs::remove_all(dir);
 }
 
 int main(int argc, char** argv) {

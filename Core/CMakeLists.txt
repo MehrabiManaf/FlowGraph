@@ -7,12 +7,17 @@ add_library(FlowGraphCore STATIC
     Source/Script.cpp
     Source/Compiler.cpp
     Source/Vm.cpp
+    Source/Executor.cpp
+    Source/Compatibility.cpp
+    Source/StandardApp.cpp
     Source/Builtins.cpp
     Source/Inspect.cpp
     Source/Intellisense.cpp
     Source/Runtime.cpp)
 target_include_directories(FlowGraphCore PUBLIC Include)
 target_compile_features(FlowGraphCore PUBLIC cxx_std_20)
+find_package(Threads REQUIRED)
+target_link_libraries(FlowGraphCore PUBLIC Threads::Threads)
 if(NOT WIN32)
     target_link_libraries(FlowGraphCore PUBLIC ${CMAKE_DL_LIBS})
 endif()

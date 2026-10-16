@@ -43,7 +43,6 @@ signals:
     void locationActivated(const QString& graph, int node);
 private:
     void refresh();
-    void fillVariables();
     Document* doc_;
     RunController* run_;
     QTreeWidget* stack_;

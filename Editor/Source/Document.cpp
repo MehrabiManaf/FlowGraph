@@ -22,6 +22,11 @@ void Document::recompile() {
     emit compiled();
 }
 
+void Document::refresh() {
+    recompile();
+    emit changed(true);
+}
+
 void Document::newScript() {
     script_ = fg::Script();
     script_.name = "Untitled";
@@ -92,6 +97,7 @@ void Document::edit(const QString& label, const std::function<void(fg::Script&)>
     lastKey_ = coalesceKey;
     lastEdit_.restart();
     fn(script_);
+    fg::stampHostEvents(script_, registry());       // remember the signature of the host events the script handles
     markDirty(true);
     if (kind == EditKind::Structural) recompile();
     emit changed(kind == EditKind::Structural);

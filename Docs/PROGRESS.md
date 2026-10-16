@@ -57,3 +57,17 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
   on the right (tabbed with Debugger); Local Variables only while a function graph/function item is active; container kind is its own
   column (TypeSpec: Single/Array/Map + key) in variable and parameter editors; pins: array = dot grid, map = circle+square, const = padlock,
   by-ref = diamond (also on containers). Dev hooks: FG_STUDIO_SCENESHOT renders the current graph at 2x.
+
+## Architecture round (apps, executors, compatibility)
+- Core: Executor (cooperative pump) + AsyncExecutor (worker thread: post events, pause/step/resume/abort, inspect(), callbacks on the
+  worker thread); Debugger is thread safe; NodeCtx::exit / RunResult::exitCode; Instance::advanceWaits / nextWakeIn;
+  Compatibility (checkCompatibility, stampHostEvents - host event nodes record props.sig; compile reports changed signatures);
+  StandardApp (event Main(Args: array<string>), Exit node std.exit, runMain fast path, LaunchFile/LaunchConfig = <script>.flowlaunch);
+  Runtime::loadScript / loadPluginsFromPathList / loadPluginsFromEnvironment (FLOW_PLUGIN_PATH), duplicate plugin loads are skipped.
+- Apps: `flow` (Apps/Flow, runtime only: --check/--plugins/--launch, exit codes 0/1/2, Ctrl+C) and `flowstudio` (Apps/Studio:
+  StandardEditorHost = EditorHost with launch configurations). fgrun / FlowGraphStudio no longer exist (stale exes may linger in build dirs).
+- Editor library renamed ScriptEditor (target FlowGraph::ScriptEditor, public header FlowGraphEditor/ScriptEditor.hpp): EditorHost
+  (runtime, launchEntries, prepareLaunch, aboutToRun/runFinished, attached, scriptChanged, preferredEntry) + ScriptEditor facade.
+  RunController now runs scripts on an AsyncExecutor (GUI never blocks); the debug panel reads state through AsyncExecutor::inspect.
+- Interpreter speed: InputBuf only constructs the inputs a node needs (3M loop iterations 1.9 s -> 1.05 s in Release).
+- Ideas: profile the VM further (NodeCtx / Continuation per node), save the dock layout, per-script plugin requirements in the file.

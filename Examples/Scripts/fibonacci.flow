@@ -167,11 +167,11 @@
       "nodes": [
         {
           "id": 1,
-          "def": "event.custom",
+          "def": "event:Main",
           "x": 0.0,
           "y": 0.0,
           "props": {
-            "name": "Main"
+            "sig": "(Args: array<string>)"
           }
         },
         {

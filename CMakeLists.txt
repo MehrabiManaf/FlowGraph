@@ -27,6 +27,9 @@ if(FG_BUILD_TESTS)
     add_subdirectory(Tests)
 endif()
 
+# ---- the standard applications ---------------------------------------------
+add_subdirectory(Apps/Flow)
+
 if(FG_BUILD_EXAMPLES)
     if(EXISTS ${CMAKE_SOURCE_DIR}/Examples/CMakeLists.txt)
         add_subdirectory(Examples)

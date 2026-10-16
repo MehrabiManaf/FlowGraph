@@ -1,5 +1,7 @@
 #include <FlowGraph/Runtime.hpp>
 
+#include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 
 #if defined(_WIN32)
@@ -36,6 +38,12 @@ bool Runtime::loadPlugin(const std::string& path, std::string* error) {
     };
     std::filesystem::path p(path);
     std::string name = p.stem().string();
+    {   // the same library may be reachable through several directories of the plugin path
+        std::error_code ec;
+        std::string canon = std::filesystem::weakly_canonical(p, ec).string();
+        if (!ec && std::find(pluginPaths_.begin(), pluginPaths_.end(), canon) != pluginPaths_.end()) return true;
+        if (!ec) pluginPaths_.push_back(canon);
+    }
 #if defined(_WIN32)
     HMODULE h = LoadLibraryW(p.wstring().c_str());
     if (!h) return fail("cannot load '" + path + "' (error " + std::to_string(GetLastError()) + ")");
@@ -73,6 +81,46 @@ int Runtime::loadPluginsFrom(const std::string& dir, std::vector<std::string>* e
         else if (errors) errors->push_back(err);
     }
     return n;
+}
+
+int Runtime::loadPluginsFromPathList(const std::string& list, std::vector<std::string>* errors) {
+#if defined(_WIN32)
+    const char sep = ';';
+#else
+    const char sep = ':';
+#endif
+    int n = 0;
+    size_t start = 0;
+    while (start <= list.size()) {
+        size_t end = list.find(sep, start);
+        if (end == std::string::npos) end = list.size();
+        std::string dir = list.substr(start, end - start);
+        if (!dir.empty() && std::filesystem::exists(dir)) n += loadPluginsFrom(dir, errors);
+        start = end + 1;
+    }
+    return n;
+}
+
+int Runtime::loadPluginsFromEnvironment(const char* variable, std::vector<std::string>* errors) {
+    const char* v = std::getenv(variable);
+    return v ? loadPluginsFromPathList(v, errors) : 0;
+}
+
+std::string Runtime::LoadedScript::explanation() const {
+    if (!error.empty()) return error;
+    return "this script cannot be loaded by this application:\n" + report.toText();
+}
+
+Runtime::LoadedScript Runtime::loadScript(const std::string& path) const {
+    LoadedScript out;
+    try {
+        out.script = Script::load(path);
+    } catch (const std::exception& e) {
+        out.error = std::string("cannot read '") + path + "': " + e.what();
+        return out;
+    }
+    out.report = checkCompatibility(out.script, *reg_);
+    return out;
 }
 
 } // namespace fg

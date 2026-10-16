@@ -104,46 +104,40 @@ DebugPanel::DebugPanel(Document* doc, RunController* run, QWidget* parent) : QWi
     connect(stack_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* cur, QTreeWidgetItem*) {
         if (!cur || updating_) return;
         run_->setSelectedFrame(cur->data(0, Qt::UserRole).toInt());
-        fillVariables();
+        refresh();
         emit locationActivated(cur->data(0, Qt::UserRole + 1).toString(), cur->data(0, Qt::UserRole + 2).toInt());
     });
 }
 
 void DebugPanel::refresh() {
+    RunController::DebugSnapshot snap;
+    bool have = run_->snapshot(snap);       // read on the worker thread: the script may be running
     updating_ = true;
     stack_->clear();
-    fg::Task* t = run_->task();
-    if (t && run_->state() == RunController::State::Paused) {
-        auto stack = t->callStack();
-        for (size_t i = 0; i < stack.size(); ++i) {
-            auto* it = new QTreeWidgetItem(stack_);
-            it->setText(0, qs(stack[i].graph) + (stack[i].isEvent ? " (event)" : ""));
-            const fg::CompiledGraph* cg = doc_->program() ? doc_->program()->findGraph(stack[i].graph) : nullptr;
-            const fg::CompiledNode* cn = cg ? cg->findNode(stack[i].node) : nullptr;
-            it->setText(1, cn ? qs(cn->title) : QString());
-            it->setData(0, Qt::UserRole, int(i));
-            it->setData(0, Qt::UserRole + 1, qs(stack[i].graph));
-            it->setData(0, Qt::UserRole + 2, stack[i].node);
-        }
-        if (stack_->topLevelItemCount()) stack_->setCurrentItem(stack_->topLevelItem(std::min(run_->selectedFrame(), stack_->topLevelItemCount() - 1)));
+    for (size_t i = 0; i < snap.stack.size(); ++i) {
+        const auto& e = snap.stack[i];
+        auto* it = new QTreeWidgetItem(stack_);
+        it->setText(0, e.graph + (e.isEvent ? " (event)" : ""));
+        const fg::CompiledGraph* cg = doc_->program() ? doc_->program()->findGraph(ss(e.graph)) : nullptr;
+        const fg::CompiledNode* cn = cg ? cg->findNode(e.node) : nullptr;
+        it->setText(1, cn ? qs(cn->title) : QString());
+        it->setData(0, Qt::UserRole, int(i));
+        it->setData(0, Qt::UserRole + 1, e.graph);
+        it->setData(0, Qt::UserRole + 2, e.node);
     }
+    if (stack_->topLevelItemCount())
+        stack_->setCurrentItem(stack_->topLevelItem(std::min(run_->selectedFrame(), stack_->topLevelItemCount() - 1)));
     updating_ = false;
-    fillVariables();
-}
 
-void DebugPanel::fillVariables() {
     vars_->clear();
-    fg::Instance* inst = run_->instance();
-    if (!inst) return;
-    fg::Task* t = run_->task();
-    if (t && run_->state() == RunController::State::Paused) {
-        size_t frameIndex = t->depth() - 1 - size_t(std::min<int>(run_->selectedFrame(), int(t->depth()) - 1));
+    if (!have) return;
+    if (run_->state() == RunController::State::Paused) {
         auto* locals = new QTreeWidgetItem(vars_, QStringList{"Locals / parameters"});
-        for (auto& v : fg::inspectFrame(*t, frameIndex)) addView(locals, v.value);
+        for (auto& v : snap.frameVariables) addView(locals, v.value);
         locals->setExpanded(true);
     }
     auto* globals = new QTreeWidgetItem(vars_, QStringList{"Variables"});
-    for (auto& v : fg::inspectGlobals(*inst)) addView(globals, v.value);
+    for (auto& v : snap.globals) addView(globals, v.value);
     globals->setExpanded(true);
 }
 

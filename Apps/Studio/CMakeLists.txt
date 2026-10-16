@@ -1,3 +1,3 @@
 set(CMAKE_AUTOMOC ON)
-qt_add_executable(FlowGraphStudio WIN32 main.cpp)
-target_link_libraries(FlowGraphStudio PRIVATE FlowGraph::Editor)
+qt_add_executable(flowstudio WIN32 main.cpp StandardEditorHost.cpp StandardEditorHost.hpp)
+target_link_libraries(flowstudio PRIVATE FlowGraph::ScriptEditor)

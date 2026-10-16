@@ -5,6 +5,7 @@
 #include <FlowGraph/Program.hpp>
 
 #include <atomic>
+#include <mutex>
 #include <functional>
 #include <memory>
 #include <set>
@@ -81,6 +82,7 @@ public:
     void breakLoop();                      // unwind to the innermost loop node and continue after it
     void wait(double seconds);             // suspend the task, then continue as chosen by next()
     void waitFor(std::function<bool(double dt)> poll);   // suspend until poll(dt) returns true
+    void exit(int code);                   // end the whole task now (all frames), reporting an exit code
     // Per activation storage of looping nodes: valid while the node is re-entered through call().
     bool resumed() const { return resumed_; }
     int64_t& state() { return state_; }
@@ -108,6 +110,8 @@ private:
     Value aux_;
     Action action_ = Action::Default;
     bool waiting_ = false;
+    bool exit_ = false;
+    int exitCode_ = 0;
     size_t pin_ = 0;
     double waitSeconds_ = 0;
     std::function<bool(double)> poll_;
@@ -121,6 +125,8 @@ struct RunResult {
     NodeId errorNode = 0;
     std::vector<Value> returns;         // function results
     std::vector<Value> refResults;      // final values of by reference parameters (Null for by value)
+    bool exited = false;                // the script called Exit
+    int exitCode = 0;                   // ... with this code
     std::shared_ptr<Task> task;         // the task that executed (inspect it while paused / after the run)
     bool paused() const { return state == TaskState::Paused; }
     bool waiting() const { return state == TaskState::Waiting; }
@@ -158,6 +164,13 @@ public:
     bool pinValue(size_t frameIndex, NodeId node, const std::string& pin, Value& out) const;
     NodeId currentNode() const;                       // node about to execute in the top frame (0 = none)
     const std::string& currentGraph() const;
+    // The outcome as it stands now (also valid after abort / failure).
+    RunResult result() { return makeResult(); }
+    bool exited() const { return exited_; }
+    int exitCode() const { return exitCode_; }
+    // Remaining time of a timed wait (Delay); poll waits report a short interval.
+    bool isWaiting() const { return state_ == TaskState::Waiting; }
+    double waitRemaining() const { return waitPoll_ ? 0.01 : (waitRemaining_ > 0 ? waitRemaining_ : 0.0); }
     // The first frame's graph / node (the event or function that started the task).
     std::vector<Value> results() const { return results_; }
 
@@ -196,6 +209,8 @@ private:
     bool skipHook_ = false;        // do not consult the debugger before the next node (resuming after a pause)
     int pendingNextPin_ = -1;      // exec output to follow when a wait ends
     bool waitingNext_ = false;
+    bool exited_ = false;
+    int exitCode_ = 0;
     std::weak_ptr<Task> self_;
     const CompiledNode* active_ = nullptr;   // node being executed / evaluated (error attribution)
     int evalDepth_ = 0;
@@ -242,6 +257,11 @@ public:
     std::shared_ptr<Task> startFunction(const std::string& name, std::vector<Value> args, std::string* error = nullptr);
     // Advances tasks suspended by latent nodes (Delay ...) by `dt` seconds and runs the ones that are ready.
     void tick(double dt);
+    // Like tick(), but only advances the waits and returns the tasks that are ready to run again; the caller
+    // decides when (and for how long) to run them. Used by Executor.
+    std::vector<std::shared_ptr<Task>> advanceWaits(double dt);
+    // Seconds until the next timed wait ends (-1 when no task is waiting).
+    double nextWakeIn() const;
     size_t pendingTaskCount() const { return tasks_.size(); }
     std::vector<std::shared_ptr<Task>> pendingTasks() const { return tasks_; }
     void abortAll();
@@ -283,11 +303,12 @@ class Debugger : public DebugHooks {
 public:
     enum class Command { Continue, StepInto, StepOver, StepOut, Pause };
 
+    // Thread safe: breakpoints and commands may be changed from another thread while the script runs.
     void setBreakpoint(const std::string& graph, NodeId node, bool on);
     bool hasBreakpoint(const std::string& graph, NodeId node) const;
     void toggleBreakpoint(const std::string& graph, NodeId node) { setBreakpoint(graph, node, !hasBreakpoint(graph, node)); }
-    void clearBreakpoints() { breakpoints_.clear(); }
-    const std::set<std::pair<std::string, NodeId>>& breakpoints() const { return breakpoints_; }
+    void clearBreakpoints();
+    std::set<std::pair<std::string, NodeId>> breakpoints() const;
 
     // Sets how `task` proceeds the next time it is run.
     void command(Task& task, Command cmd);
@@ -298,14 +319,16 @@ public:
     void onExecLink(Task& task, const CompiledGraph& graph, int fromNode, int execOutOrdinal, int toNode) override;
     void onTaskStateChanged(Task& task) override;
 
+    // Callbacks run on the thread that executes the script. Set them while no script is running.
     std::function<void(const std::string& graph, NodeId from, int execOut, NodeId to)> linkFired;
     std::function<void(Task&)> taskStateChanged;
 
 private:
     struct Step { Command cmd = Command::Continue; size_t depth = 0; };
+    mutable std::mutex mu_;
     std::set<std::pair<std::string, NodeId>> breakpoints_;
     std::map<const Task*, Step> steps_;
-    bool pauseAll_ = false;
+    std::atomic<bool> pauseAll_{false};
 };
 
 } // namespace fg

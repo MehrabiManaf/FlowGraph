@@ -1,7 +1,12 @@
-#include <FlowGraphEditor/Studio.hpp>
+// flowstudio: the editor and debugger of the standard applications (the ones `flow` runs).
+//
+//   flowstudio [script.flow]
+//
+// Plugins are loaded like `flow` does: FLOW_PLUGIN_PATH and the plugins folder next to the program.
+#include "StandardEditorHost.hpp"
 
-#include <QDir>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFileInfo>
 #include <QPixmap>
 #include <QTimer>
@@ -14,40 +19,41 @@ int main(int argc, char** argv) {
     fged::initEditor();
 
     fg::Runtime rt;
-    // plugins: <exe dir>/plugins/*.dll
+    fg::standard::registerStandardApp(rt.registry());
+    std::vector<std::string> errors;
+    rt.loadPluginsFromEnvironment("FLOW_PLUGIN_PATH", &errors);
     QString pluginDir = QDir(QCoreApplication::applicationDirPath()).filePath("plugins");
-    if (QFileInfo::exists(pluginDir)) {
-        std::vector<std::string> errors;
-        rt.loadPluginsFrom(pluginDir.toStdString(), &errors);
-        for (auto& e : errors) qWarning("plugin: %s", e.c_str());
-    }
-    QString file = app.arguments().size() > 1 ? app.arguments().at(1) : QString();
-    auto* w = fged::createStudio(rt, file);
+    if (QFileInfo::exists(pluginDir)) rt.loadPluginsFrom(pluginDir.toStdString(), &errors);
+    for (auto& e : errors) qWarning("plugin: %s", e.c_str());
+
+    flowstudio::StandardEditorHost host(rt);
+    fged::ScriptEditor editor(host);
+    editor.newScript();
+    if (app.arguments().size() > 1) editor.open(app.arguments().at(1));
+    editor.show();
+
+    fged::ScriptEditor* ed = &editor;
     if (qEnvironmentVariableIsSet("FG_STUDIO_SELECT")) {
-        QTimer::singleShot(600, &app, [w] { fged::devSelect(w, qEnvironmentVariable("FG_STUDIO_SELECT")); });
+        QTimer::singleShot(600, &app, [ed] { ed->devSelect(qEnvironmentVariable("FG_STUDIO_SELECT")); });
     }
     // Developer aid: FG_STUDIO_PROBE=<prefix> writes <prefix>.coords after 2 s and <prefix>.final after 10 s, then quits.
     if (qEnvironmentVariableIsSet("FG_STUDIO_PROBE")) {
         QString prefix = qEnvironmentVariable("FG_STUDIO_PROBE");
-        QTimer::singleShot(2000, &app, [w, prefix] { fged::devProbe(w, prefix + ".coords", true); });
-        QTimer::singleShot(10000, &app, [w, prefix, &app] { fged::devProbe(w, prefix + ".final", false); app.quit(); });
+        QTimer::singleShot(2000, &app, [ed, prefix] { ed->devProbe(prefix + ".coords", true); });
+        QTimer::singleShot(10000, &app, [ed, prefix, &app] { ed->devProbe(prefix + ".final", false); app.quit(); });
     }
     // Developer aid: FG_STUDIO_RUN=<entry> [FG_STUDIO_BREAK=<graph>:<node id>] starts a run shortly after startup.
     if (qEnvironmentVariableIsSet("FG_STUDIO_RUN")) {
-        QTimer::singleShot(800, &app, [w] {
-            fged::devRun(w, qEnvironmentVariable("FG_STUDIO_RUN"), qEnvironmentVariable("FG_STUDIO_BREAK"));
-        });
+        QTimer::singleShot(800, &app, [ed] { ed->devRun(qEnvironmentVariable("FG_STUDIO_RUN"), qEnvironmentVariable("FG_STUDIO_BREAK")); });
     }
     // Developer aid: FG_STUDIO_SCREENSHOT=<file.png> saves a screenshot of the window and exits.
     if (qEnvironmentVariableIsSet("FG_STUDIO_SCREENSHOT")) {
         QString out = qEnvironmentVariable("FG_STUDIO_SCREENSHOT");
-        QTimer::singleShot(2500, &app, [w, out, &app] {
-            w->grab().save(out);
-            if (qEnvironmentVariableIsSet("FG_STUDIO_SCENESHOT")) fged::devSceneShot(w, qEnvironmentVariable("FG_STUDIO_SCENESHOT"));
+        QTimer::singleShot(2500, &app, [ed, out, &app] {
+            ed->window()->grab().save(out);
+            if (qEnvironmentVariableIsSet("FG_STUDIO_SCENESHOT")) ed->devSceneShot(qEnvironmentVariable("FG_STUDIO_SCENESHOT"));
             app.quit();
         });
     }
-    int rc = app.exec();
-    delete w;
-    return rc;
+    return app.exec();
 }
