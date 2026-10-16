@@ -13,6 +13,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
+#include <QImage>
+#include <QPainter>
 #include <QFileDialog>
 #include <QTextStream>
 #include <iostream>
@@ -77,7 +79,7 @@ StudioWindow::StudioWindow(fg::Runtime& rt, QWidget* parent)
             if (s->graphName() == g) s->fireLink(from, out, to);
     });
     connect(&run_, &RunController::paused, this, [this](const QString& graph, int node) {
-        if (debugDock_) debugDock_->open();
+        if (debugDock_) { debugDock_->open(); debugDock_->raise(); }
         clearDebugMarks();
         if (GraphView* v = openGraph(graph)) {
             v->graphScene()->setDebugNode(node);
@@ -112,7 +114,7 @@ StudioWindow::~StudioWindow() {
 void StudioWindow::createDocks() {
     KDDockWidgets::DockWidgetOptions opts = KDDockWidgets::DockWidgetOption_None;
     KDDockWidgets::LayoutSaverOptions lopts = KDDockWidgets::LayoutSaverOption::None;
-    auto makeDock = [&](const QString& title, QWidget* w, bool scroll) {
+    auto makeDock = [&](const QString& title, QWidget* w, bool scroll, int maxWidth = 0) {
         auto* dock = new CDockWidget(title, opts, lopts);
         dock->setAffinities(affinities());
         if (scroll) {
@@ -120,7 +122,11 @@ void StudioWindow::createDocks() {
             sa->setWidgetResizable(true);
             sa->setWidget(w);
             dock->setWidget(sa);
-        } else dock->setWidget(w);
+            if (maxWidth) sa->setMaximumWidth(maxWidth);      // keep the side panels from taking over the window
+        } else {
+            dock->setWidget(w);
+            if (maxWidth) w->setMaximumWidth(maxWidth);
+        }
         docks_.push_back(dock);
         return dock;
     };
@@ -131,19 +137,20 @@ void StudioWindow::createDocks() {
     log_ = new LogPanel();
     debug_ = new DebugPanel(&doc_, &run_);
 
-    auto* dMy = makeDock("My Script", myScript_, true);
-    auto* dDetails = makeDock("Details", details_, true);
+    auto* dMy = makeDock("My Script", myScript_, true, 380);
+    auto* dDetails = makeDock("Details", details_, true, 520);
     diagDock_ = makeDock("Compile Results", diagnostics_, false);
     auto* dLog = makeDock("Output Log", log_, false);
     logDock_ = dLog;
-    debugDock_ = makeDock("Debugger", debug_, false);
+    debugDock_ = makeDock("Debugger", debug_, false, 520);
 
     addDockWidget(dMy, KDDockWidgets::Location_OnLeft, nullptr, KDDockWidgets::InitialOption(QSize(280, 400)));
-    addDockWidget(dDetails, KDDockWidgets::Location_OnBottom, dMy, KDDockWidgets::InitialOption(QSize(280, 300)));
+    addDockWidget(dDetails, KDDockWidgets::Location_OnRight, nullptr, KDDockWidgets::InitialOption(QSize(340, 400)));
     addDockWidget(dLog, KDDockWidgets::Location_OnBottom, nullptr, KDDockWidgets::InitialOption(QSize(600, 180)));
     dLog->addDockWidgetAsTab(diagDock_);
-    addDockWidget(debugDock_, KDDockWidgets::Location_OnRight, nullptr,
-                  KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartHidden, QSize(340, 400)));
+    dDetails->addDockWidgetAsTab(debugDock_);       // the debugger shares the right-hand column with the details
+    dDetails->setAsCurrentTab();
+
 
     connect(myScript_, &MyScriptPanel::openGraph, this, [this](const QString& n) { openGraph(n); });
     connect(myScript_, &MyScriptPanel::eventActivated, this, [this](const QString& g, int n) { focusNode(g, n); });
@@ -581,6 +588,19 @@ void StudioWindow::devProbe(const QString& file, bool coordinates) {
         for (auto& c : g->connections) completed += c.fromNode == 1 && c.toNode == 3;
         out << "completedLinks " << completed << "\n";
     }
+}
+
+void StudioWindow::devSceneShot(const QString& file) {
+    GraphScene* sc = currentScene();
+    if (!sc) return;
+    QRectF r = sc->contentRect().adjusted(-40, -40, 40, 40);
+    QImage img(int(r.width() * 2), int(r.height() * 2), QImage::Format_ARGB32);
+    img.fill(QColor(35, 35, 35));
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing);
+    sc->render(&p, QRectF(0, 0, img.width(), img.height()), r);
+    p.end();
+    img.save(file);
 }
 
 void StudioWindow::log(int level, const QString& text) { log_->append(level, text); }

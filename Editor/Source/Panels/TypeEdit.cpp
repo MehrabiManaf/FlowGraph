@@ -8,12 +8,10 @@ namespace fged {
 TypeEdit::TypeEdit(const fg::Registry& reg, QWidget* parent, bool) : QComboBox(parent), reg_(reg) {
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
+    // base types only: the container (array / map) is chosen in its own column
     QStringList items;
     for (auto* t : reg.types()) items << QString::fromStdString(t->name);
-    QStringList all = items;
-    for (auto& n : items) all << "array<" + n + ">";
-    for (auto& n : items) all << "map<string," + n + ">";
-    addItems(all);
+    addItems(items);
     if (completer()) completer()->setCaseSensitivity(Qt::CaseInsensitive);
     connect(lineEdit(), &QLineEdit::editingFinished, this, [this] { commit(); });
     connect(this, QOverload<int>::of(&QComboBox::activated), this, [this](int) { commit(); });

@@ -56,6 +56,8 @@ const Metrics& metrics() {
     return m;
 }
 
+template <class V> QColor c0(const V& v, const QPalette& pal) { return v.hovered ? pal.highlight().color() : v.color; }
+
 bool hiddenLabel(const fg::CompiledPin& p) {
     return p.kind == fg::PinKind::Exec && (p.name == "In" || p.name == "Then");
 }
@@ -104,6 +106,7 @@ void NodeItem::layout() {
         v.isConst = p.isConst;
         v.wildcard = p.wildcard;
         v.container = p.type && p.type->isContainer();
+        v.containerKind = !p.type ? 0 : p.type->kind == fg::TypeKind::Array ? 1 : p.type->kind == fg::TypeKind::Map ? 2 : 0;
         v.type = p.type;
         v.doc = qs(p.doc);
         return v;
@@ -140,6 +143,10 @@ void NodeItem::layout() {
         v.connector = QRectF(QPointF(M.pinMargins.left(), top + (M.pinHeight - cs.height()) / 2), cs);
         QSizeF ls = fm.size(Qt::TextSingleLine, v.label);
         double x = v.connector.right() + (v.label.isEmpty() ? 0 : M.pinSpacing);
+        if (v.isConst) {       // lock symbol between the connector and the name
+            v.lockRect = QRectF(QPointF(v.connector.right() + 3, top + (M.pinHeight - 11) / 2), QSizeF(8, 11));
+            x = v.lockRect.right() + M.pinSpacing;
+        }
         v.labelRect = QRectF(QPointF(x, top + (M.pinHeight - ls.height()) / 2), ls);
         double right = v.labelRect.right();
         if (v.editor != Editor::None) {
@@ -162,6 +169,10 @@ void NodeItem::layout() {
         v.connector = QRectF(QPointF(-(cs.width() + M.pinMargins.right()), top + (M.pinHeight - cs.height()) / 2), cs);
         QSizeF ls = fm.size(Qt::TextSingleLine, v.label);
         double x = v.connector.left() - (v.label.isEmpty() ? 0 : M.pinSpacing) - ls.width();
+        if (v.isConst) {
+            v.lockRect = QRectF(QPointF(v.connector.left() - 3 - 8, top + (M.pinHeight - 11) / 2), QSizeF(8, 11));
+            x = v.lockRect.left() - M.pinSpacing - ls.width();
+        }
         v.labelRect = QRectF(QPointF(x, top + (M.pinHeight - ls.height()) / 2), ls);
         double w = -(v.labelRect.left() - M.pinMargins.left());
         outputsRect_ = outputsRect_.united(QRectF(-w, top, w, M.pinHeight));
@@ -178,6 +189,7 @@ void NodeItem::layout() {
         for (auto& v : *list) {
             v.connector.translate(width, 0);
             v.labelRect.translate(width, 0);
+            v.lockRect.translate(width, 0);
         }
     titleRect_.setWidth(width);
     double bottom = std::max(inputsRect_.bottom(), outputsRect_.bottom());
@@ -381,21 +393,49 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
             p->drawPath(M.execShape);
             p->restore();
         } else {
-            if (v.byRef) {
+            QPointF c = v.connector.center();
+            if (v.containerKind == 1) {
+                // array: a 3 x 3 grid of dots
+                QColor hollow = qApp->palette().window().color();
+                p->setBrush(v.connected ? c0(v, pal) : hollow);
+                for (int i = -1; i <= 1; ++i)
+                    for (int j = -1; j <= 1; ++j) p->drawEllipse(QPointF(c.x() + i * 3.9, c.y() + j * 3.9), 1.45, 1.45);
+            } else if (v.containerKind == 2) {
+                // map: a circle (key) and a square (value) joined by a bar
+                QColor hollow = qApp->palette().window().color();
+                p->setBrush(v.connected ? c0(v, pal) : hollow);
+                p->drawLine(QPointF(c.x() - 2.5, c.y()), QPointF(c.x() + 2.5, c.y()));
+                p->drawEllipse(QPointF(c.x() - 4.0, c.y()), 2.8, 2.8);
+                p->drawRect(QRectF(c.x() + 1.4, c.y() - 2.8, 5.6, 5.6));
+            } else if (v.byRef) {
                 p->save();
-                p->translate(v.connector.center());
+                p->translate(c);
                 p->drawPath(M.refShape);
                 p->restore();
             } else {
-                p->drawEllipse(v.connector.center(), 4.0, 4.0);
+                p->drawEllipse(c, 4.0, 4.0);
             }
-            if (v.container) {
-                p->setBrush(Qt::transparent);
-                p->drawRoundedRect(v.connector, 3, 3);
+            if (v.byRef && v.containerKind != 0) {        // reference containers get a small diamond on top
+                p->save();
+                p->translate(c + QPointF(0, -8));
+                p->scale(0.6, 0.6);
+                p->drawPath(M.refShape);
+                p->restore();
             }
         }
         p->setPen(pal.windowText().color());
         p->drawText(v.labelRect, Qt::AlignCenter, v.label);
+        if (v.isConst) {
+            // padlock: shackle + body
+            QRectF l = v.lockRect;
+            p->save();
+            p->setPen(QPen(QColor(235, 200, 90), 1.4));
+            p->setBrush(Qt::NoBrush);
+            p->drawArc(QRectF(l.left() + 1.5, l.top() + 0.5, l.width() - 3, 7), 0, 180 * 16);
+            p->setBrush(QColor(235, 200, 90));
+            p->drawRoundedRect(QRectF(l.left(), l.top() + 4.5, l.width(), 6), 1.5, 1.5);
+            p->restore();
+        }
         if (v.editor == Editor::Check) {
             QStyleOptionButton o;
             o.rect = v.editorRect.toRect();
@@ -481,7 +521,14 @@ void NodeItem::hoverMoveEvent(QGraphicsSceneHoverEvent* e) {
         v->hovered = h;
     }
     if (changed) update();
-    if (under) setToolTip(gscene_->pinTooltip(refFor(*under), under->doc));
+    if (under) {
+        QString tip = gscene_->pinTooltip(refFor(*under), under->doc);
+        if (under->isConst) tip += QChar('\n') + QString("const: cannot be modified by the function");
+        if (under->byRef) tip += QChar('\n') + QString("by reference: refers to the caller's variable");
+        if (under->containerKind == 1) tip += QChar('\n') + QString("array");
+        else if (under->containerKind == 2) tip += QChar('\n') + QString("map");
+        setToolTip(tip);
+    }
     else if (error_ || warning_) setToolTip(diagText_);
     else setToolTip(cn_.def ? qs(cn_.def->doc) : QString());
     QGraphicsObject::hoverMoveEvent(e);

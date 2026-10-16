@@ -22,4 +22,6 @@ void devSelect(QWidget* studio, const QString& spec);
 
 void devProbe(QWidget* studio, const QString& file, bool coordinates);
 
+void devSceneShot(QWidget* studio, const QString& file);
+
 } // namespace fged

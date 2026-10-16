@@ -53,3 +53,7 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
   FG_STUDIO_PROBE hook: usage `real-input-smoke.ps1 -Exe <Studio.exe> -Script <x.flow> -Prefix <tmp path>`. Coordinates from the
   probe are logical pixels: multiply by the device pixel ratio (it is printed); points beyond the screen edge are clamped.
 - build.bat defaults to Release: after editor fixes rebuild Release too, or the Studio you launch is stale.
+- UI round 2: Backspace/Delete/Ctrl+C in a pin editor no longer reach the graph (view hands keys to the focused proxy widget); Details dock
+  on the right (tabbed with Debugger); Local Variables only while a function graph/function item is active; container kind is its own
+  column (TypeSpec: Single/Array/Map + key) in variable and parameter editors; pins: array = dot grid, map = circle+square, const = padlock,
+  by-ref = diamond (also on containers). Dev hooks: FG_STUDIO_SCENESHOT renders the current graph at 2x.

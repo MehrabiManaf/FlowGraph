@@ -86,6 +86,9 @@ FitTree* MyScriptPanel::makeSection(const QString& title, bool plus, CCollapsibl
 void MyScriptPanel::setCurrentGraph(const QString& name) {
     if (current_ == name) return;
     current_ = name;
+    // local variables belong to a function: they are shown while a function graph is the active one
+    const fg::Graph* g = doc_->script().findGraph(ss(name));
+    localsGraph_ = (g && g->kind == fg::GraphKind::Function) ? name : QString();
     scheduleRefresh();
 }
 
@@ -101,11 +104,15 @@ void MyScriptPanel::scheduleRefresh() {
 void MyScriptPanel::refresh() {
     const fg::Script& s = doc_->script();
     const fg::Registry& reg = doc_->registry();
+    if (!localsGraph_.isEmpty()) {
+        const fg::Graph* lg = s.findGraph(ss(localsGraph_));
+        if (!lg || lg->kind != fg::GraphKind::Function) localsGraph_.clear();
+    }
     // signature of everything that is displayed: skip the rebuild when nothing changed (keeps editors open)
-    QString sig = current_ + "#";
+    QString sig = localsGraph_ + "#";
     for (auto& g : s.graphs) sig += qs(g.name) + (g.kind == fg::GraphKind::Event ? "E" : "F") + "|";
     for (auto& v : s.variables) sig += qs(v.name) + ":" + qs(v.type) + "|";
-    if (auto* g = s.findGraph(ss(current_)))
+    if (auto* g = s.findGraph(ss(localsGraph_)))
         for (auto& v : g->locals) sig += "L" + qs(v.name) + ":" + qs(v.type) + "|";
     for (auto& e : s.customEvents()) sig += "e" + qs(e.name) + qs(e.graph) + QString::number(e.node) + "|";
     for (auto* e : reg.events()) sig += "h" + qs(e->name) + "|";
@@ -143,16 +150,15 @@ void MyScriptPanel::refresh() {
         auto* it = mk(vars_, qs(v.name), qs(v.type), Kind::Variable, true, &c);
         it->setData(0, kMime, "global|" + qs(v.name));
     }
-    if (auto* g = s.findGraph(ss(current_)); g && g->kind == fg::GraphKind::Function) {
+    if (auto* g = s.findGraph(ss(localsGraph_)); g && g->kind == fg::GraphKind::Function) {
         for (auto& v : g->locals) {
             QColor c = rgb(reg.typeColor(reg.typeOrAny(v.type)));
             auto* it = mk(locals_, qs(v.name), qs(v.type), Kind::Local, true, &c);
             it->setData(0, kMime, "local|" + qs(v.name));
         }
-        localsPanel_->SetPlusButtonDisabled(false);
-    } else {
-        localsPanel_->SetPlusButtonDisabled(true);
+        localsPanel_->SetTitle("Local Variables (" + localsGraph_ + ")");
     }
+    localsPanel_->setVisible(!localsGraph_.isEmpty());
     for (auto& e : s.customEvents()) {
         QStringList ps;
         for (auto& p : e.params) ps << qs(p.name);
@@ -180,10 +186,16 @@ void MyScriptPanel::onSelection(FitTree* tree) {
     auto* it = tree->currentItem();
     if (!it) return;
     QString name = it->data(0, kName).toString();
-    if (tree == graphs_) emit selectionChanged(int(Kind::EventGraph), "", name);
-    else if (tree == functions_) emit selectionChanged(int(Kind::Function), "", name);
+    if (tree == graphs_) {
+        if (!localsGraph_.isEmpty()) { localsGraph_.clear(); scheduleRefresh(); }
+        emit selectionChanged(int(Kind::EventGraph), "", name);
+    }
+    else if (tree == functions_) {
+        if (localsGraph_ != name) { localsGraph_ = name; scheduleRefresh(); }
+        emit selectionChanged(int(Kind::Function), "", name);
+    }
     else if (tree == vars_) emit selectionChanged(int(Kind::Variable), "", name);
-    else if (tree == locals_) emit selectionChanged(int(Kind::Local), current_, name);
+    else if (tree == locals_) emit selectionChanged(int(Kind::Local), localsGraph_, name);
     else emit selectionChanged(int(Kind::None), "", "");
 }
 
@@ -220,9 +232,9 @@ void MyScriptPanel::onItemChanged(FitTree* tree, QTreeWidgetItem* item) {
         if (s.variableIndex(ss(newName)) >= 0) { QMessageBox::warning(this, "Rename", "A variable named '" + newName + "' already exists."); return revert(); }
         doc_->edit("Rename variable", [&](fg::Script& sc) { sc.renameVariable(ss(oldName), ss(newName)); });
     } else if (tree == locals_) {
-        const fg::Graph* g = s.findGraph(ss(current_));
+        const fg::Graph* g = s.findGraph(ss(localsGraph_));
         if (!g || g->findLocal(ss(newName))) return revert();
-        doc_->edit("Rename local variable", [&](fg::Script& sc) { sc.renameLocal(ss(current_), ss(oldName), ss(newName)); });
+        doc_->edit("Rename local variable", [&](fg::Script& sc) { sc.renameLocal(ss(localsGraph_), ss(oldName), ss(newName)); });
     }
     item->setData(0, kName, newName);
 }
@@ -256,7 +268,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
             if (tree == graphs_ || tree == functions_) s.removeGraph(ss(name));
             else if (tree == vars_) s.variables.erase(std::remove_if(s.variables.begin(), s.variables.end(), [&](const fg::VariableDecl& v) { return v.name == ss(name); }), s.variables.end());
             else if (tree == locals_)
-                if (auto* g = s.findGraph(ss(current_)))
+                if (auto* g = s.findGraph(ss(localsGraph_)))
                     g->locals.erase(std::remove_if(g->locals.begin(), g->locals.end(), [&](const fg::VariableDecl& v) { return v.name == ss(name); }), g->locals.end());
         });
     }
@@ -283,12 +295,12 @@ void MyScriptPanel::addVariable() {
 }
 
 void MyScriptPanel::addLocal() {
-    const fg::Graph* g = doc_->script().findGraph(ss(current_));
+    const fg::Graph* g = doc_->script().findGraph(ss(localsGraph_));
     if (!g || g->kind != fg::GraphKind::Function) return;
     QString name = "NewLocal";
     for (int i = 1; g->findLocal(ss(name)); ++i) name = "NewLocal_" + QString::number(i);
     doc_->edit("Add local variable", [&](fg::Script& s) {
-        if (auto* gr = s.findGraph(ss(current_))) gr->locals.push_back({ss(name), "int", fg::Value(int64_t(0)), "", ""});
+        if (auto* gr = s.findGraph(ss(localsGraph_))) gr->locals.push_back({ss(name), "int", fg::Value(int64_t(0)), "", ""});
     });
     beginRename(locals_, name);
 }

@@ -29,7 +29,8 @@
         },
         {
           "name": "Name",
-          "type": "string"
+          "type": "string",
+          "const": true
         }
       ],
       "outputs": [],

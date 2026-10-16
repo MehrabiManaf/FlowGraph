@@ -89,6 +89,7 @@ private:
     fg::Graph* mutableGraph(fg::Script& s) const { return s.findGraph(name_.toStdString()); }
     void onInplaceFinished();
     void hideInplace();
+    void cancelInplace();
     LinkItem* linkItem(const fg::Connection& c) const;
     static QString linkKey(const fg::Connection& c);
     QByteArray buildClip(const std::set<fg::NodeId>& ids) const;

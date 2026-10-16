@@ -122,7 +122,7 @@ void inventory(const std::string& dir) {
     s.variables.push_back({"Stock", "map<string,int>", Value(), "Inventory", "Item -> amount"});
 
     // AddUnique(List: array<string>&, Name: string) - adds Name unless it is already there.
-    Graph& f = s.addFunction("AddUnique", {{"List", "array<string>", true, false, Value()}, {"Name", "string", false, false, Value()}});
+    Graph& f = s.addFunction("AddUnique", {{"List", "array<string>", true, false, Value()}, {"Name", "string", false, true, Value()}});
     f.connections.clear();
     NodeId entry = f.nodes[0].id;
     f.nodes.pop_back();                       // drop the default return node; the chain simply ends

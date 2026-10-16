@@ -9,9 +9,11 @@
 #include <algorithm>
 #include <cmath>
 #include <QDragEnterEvent>
+#include <QGraphicsProxyWidget>
 #include <QMenu>
 #include <QMimeData>
 #include <QScrollBar>
+#include <QResizeEvent>
 #include <QWheelEvent>
 
 namespace fged {
@@ -39,7 +41,13 @@ void GraphView::setZoom(double z) {
     setTransform(t);
 }
 
+void GraphView::resizeEvent(QResizeEvent* e) {
+    QGraphicsView::resizeEvent(e);
+    if (autoFrame_) frameAll();
+}
+
 void GraphView::wheelEvent(QWheelEvent* e) {
+    autoFrame_ = false;
     int d = e->angleDelta().y();
     if (d == 0) { e->ignore(); return; }
     setZoom(d > 0 ? zoom_ * 1.15 : zoom_ / 1.15);
@@ -76,6 +84,7 @@ void GraphView::frameAll() {
 }
 
 void GraphView::centerOnNode(fg::NodeId id, bool animated) {
+    autoFrame_ = false;
     NodeItem* n = graphScene()->nodeItem(id);
     if (!n) return;
     QPointF target = n->sceneBoundingRect().center();
@@ -105,6 +114,7 @@ void GraphView::mousePressEvent(QMouseEvent* e) {
     if (e->button() == Qt::MiddleButton || e->button() == Qt::RightButton) {
         QGraphicsItem* under = itemAt(e->pos());
         if (e->button() == Qt::MiddleButton || !under || dynamic_cast<LinkItem*>(under)) {
+            autoFrame_ = false;
             panning_ = true;
             panMoved_ = false;
             panButton_ = e->button();
@@ -197,6 +207,11 @@ void GraphView::contextMenuEvent(QContextMenuEvent* e) {
 // ------------------------------------------------------------------ keyboard
 void GraphView::keyPressEvent(QKeyEvent* e) {
     GraphScene* sc = graphScene();
+    // while a pin value is being edited the keys belong to the editor (Backspace must not delete nodes)
+    if (dynamic_cast<QGraphicsProxyWidget*>(sc->focusItem())) {
+        QGraphicsView::keyPressEvent(e);
+        return;
+    }
     QPointF cursor = mapToScene(mapFromGlobal(QCursor::pos()));
     bool ctrl = e->modifiers() & Qt::ControlModifier;
     if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) { sc->deleteSelected(); e->accept(); return; }

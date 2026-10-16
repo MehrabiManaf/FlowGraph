@@ -24,6 +24,7 @@ public:
 
 protected:
     void wheelEvent(QWheelEvent* e) override;
+    void resizeEvent(QResizeEvent* e) override;
     void drawBackground(QPainter* p, const QRectF& r) override;
     void contextMenuEvent(QContextMenuEvent* e) override;
     void mousePressEvent(QMouseEvent* e) override;
@@ -38,6 +39,7 @@ private:
     void setZoom(double z);
 
     double zoom_ = 1.0;
+    bool autoFrame_ = true;      // keep the whole graph in view until the user zooms or pans
     bool panning_ = false;
     bool panMoved_ = false;
     QPoint panLast_;

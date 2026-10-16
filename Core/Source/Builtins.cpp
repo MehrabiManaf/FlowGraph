@@ -226,8 +226,13 @@ void registerScriptNodes(Registry& r) {
         }
         d.dynamicPins = [isSet](const Node& n, const NodeBuildCtx& c, std::vector<PinDef>& pins) {
             std::string t = varType(n, c);
-            if (isSet) pins.push_back(dataIn("Value", t));
-            else pins.push_back(dataOut("Value", t));
+            bool constParam = false;       // reading a const parameter: mark the pin so editors can show it
+            if (c.graph && (n.prop("scope").empty() || n.prop("scope") == "param") && !c.graph->findLocal(n.prop("name")))
+                for (auto& p : c.graph->inputs)
+                    if (p.name == n.prop("name") && p.isConst) constParam = true;
+            PinDef d = isSet ? dataIn("Value", t) : dataOut("Value", t);
+            d.isConst = constParam;
+            pins.push_back(std::move(d));
         };
         d.expand = [isSet](const NodeBuildCtx& c, std::vector<NodeTemplate>& out) {
             auto add = [&](const std::string& name, const std::string& type, const std::string& scope, const std::string& cat) {

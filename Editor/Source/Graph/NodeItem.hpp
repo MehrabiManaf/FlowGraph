@@ -62,7 +62,8 @@ private:
         fg::PinKind kind = fg::PinKind::Data;
         fg::PinDir dir = fg::PinDir::In;
         QColor color;
-        QRectF connector, labelRect, editorRect;
+        QRectF connector, labelRect, editorRect, lockRect;
+        int containerKind = 0;      // 0 = single value, 1 = array, 2 = map
         bool connected = false, byRef = false, container = false, wildcard = false, isConst = false;
         Editor editor = Editor::None;
         QString editorText;

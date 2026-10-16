@@ -41,6 +41,7 @@ private:
 
     Document* doc_;
     QString current_;
+    QString localsGraph_;      // the function whose local variables are listed (empty = section hidden)
     FitTree *graphs_ = nullptr, *functions_ = nullptr, *vars_ = nullptr, *locals_ = nullptr, *events_ = nullptr;
     CCollapsiblePanel *graphsPanel_ = nullptr, *functionsPanel_ = nullptr, *varsPanel_ = nullptr, *localsPanel_ = nullptr, *eventsPanel_ = nullptr;
     bool building_ = false;

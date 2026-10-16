@@ -3,6 +3,7 @@
 #include "Graph/GraphScene.hpp"
 #include "Graph/LinkItem.hpp"
 #include "Panels/MyScriptPanel.hpp"
+#include "Panels/TypeSpec.hpp"
 #include "Studio/RunController.hpp"
 #include "Studio/StudioWindow.hpp"
 #include <FlowGraphEditor/Studio.hpp>
@@ -10,6 +11,7 @@
 #include "Graph/GraphView.hpp"
 
 #include <QApplication>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QScrollBar>
 #include <QClipboard>
@@ -465,6 +467,37 @@ TEST(studio_window_pin_drag_creates_link) {
     bool linked = false;
     for (auto& c : f.win.document()->graph(sc->graphName())->connections) linked |= c.fromNode == 2 && c.toNode == br && c.toPin == "In";
     CHECK(linked);
+}
+
+TEST(backspace_in_pin_editor_does_not_delete_the_node) {
+    StudioFixture f;
+    CHECK(f.view != nullptr);
+    if (!f.view) return;
+    GraphScene* sc = f.scene();
+    NodeItem* n = sc->nodeItem(2);
+    sc->selectOnly(2);
+    sc->startInplaceEdit(n, "String", n->scenePos() + QPointF(10, 40), 80, "Hello", f.rt.registry().tString());
+    QCoreApplication::processEvents();
+    size_t nodesBefore = f.win.document()->graph(sc->graphName())->nodes.size();
+    for (int i = 0; i < 3; ++i) {
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+        QApplication::sendEvent(f.view, &press);
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_Backspace, Qt::NoModifier);
+        QApplication::sendEvent(f.view, &release);
+        QCoreApplication::processEvents();
+    }
+    CHECK_EQ(f.win.document()->graph(sc->graphName())->nodes.size(), nodesBefore);
+    CHECK(sc->nodeItem(2) != nullptr);
+}
+
+TEST(type_spec_splits_containers) {
+    TypeSpec a = TypeSpec::parse("array<float>");
+    CHECK(a.container == TypeSpec::Container::Array && a.value == "float");
+    TypeSpec m = TypeSpec::parse("map<string,array<int>>");
+    CHECK(m.container == TypeSpec::Container::Map && m.key == "string" && m.value == "array<int>");
+    CHECK_EQ(m.str(), QString("map<string,array<int>>"));
+    TypeSpec s = TypeSpec::parse("Actor");
+    CHECK(s.container == TypeSpec::Container::Single && s.str() == "Actor");
 }
 
 int main(int argc, char** argv) {

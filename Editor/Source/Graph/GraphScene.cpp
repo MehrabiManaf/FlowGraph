@@ -161,7 +161,7 @@ void GraphScene::sync() {
     }
     for (auto it = nodes_.begin(); it != nodes_.end();) {
         if (alive.count(it->first)) { ++it; continue; }
-        if (it->first == editNode_) hideInplace();
+        if (it->first == editNode_) cancelInplace();
         if (it->first == debugNode_) debugNode_ = 0;
         removeItem(it->second);
         delete it->second;
@@ -332,6 +332,11 @@ void GraphScene::startInplaceEdit(NodeItem* item, const std::string& pin, const 
     editorProxy_->show();
     editor_->setFocus();
     editor_->selectAll();
+}
+
+void GraphScene::cancelInplace() {
+    editNode_ = 0;      // forget the target first: hiding the editor emits editingFinished
+    hideInplace();
 }
 
 void GraphScene::hideInplace() {
@@ -527,6 +532,7 @@ fg::NodeId GraphScene::addVariableNode(const QString& name, const QString& scope
 }
 
 void GraphScene::deleteSelected() {
+    if (editNode_ != 0) cancelInplace();
     std::set<fg::NodeId> nodes;
     std::vector<fg::Connection> links;
     std::set<int> comments;

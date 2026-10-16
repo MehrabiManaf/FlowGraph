@@ -22,6 +22,7 @@ public:
     void SetPlusButtonDisabled(const bool& Disabled);
     void SetContentsExpaned(bool Expanded);
     void UpdateContentsHeight();
+    void SetTitle(const QString& Title) { mp_Label->setText(Title); }
 private:
     double AnimationProgress() const { return m_AnimationProgress; }
     void SetAnimationProgress(const double& Progress);

@@ -38,6 +38,8 @@ public:
     void devSelect(const QString& spec);
     // Developer aid for real-input smoke tests: writes global screen coordinates / script state to a text file.
     void devProbe(const QString& file, bool coordinates);
+    // Developer aid: renders the current graph at 2x into a PNG.
+    void devSceneShot(const QString& file);
 
 protected:
     void closeEvent(QCloseEvent* e) override;

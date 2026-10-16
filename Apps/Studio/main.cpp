@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
         QString out = qEnvironmentVariable("FG_STUDIO_SCREENSHOT");
         QTimer::singleShot(2500, &app, [w, out, &app] {
             w->grab().save(out);
+            if (qEnvironmentVariableIsSet("FG_STUDIO_SCENESHOT")) fged::devSceneShot(w, qEnvironmentVariable("FG_STUDIO_SCENESHOT"));
             app.quit();
         });
     }

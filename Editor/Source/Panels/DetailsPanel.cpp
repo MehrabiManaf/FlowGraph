@@ -2,8 +2,10 @@
 #include "../Graph/Style.hpp"
 #include "../Studio/RunController.hpp"
 #include "TypeEdit.hpp"
+#include "TypeSpec.hpp"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QHBoxLayout>
 #include <set>
 #include <QFormLayout>
@@ -171,13 +173,30 @@ void DetailsPanel::buildVariable() {
     });
     form_->addRow("Name", nameEdit);
 
-    auto* typeEdit = new TypeEdit(doc_->registry());
-    typeEdit->setType(qs(v->type));
-    connect(typeEdit, &TypeEdit::typeEdited, this, [=](const QString& t) {
-        mutate([&](fg::VariableDecl& d) { d.type = ss(t); d.def = fg::Value(); }, "Change variable type", QString());
-        QTimer::singleShot(0, this, [this] { rebuild(); });
-    });
-    form_->addRow("Type", typeEdit);
+    {
+        TypeSpec spec = TypeSpec::parse(qs(v->type));
+        auto* valueEdit = new TypeEdit(doc_->registry());
+        valueEdit->setType(spec.value);
+        auto* containerBox = new QComboBox;
+        containerBox->addItems({"Single", "Array", "Map"});
+        containerBox->setCurrentIndex(int(spec.container));
+        auto* keyEdit = new TypeEdit(doc_->registry());
+        keyEdit->setType(spec.key);
+        auto apply = [=]() {
+            TypeSpec ns;
+            ns.container = TypeSpec::Container(containerBox->currentIndex());
+            ns.key = keyEdit->type();
+            ns.value = valueEdit->type();
+            mutate([&](fg::VariableDecl& d) { d.type = ss(ns.str()); d.def = fg::Value(); }, "Change variable type", QString());
+            QTimer::singleShot(0, this, [this] { rebuild(); });
+        };
+        connect(valueEdit, &TypeEdit::typeEdited, this, apply);
+        connect(keyEdit, &TypeEdit::typeEdited, this, apply);
+        connect(containerBox, qOverload<int>(&QComboBox::activated), this, apply);
+        form_->addRow("Type", valueEdit);
+        form_->addRow("Container", containerBox);
+        if (spec.container == TypeSpec::Container::Map) form_->addRow("Key type", keyEdit);
+    }
 
     const fg::TypeDesc* t = doc_->registry().findType(v->type);
     if (t && (t->isPrimitive() || t->isEnum())) {
@@ -210,17 +229,20 @@ void DetailsPanel::buildVariable() {
 
 // ------------------------------------------------------------------ parameter tables
 QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::ParamDecl>& params, std::function<void(std::vector<fg::ParamDecl>)> apply) {
-    auto* table = new QTableWidget(int(params.size()), inputs ? 4 : 2);
-    QStringList headers{"Name", "Type"};
+    enum { ColName, ColType, ColContainer, ColKey, ColRef, ColConst };
+    auto* table = new QTableWidget(int(params.size()), inputs ? 6 : 4);
+    QStringList headers{"Name", "Type", "Container", "Key"};
     if (inputs) headers << "Ref" << "Const";
     table->setHorizontalHeaderLabels(headers);
     table->verticalHeader()->hide();
     table->horizontalHeader()->setStretchLastSection(false);
-    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(ColName, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(ColType, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(ColContainer, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(ColKey, QHeaderView::ResizeToContents);
     if (inputs) {
-        table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-        table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+        table->horizontalHeader()->setSectionResizeMode(ColRef, QHeaderView::ResizeToContents);
+        table->horizontalHeader()->setSectionResizeMode(ColConst, QHeaderView::ResizeToContents);
     }
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -232,11 +254,15 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
         std::vector<fg::ParamDecl> out;
         for (int r = 0; r < table->rowCount(); ++r) {
             fg::ParamDecl p;
-            p.name = ss(table->item(r, 0)->text().trimmed());
-            p.type = ss(static_cast<TypeEdit*>(table->cellWidget(r, 1))->type());
+            p.name = ss(table->item(r, ColName)->text().trimmed());
+            TypeSpec spec;
+            spec.value = static_cast<TypeEdit*>(table->cellWidget(r, ColType))->type();
+            spec.container = TypeSpec::Container(static_cast<QComboBox*>(table->cellWidget(r, ColContainer))->currentIndex());
+            spec.key = static_cast<TypeEdit*>(table->cellWidget(r, ColKey))->type();
+            p.type = ss(spec.str());
             if (inputs) {
-                p.byRef = static_cast<QCheckBox*>(table->cellWidget(r, 2))->isChecked();
-                p.isConst = static_cast<QCheckBox*>(table->cellWidget(r, 3))->isChecked();
+                p.byRef = static_cast<QCheckBox*>(table->cellWidget(r, ColRef))->isChecked();
+                p.isConst = static_cast<QCheckBox*>(table->cellWidget(r, ColConst))->isChecked();
             }
             out.push_back(std::move(p));
         }
@@ -244,18 +270,34 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
     };
     for (int r = 0; r < table->rowCount(); ++r) {
         const fg::ParamDecl& p = params[size_t(r)];
-        table->setItem(r, 0, new QTableWidgetItem(qs(p.name)));
+        TypeSpec spec = TypeSpec::parse(qs(p.type));
+        table->setItem(r, ColName, new QTableWidgetItem(qs(p.name)));
         auto* te = new TypeEdit(doc_->registry());
-        te->setType(qs(p.type));
-        table->setCellWidget(r, 1, te);
+        te->setType(spec.value);
+        te->setMinimumWidth(110);
+        table->setCellWidget(r, ColType, te);
+        auto* cont = new QComboBox;
+        cont->addItems({"Single", "Array", "Map"});
+        cont->setCurrentIndex(int(spec.container));
+        table->setCellWidget(r, ColContainer, cont);
+        auto* key = new TypeEdit(doc_->registry());
+        key->setType(spec.key);
+        key->setMinimumWidth(90);
+        key->setEnabled(spec.container == TypeSpec::Container::Map);
+        table->setCellWidget(r, ColKey, key);
         connect(te, &TypeEdit::typeEdited, this, [=] { apply(collect()); });
+        connect(key, &TypeEdit::typeEdited, this, [=] { apply(collect()); });
+        connect(cont, qOverload<int>(&QComboBox::activated), this, [=](int) {
+            key->setEnabled(cont->currentIndex() == int(TypeSpec::Container::Map));
+            apply(collect());
+        });
         if (inputs) {
             auto* ref = new QCheckBox;
             ref->setChecked(p.byRef);
             auto* cst = new QCheckBox;
             cst->setChecked(p.isConst);
-            table->setCellWidget(r, 2, ref);
-            table->setCellWidget(r, 3, cst);
+            table->setCellWidget(r, ColRef, ref);
+            table->setCellWidget(r, ColConst, cst);
             connect(ref, &QCheckBox::toggled, this, [=] { apply(collect()); });
             connect(cst, &QCheckBox::toggled, this, [=] { apply(collect()); });
         }
