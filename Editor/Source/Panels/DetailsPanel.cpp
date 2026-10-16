@@ -10,6 +10,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QCompleter>
+#include <QElapsedTimer>
 #include <QComboBox>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -241,11 +242,48 @@ QString columnTip(int col, const QString& value) {
     case ColName: return "<b>Name</b>: " + value.toHtmlEscaped();
     case ColType: return "<b>Type</b>: " + value.toHtmlEscaped() + "<br><i>Double-click to change it.</i>";
     case ColContainer: return "<b>Container</b>: " + value + "<br>A single value, an array of it, or a map from a key type to it.<br><i>Double-click to change it.</i>";
-    case ColKey: return "<b>Key</b>: " + value.toHtmlEscaped() + "<br>The key type of a map; only used when the container is a Map.";
+    case ColKey: return "<b>Key</b>: " + (value.isEmpty() ? QString("(none)") : value.toHtmlEscaped()) + "<br>The key type of a map; only used when the container is a Map.";
     case ColRef: return "<b>Ref</b>: " + value + "<br>Passed by reference: the function reads and writes the caller's variable.";
     default: return "<b>Const</b>: " + value + "<br>The function may not modify the parameter (a const reference needs no variable and makes no copy).";
     }
 }
+
+// A combo box that knows whether its list is open (opening the list moves the focus away from the line edit, which is not the end of the edit).
+class PopupCombo : public QComboBox {
+public:
+    using QComboBox::QComboBox;
+    bool popupOpen() const { return open_; }
+    // The list is about to open: the editor must not end before. It opens once the mouse buttons are up - the release of the
+    // double click that started the edit would otherwise hit the new list and close it (or choose an item) at once.
+    void expectPopup() {
+        open_ = true;
+        setProperty("popupOpen", true);
+        openWhenReleased();
+    }
+    // A choice that arrives right after the list opened is Qt's reaction to that mouse release, not the user's.
+    bool justOpened() const { return open_ && shown_.isValid() && shown_.elapsed() < 250; }
+    void showPopup() override {
+        open_ = true;
+        setProperty("popupOpen", true);
+        shown_.start();
+        QComboBox::showPopup();
+    }
+    void hidePopup() override {
+        open_ = false;
+        setProperty("popupOpen", false);
+        QComboBox::hidePopup();
+    }
+private:
+    void openWhenReleased() {
+        QTimer::singleShot(0, this, [this] {
+            if (!open_) return;                                                 // closed meanwhile
+            if (QApplication::mouseButtons() != Qt::NoButton) openWhenReleased();
+            else showPopup();
+        });
+    }
+    bool open_ = false;
+    QElapsedTimer shown_;
+};
 
 // Edits the cells of a parameter table. Nothing but text is in the cells until the user asks to edit one: then a combo box (types,
 // containers) or a line edit (names) appears, and the check columns toggle on a click.
@@ -260,10 +298,10 @@ public:
             if (index.sibling(index.row(), ColContainer).data(Qt::DisplayRole).toString() != kContainerNames[2]) return nullptr;
             return typeEditor(parent);
         case ColContainer: {
-            auto* box = new QComboBox(parent);
+            auto* box = new PopupCombo(parent);
             for (auto* n : kContainerNames) box->addItem(n);
-            QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { finish(box); });
-            QTimer::singleShot(0, box, &QComboBox::showPopup);          // the choice is made right away, like a menu
+            QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { if (!box->justOpened()) finish(box); });
+            box->expectPopup();                                         // the choice is made right away, like a menu
             return box;
         }
         case ColRef:
@@ -292,6 +330,14 @@ public:
     }
 
     void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const override { editor->setGeometry(option.rect); }
+
+    // The delegate ends an edit when the editor loses the focus - which is what happens when its list opens. Not then.
+    bool eventFilter(QObject* object, QEvent* event) override {
+        if (event->type() == QEvent::FocusOut)
+            if (auto* box = dynamic_cast<PopupCombo*>(object))
+                if (box->popupOpen()) return false;
+        return QStyledItemDelegate::eventFilter(object, event);
+    }
 
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         if (index.column() < ColRef) return QStyledItemDelegate::paint(painter, option, index);
@@ -329,14 +375,21 @@ public:
     }
 
 private:
-    QComboBox* typeEditor(QWidget* parent) const {
-        auto* box = new QComboBox(parent);
+    PopupCombo* typeEditor(QWidget* parent) const {
+        auto* box = new PopupCombo(parent);
         box->setEditable(true);
         box->setInsertPolicy(QComboBox::NoInsert);
         for (auto* t : reg_.types()) box->addItem(qs(t->name));
         if (box->completer()) box->completer()->setCaseSensitivity(Qt::CaseInsensitive);
-        QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { finish(box); });
-        QObject::connect(box->lineEdit(), &QLineEdit::editingFinished, box, [this, box] { finish(box); });
+        QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { if (!box->justOpened()) finish(box); });
+        // A choice or Return ends the edit; so does moving the focus to another widget - but not while the list is open, and not
+        // into the list itself (opening it takes the focus away from the line edit too).
+        QObject::connect(box->lineEdit(), &QLineEdit::returnPressed, box, [this, box] { finish(box); });
+        QObject::connect(qApp, &QApplication::focusChanged, box, [this, box](QWidget*, QWidget* now) {
+            if (!now || box->popupOpen() || now == box || box->isAncestorOf(now)) return;
+            finish(box);
+        });
+        box->expectPopup();                                             // the list of types opens at once, like the container list
         return box;
     }
     void finish(QWidget* editor) const {
@@ -352,6 +405,15 @@ void styleParamRow(QTableWidget* table, int r) {
     const bool isMap = table->item(r, ColContainer)->text() == kContainerNames[2];
     QSignalBlocker block(table);
     const QColor dimColor = table->palette().color(QPalette::PlaceholderText);
+    // only a map has a key type: the cell is empty for the other containers (the type is remembered for when it becomes a map again)
+    QTableWidgetItem* keyItem = table->item(r, ColKey);
+    if (isMap) {
+        if (keyItem->text().isEmpty()) keyItem->setText(keyItem->data(Qt::UserRole).toString().isEmpty() ? QString("string") : keyItem->data(Qt::UserRole).toString());
+        keyItem->setData(Qt::UserRole, keyItem->text());
+    } else if (!keyItem->text().isEmpty()) {
+        keyItem->setData(Qt::UserRole, keyItem->text());
+        keyItem->setText(QString());
+    }
     for (int c = 0; c < ColCount; ++c) {
         QTableWidgetItem* it = table->item(r, c);
         if (!it) continue;
@@ -394,7 +456,7 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
             TypeSpec spec;
             spec.value = table->item(r, ColType)->text();
             spec.container = TypeSpec::Container(std::max(0, int(QStringList{kContainerNames[0], kContainerNames[1], kContainerNames[2]}.indexOf(table->item(r, ColContainer)->text()))));
-            spec.key = table->item(r, ColKey)->text();
+            if (spec.container == TypeSpec::Container::Map) spec.key = table->item(r, ColKey)->text();
             p.type = ss(spec.str());
             if (inputs) {
                 p.byRef = table->item(r, ColRef)->checkState() == Qt::Checked;
@@ -416,7 +478,8 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
         text(ColName, qs(p.name));
         text(ColType, spec.value);
         text(ColContainer, kContainerNames[int(spec.container)]);
-        text(ColKey, spec.key);
+        text(ColKey, spec.container == TypeSpec::Container::Map ? spec.key : QString());
+        table->item(r, ColKey)->setData(Qt::UserRole, spec.key);
         if (inputs) {
             for (int col : {int(ColRef), int(ColConst)}) {
                 auto* it = new QTableWidgetItem;

@@ -29,6 +29,7 @@
 #include <QClipboard>
 #include <QElapsedTimer>
 #include <QComboBox>
+#include <QAbstractItemView>
 #include <QHeaderView>
 #include <QTimer>
 #include <QDir>
@@ -535,7 +536,10 @@ TEST(details_parameter_tables_edit_through_a_delegate) {
     CHECK(in->item(1, 4)->toolTip().contains("Ref") && in->item(1, 4)->toolTip().contains("yes"));
     CHECK(in->item(0, 5)->toolTip().contains("Const") && in->item(0, 5)->toolTip().contains("no"));
     CHECK(out->item(0, 3)->toolTip().contains("Key") && out->item(0, 3)->toolTip().contains("string"));
-    CHECK(!(in->item(0, 3)->flags() & Qt::ItemIsEditable));                                    // the key of a non-map is not editable
+    CHECK(!(in->item(0, 3)->flags() & Qt::ItemIsEditable));                                    // the key of a non-map is not editable ...
+    CHECK(in->item(0, 3)->text().isEmpty());                                                   // ... and empty, as it is for an array
+    CHECK(in->item(1, 3)->text().isEmpty());
+    CHECK_EQ(out->item(0, 3)->text(), QString("string"));                                      // only a map has a key type
 
     auto param = [&](bool inputs, size_t i) {
         const fg::Graph* g = f.doc.graph("Add");
@@ -551,8 +555,15 @@ TEST(details_parameter_tables_edit_through_a_delegate) {
     if (boxes.size() != 1) return;
     CHECK(boxes[0]->isEditable());
     CHECK(boxes[0]->findText("float") >= 0);
+    CHECK(spinUntil([&] { return boxes[0]->property("popupOpen").toBool(); }, 2000));            // the list of types is open ...
+    emit qApp->focusChanged(boxes[0]->lineEdit(), boxes[0]->view());                           // ... and the focus moving into it does not end the edit
+    settle();
+    CHECK_EQ(details.findChildren<QComboBox*>().size(), 1);
+    boxes = details.findChildren<QComboBox*>();
+    if (boxes.size() != 1) return;
     boxes[0]->setCurrentText("float");
-    emit boxes[0]->lineEdit()->editingFinished();
+    boxes[0]->hidePopup();
+    emit boxes[0]->lineEdit()->returnPressed();                                                // typed + Return
     QCoreApplication::processEvents();
     CHECK_EQ(param(true, 0).type, std::string("float"));
     settle();
@@ -565,7 +576,8 @@ TEST(details_parameter_tables_edit_through_a_delegate) {
     CHECK_EQ(boxes.size(), 1);
     if (boxes.size() != 1) return;
     boxes[0]->setCurrentText("nonsense");
-    emit boxes[0]->lineEdit()->editingFinished();
+    boxes[0]->hidePopup();
+    emit boxes[0]->lineEdit()->returnPressed();
     settle();
     CHECK_EQ(param(true, 0).type, std::string("float"));
     CHECK(details.findChildren<QComboBox*>().isEmpty());
@@ -580,11 +592,50 @@ TEST(details_parameter_tables_edit_through_a_delegate) {
     CHECK(!boxes[0]->isEditable());
     CHECK_EQ(boxes[0]->count(), 3);
     boxes[0]->setCurrentIndex(2);
+    boxes[0]->hidePopup();                                                                     // a choice closes the list first
     emit boxes[0]->activated(2);
     settle();
     CHECK_EQ(param(true, 0).type, std::string("map<string,float>"));
     in = tables()[0];
     CHECK(in->item(0, 3)->flags() & Qt::ItemIsEditable);
+    CHECK_EQ(in->item(0, 3)->text(), QString("string"));                                       // a map starts with string keys
+
+    // the key type is chosen from the (open) list as well
+    in->editItem(in->item(0, 3));
+    QCoreApplication::processEvents();
+    boxes = details.findChildren<QComboBox*>();
+    CHECK_EQ(boxes.size(), 1);
+    if (boxes.size() != 1) return;
+    CHECK(spinUntil([&] { return boxes[0]->property("popupOpen").toBool(); }, 2000));
+    boxes[0]->setCurrentText("int");
+    boxes[0]->hidePopup();
+    emit qApp->focusChanged(boxes[0]->lineEdit(), in);                                         // clicking elsewhere ends (and commits) the edit
+    settle();
+    CHECK_EQ(param(true, 0).type, std::string("map<int,float>"));
+    in = tables()[0];
+
+    // back to a single value: the key cell is empty again, and the key is remembered for the next time it is a map
+    in->editItem(in->item(0, 2));
+    QCoreApplication::processEvents();
+    boxes = details.findChildren<QComboBox*>();
+    if (boxes.size() != 1) return;
+    boxes[0]->setCurrentIndex(0);
+    boxes[0]->hidePopup();                                                                     // a choice closes the list first
+    emit boxes[0]->activated(0);
+    settle();
+    CHECK_EQ(param(true, 0).type, std::string("float"));
+    in = tables()[0];
+    CHECK(in->item(0, 3)->text().isEmpty());
+    in->editItem(in->item(0, 2));
+    QCoreApplication::processEvents();
+    boxes = details.findChildren<QComboBox*>();
+    if (boxes.size() != 1) return;
+    boxes[0]->setCurrentIndex(2);
+    boxes[0]->hidePopup();                                                                     // a choice closes the list first
+    emit boxes[0]->activated(2);
+    settle();
+    CHECK_EQ(param(true, 0).type, std::string("map<int,float>"));
+    in = tables()[0];
 
     // Ref and Const are check marks in the cell
     in->item(0, 5)->setCheckState(Qt::Checked);
