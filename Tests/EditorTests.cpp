@@ -1,6 +1,7 @@
 // Tests of the editor logic that do not need a visible window (run with QT_QPA_PLATFORM=offscreen).
 #include "Document.hpp"
 #include "Graph/GraphScene.hpp"
+#include "Graph/Style.hpp"
 #include "Graph/LinkItem.hpp"
 #include "Graph/PalettePopup.hpp"
 #include "Panels/DetailsPanel.hpp"
@@ -28,6 +29,8 @@
 #include <QScrollBar>
 #include <QClipboard>
 #include <QElapsedTimer>
+#include <QImage>
+#include <QPainter>
 #include <QComboBox>
 #include <QAbstractItemView>
 #include <QHeaderView>
@@ -642,6 +645,89 @@ TEST(details_parameter_tables_edit_through_a_delegate) {
     settle();
     CHECK(param(true, 0).isConst);
     CHECK(in->item(0, 5)->toolTip().contains("yes"));
+}
+
+// The connector of a data pin tells the container kind: a circle (single value), a bracket with a row of items (array), a 3 x 2 matrix
+// (map: key type left, value type right); diamonds instead of circles for references.
+static QImage renderGlyph(const PinGlyph& g, int scale = 8) {
+    QImage img(24 * scale, 24 * scale, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.scale(scale, scale);
+    drawPinGlyph(&p, QPointF(12, 12), g);
+    return img;
+}
+// pixel at an offset (in connector units) from the center of the glyph
+static QColor glyphAt(const QImage& img, double dx, double dy, int scale = 8) {
+    return QColor::fromRgba(img.pixel(int((12 + dx) * scale), int((12 + dy) * scale)));
+}
+static bool inked(const QImage& img, double dx, double dy) { return glyphAt(img, dx, dy).alpha() > 200; }
+
+TEST(pin_connectors_show_the_container_kind) {
+    const QColor value(220, 40, 40), key(40, 90, 230), hollow(30, 30, 30);
+    PinGlyph g;
+    g.color = value;
+    g.keyColor = key;
+    g.hollow = hollow;
+    g.connected = true;
+
+    // a single value: a circle - and a diamond for a reference
+    QImage circle = renderGlyph(g);
+    CHECK(inked(circle, 0, 0) && inked(circle, 3.5, 0) && inked(circle, 0, -3.5));
+    CHECK(inked(circle, 3.0, 3.0));                                    // the diagonal is inside a circle ...
+    CHECK(!inked(circle, 5, 0));
+    g.byRef = true;
+    QImage diamond = renderGlyph(g);
+    CHECK(inked(diamond, 0, 4.2) && inked(diamond, 4.2, 0));          // ... the tips reach further than the circle
+    CHECK(!inked(diamond, 3.0, 3.0));                                  // and the corners are cut off
+    g.byRef = false;
+
+    // an array: a bracket frame with three items in a row, all in the element color
+    g.container = 1;
+    QImage array = renderGlyph(g);
+    for (double x : {-4.2, 0.0, 4.2}) CHECK(inked(array, x, 0));       // the items
+    CHECK(glyphAt(array, 0, 0) == value);
+    CHECK(inked(array, -7.4, 0) && inked(array, 7.4, 0));              // the brackets
+    CHECK(inked(array, -6.6, -4.6) && inked(array, 6.6, 4.6));         // ... with their serifs
+    CHECK(!inked(array, 0, -3.0) && !inked(array, 0, 3.0));            // the items are in one row, not a grid
+    CHECK(!inked(array, 0, -4.6));                                     // no lid on the frame
+    CHECK(glyphAt(array, -7.4, 0) == value);
+    CHECK(!inked(array, -2.1, 0));                                     // the items do not run into each other
+    g.byRef = true;
+    QImage refArray = renderGlyph(g);
+    CHECK(glyphAt(refArray, 4.2 + 1.7, 0).alpha() > glyphAt(array, 4.2 + 1.7, 0).alpha() + 40);   // diamond items reach further than circles
+    g.byRef = false;
+
+    // a map: 3 rows x 2 columns, the left column in the key color and the right one in the value color
+    g.container = 2;
+    QImage map = renderGlyph(g);
+    for (double y : {-4.4, 0.0, 4.4}) {
+        CHECK(glyphAt(map, -3.0, y) == key);
+        CHECK(glyphAt(map, 3.0, y) == value);
+    }
+    CHECK(!inked(map, 0, 0));                                          // nothing between the columns
+    CHECK(!inked(map, -3.0, 2.2) && !inked(map, 3.0, -2.2));           // three separate rows
+    g.byRef = true;
+    QImage refMap = renderGlyph(g);
+    CHECK(inked(refMap, -3.0 + 1.8, 0) && !inked(map, -3.0 + 1.8, 0));
+    CHECK(inked(refMap, 3.0, 4.4 + 1.8) && !inked(map, 3.0, 4.4 + 1.8));
+    CHECK(glyphAt(refMap, -3.0, 0) == key && glyphAt(refMap, 3.0, 0) == value);
+    g.byRef = false;
+
+    // not connected: hollow items (the fill is the background, the outline keeps the type color)
+    g.connected = false;
+    g.container = 0;
+    CHECK(glyphAt(renderGlyph(g), 0, 0) == hollow);
+    CHECK(inked(renderGlyph(g), 3.9, 0));
+    g.container = 1;
+    CHECK(glyphAt(renderGlyph(g), 0, 0) == hollow);
+    CHECK(glyphAt(renderGlyph(g), 0, 1.15) == value);                  // the outline of the middle item
+    g.container = 2;
+    QImage hollowMap = renderGlyph(g);
+    CHECK(glyphAt(hollowMap, -3.0, 0) == hollow && glyphAt(hollowMap, 3.0, 0) == hollow);
+    CHECK(glyphAt(hollowMap, -3.0 - 1.15, 0) == key);                  // the outline of the key items
+    CHECK(glyphAt(hollowMap, 3.0 + 1.15, 0) == value);
 }
 
 TEST(editing_stops_a_running_script) {

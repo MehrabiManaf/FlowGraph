@@ -21,6 +21,7 @@ struct Metrics {
     double pinSpacing = 5.0;
     double sideSpacing = 14.0;
     QSizeF dataConnector{12.0, 12.0};
+    QSizeF arrayConnector{kArrayConnectorWidth, 12.0};      // [ o o o ] is wider than the other connectors
     QSizeF execConnector{12.0, 15.0};
     double pinHeight = 0;
     double editorMin = 22.0, editorMax = 400.0;
@@ -101,6 +102,7 @@ void NodeItem::layout() {
         v.kind = p.kind;
         v.dir = p.dir;
         v.color = pinColor(reg, p);
+        v.keyColor = p.type && p.type->kind == fg::TypeKind::Map && !p.wildcard && p.type->keyType ? rgb(reg.typeColor(p.type->keyType)) : v.color;
         v.connected = p.connected;
         v.byRef = p.byRef;
         v.isConst = p.isConst;
@@ -143,7 +145,7 @@ void NodeItem::layout() {
                         M.titleMargins.top() + titleSize.height() + M.titleMargins.bottom());
 
     auto placeInput = [&](PinView& v, double& top) {
-        QSizeF cs = v.kind == fg::PinKind::Exec ? M.execConnector : M.dataConnector;
+        QSizeF cs = v.kind == fg::PinKind::Exec ? M.execConnector : v.containerKind == 1 ? M.arrayConnector : M.dataConnector;
         v.connector = QRectF(QPointF(M.pinMargins.left(), top + (M.pinHeight - cs.height()) / 2), cs);
         QSizeF ls = fm.size(Qt::TextSingleLine, v.label);
         double x = v.connector.right() + (v.label.isEmpty() ? 0 : M.pinSpacing);
@@ -169,7 +171,7 @@ void NodeItem::layout() {
     for (auto& v : inData_) placeInput(v, top);
 
     auto placeOutput = [&](PinView& v, double& top) {
-        QSizeF cs = v.kind == fg::PinKind::Exec ? M.execConnector : M.dataConnector;
+        QSizeF cs = v.kind == fg::PinKind::Exec ? M.execConnector : v.containerKind == 1 ? M.arrayConnector : M.dataConnector;
         v.connector = QRectF(QPointF(-(cs.width() + M.pinMargins.right()), top + (M.pinHeight - cs.height()) / 2), cs);
         QSizeF ls = fm.size(Qt::TextSingleLine, v.label);
         double x = v.connector.left() - (v.label.isEmpty() ? 0 : M.pinSpacing) - ls.width();
@@ -405,35 +407,14 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
             p->drawPath(M.execShape);
             p->restore();
         } else {
-            QPointF c = v.connector.center();
-            if (v.containerKind == 1) {
-                // array: a 3 x 3 grid of dots
-                QColor hollow = qApp->palette().window().color();
-                p->setBrush(v.connected ? c0(v, pal) : hollow);
-                for (int i = -1; i <= 1; ++i)
-                    for (int j = -1; j <= 1; ++j) p->drawEllipse(QPointF(c.x() + i * 3.9, c.y() + j * 3.9), 1.45, 1.45);
-            } else if (v.containerKind == 2) {
-                // map: a circle (key) and a square (value) joined by a bar
-                QColor hollow = qApp->palette().window().color();
-                p->setBrush(v.connected ? c0(v, pal) : hollow);
-                p->drawLine(QPointF(c.x() - 2.5, c.y()), QPointF(c.x() + 2.5, c.y()));
-                p->drawEllipse(QPointF(c.x() - 4.0, c.y()), 2.8, 2.8);
-                p->drawRect(QRectF(c.x() + 1.4, c.y() - 2.8, 5.6, 5.6));
-            } else if (v.byRef) {
-                p->save();
-                p->translate(c);
-                p->drawPath(M.refShape);
-                p->restore();
-            } else {
-                p->drawEllipse(c, 4.0, 4.0);
-            }
-            if (v.byRef && v.containerKind != 0) {        // reference containers get a small diamond on top
-                p->save();
-                p->translate(c + QPointF(0, -8));
-                p->scale(0.6, 0.6);
-                p->drawPath(M.refShape);
-                p->restore();
-            }
+            PinGlyph glyph;
+            glyph.container = v.containerKind;
+            glyph.byRef = v.byRef;
+            glyph.connected = v.connected;
+            glyph.color = c0(v, pal);
+            glyph.keyColor = v.hovered ? pal.highlight().color() : v.keyColor;
+            glyph.hollow = pal.window().color();
+            drawPinGlyph(p, v.connector.center(), glyph);
         }
         p->setPen(v.hovered ? pal.highlight().color() : pal.windowText().color());       // the label lights up with the connector
         p->drawText(v.labelRect, Qt::AlignCenter, v.label);

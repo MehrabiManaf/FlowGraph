@@ -5,7 +5,9 @@
 #include <chrono>
 
 #include <QApplication>
+#include <QPointF>
 #include <QColor>
+#include <QPainter>
 #include <QPalette>
 #include <QString>
 
@@ -39,6 +41,23 @@ inline QColor headerColor(fg::NodeStyle s) {
 inline qint64 nowMicros() {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
+
+// The connector of a data pin, drawn around `center` (12 x 12, an array 16 x 12 - see kArrayConnector):
+//   a single value is a circle,
+//   an array is a bracket frame with its items in a row   [ o o o ]   (the items have the color of the element type),
+//   a map is a matrix of 3 rows x 2 columns: the left column has the color of the key type, the right one that of the value type.
+// A reference has diamonds instead of circles. Items are filled when the pin is connected and hollow otherwise.
+inline constexpr double kArrayConnectorWidth = 16.0;
+
+struct PinGlyph {
+    int container = 0;          // 0 = single value, 1 = array, 2 = map
+    bool byRef = false;
+    bool connected = false;
+    QColor color;               // the value (element) type
+    QColor keyColor;            // maps: the key type
+    QColor hollow;              // fill of the items of a pin that is not connected
+};
+void drawPinGlyph(QPainter* p, const QPointF& center, const PinGlyph& g);
 
 // Display text of the default value of a pin.
 QString defaultText(const fg::CompiledPin& p);

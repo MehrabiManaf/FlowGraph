@@ -143,3 +143,7 @@ Rules to keep it correct:
 - Details panel, function Inputs / Outputs tables: no header and no widgets in the cells. The column names are in the tooltip of every cell
   ("Type: int ..."); Ref / Const are centered check marks; a ParamDelegate creates the editors only on a double click or F2 (types: editable
   combo with the registry's types, container: a list that opens at once, names: line edit); the Key cell is editable only for maps.
+- Pin connectors (NodeItem, drawPinGlyph in Style.cpp): single value = circle; array = `[ o o o ]` (bracket frame with a row of items in the
+  element color, its connector is 16 px wide); map = 3 x 2 matrix, left column in the key type color, right column in the value type color;
+  by reference: the circles become diamonds (the small diamond on top of reference containers is gone); const keeps the padlock. Items are
+  filled when connected, hollow otherwise. Test: pin_connectors_show_the_container_kind (renders the glyphs and samples pixels).
