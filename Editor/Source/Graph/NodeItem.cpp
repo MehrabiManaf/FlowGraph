@@ -363,22 +363,20 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
     }
 
     QRectF body(0, 0, titleRect_.width(), bodyBottom_);
-    // body + header
-    p->setPen(QPen(border, bw));
-    p->setBrush(pal.window().color());
-    p->drawRoundedRect(body, 5, 5);
-    QPainterPath headerPath;
-    headerPath.addRoundedRect(titleRect_, 5, 5);
-    headerPath.addRect(QRectF(titleRect_.left(), titleRect_.bottom() - 6, titleRect_.width(), 6));
+    // body + header: the header is a plain rectangle clipped to the rounded body, so its corners are exactly the
+    // body's (no second rounded shape, no seam where a rounded rect and a rect meet); the border is drawn once on top
+    QPainterPath bodyPath;
+    bodyPath.addRoundedRect(body, 5, 5);
     p->setPen(Qt::NoPen);
-    p->setBrush(header_);
+    p->setBrush(pal.window().color());
+    p->drawPath(bodyPath);
     p->save();
-    p->setClipRect(titleRect_);
-    p->drawPath(headerPath.simplified());
+    p->setClipPath(bodyPath);
+    p->fillRect(titleRect_, header_);
     p->restore();
     p->setPen(QPen(border, bw));
     p->setBrush(Qt::NoBrush);
-    p->drawRoundedRect(body, 5, 5);
+    p->drawPath(bodyPath);
     p->setPen(Qt::white);
     p->setFont(M.bold);
     p->drawText(titleRect_, Qt::AlignCenter, title_);
