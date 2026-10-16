@@ -6,8 +6,12 @@
 // directories listed in the FLOW_PLUGIN_PATH environment variable and from the `plugins` folder next to the program.
 // Exit code: the code given to the Exit node, 0 when the script ends normally, 1 when it fails at run time and 2
 // when it cannot be loaded (unreadable file, missing events / plugins, compile errors).
+// When the script has run (finished, failed or interrupted) flow reports "Execution Time: N ms" on stderr, so the
+// output of the script itself stays clean. The time is the wall clock time of the Main event, delays included;
+// loading, plugins and compiling are not part of it.
 #include <FlowGraph/Runtime.hpp>
 
+#include <chrono>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -140,7 +144,11 @@ int main(int argc, char** argv) {
     inst.setStepLimit(0);                       // no limit: a long running script is not a runaway loop
     g_running = &inst;
     std::signal(SIGINT, onInterrupt);
+    auto started = std::chrono::steady_clock::now();
     auto outcome = standard::runMain(inst, args);
+    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
     g_running = nullptr;
+    std::fflush(stdout);                        // the output of the script first, then the time
+    std::fprintf(stderr, "Execution Time: %.3f ms%c", ms, 10);
     return outcome.exitCode;
 }

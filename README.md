@@ -63,6 +63,8 @@ flow [options] script.flow [arguments...]
   `2` when it cannot be loaded or has compile errors. Ctrl+C aborts the script.
 * `flow` runs the script directly on the calling thread: no scheduler, no extra threads, no step limit. Delay nodes
   really sleep.
+* After the script has run, `flow` prints `Execution Time: <n> ms` on **stderr** (wall clock time of the `Main` event, delays
+  included; loading and compiling are not counted), so redirecting or piping the script's output is not affected.
 
 ## flowstudio and launch configurations
 
