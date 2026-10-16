@@ -33,6 +33,7 @@
 #include <QToolButton>
 
 #include <kddockwidgets/Config.h>
+#include <kddockwidgets/core/DockWidget.h>
 
 namespace fged {
 
@@ -122,7 +123,7 @@ ScriptEditorWindow::~ScriptEditorWindow() {
 void ScriptEditorWindow::createDocks() {
     KDDockWidgets::DockWidgetOptions opts = KDDockWidgets::DockWidgetOption_None;
     KDDockWidgets::LayoutSaverOptions lopts = KDDockWidgets::LayoutSaverOption::None;
-    auto makeDock = [&](const QString& title, QWidget* w, bool scroll, int maxWidth = 0) {
+    auto makeDock = [&](const QString& title, QWidget* w, bool scroll) {
         auto* dock = new CDockWidget(title, opts, lopts);
         dock->setAffinities(affinities());
         if (scroll) {
@@ -130,10 +131,8 @@ void ScriptEditorWindow::createDocks() {
             sa->setWidgetResizable(true);
             sa->setWidget(w);
             dock->setWidget(sa);
-            if (maxWidth) sa->setMaximumWidth(maxWidth);      // keep the side panels from taking over the window
         } else {
             dock->setWidget(w);
-            if (maxWidth) w->setMaximumWidth(maxWidth);
         }
         docks_.push_back(dock);
         return dock;
@@ -145,19 +144,19 @@ void ScriptEditorWindow::createDocks() {
     log_ = new LogPanel();
     debug_ = new DebugPanel(&doc_, &run_);
 
-    auto* dMy = makeDock("My Script", myScript_, true, 380);
-    auto* dDetails = makeDock("Details", details_, true, 520);
+    dMy_ = makeDock("My Script", myScript_, true);
+    dDetails_ = makeDock("Details", details_, true);
     diagDock_ = makeDock("Compile Results", diagnostics_, false);
     auto* dLog = makeDock("Output Log", log_, false);
     logDock_ = dLog;
-    debugDock_ = makeDock("Debugger", debug_, false, 520);
+    debugDock_ = makeDock("Debugger", debug_, false);
 
-    addDockWidget(dMy, KDDockWidgets::Location_OnLeft, nullptr, KDDockWidgets::InitialOption(QSize(280, 400)));
-    addDockWidget(dDetails, KDDockWidgets::Location_OnRight, nullptr, KDDockWidgets::InitialOption(QSize(340, 400)));
+    addDockWidget(dMy_, KDDockWidgets::Location_OnLeft, nullptr, KDDockWidgets::InitialOption(QSize(280, 400)));
+    addDockWidget(dDetails_, KDDockWidgets::Location_OnRight, nullptr, KDDockWidgets::InitialOption(QSize(340, 400)));
     addDockWidget(dLog, KDDockWidgets::Location_OnBottom, nullptr, KDDockWidgets::InitialOption(QSize(600, 180)));
     dLog->addDockWidgetAsTab(diagDock_);
-    dDetails->addDockWidgetAsTab(debugDock_);       // the debugger shares the right-hand column with the details
-    dDetails->setAsCurrentTab();
+    dDetails_->addDockWidgetAsTab(debugDock_);       // the debugger shares the right-hand column with the details
+    dDetails_->setAsCurrentTab();
 
 
     connect(myScript_, &MyScriptPanel::openGraph, this, [this](const QString& n) { openGraph(n); });
@@ -515,6 +514,29 @@ bool ScriptEditorWindow::fileSaveAs() {
     host_.scriptChanged(facade_, ScriptChange::Saved);
     emit facade_.scriptChanged();
     return true;
+}
+
+// The side panels have no maximum width (they follow their dock when the user widens it). KDDockWidgets gives the
+// new docks a share of the window instead of the size we ask for, so the first time the window is shown the
+// side docks are brought to a sensible width.
+void ScriptEditorWindow::showEvent(QShowEvent* e) {
+    KDDockWidgets::QtWidgets::MainWindow::showEvent(e);
+    if (sizesApplied_) return;
+    sizesApplied_ = true;
+    QTimer::singleShot(0, this, [this] { applyInitialSizes(); });
+}
+
+void ScriptEditorWindow::applyInitialSizes() {
+    auto resize = [](CDockWidget* dock, int wanted, bool growToTheLeft) {
+        auto* c = static_cast<KDDockWidgets::Core::DockWidget*>(dock->controller());
+        if (!c) return;
+        int delta = wanted - c->sizeInLayout().width();
+        if (delta == 0) return;
+        if (growToTheLeft) c->resizeInLayout(delta, 0, 0, 0);
+        else c->resizeInLayout(0, 0, delta, 0);
+    };
+    resize(dMy_, 300, false);
+    resize(dDetails_, 360, true);
 }
 
 void ScriptEditorWindow::closeEvent(QCloseEvent* e) {

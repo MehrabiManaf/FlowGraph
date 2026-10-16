@@ -19,6 +19,8 @@
 #include <QPushButton>
 #include <QTableWidget>
 #include <QToolButton>
+#include <kddockwidgets/core/DockWidget.h>
+#include "Common/CustomViewFactory/DockWidget.hpp"
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
 #include <QMouseEvent>
@@ -625,6 +627,35 @@ TEST(renaming_a_function_in_the_list_keeps_the_details_in_sync) {
     bool nameShown = false;
     for (auto* e : details->findChildren<QLineEdit*>()) nameShown |= e->text() == "Score";
     CHECK(nameShown);
+}
+
+TEST(side_panels_follow_their_docks) {
+    StudioFixture f;
+    f.win.resize(QSize(1500, 900));
+    f.win.show();
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    auto* details = f.win.findChild<DetailsPanel*>();
+    auto* my = f.win.findChild<MyScriptPanel*>();
+    CHECK(details && my);
+    if (!details || !my) return;
+    // nothing limits the width of the panels: they take whatever their dock gets
+    CHECK(details->parentWidget() && details->parentWidget()->maximumWidth() > 5000);
+    CHECK(my->parentWidget() && my->parentWidget()->maximumWidth() > 5000);
+    // at the start they have a sensible width
+    CHECK(details->width() > 250 && details->width() < 600);
+    CHECK(my->width() > 200 && my->width() < 500);
+    // widen the details dock: the panel fills it
+    auto docks = f.win.findChildren<CDockWidget*>();
+    CDockWidget* detailsDock = nullptr;
+    for (auto* d : docks) if (d->isAncestorOf(details)) detailsDock = d;
+    CHECK(detailsDock != nullptr);
+    if (!detailsDock) return;
+    auto* c = static_cast<KDDockWidgets::Core::DockWidget*>(detailsDock->controller());
+    int before = details->width();
+    c->resizeInLayout(300, 0, 0, 0);
+    QCoreApplication::processEvents();
+    CHECK(details->width() > before + 200);
 }
 
 TEST(backspace_in_pin_editor_does_not_delete_the_node) {

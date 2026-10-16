@@ -56,9 +56,11 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* e) override;
+    void showEvent(QShowEvent* e) override;
 
 private:
     void createDocks();
+    void applyInitialSizes();
     void createActions();
     void createMenus();
     void createToolBar();
@@ -101,6 +103,9 @@ private:
     CDockWidget* debugDock_ = nullptr;
     CDockWidget* diagDock_ = nullptr;
     CDockWidget* logDock_ = nullptr;
+    CDockWidget* dMy_ = nullptr;
+    CDockWidget* dDetails_ = nullptr;
+    bool sizesApplied_ = false;
 
     bool runShown_ = false;
     QComboBox* entryCombo_ = nullptr;
