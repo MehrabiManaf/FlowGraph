@@ -27,6 +27,7 @@
 #include <QScrollBar>
 #include <QClipboard>
 #include <QElapsedTimer>
+#include <QTimer>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -345,6 +346,38 @@ TEST(run_controller_waits_on_delay) {
     CHECK(sawWaiting);
 }
 
+TEST(run_controller_is_not_flooded_by_a_script_that_follows_millions_of_links) {
+    Fixture f;
+    f.doc.edit("Long loop", [&](fg::Script& s) {
+        auto& g = s.graphs[0];
+        g.connections.clear();
+        fg::NodeId loop = g.addNode("flow.for").id;
+        g.findNode(loop)->defaults["Last"] = fg::Value(int64_t(3000000));
+        fg::NodeId br = g.addNode("flow.branch").id;                         // every iteration follows one link into it
+        g.connections.push_back({1, "Then", loop, "In"});
+        g.connections.push_back({loop, "Loop Body", br, "In"});
+    });
+    RunController run(&f.doc);
+    size_t links = 0;
+    QObject::connect(&run, &RunController::linkFired, [&](const QString&, int, int, int) { ++links; });
+    bool finished = false, ok = false;
+    QObject::connect(&run, &RunController::finished, [&](bool o, const QString&) { finished = true; ok = o; });
+    // the GUI thread stays responsive: a timer keeps firing while the script runs
+    int ticks = 0;
+    QTimer ticker;
+    QObject::connect(&ticker, &QTimer::timeout, [&] { ++ticks; });
+    ticker.start(10);
+    QElapsedTimer clock;
+    clock.start();
+    CHECK(run.start("Main", {}));
+    CHECK(spinUntil([&] { return finished; }, 60000));
+    CHECK(ok);
+    CHECK(ticks > 3);
+    CHECK(links > 0);                                       // the animation still hears about the links ...
+    CHECK(links < 20000);                                   // ... but not about every one of the 3 million
+    CHECK(clock.elapsed() < 30000);
+}
+
 TEST(editing_stops_a_running_script) {
     Fixture f;
     auto all = f.palette();
@@ -448,6 +481,25 @@ TEST(mouse_drag_node_keeps_new_position) {
     CHECK(std::abs(f.scene.nodeItem(2)->scenePos().x() - after.x()) < 0.5);
 }
 
+
+TEST(pin_editor_follows_its_node_when_the_node_is_dragged) {
+    ViewFixture f;
+    NodeItem* n = f.scene.nodeItem(2);
+    QRectF box = n->editorSceneRect("String");
+    CHECK(!box.isNull());
+    QPoint inBox = f.toView(box.center());
+    f.send(QEvent::MouseMove, inBox, Qt::NoButton, Qt::NoButton);
+    f.send(QEvent::MouseButtonPress, inBox, Qt::LeftButton, Qt::LeftButton);      // opens the editor of the pin ...
+    CHECK(f.scene.isInplaceEditing());
+    QPointF nodeBefore = n->scenePos();
+    for (int i = 1; i <= 4; ++i) f.send(QEvent::MouseMove, inBox + QPoint(25 * i, 15 * i), Qt::NoButton, Qt::LeftButton);   // ... and drags
+    CHECK(std::abs(n->scenePos().x() - nodeBefore.x()) > 50);                        // the node moved
+    QRectF boxAfter = n->editorSceneRect("String");
+    CHECK(std::abs(f.scene.inplaceEditorPos().x() - boxAfter.left()) < 1.0);          // and the editor went with it
+    CHECK(std::abs(f.scene.inplaceEditorPos().y() - boxAfter.top()) < 1.0);
+    f.send(QEvent::MouseButtonRelease, inBox + QPoint(100, 60), Qt::LeftButton, Qt::NoButton);
+    CHECK(std::abs(f.scene.inplaceEditorPos().x() - n->editorSceneRect("String").left()) < 1.0);
+}
 
 // The same interactions inside the real main window (docking, tabs, refresh on every edit).
 struct TestHost : fged::EditorHost {

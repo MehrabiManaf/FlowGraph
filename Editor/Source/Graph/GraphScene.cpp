@@ -234,6 +234,10 @@ void GraphScene::updateLinksOf(fg::NodeId id) {
 
 void GraphScene::nodeMoved(NodeItem* item) {
     if (!syncing_) updateLinksOf(item->nodeId());
+    if (editNode_ == item->nodeId() && editorProxy_->isVisible()) {      // the node is dragged while its pin is being edited: the editor follows
+        QRectF r = item->editorSceneRect(editPin_);
+        if (!r.isNull()) editorProxy_->setPos(r.topLeft());
+    }
 }
 
 void GraphScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* e) {
@@ -330,6 +334,8 @@ void GraphScene::startInplaceEdit(NodeItem* item, const std::string& pin, const 
     editor_->setFocus();
     editor_->selectAll();
 }
+
+QPointF GraphScene::inplaceEditorPos() const { return editorProxy_->pos(); }
 
 void GraphScene::cancelInplace() {
     editNode_ = 0;      // forget the target first: hiding the editor emits editingFinished

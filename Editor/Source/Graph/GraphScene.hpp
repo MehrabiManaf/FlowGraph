@@ -54,6 +54,8 @@ public:
     void finishLinkDrag(const QPointF& scenePos, const QPoint& screenPos);
     void setPinDefault(fg::NodeId node, const std::string& pin, const fg::Value& v);
     void startInplaceEdit(NodeItem* item, const std::string& pin, const QPointF& scenePos, double width, const QString& text, const fg::TypeDesc* type);
+    bool isInplaceEditing() const { return editNode_ != 0; }
+    QPointF inplaceEditorPos() const;                       // scene position of the in-place editor (tests)
     void chooseEnumValue(NodeItem* item, const std::string& pin, const fg::TypeDesc* type, const QPoint& screenPos);
     void nodeMoved(NodeItem* item);
     void nodeActivated(fg::NodeId id) { emit nodeDoubleClicked(id); }

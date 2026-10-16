@@ -4,8 +4,14 @@
 #include <FlowGraph/Executor.hpp>
 
 #include <QObject>
+#include <QTimer>
 
+#include <array>
+#include <atomic>
 #include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace fged {
 
@@ -72,6 +78,23 @@ private:
     void onTaskState(fg::TaskState st);
     void onCompleted(bool ok, bool exited, int exitCode, const QString& error, const QString& returns);
     void onDocumentChanged(bool structural);
+
+    // The worker reports log lines and fired links through these buffers; the GUI thread empties them every few milliseconds
+    // (and before it handles any other report), so a script that executes millions of nodes per second cannot flood the event queue.
+    void drainPending();
+    void clearPending();
+    void reportLink(uint64_t generation, const std::string& graph, int from, int out, int to);
+    void reportLog(uint64_t generation, int level, const std::string& text);
+    struct LinkEvent { uint64_t generation; std::string graph; int from, out, to; };
+    struct LogEvent { uint64_t generation; int level; std::string text; };
+    static constexpr size_t kMaxPendingLogs = 200000;
+    std::mutex pendingMu_;
+    std::vector<LinkEvent> pendingLinks_;
+    std::vector<LogEvent> pendingLogs_;
+    size_t droppedLogs_ = 0;
+    std::atomic<uint32_t> linkTick_{1};                          // advances whenever the GUI has taken the pending links
+    std::array<std::atomic<uint64_t>, 256> linkSeen_{};          // per link (hashed): the tick in which it was last reported
+    QTimer pendingTimer_;
 
     Document* doc_;
     std::unique_ptr<fg::AsyncExecutor> ax_;
