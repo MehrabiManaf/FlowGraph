@@ -276,6 +276,11 @@ void MyScriptPanel::onItemChanged(FitTree* tree, QTreeWidgetItem* item) {
         doc_->edit("Rename local variable", [&](fg::Script& sc) { sc.renameLocal(ss(localsGraph_), ss(oldName), ss(newName)); });
     }
     item->setData(0, kName, newName);
+    // the details panel still shows the old name: tell it about the renamed item
+    if (tree->currentItem() == item) {
+        if (tree == functions_) localsGraph_ = newName;
+        onSelection(tree);
+    }
 }
 
 void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {

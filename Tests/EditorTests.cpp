@@ -3,6 +3,7 @@
 #include "Graph/GraphScene.hpp"
 #include "Graph/LinkItem.hpp"
 #include "Graph/PalettePopup.hpp"
+#include "Panels/DetailsPanel.hpp"
 #include "Panels/MyScriptPanel.hpp"
 #include "Panels/TypeSpec.hpp"
 #include "Studio/RunController.hpp"
@@ -15,6 +16,8 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QPushButton>
+#include <QTableWidget>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
@@ -533,6 +536,75 @@ TEST(copying_nodes_never_duplicates_an_event_handler) {
     for (auto& n : f.graph().nodes) handlers += n.def == "event:Main";
     CHECK_EQ(handlers, 1);
     CHECK(f.doc.program()->ok());
+}
+
+TEST(adding_a_parameter_keeps_the_function_details_visible) {
+    StudioFixture f;
+    f.win.document()->edit("Add function", [](fg::Script& s) { s.addFunction("NewFunction"); });
+    QCoreApplication::processEvents();
+    auto* panel = f.win.findChild<MyScriptPanel*>();
+    auto* details = f.win.findChild<DetailsPanel*>();
+    CHECK(panel && details);
+    if (!panel || !details) return;
+    // select the function in the list like the user does
+    QTreeWidget* functions = panel->findChildren<QTreeWidget*>().at(1);
+    CHECK_EQ(functions->topLevelItemCount(), 1);
+    functions->setCurrentItem(functions->topLevelItem(0));
+    QCoreApplication::processEvents();
+    auto addButtons = [&] {
+        std::vector<QPushButton*> out;
+        for (auto* b : details->findChildren<QPushButton*>()) if (b->text() == "Add") out.push_back(b);
+        return out;
+    };
+    CHECK_EQ(addButtons().size(), size_t(2));          // inputs and outputs
+    for (int round = 0; round < 3; ++round) {
+        auto buttons = addButtons();
+        CHECK(buttons.size() == 2);
+        if (buttons.size() != 2) return;
+        buttons[round % 2]->click();                   // Add an input, then an output, then an input
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+        CHECK_EQ(details->findChildren<QTableWidget*>().size(), 2);      // still the function editor, not an empty panel
+        CHECK_EQ(addButtons().size(), size_t(2));
+    }
+    const fg::Graph* g = f.win.document()->graph("NewFunction");
+    CHECK(g && g->inputs.size() == 2 && g->outputs.size() == 1);
+}
+
+TEST(renaming_a_function_in_the_list_keeps_the_details_in_sync) {
+    StudioFixture f;
+    f.win.document()->edit("Add function", [](fg::Script& s) { s.addFunction("NewFunction"); });
+    QCoreApplication::processEvents();
+    auto* panel = f.win.findChild<MyScriptPanel*>();
+    auto* details = f.win.findChild<DetailsPanel*>();
+    if (!panel || !details) { CHECK(false); return; }
+    QTreeWidget* functions = panel->findChildren<QTreeWidget*>().at(1);
+    functions->setCurrentItem(functions->topLevelItem(0));
+    QCoreApplication::processEvents();
+    functions->topLevelItem(0)->setText(0, "Compute");           // the user types a name in the list
+    QCoreApplication::processEvents();
+    CHECK(f.win.document()->graph("Compute") != nullptr);
+    QPushButton* add = nullptr;
+    for (auto* b : details->findChildren<QPushButton*>()) if (b->text() == "Add" && !add) add = b;
+    CHECK(add != nullptr);
+    if (!add) return;
+    add->click();
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    const fg::Graph* g = f.win.document()->graph("Compute");
+    CHECK(g && g->inputs.size() == 1);                           // the parameter went to the renamed function
+    CHECK_EQ(details->findChildren<QTableWidget*>().size(), 2);
+    // renaming a variable in the list is followed by its details as well
+    f.win.document()->edit("Add variable", [](fg::Script& s) { s.variables.push_back({"V", "int", fg::Value(0), "", ""}); });
+    QCoreApplication::processEvents();
+    QTreeWidget* vars = panel->findChildren<QTreeWidget*>().at(2);
+    vars->setCurrentItem(vars->topLevelItem(0));
+    QCoreApplication::processEvents();
+    vars->topLevelItem(0)->setText(0, "Score");
+    QCoreApplication::processEvents();
+    bool nameShown = false;
+    for (auto* e : details->findChildren<QLineEdit*>()) nameShown |= e->text() == "Score";
+    CHECK(nameShown);
 }
 
 TEST(backspace_in_pin_editor_does_not_delete_the_node) {
