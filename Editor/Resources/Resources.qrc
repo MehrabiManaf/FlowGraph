@@ -6,6 +6,7 @@
         <file alias="new.svg">Icons/new.svg</file>
         <file alias="open.svg">Icons/open.svg</file>
         <file alias="save.svg">Icons/save.svg</file>
+        <file alias="configure.svg">Icons/configure.svg</file>
         <file alias="step-into.svg">Icons/step-into.svg</file>
         <file alias="step-out.svg">Icons/step-out.svg</file>
         <file alias="step-over.svg">Icons/step-over.svg</file>

@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QIcon>
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QListWidget>
@@ -108,10 +109,10 @@ void StandardEditorHost::attached(fged::ScriptEditor& editor) {
     editor_ = &editor;
     QMenu* run = editor.menu("&Run");
     run->addSeparator();
-    QAction* a = run->addAction("Launch &Configurations...");
+    QAction* a = run->addAction(QIcon(":/Icons/configure.svg"), "Launch &Configurations...");
     QObject::connect(a, &QAction::triggered, &editor, [this] { editConfigurations(); });
     // a button next to the selector of the toolbar
-    QAction* configure = new QAction("Configure...", &editor);
+    QAction* configure = new QAction(QIcon(":/Icons/configure.svg"), "Configure...", &editor);
     configure->setToolTip("Edit the launch configurations of this script");
     QObject::connect(configure, &QAction::triggered, &editor, [this] { editConfigurations(); });
     editor.addToLaunchSelector(configure);
