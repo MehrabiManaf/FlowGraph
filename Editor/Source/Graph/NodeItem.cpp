@@ -517,7 +517,9 @@ void NodeItem::hoverMoveEvent(QGraphicsSceneHoverEvent* e) {
     if (under) {
         QString tip = gscene_->pinTooltip(refFor(*under), under->doc);
         if (under->isConst) tip += QChar('\n') + QString("const: cannot be modified by the function");
-        if (under->byRef) tip += QChar('\n') + QString("by reference: refers to the caller's variable");
+        if (under->byRef)
+            tip += QChar('\n') + (cn_.op == fg::NodeOp::CallFunction ? QString("by reference: refers to the caller's variable")
+                                                                    : QString("by reference: this node modifies the container in place"));
         if (under->containerKind == 1) tip += QChar('\n') + QString("array");
         else if (under->containerKind == 2) tip += QChar('\n') + QString("map");
         setToolTip(tip);

@@ -1954,6 +1954,39 @@ TEST(evaluate_expression_finds_locals_and_nested_values) {
     CHECK_EQ(r.view.total, size_t(1));
 }
 
+TEST(container_nodes_that_modify_their_container_take_it_by_reference) {
+    TestRuntime rt;
+    Script s;
+    Graph& g = s.addEventGraph();
+    fpNode(g, "event:Go");
+    struct Case { const char* node; const char* pin; bool byRef; };
+    const Case cases[] = {
+        {"array.add", "Array", true},     {"array.insert", "Array", true}, {"array.set", "Array", true}, {"array.remove", "Array", true},
+        {"array.clear", "Array", true},   {"map.set", "Map", true},        {"map.remove", "Map", true}, {"map.clear", "Map", true},
+        {"array.get", "Array", false},    {"array.length", "Array", false}, {"array.contains", "Array", false}, {"array.find", "Array", false},
+        {"map.get", "Map", false},        {"map.contains", "Map", false},  {"map.length", "Map", false},      {"map.keys", "Map", false},
+        {"map.values", "Map", false},     {"flow.foreach", "Array", false},
+    };
+    std::vector<NodeId> ids;
+    for (auto& c : cases) ids.push_back(fpNode(g, c.node));
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    const CompiledGraph& cg = prog->graphs[0];
+    for (size_t i = 0; i < ids.size(); ++i) {
+        const CompiledNode* n = cg.findNode(ids[i]);
+        const CompiledPin* pin = n ? n->findPin(cases[i].pin, PinDir::In, PinKind::Data) : nullptr;
+        CHECK(pin != nullptr);
+        if (pin) {
+            CHECK_EQ(pin->byRef, cases[i].byRef);
+            CHECK(!pin->isConst);
+        }
+        // only the container pin: the other inputs (index, item, key, value) are plain values
+        if (n)
+            for (int pi : n->dataIn)
+                if (n->pins[size_t(pi)].name != cases[i].pin) CHECK(!n->pins[size_t(pi)].byRef);
+    }
+}
+
 int main(int argc, char** argv) {
     g_exeDir = std::filesystem::path(argv[0]).parent_path().string();
     std::setvbuf(stdout, nullptr, _IONBF, 0);

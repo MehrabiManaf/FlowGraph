@@ -491,6 +491,16 @@ void registerStrings(Registry& r) {
 }
 
 // ------------------------------------------------------------------ containers
+// A node that modifies its container changes the one it is connected to (containers are references inside a graph), so its first data
+// input is a by-reference pin, like a by-reference parameter of a function.
+void markContainerByRef(NodeDef& d) {
+    for (auto& p : d.pins)
+        if (p.kind == PinKind::Data && p.dir == PinDir::In) {
+            p.byRef = true;
+            return;
+        }
+}
+
 void registerContainers(Registry& r) {
     auto arrayNode = [&](const char* id, Intrinsic fast, const char* title, bool pure, bool mutates, std::vector<PinDef> pins, std::function<void(NodeCtx&)> run) {
         NodeDef d = pure ? pureNode(id, title, "Containers|Array") : execNode(id, title, "Containers|Array");
@@ -498,6 +508,7 @@ void registerContainers(Registry& r) {
         d.typeParams.push_back({"T", {}, "int"});
         for (auto& p : pins) d.pins.push_back(std::move(p));
         d.mutatesFirstInput = mutates;
+        if (mutates) markContainerByRef(d);
         d.keywords = "array list vector";
         d.run = std::move(run);
         r.addNode(std::move(d));
@@ -560,6 +571,7 @@ void registerContainers(Registry& r) {
         d.typeParams.push_back({"V", {}, "int"});
         for (auto& p : pins) d.pins.push_back(std::move(p));
         d.mutatesFirstInput = mutates;
+        if (mutates) markContainerByRef(d);
         d.keywords = "map dictionary table";
         d.run = std::move(run);
         r.addNode(std::move(d));
