@@ -2123,6 +2123,31 @@ TEST(builtin_nodes_show_how_they_use_containers) {
     }
 }
 
+// Scripts come from files: a chain of pure nodes of any length must compile (no recursion along it) and run into the evaluation depth limit.
+TEST(very_long_chain_of_pure_nodes_is_a_script_error) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"R", "int", Value(0), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Go").id;
+    NodeId set = g.addNode("var.set").id;
+    g.findNode(set)->props = {{"name", "R"}, {"scope", "global"}};
+    link(g, ev, "Then", set, "In");
+    NodeId prev = g.addNode("math.add").id;
+    link(g, prev, "Result", set, "Value");
+    for (int i = 0; i < 200000; ++i) {
+        NodeId n = g.addNode("math.add").id;
+        link(g, n, "Result", prev, "A");
+        prev = n;
+    }
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    auto r = inst.callEvent("Go");
+    CHECK(!r.ok);
+    CHECK(r.error.find("nested too deeply") != std::string::npos);
+}
+
 int main(int argc, char** argv) {
     g_exeDir = std::filesystem::path(argv[0]).parent_path().string();
     std::setvbuf(stdout, nullptr, _IONBF, 0);

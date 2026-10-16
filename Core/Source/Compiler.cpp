@@ -498,15 +498,27 @@ struct GraphCompiler {
         // cycles through pure nodes can never be evaluated
         enum { White, Gray, Black };
         std::vector<int> color(cg.nodes.size(), White);
-        std::function<bool(int)> visit = [&](int ni) {
-            color[static_cast<size_t>(ni)] = Gray;
-            for (auto& ds : cg.nodes[static_cast<size_t>(ni)].inputs) {
+        // iterative: a script may chain any number of pure nodes, and recursing along the chain would overflow the stack
+        auto visit = [&](int root) {
+            std::vector<std::pair<int, size_t>> stack{{root, 0}};      // node, next input to look at
+            color[static_cast<size_t>(root)] = Gray;
+            while (!stack.empty()) {
+                auto& [ni, next] = stack.back();
+                const auto& inputs = cg.nodes[static_cast<size_t>(ni)].inputs;
+                if (next == inputs.size()) {
+                    color[static_cast<size_t>(ni)] = Black;
+                    stack.pop_back();
+                    continue;
+                }
+                const DataSource& ds = inputs[next++];
                 if (ds.kind == DataSource::Kind::Default || !ds.pure) continue;
                 int c = color[static_cast<size_t>(ds.node)];
                 if (c == Gray) return true;
-                if (c == White && visit(ds.node)) return true;
+                if (c == White) {
+                    color[static_cast<size_t>(ds.node)] = Gray;
+                    stack.emplace_back(ds.node, 0);
+                }
             }
-            color[static_cast<size_t>(ni)] = Black;
             return false;
         };
         for (auto& cn : cg.nodes) {
