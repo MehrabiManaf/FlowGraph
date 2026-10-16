@@ -76,3 +76,4 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
   events of the app (dimmed = not handled, double click adds the handler); Details shows an event read-only; copy/paste never
   duplicates a handler. Hosts decide what a new script contains (EditorHost::initializeNewScript, standard::createMainTemplate).
 - flowstudio: the entries box is a *Launch configuration* selector (EditorHost::launchLabel/launchEntrySelected, ScriptEditor::addToLaunchSelector for the Configure... button); Event Graphs lists only the events the script handles and has no + button (context menu: New event graph).
+- Event nodes are undeletable in the editor (GraphScene::deleteSelected skips them and reports it; "Remove handler" is gone; event graphs with events cannot be deleted).

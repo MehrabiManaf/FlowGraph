@@ -177,6 +177,26 @@ TEST(connecting_replaces_existing_link) {
     CHECK_EQ(fromThen, 1);
 }
 
+TEST(event_nodes_cannot_be_deleted) {
+    Fixture f;
+    QString message;
+    QObject::connect(&f.scene, &GraphScene::message, [&](const QString& m) { message = m; });
+    f.scene.clearSelection();
+    f.scene.nodeItem(1)->setSelected(true);            // the Main event
+    f.scene.deleteSelected();
+    CHECK(f.scene.nodeItem(1) != nullptr);
+    CHECK(f.graph().findNode(1) != nullptr);
+    CHECK(!message.isEmpty());
+    // a mixed selection deletes everything but the event
+    f.scene.clearSelection();
+    f.scene.nodeItem(1)->setSelected(true);
+    f.scene.nodeItem(2)->setSelected(true);
+    f.scene.deleteSelected();
+    CHECK(f.graph().findNode(1) != nullptr);
+    CHECK(f.graph().findNode(2) == nullptr);
+    CHECK(f.doc.program()->events.count("Main") == 1);
+}
+
 TEST(delete_selected_removes_links_and_is_undoable) {
     Fixture f;
     f.scene.selectOnly(2);

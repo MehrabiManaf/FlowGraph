@@ -293,15 +293,24 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     QString graph = item->data(0, kMime).toString();
     int node = item->data(0, kNode).toInt();
     QMenu m;
-    QAction *open = nullptr, *remove = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr, *newGraph = nullptr;
+    QAction *open = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr, *newGraph = nullptr;
     if (isEvent) {
-        open = m.addAction("Go to handler");
-        remove = m.addAction("Remove handler");
+        open = m.addAction("Go to handler");        // events belong to the application: they cannot be removed
     } else {
         open = m.addAction("Open");
         rename = m.addAction("Rename");
         if (tree == functions_) dup = m.addAction("Duplicate");
         del = m.addAction("Delete");
+        if (tree == graphs_) {                      // an event graph that holds event handlers cannot go away
+            const fg::Graph* gr = doc_->script().findGraph(ss(name));
+            bool hasEvents = false;
+            if (gr)
+                for (auto& n : gr->nodes) hasEvents |= n.def.rfind("event:", 0) == 0;
+            if (hasEvents) {
+                del->setEnabled(false);
+                del->setToolTip("This graph contains events, which cannot be deleted");
+            }
+        }
     }
     if (tree == graphs_) {
         m.addSeparator();
@@ -313,7 +322,6 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
         if (isEvent) emit eventActivated(graph, node);
         else emit openGraph(name);
     } else if (a == newGraph) addGraph();
-    else if (a == remove) removeHandler(graph, node);
     else if (a == rename) tree->editItem(item, 0);
     else if (a == dup) {
         doc_->edit("Duplicate function", [&](fg::Script& s) {
@@ -335,15 +343,6 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
                     g->locals.erase(std::remove_if(g->locals.begin(), g->locals.end(), [&](const fg::VariableDecl& v) { return v.name == ss(name); }), g->locals.end());
         });
     }
-}
-
-void MyScriptPanel::removeHandler(const QString& graph, int node) {
-    doc_->edit("Remove event handler", [&](fg::Script& s) {
-        auto* g = s.findGraph(ss(graph));
-        if (!g) return;
-        g->connections.erase(std::remove_if(g->connections.begin(), g->connections.end(), [&](const fg::Connection& c) { return c.fromNode == node || c.toNode == node; }), g->connections.end());
-        g->nodes.erase(std::remove_if(g->nodes.begin(), g->nodes.end(), [&](const fg::Node& n) { return n.id == node; }), g->nodes.end());
-    });
 }
 
 void MyScriptPanel::addGraph() {

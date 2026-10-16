@@ -43,7 +43,6 @@ private:
     void onSelection(FitTree* tree);
     void contextMenu(FitTree* tree, const QPoint& pos);
     void addGraph();
-    void removeHandler(const QString& graph, int node);
     void addFunction();
     void addVariable();
     void addLocal();

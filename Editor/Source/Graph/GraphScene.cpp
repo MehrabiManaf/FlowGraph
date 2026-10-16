@@ -530,12 +530,16 @@ void GraphScene::deleteSelected() {
     std::set<fg::NodeId> nodes;
     std::vector<fg::Connection> links;
     std::set<int> comments;
+    bool refusedEvent = false;
     for (auto* it : selectedItems()) {
         if (auto* n = dynamic_cast<NodeItem*>(it)) {
-            if (n->compiled().op != fg::NodeOp::FunctionEntry) nodes.insert(n->nodeId());
+            // the entry of a function and the events of the application are fixed: they cannot be deleted
+            if (n->compiled().op == fg::NodeOp::Event) refusedEvent = true;
+            else if (n->compiled().op != fg::NodeOp::FunctionEntry) nodes.insert(n->nodeId());
         } else if (auto* l = dynamic_cast<LinkItem*>(it)) links.push_back(l->connection());
         else if (auto* c = dynamic_cast<CommentItem*>(it)) comments.insert(c->commentId());
     }
+    if (refusedEvent) emit message("Events belong to the application and cannot be deleted");
     if (nodes.empty() && links.empty() && comments.empty()) return;
     doc_->edit("Delete", [&](fg::Script& s) {
         auto* g = mutableGraph(s);

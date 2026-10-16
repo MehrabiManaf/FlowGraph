@@ -103,7 +103,7 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
 * **Events belong to the application.** `registry.addEvent("Tick", {{"DeltaTime", "float"}})` declares a connection point
   between the application and its scripts. Scripts cannot declare, rename, change or delete events: they only *handle* them
   (one `event:Tick` node per event, offered once in the node palette; *My Script > Event Graphs* lists the events the script
-  handles). Think of events as
+  handles). Event nodes cannot be deleted in the editor (neither can an event graph that contains them). Think of events as
   compiled into the application, whereas functions are the script's own.
 * **Compatibility.** A script refers to the events of the application it was made for. `loadScript` /
   `fg::checkCompatibility` list everything this application lacks: events it never raises, events whose arguments changed
