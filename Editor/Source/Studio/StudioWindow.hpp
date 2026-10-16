@@ -36,6 +36,8 @@ public:
     void runEntry(const QString& entry);
     // Developer aid: "node:<graph>:<id>", "var:<name>" or "graph:<name>" selects that item and shows its details.
     void devSelect(const QString& spec);
+    // Developer aid for real-input smoke tests: writes global screen coordinates / script state to a text file.
+    void devProbe(const QString& file, bool coordinates);
 
 protected:
     void closeEvent(QCloseEvent* e) override;

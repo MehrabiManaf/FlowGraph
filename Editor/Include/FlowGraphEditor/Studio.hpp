@@ -20,4 +20,6 @@ void devRun(QWidget* studio, const QString& entry, const QString& breakpoint = Q
 
 void devSelect(QWidget* studio, const QString& spec);
 
+void devProbe(QWidget* studio, const QString& file, bool coordinates);
+
 } // namespace fged

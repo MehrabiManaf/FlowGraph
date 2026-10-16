@@ -26,6 +26,12 @@ int main(int argc, char** argv) {
     if (qEnvironmentVariableIsSet("FG_STUDIO_SELECT")) {
         QTimer::singleShot(600, &app, [w] { fged::devSelect(w, qEnvironmentVariable("FG_STUDIO_SELECT")); });
     }
+    // Developer aid: FG_STUDIO_PROBE=<prefix> writes <prefix>.coords after 2 s and <prefix>.final after 10 s, then quits.
+    if (qEnvironmentVariableIsSet("FG_STUDIO_PROBE")) {
+        QString prefix = qEnvironmentVariable("FG_STUDIO_PROBE");
+        QTimer::singleShot(2000, &app, [w, prefix] { fged::devProbe(w, prefix + ".coords", true); });
+        QTimer::singleShot(10000, &app, [w, prefix, &app] { fged::devProbe(w, prefix + ".final", false); app.quit(); });
+    }
     // Developer aid: FG_STUDIO_RUN=<entry> [FG_STUDIO_BREAK=<graph>:<node id>] starts a run shortly after startup.
     if (qEnvironmentVariableIsSet("FG_STUDIO_RUN")) {
         QTimer::singleShot(800, &app, [w] {

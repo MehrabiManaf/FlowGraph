@@ -49,3 +49,7 @@ Editor done (Editor/Source, Apps/Studio): Document (undo via script snapshots), 
   palette popup, rubber-band select, panning/zoom.
 - Gotchas: the bash tool turns backslash-n inside string literals into real newlines (use %c,10 or the Edit tool);
   Qt's `slots` macro clashes with member names; QTest::mouseMove sends no buttons (use QMouseEvent + sendEvent).
+- Tools/real-input-smoke.ps1 drives the real Studio exe with OS mouse input (SetCursorPos/mouse_event) using the
+  FG_STUDIO_PROBE hook: usage `real-input-smoke.ps1 -Exe <Studio.exe> -Script <x.flow> -Prefix <tmp path>`. Coordinates from the
+  probe are logical pixels: multiply by the device pixel ratio (it is printed); points beyond the screen edge are clamped.
+- build.bat defaults to Release: after editor fixes rebuild Release too, or the Studio you launch is stale.

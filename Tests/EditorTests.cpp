@@ -4,6 +4,8 @@
 #include "Graph/LinkItem.hpp"
 #include "Panels/MyScriptPanel.hpp"
 #include "Studio/RunController.hpp"
+#include "Studio/StudioWindow.hpp"
+#include <FlowGraphEditor/Studio.hpp>
 
 #include "Graph/GraphView.hpp"
 
@@ -404,10 +406,73 @@ TEST(mouse_drag_node_keeps_new_position) {
     CHECK(std::abs(f.scene.nodeItem(2)->scenePos().x() - after.x()) < 0.5);
 }
 
+
+// The same interactions inside the real main window (docking, tabs, refresh on every edit).
+struct StudioFixture {
+    fg::Runtime rt;
+    StudioWindow win{rt};
+    GraphView* view = nullptr;
+    StudioFixture() {
+        win.show();
+        QCoreApplication::processEvents();
+        view = win.findChild<GraphView*>();
+        QCoreApplication::processEvents();
+    }
+    GraphScene* scene() { return view->graphScene(); }
+    QPoint toView(const QPointF& p) { return view->mapFromScene(p); }
+    void send(QEvent::Type type, QPoint p, Qt::MouseButton button, Qt::MouseButtons buttons) {
+        QMouseEvent e(type, QPointF(p), QPointF(view->viewport()->mapToGlobal(p)), button, buttons, Qt::NoModifier);
+        QApplication::sendEvent(view->viewport(), &e);
+        QCoreApplication::processEvents();
+    }
+    void drag(QPoint from, QPoint to) {
+        send(QEvent::MouseMove, from, Qt::NoButton, Qt::NoButton);      // hover first, like a real mouse
+        send(QEvent::MouseButtonPress, from, Qt::LeftButton, Qt::LeftButton);
+        for (int i = 1; i <= 5; ++i) send(QEvent::MouseMove, from + (to - from) * i / 5, Qt::NoButton, Qt::LeftButton);
+        send(QEvent::MouseButtonRelease, to, Qt::LeftButton, Qt::NoButton);
+    }
+};
+
+TEST(studio_window_node_move_sticks) {
+    StudioFixture f;
+    CHECK(f.view != nullptr);
+    if (!f.view) return;
+    NodeItem* n = f.scene()->nodeItem(2);
+    CHECK(n != nullptr);
+    if (!n) return;
+    QPointF before = n->scenePos();
+    QPoint header = f.toView(n->mapToScene(QPointF(20, 8)));
+    f.drag(header, header + QPoint(90, 60));
+    QCoreApplication::processEvents();
+    QPointF after = f.scene()->nodeItem(2)->scenePos();
+    CHECK(std::abs(after.x() - before.x()) > 30);
+    CHECK(std::abs(f.win.document()->graph(f.scene()->graphName())->findNode(2)->x - after.x()) < 0.5);
+}
+
+TEST(studio_window_pin_drag_creates_link) {
+    StudioFixture f;
+    CHECK(f.view != nullptr);
+    if (!f.view) return;
+    GraphScene* sc = f.scene();
+    auto all = fg::buildPalette(fg::NodeBuildCtx{f.rt.registry(), &f.win.document()->script(), f.win.document()->script().findGraph(ss(sc->graphName()))});
+    fg::NodeId br = sc->addNodeFromTemplate(*findTemplate(all, "flow.branch"), QPointF(600, 0));
+    QCoreApplication::processEvents();
+    f.view->centerOn(400, 50);
+    QCoreApplication::processEvents();
+    QPoint from = f.toView(sc->nodeItem(2)->pinScenePos("Then", fg::PinDir::Out));
+    QPoint to = f.toView(sc->nodeItem(br)->pinScenePos("In", fg::PinDir::In));
+    f.drag(from, to);
+    bool linked = false;
+    for (auto& c : f.win.document()->graph(sc->graphName())->connections) linked |= c.fromNode == 2 && c.toNode == br && c.toPin == "In";
+    CHECK(linked);
+}
+
 int main(int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
+    fged::applyDarkTheme(app);
+    fged::initEditor();
     for (auto& t : tests()) {
         int before = g_failures;
         std::printf("[ RUN  ] %s\n", t.name);

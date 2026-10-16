@@ -12,7 +12,11 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QFile>
 #include <QFileDialog>
+#include <QTextStream>
+#include <iostream>
+#include "../Graph/NodeItem.hpp"
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -546,6 +550,37 @@ void StudioWindow::devSelect(const QString& spec) {
     if (p.size() == 3 && p[0] == "node") focusNode(p[1], p[2].toInt());
     else if (p.size() == 2 && p[0] == "var") details_->showVariable("", p[1]);
     else if (p.size() == 2 && p[0] == "graph") { openGraph(p[1]); details_->showGraph(p[1]); }
+}
+
+void StudioWindow::devProbe(const QString& file, bool coordinates) {
+    QFile f(file);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    QTextStream out(&f);
+    GraphView* v = currentView();
+    if (!v) { out << "noview\n"; return; }
+    GraphScene* sc = v->graphScene();
+    auto global = [&](const QPointF& scenePos) { return v->viewport()->mapToGlobal(v->mapFromScene(scenePos)); };
+    const fg::Graph* g = doc_.graph(sc->graphName());
+    if (coordinates) {
+        if (NodeItem* n2 = sc->nodeItem(2)) {
+            QPoint h = global(n2->mapToScene(QPointF(20, 8)));
+            out << "header " << h.x() << " " << h.y() << "\n";
+        }
+        if (NodeItem* n3 = sc->nodeItem(3), *n2 = sc->nodeItem(1); n3 && n2) {
+            QPoint a = global(n2->pinScenePos("Then", fg::PinDir::Out));
+            QPoint b = global(n3->pinScenePos("In", fg::PinDir::In));
+            out << "scale " << v->transform().m11() << " scenePinFrom " << n3->pinScenePos("Completed", fg::PinDir::Out).x() << " " << n3->pinScenePos("Completed", fg::PinDir::Out).y() << " dpr " << v->devicePixelRatioF() << Qt::endl;
+            out << "from " << a.x() << " " << a.y() << "\n";
+            out << "to " << b.x() << " " << b.y() << "\n";
+        }
+    }
+    if (g) {
+        if (auto* n = g->findNode(2)) out << "node2 " << n->x << " " << n->y << "\n";
+        if (NodeItem* n2 = sc->nodeItem(2)) out << "item2 " << n2->pos().x() << " " << n2->pos().y() << "\n";
+        int completed = 0;
+        for (auto& c : g->connections) completed += c.fromNode == 1 && c.toNode == 3;
+        out << "completedLinks " << completed << "\n";
+    }
 }
 
 void StudioWindow::log(int level, const QString& text) { log_->append(level, text); }

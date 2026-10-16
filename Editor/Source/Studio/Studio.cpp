@@ -85,4 +85,8 @@ void devSelect(QWidget* studio, const QString& spec) {
     if (auto* w = dynamic_cast<StudioWindow*>(studio)) w->devSelect(spec);
 }
 
+void devProbe(QWidget* studio, const QString& file, bool coordinates) {
+    if (auto* w = dynamic_cast<StudioWindow*>(studio)) w->devProbe(file, coordinates);
+}
+
 } // namespace fged
