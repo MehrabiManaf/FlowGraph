@@ -1301,6 +1301,109 @@ TEST(editor_reports_scripts_that_need_missing_events) {
     fs::remove_all(dir);
 }
 
+// Snap to grid: nodes the user moves (and nodes that are placed) land on the grid; Alt moves freely.
+static bool onGrid(double v, double step) { return std::abs(v / step - std::round(v / step)) < 1e-6; }
+
+TEST(snap_to_grid_places_and_moves_nodes_on_the_grid) {
+    ViewFixture f;
+    NodeItem* n = f.scene.nodeItem(2);
+    QPoint header = f.toView(n->mapToScene(QPointF(20, 8)));
+    auto stored = [&] { return f.doc.graph("EventGraph")->findNode(2); };
+
+    f.scene.setSnapToGrid(true);
+    f.scene.setSnapStep(20);
+    f.drag(header, header + QPoint(93, 47));                 // not a multiple of the step
+    QCoreApplication::processEvents();
+    n = f.scene.nodeItem(2);
+    CHECK(onGrid(n->scenePos().x(), 20) && onGrid(n->scenePos().y(), 20));
+    CHECK(std::abs(n->scenePos().x() - 300.0) > 60);                          // it did move
+    CHECK(std::abs(stored()->x - n->scenePos().x()) < 0.5 && std::abs(stored()->y - n->scenePos().y()) < 0.5);   // and the grid position is what is saved
+
+    // a larger step
+    f.scene.setSnapStep(40);
+    header = f.toView(n->mapToScene(QPointF(20, 8)));
+    f.drag(header, header + QPoint(37, 33));
+    QCoreApplication::processEvents();
+    n = f.scene.nodeItem(2);
+    CHECK(onGrid(n->scenePos().x(), 40) && onGrid(n->scenePos().y(), 40));
+
+    // without snapping the node follows the mouse exactly
+    f.scene.setSnapToGrid(false);
+    QPointF free0 = n->scenePos();
+    header = f.toView(n->mapToScene(QPointF(20, 8)));
+    f.drag(header, header + QPoint(13, 7));
+    QCoreApplication::processEvents();
+    n = f.scene.nodeItem(2);
+    CHECK(!onGrid(n->scenePos().x(), 20) || !onGrid(n->scenePos().y(), 20));
+    CHECK(std::abs((n->scenePos().x() - free0.x()) - 13) < 1.5);
+
+    // Alt switches snapping off while dragging
+    f.scene.setSnapToGrid(true);
+    f.scene.setSnapStep(20);
+    header = f.toView(n->mapToScene(QPointF(20, 8)));
+    auto sendAlt = [&](QEvent::Type type, QPoint pos, Qt::MouseButton button, Qt::MouseButtons buttons) {
+        QMouseEvent e(type, QPointF(pos), QPointF(f.view.viewport()->mapToGlobal(pos)), button, buttons, Qt::AltModifier);
+        QApplication::sendEvent(f.view.viewport(), &e);
+        QCoreApplication::processEvents();
+    };
+    QPointF beforeAlt = n->scenePos();
+    sendAlt(QEvent::MouseButtonPress, header, Qt::LeftButton, Qt::LeftButton);
+    sendAlt(QEvent::MouseMove, header + QPoint(8, 5), Qt::NoButton, Qt::LeftButton);
+    sendAlt(QEvent::MouseMove, header + QPoint(17, 11), Qt::NoButton, Qt::LeftButton);
+    sendAlt(QEvent::MouseButtonRelease, header + QPoint(17, 11), Qt::LeftButton, Qt::NoButton);
+    n = f.scene.nodeItem(2);
+    CHECK(std::abs((n->scenePos().x() - beforeAlt.x()) - 17) < 1.5);
+    CHECK(!onGrid(n->scenePos().x(), 20));
+
+    // new nodes are placed on the grid too
+    auto all = fg::buildPalette(fg::NodeBuildCtx{f.rt.registry(), &f.doc.script(), f.doc.script().findGraph("EventGraph")});
+    fg::NodeId placed = f.scene.addNodeFromTemplate(*findTemplate(all, "math.add"), QPointF(263, 157));
+    CHECK(std::abs(f.doc.graph("EventGraph")->findNode(placed)->x - 260) < 0.01 && std::abs(f.doc.graph("EventGraph")->findNode(placed)->y - 160) < 0.01);
+    f.scene.setSnapToGrid(false);
+    fg::NodeId free = f.scene.addNodeFromTemplate(*findTemplate(all, "math.add"), QPointF(263, 157));
+    CHECK(std::abs(f.doc.graph("EventGraph")->findNode(free)->x - 263) < 0.01);
+}
+
+TEST(view_menu_snap_to_grid_switches_every_graph) {
+    StudioFixture f;
+    CHECK(f.view != nullptr);
+    if (!f.view) return;
+    QAction* snap = nullptr;
+    QAction* forty = nullptr;
+    QAction* twenty = nullptr;
+    for (auto* a : f.win.findChildren<QAction*>()) {
+        if (a->text() == "Snap to &Grid") snap = a;
+        if (a->text() == "40 units") forty = a;
+        if (a->text() == "20 units") twenty = a;
+    }
+    CHECK(snap && forty && twenty);
+    if (!snap || !forty || !twenty) return;
+    CHECK(snap->isCheckable());
+    const bool initial = snap->isChecked();                              // the user's setting: put it back at the end
+    const bool wasForty = forty->isChecked();
+    CHECK_EQ(f.scene()->snapToGrid(), initial);
+    snap->setChecked(true);
+    CHECK(f.scene()->snapToGrid());
+    forty->trigger();
+    CHECK_EQ(f.scene()->snapStep(), 40.0);
+    // a graph that is opened later follows the setting as well
+    f.win.document()->edit("Function", [&](fg::Script& s) { s.addFunction("Other"); });
+    emit f.win.findChild<MyScriptPanel*>()->openGraph("Other");           // what double-clicking the function does
+    GraphView* other = nullptr;
+    for (auto* v : f.win.findChildren<GraphView*>())
+        if (v->graphScene()->graphName() == "Other") other = v;
+    CHECK(other != nullptr);
+    if (other) {
+        CHECK(other->graphScene()->snapToGrid());
+        CHECK_EQ(other->graphScene()->snapStep(), 40.0);
+    }
+    snap->setChecked(false);
+    CHECK(!f.scene()->snapToGrid());
+    if (other) CHECK(!other->graphScene()->snapToGrid());
+    (wasForty ? forty : twenty)->trigger();
+    snap->setChecked(initial);
+}
+
 int main(int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     qputenv("QT_QPA_PLATFORM", "offscreen");

@@ -153,3 +153,8 @@ Rules to keep it correct:
   Entry, Contains Key, Keys, Values, For Each, Select and Reroute inputs, comparisons) take a const reference; outputs that hand out a container
   that exists elsewhere (Get Variable, Get Item, Get Entry, For Each element, Select result, Reroute) are references. Visual only: the compiler
   and interpreter use byRef / isConst of a pin for function calls only. Test: builtin_nodes_show_how_they_use_containers.
+- Snap to grid (GraphScene::setSnapToGrid / setSnapStep / snapped; View > Snap to Grid and View > Grid Snap Size 10 / 20 / 40, stored in the
+  user's settings "editor/snapToGrid", "editor/snapStep"; default on, 20 = the fine grid lines): nodes (reroutes too) snap by their top left
+  corner while the user drags them (NodeItem::itemChange, only while the left button is down and not during sync), new nodes snap where they
+  are placed, Alt while dragging moves freely. Comments are not snapped. Tests: snap_to_grid_places_and_moves_nodes_on_the_grid,
+  view_menu_snap_to_grid_switches_every_graph.

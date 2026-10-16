@@ -29,6 +29,7 @@
 #include <QTabWidget>
 #include <QTimer>
 #include <set>
+#include <QSettings>
 #include <QToolBar>
 #include <QToolButton>
 
@@ -203,6 +204,16 @@ void ScriptEditorWindow::createActions() {
     actSelectAll_ = act("Select &All\tCtrl+A");
     actComment_ = act("Add Co&mment\tC");
     actFrame_ = act("&Frame All\tHome");
+    {
+        QSettings settings("FlowGraph", "FlowGraph Studio");
+        snapToGrid_ = settings.value("editor/snapToGrid", true).toBool();
+        snapStep_ = settings.value("editor/snapStep", 20.0).toDouble();
+        if (snapStep_ != 10.0 && snapStep_ != 20.0 && snapStep_ != 40.0) snapStep_ = 20.0;
+    }
+    actSnap_ = act("Snap to &Grid");
+    actSnap_->setCheckable(true);
+    actSnap_->setChecked(snapToGrid_);
+    actSnap_->setToolTip("Nodes you move or place land on the grid. Hold Alt while dragging to move freely.");
     actRun_ = new QAction(QIcon(":/Icons/attach.svg"), "Run", this);
     actRun_->setShortcut(QKeySequence(Qt::Key_F5));
     actPause_ = new QAction(QIcon(":/Icons/interrupt.svg"), "Pause", this);
@@ -239,6 +250,11 @@ void ScriptEditorWindow::createActions() {
         if (auto* v = currentView()) v->graphScene()->addComment(v->mapToScene(v->viewport()->rect().center()));
     });
     connect(actFrame_, &QAction::triggered, this, [this] { if (auto* v = currentView()) v->frameAll(); });
+    connect(actSnap_, &QAction::toggled, this, [this](bool on) {
+        snapToGrid_ = on;
+        QSettings("FlowGraph", "FlowGraph Studio").setValue("editor/snapToGrid", on);
+        applySnap();
+    });
     connect(actRun_, &QAction::triggered, this, [this] { runOrContinue(); });
     connect(actPause_, &QAction::triggered, this, [this] { run_.pause(); });
     connect(actStop_, &QAction::triggered, this, [this] { run_.stop(); });
@@ -270,6 +286,22 @@ void ScriptEditorWindow::createMenus() {
 
     QMenu* view = menuBar()->addMenu("&View");
     view->addAction(actFrame_);
+    view->addSeparator();
+    view->addAction(actSnap_);
+    QMenu* gridSize = view->addMenu("Grid Snap Si&ze");
+    snapSizeGroup_ = new QActionGroup(this);
+    for (double step : {10.0, 20.0, 40.0}) {
+        QAction* a = gridSize->addAction(QString::number(int(step)) + " units");
+        a->setCheckable(true);
+        a->setChecked(step == snapStep_);
+        a->setData(step);
+        snapSizeGroup_->addAction(a);
+        connect(a, &QAction::triggered, this, [this, step] {
+            snapStep_ = step;
+            QSettings("FlowGraph", "FlowGraph Studio").setValue("editor/snapStep", step);
+            applySnap();
+        });
+    }
     view->addSeparator();
     for (auto* dw : docks_) view->addAction(dw->toggleAction());
 
@@ -332,6 +364,13 @@ GraphScene* ScriptEditorWindow::currentScene() const {
     return v ? v->graphScene() : nullptr;
 }
 
+void ScriptEditorWindow::applySnap() {
+    for (auto& [v, s] : views_) {
+        s->setSnapToGrid(snapToGrid_);
+        s->setSnapStep(snapStep_);
+    }
+}
+
 GraphView* ScriptEditorWindow::openGraph(const QString& name) {
     for (auto& [v, s] : views_)
         if (s->graphName() == name) {
@@ -342,6 +381,8 @@ GraphView* ScriptEditorWindow::openGraph(const QString& name) {
     auto* scene = new GraphScene(&doc_, name);
     auto* view = new GraphView(scene);
     views_[view] = scene;
+    scene->setSnapToGrid(snapToGrid_);
+    scene->setSnapStep(snapStep_);
     scene->pinValueProvider = [this, scene](const PinRef& ref, QString& out) {
         return run_.pinText(scene->graphName(), ref.node, ref.pin, out);
     };

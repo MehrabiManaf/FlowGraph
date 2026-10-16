@@ -240,9 +240,28 @@ void GraphScene::nodeMoved(NodeItem* item) {
     }
 }
 
+QPointF GraphScene::snapped(const QPointF& p) const {
+    if (!snap_) return p;
+    return QPointF(std::round(p.x() / snapStep_) * snapStep_, std::round(p.y() / snapStep_) * snapStep_);
+}
+
+void GraphScene::mousePressEvent(QGraphicsSceneMouseEvent* e) {
+    userMoving_ = e->button() == Qt::LeftButton;
+    altHeld_ = e->modifiers().testFlag(Qt::AltModifier);
+    QGraphicsScene::mousePressEvent(e);
+}
+
+void GraphScene::mouseMoveEvent(QGraphicsSceneMouseEvent* e) {
+    altHeld_ = e->modifiers().testFlag(Qt::AltModifier);
+    QGraphicsScene::mouseMoveEvent(e);
+}
+
 void GraphScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* e) {
     QGraphicsScene::mouseReleaseEvent(e);
-    if (e->button() == Qt::LeftButton) commitLayout();
+    if (e->button() == Qt::LeftButton) {
+        userMoving_ = false;
+        commitLayout();
+    }
 }
 
 void GraphScene::commitLayout() {
@@ -484,7 +503,8 @@ void GraphScene::insertReroute(const fg::Connection& c, const QPointF& scenePos)
         auto* g = mutableGraph(s);
         if (!g) return;
         g->connections.erase(std::remove(g->connections.begin(), g->connections.end(), c), g->connections.end());
-        fg::NodeId id = g->addNode("reroute", scenePos.x() - 14, scenePos.y() - 9).id;
+        const QPointF at = snapped(scenePos - QPointF(18, 9));        // the reroute is 36 x 18: its center is where the link was clicked
+        fg::NodeId id = g->addNode("reroute", at.x(), at.y()).id;
         g->connections.push_back({c.fromNode, c.fromPin, id, "In"});
         g->connections.push_back({id, "Out", c.toNode, c.toPin});
     });
@@ -492,6 +512,7 @@ void GraphScene::insertReroute(const fg::Connection& c, const QPointF& scenePos)
 
 // ------------------------------------------------------------------ adding / removing nodes
 fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPointF& pos, const PinRef* from) {
+    const QPointF at = snapped(pos);
     fg::NodeId newId = 0;
     std::string pinName;
     bool connect = false;
@@ -505,7 +526,7 @@ fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPoi
     doc_->edit("Add node", [&](fg::Script& s) {
         fg::Graph* g = mutableGraph(s);
         if (!g) return;
-        fg::Node& n = fg::instantiate(*g, t, pos.x(), pos.y());
+        fg::Node& n = fg::instantiate(*g, t, at.x(), at.y());
         newId = n.id;
         if (connect) {
             fg::Connection c = from->dir == fg::PinDir::Out ? fg::Connection{from->node, from->pin, newId, pinName}
@@ -517,7 +538,8 @@ fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPoi
     return newId;
 }
 
-fg::NodeId GraphScene::addVariableNode(const QString& name, const QString& scope, bool isSet, const QPointF& pos) {
+fg::NodeId GraphScene::addVariableNode(const QString& name, const QString& scope, bool isSet, const QPointF& where) {
+    const QPointF pos = snapped(where);
     fg::NodeId id = 0;
     doc_->edit(isSet ? "Add Set variable" : "Add Get variable", [&](fg::Script& s) {
         if (auto* g = mutableGraph(s)) {

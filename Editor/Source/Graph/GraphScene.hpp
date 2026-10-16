@@ -78,6 +78,15 @@ public:
     void setNodeComment(fg::NodeId id, const QString& text);
     QRectF contentRect() const;
 
+    // ---- snap to grid: nodes moved by the user (and new nodes) land on a grid of `step` scene units, by their top left corner.
+    // Holding Alt while dragging moves freely.
+    void setSnapToGrid(bool on) { snap_ = on; }
+    bool snapToGrid() const { return snap_; }
+    void setSnapStep(double step) { snapStep_ = step >= 1.0 ? step : 1.0; }
+    double snapStep() const { return snapStep_; }
+    QPointF snapped(const QPointF& p) const;                                   // p moved to the nearest grid point (when snapping is on)
+    bool snapsUserMoves() const { return snap_ && userMoving_ && !altHeld_ && !syncing_; }
+
 signals:
     void selectionNodesChanged(const QList<int>& ids);
     void paletteRequested(const PinRef& from, const QPointF& scenePos, const QPoint& screenPos);
@@ -85,6 +94,8 @@ signals:
     void message(const QString& text);
 
 protected:
+    void mousePressEvent(QGraphicsSceneMouseEvent* e) override;
+    void mouseMoveEvent(QGraphicsSceneMouseEvent* e) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* e) override;
 
 private:
@@ -104,6 +115,10 @@ private:
     std::map<QString, LinkItem*> links_;
     std::map<int, CommentItem*> comments_;
     bool syncing_ = false;
+    bool snap_ = false;
+    double snapStep_ = 20.0;
+    bool userMoving_ = false;          // the left mouse button is down: item moves come from the user
+    bool altHeld_ = false;             // Alt switches snapping off while dragging
     bool animating_ = false;
     QTimer animTimer_;
     fg::NodeId debugNode_ = 0;

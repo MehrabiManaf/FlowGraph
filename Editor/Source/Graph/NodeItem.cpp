@@ -77,6 +77,7 @@ NodeItem::NodeItem(GraphScene* scene, fg::NodeId id) : gscene_(scene), id_(id) {
 }
 
 QVariant NodeItem::itemChange(GraphicsItemChange change, const QVariant& value) {
+    if (change == ItemPositionChange && gscene_ && gscene_->snapsUserMoves()) return gscene_->snapped(value.toPointF());
     if (change == ItemPositionHasChanged && gscene_) gscene_->nodeMoved(this);
     return QGraphicsObject::itemChange(change, value);
 }

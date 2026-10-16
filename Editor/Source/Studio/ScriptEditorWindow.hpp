@@ -114,7 +114,12 @@ private:
     QAction *actUndo_, *actRedo_, *actCut_, *actCopy_, *actPaste_, *actDuplicate_, *actDelete_, *actSelectAll_, *actComment_, *actFrame_;
     QAction *actRun_, *actStop_, *actPause_, *actStepOver_, *actStepInto_, *actStepOut_, *actBreakpoint_;
     QAction* actAbout_;
+    QAction* actSnap_ = nullptr;
     QActionGroup* speedGroup_ = nullptr;
+    QActionGroup* snapSizeGroup_ = nullptr;
+    bool snapToGrid_ = true;            // View > Snap to Grid, remembered between sessions
+    double snapStep_ = 20.0;
+    void applySnap();
 };
 
 } // namespace fged
