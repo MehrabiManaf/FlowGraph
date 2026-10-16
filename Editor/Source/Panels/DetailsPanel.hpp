@@ -31,6 +31,7 @@ private:
 
     void buildVariable();
     void buildGraph();
+    void buildGraphFor(const QString& graphName);
     void buildNodes();
     void buildEventParams(const fg::Node& node);
     QTableWidget* buildParamTable(bool inputs, const std::vector<fg::ParamDecl>& params, std::function<void(std::vector<fg::ParamDecl>)> apply);
@@ -38,6 +39,7 @@ private:
     Document* doc_;
     Mode mode_ = Mode::None;
     QString owner_, name_;
+    QString graphTarget_;      // graph shown by the function editor (name_ or owner_)
     QList<int> ids_;
     QFormLayout* form_ = nullptr;
     QWidget* body_ = nullptr;

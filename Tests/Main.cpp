@@ -120,6 +120,7 @@ TEST(function_call_with_return) {
     auto prog = build(rt, s);
     CHECK(prog->ok());
     Instance inst(prog);
+    CHECK_EQ(prog->graphs[0].nodes[size_t(prog->graphs[0].entry)].title, std::string("Mul3"));      // entry node is named after its function
     auto r = inst.callFunction("Mul3", {Value(2.5)});
     CHECK(r.ok);
     CHECK_EQ(r.returns.size(), size_t(1));

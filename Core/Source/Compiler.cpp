@@ -268,6 +268,7 @@ struct GraphCompiler {
             cn.typeArgs = w.args;
             cn.params = n.params;
             cn.title = nodeTitle(n, w.def);
+            if (w.def && w.def->op == NodeOp::FunctionEntry) cn.title = g.name;       // the entry node is named after its function
             if (w.def) {
                 cn.op = w.def->op;
                 cn.pure = w.def->pure;

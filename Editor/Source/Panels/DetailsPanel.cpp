@@ -307,29 +307,36 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
 }
 
 // ------------------------------------------------------------------ graphs / functions
-void DetailsPanel::buildGraph() {
-    const fg::Graph* g = doc_->script().findGraph(ss(name_));
+void DetailsPanel::buildGraph() { buildGraphFor(name_); }
+
+// The function / graph editor: name, description and the parameter tables. Shown for a selected function and
+// also while the entry or a return node of a function graph is selected.
+void DetailsPanel::buildGraphFor(const QString& graphName) {
+    graphTarget_ = graphName;
+    const fg::Graph* g = doc_->script().findGraph(ss(graphName));
     if (!g) { form_->addRow(dim("The graph no longer exists.")); return; }
     const bool fn = g->kind == fg::GraphKind::Function;
     form_->addRow(heading(fn ? "Function" : "Event graph"));
     auto* nameEdit = new QLineEdit(qs(g->name));
     connect(nameEdit, &QLineEdit::editingFinished, this, [this, nameEdit, fn] {
         QString nn = nameEdit->text().trimmed();
-        if (nn.isEmpty() || nn == name_) { nameEdit->setText(name_); return; }
-        if (doc_->script().graphIndex(ss(nn)) >= 0) { QMessageBox::warning(this, "Rename", "A graph with that name exists."); nameEdit->setText(name_); return; }
-        QString old = name_;
+        if (nn.isEmpty() || nn == graphTarget_) { nameEdit->setText(graphTarget_); return; }
+        if (doc_->script().graphIndex(ss(nn)) >= 0) { QMessageBox::warning(this, "Rename", "A graph with that name exists."); nameEdit->setText(graphTarget_); return; }
+        QString old = graphTarget_;
         edit("Rename graph", [&](fg::Script& s) {
             if (fn) s.renameFunction(ss(old), ss(nn));
             else if (auto* gr = s.findGraph(ss(old))) gr->name = ss(nn);
         });
-        name_ = nn;
+        graphTarget_ = nn;
+        if (name_ == old) name_ = nn;
+        if (owner_ == old) owner_ = nn;
         emit graphRenamed(old, nn);
     });
     form_->addRow("Name", nameEdit);
     auto* docEdit = new QLineEdit(qs(g->doc));
     connect(docEdit, &QLineEdit::editingFinished, this, [this, docEdit] {
-        QString name = name_, text = docEdit->text();
-        edit("Edit description", [=](fg::Script& s) { if (auto* gr = s.findGraph(ss(name))) gr->doc = ss(text); }, "graphdoc:" + name_);
+        QString name = graphTarget_, text = docEdit->text();
+        edit("Edit description", [=](fg::Script& s) { if (auto* gr = s.findGraph(ss(name))) gr->doc = ss(text); }, "graphdoc:" + graphTarget_);
     });
     form_->addRow("Description", docEdit);
     if (!fn) return;
@@ -337,7 +344,7 @@ void DetailsPanel::buildGraph() {
     auto section = [&](bool inputs) {
         const auto& params = inputs ? g->inputs : g->outputs;
         form_->addRow(heading(inputs ? "Inputs" : "Outputs"));
-        QString gname = name_;
+        QString gname = graphTarget_;
         auto apply = [this, gname, inputs](std::vector<fg::ParamDecl> np) {
             const fg::Graph* cur = doc_->script().findGraph(ss(gname));
             if (!cur) return;
@@ -482,7 +489,11 @@ void DetailsPanel::buildNodes() {
     const fg::Node* node = g->findNode(ids_.front());
     const fg::CompiledNode* cn = cg->findNode(ids_.front());
     if (!node || !cn) { form_->addRow(dim("")); return; }
-    form_->addRow(heading(qs(cn->title)));
+    if (g->kind == fg::GraphKind::Function && (cn->op == fg::NodeOp::FunctionEntry || cn->op == fg::NodeOp::Return)) {
+        buildGraphFor(owner_);                 // the function's name and its inputs / outputs
+        form_->addRow(new QLabel(QString()));
+    }
+    form_->addRow(heading(cn->op == fg::NodeOp::FunctionEntry ? QString("Function entry node") : qs(cn->title)));
     if (cn->def && !cn->def->doc.empty()) form_->addRow(dim(qs(cn->def->doc)));
     form_->addRow("Definition", new QLabel(qs(cn->defId) + (cn->def && !cn->def->source.empty() ? "  [" + qs(cn->def->source) + "]" : QString())));
 
