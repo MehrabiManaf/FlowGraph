@@ -356,7 +356,7 @@ struct ViewFixture {
         scene.sync();
         view.resize(1000, 700);
         view.show();
-        view.centerOn(150, 50);
+        view.centerOn(300, 50);
         QCoreApplication::processEvents();
     }
     QPoint toView(const QPointF& scenePos) { return view.mapFromScene(scenePos); }
@@ -377,7 +377,7 @@ struct ViewFixture {
 TEST(mouse_drag_between_pins_creates_link) {
     ViewFixture f;
     auto all = fg::buildPalette(fg::NodeBuildCtx{f.rt.registry(), &f.doc.script(), f.doc.script().findGraph("EventGraph")});
-    fg::NodeId br = f.scene.addNodeFromTemplate(*findTemplate(all, "flow.branch"), QPointF(500, 0));
+    fg::NodeId br = f.scene.addNodeFromTemplate(*findTemplate(all, "flow.branch"), QPointF(560, 0));
     f.scene.sync();
     QCoreApplication::processEvents();
     QPoint a = f.pinPoint(2, "Then", fg::PinDir::Out);
