@@ -551,9 +551,9 @@ TEST(adding_a_parameter_keeps_the_function_details_visible) {
     CHECK_EQ(functions->topLevelItemCount(), 1);
     functions->setCurrentItem(functions->topLevelItem(0));
     QCoreApplication::processEvents();
-    auto addButtons = [&] {
-        std::vector<QPushButton*> out;
-        for (auto* b : details->findChildren<QPushButton*>()) if (b->text() == "Add") out.push_back(b);
+    auto addButtons = [&] {                              // the "+" buttons in the headers of Inputs and Outputs
+        std::vector<QToolButton*> out;
+        for (auto* b : details->findChildren<QToolButton*>()) if (b->text() == "+") out.push_back(b);
         return out;
     };
     CHECK_EQ(addButtons().size(), size_t(2));          // inputs and outputs
@@ -584,8 +584,8 @@ TEST(renaming_a_function_in_the_list_keeps_the_details_in_sync) {
     functions->topLevelItem(0)->setText(0, "Compute");           // the user types a name in the list
     QCoreApplication::processEvents();
     CHECK(f.win.document()->graph("Compute") != nullptr);
-    QPushButton* add = nullptr;
-    for (auto* b : details->findChildren<QPushButton*>()) if (b->text() == "Add" && !add) add = b;
+    QToolButton* add = nullptr;
+    for (auto* b : details->findChildren<QToolButton*>()) if (b->text() == "+" && !add) add = b;
     CHECK(add != nullptr);
     if (!add) return;
     add->click();

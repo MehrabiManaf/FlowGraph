@@ -23,6 +23,8 @@ public:
     void SetContentsExpaned(bool Expanded);
     void UpdateContentsHeight();
     void SetTitle(const QString& Title) { mp_Label->setText(Title); }
+    // Expands the panel at once (no animation): for panels that are created already open.
+    void ExpandImmediately();
 private:
     double AnimationProgress() const { return m_AnimationProgress; }
     void SetAnimationProgress(const double& Progress);

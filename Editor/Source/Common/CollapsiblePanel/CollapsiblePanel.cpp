@@ -96,6 +96,14 @@ void CCollapsiblePanel::AddWidget(QWidget* Widget, bool MustExpandContents)
         UpdateContentsHeight();
 }
 
+void CCollapsiblePanel::ExpandImmediately()
+{
+    mp_PanelButton->blockSignals(true);
+    mp_PanelButton->setChecked(true);
+    mp_PanelButton->blockSignals(false);
+    SetAnimationProgress(1.0);
+}
+
 void CCollapsiblePanel::SetPlusButtonDisabled(const bool& Disabled)
 {
     if(mp_PlusButton)

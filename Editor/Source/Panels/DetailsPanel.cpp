@@ -3,6 +3,7 @@
 #include "../Studio/RunController.hpp"
 
 #include <FlowGraph/Compatibility.hpp>
+#include "../Common/CollapsiblePanel/CollapsiblePanel.hpp"
 #include "TypeEdit.hpp"
 #include "TypeSpec.hpp"
 
@@ -13,6 +14,7 @@
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QMenu>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
@@ -333,7 +335,6 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
 
     auto section = [&](bool inputs) {
         const auto& params = inputs ? g->inputs : g->outputs;
-        form_->addRow(heading(inputs ? "Inputs" : "Outputs"));
         QString gname = graphTarget_;
         auto apply = [this, gname, inputs](std::vector<fg::ParamDecl> np) {
             const fg::Graph* cur = doc_->script().findGraph(ss(gname));
@@ -360,15 +361,11 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
             });
         };
         auto* table = buildParamTable(inputs, params, apply);
-        auto* buttons = new QWidget;
-        auto* bl = new QHBoxLayout(buttons);
-        bl->setContentsMargins(0, 0, 0, 0);
-        auto* add = new QPushButton("Add");
-        auto* del = new QPushButton("Remove");
-        bl->addWidget(add);
-        bl->addWidget(del);
-        bl->addStretch(1);
-        connect(add, &QPushButton::clicked, this, [this, gname, inputs] {
+        // a panel like the ones of My Script: "+" in its header adds a parameter, "Remove" is in the right click menu
+        auto* panel = new CCollapsiblePanel(inputs ? "Inputs" : "Outputs", nullptr, true);
+        panel->AddWidget(table);
+        panel->ExpandImmediately();
+        connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [this, gname, inputs] {
             edit("Add parameter", [&](fg::Script& s) {
                 auto* gr = s.findGraph(ss(gname));
                 if (!gr) return;
@@ -383,10 +380,14 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
                 dst.push_back({n, "int", false, false, fg::Value()});
             }, QString(), true);
         });
-        connect(del, &QPushButton::clicked, this, [this, gname, inputs, table] {
-            int row = table->currentRow();
-            if (row < 0) row = table->rowCount() - 1;
+        table->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(table, &QWidget::customContextMenuRequested, this, [this, gname, inputs, table](const QPoint& pos) {
+            int row = table->rowAt(pos.y());
             if (row < 0) return;
+            table->selectRow(row);
+            QMenu menu;
+            QAction* remove = menu.addAction("Remove");
+            if (menu.exec(table->viewport()->mapToGlobal(pos)) != remove) return;
             edit("Remove parameter", [&](fg::Script& s) {
                 auto* gr = s.findGraph(ss(gname));
                 if (!gr) return;
@@ -396,8 +397,7 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
                 dst.erase(dst.begin() + row);
             }, QString(), true);
         });
-        form_->addRow(table);
-        form_->addRow(buttons);
+        form_->addRow(panel);
     };
     section(true);
     section(false);
