@@ -112,7 +112,7 @@ private:
     QLabel* statusLabel_ = nullptr;
     QAction *actNew_, *actOpen_, *actSave_, *actSaveAs_, *actExit_;
     QAction *actUndo_, *actRedo_, *actCut_, *actCopy_, *actPaste_, *actDuplicate_, *actDelete_, *actSelectAll_, *actComment_, *actFrame_;
-    QAction *actRun_, *actStop_, *actPause_, *actStepOver_, *actStepInto_, *actStepOut_, *actBreakpoint_;
+    QAction *actRun_, *actStop_, *actStepOver_, *actStepInto_, *actStepOut_, *actBreakpoint_;
     QAction* actAbout_;
     QAction* actSnap_ = nullptr;
     QActionGroup* speedGroup_ = nullptr;

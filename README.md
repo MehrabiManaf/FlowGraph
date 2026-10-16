@@ -177,7 +177,7 @@ function blocks; editing the script stops the run. `Apps/Studio` (`flowstudio`) 
 | Variables | drag a variable from *My Script* onto the canvas (Ctrl = Get, Alt = Set, otherwise a menu) |
 | Edit | Ctrl+Z / Ctrl+Y, Ctrl+C / X / V, Ctrl+D duplicate, Del delete, `C` add comment box (wraps the selection) |
 | Navigate | wheel zooms, middle / right drag pans, Home frames everything |
-| Run | F5 runs the entry chosen in the toolbar, F6 pause, Shift+F5 stop |
+| Run | F5 (or F6) runs the entry chosen in the toolbar; the same button pauses the running script and continues a paused one; Shift+F5 stop |
 | Debug | F9 toggles a breakpoint, F10 / F11 / Shift+F11 step over / into / out; hover pins while paused to see values; *Run > Execution speed* slows execution so the animated links are visible |
 
 ## Script file format

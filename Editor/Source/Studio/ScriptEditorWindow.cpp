@@ -214,10 +214,9 @@ void ScriptEditorWindow::createActions() {
     actSnap_->setCheckable(true);
     actSnap_->setChecked(snapToGrid_);
     actSnap_->setToolTip("Nodes you move or place land on the grid. Hold Alt while dragging to move freely.");
-    actRun_ = new QAction(QIcon(":/Icons/continue.svg"), "Run", this);       // Run and Continue are the same action: the same icon
-    actRun_->setShortcut(QKeySequence(Qt::Key_F5));
-    actPause_ = new QAction(QIcon(":/Icons/interrupt.svg"), "Pause", this);
-    actPause_->setShortcut(QKeySequence(Qt::Key_F6));
+    // One button: Run when nothing runs, Pause while the script runs, Continue while it is paused (see updateRunActions)
+    actRun_ = new QAction(QIcon(":/Icons/continue.svg"), "Run", this);
+    actRun_->setShortcuts({QKeySequence(Qt::Key_F5), QKeySequence(Qt::Key_F6)});
     actStop_ = new QAction(QIcon(":/Icons/stop.svg"), "Stop", this);
     actStop_->setShortcut(QKeySequence("Shift+F5"));
     actStepOver_ = new QAction(QIcon(":/Icons/step-over.svg"), "Step Over", this);
@@ -255,8 +254,11 @@ void ScriptEditorWindow::createActions() {
         QSettings("FlowGraph", "FlowGraph Studio").setValue("editor/snapToGrid", on);
         applySnap();
     });
-    connect(actRun_, &QAction::triggered, this, [this] { runOrContinue(); });
-    connect(actPause_, &QAction::triggered, this, [this] { run_.pause(); });
+    connect(actRun_, &QAction::triggered, this, [this] {
+        const auto st = run_.state();
+        if (st == RunController::State::Running || st == RunController::State::Waiting) run_.pause();
+        else runOrContinue();
+    });
     connect(actStop_, &QAction::triggered, this, [this] { run_.stop(); });
     connect(actStepOver_, &QAction::triggered, this, [this] { run_.stepOver(); });
     connect(actStepInto_, &QAction::triggered, this, [this] { run_.stepInto(); });
@@ -306,7 +308,7 @@ void ScriptEditorWindow::createMenus() {
     for (auto* dw : docks_) view->addAction(dw->toggleAction());
 
     QMenu* runMenu = menuBar()->addMenu("&Run");
-    runMenu->addActions({actRun_, actPause_, actStop_});
+    runMenu->addActions({actRun_, actStop_});
     runMenu->addSeparator();
     runMenu->addActions({actStepOver_, actStepInto_, actStepOut_});
     runMenu->addSeparator();
@@ -340,7 +342,7 @@ void ScriptEditorWindow::createToolBar() {
     entryCombo_->setToolTip(host_.launchToolTip());
     tb->addWidget(entryCombo_);
     connect(entryCombo_, qOverload<int>(&QComboBox::activated), this, [this](int) { host_.launchEntrySelected(entryCombo_->currentData().toString()); });
-    tb->addActions({actRun_, actPause_, actStop_});
+    tb->addActions({actRun_, actStop_});
     tb->addSeparator();
     tb->addActions({actStepOver_, actStepInto_, actStepOut_});
 }
@@ -598,9 +600,9 @@ void ScriptEditorWindow::updateEditActions() {
 void ScriptEditorWindow::updateRunActions() {
     using S = RunController::State;
     S s = run_.state();
-    actRun_->setText(s == S::Paused ? "Continue" : "Run");
-    actRun_->setEnabled(s == S::Idle || s == S::Paused);
-    actPause_->setEnabled(s == S::Running || s == S::Waiting);
+    const bool busy = s == S::Running || s == S::Waiting;       // the script runs: the button pauses it
+    actRun_->setText(busy ? "Pause" : s == S::Paused ? "Continue" : "Run");
+    actRun_->setIcon(QIcon(busy ? ":/Icons/interrupt.svg" : ":/Icons/continue.svg"));
     actStop_->setEnabled(s != S::Idle);
     actStepOver_->setEnabled(s == S::Paused);
     actStepInto_->setEnabled(s == S::Paused);

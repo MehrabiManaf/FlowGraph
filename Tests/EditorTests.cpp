@@ -909,6 +909,13 @@ struct TestHost : fged::EditorHost {
     explicit TestHost(fg::Runtime& r) : rt(r) {}
     fg::Runtime& runtime() override { return rt; }
     void initializeNewScript(fg::Script& s) override { fg::standard::createMainTemplate(s, rt.registry()); }
+    // runs without asking for the arguments (the default host opens a dialog)
+    bool prepareLaunch(const fged::LaunchEntry& entry, fged::LaunchSpec& spec, QWidget*) override {
+        spec.entry = entry.entry;
+        spec.args.clear();
+        for (auto& p : entry.params) spec.args.push_back(rt.registry().defaultValue(rt.registry().findType(p.type)));
+        return true;
+    }
 };
 
 struct StudioFixture {
@@ -1485,6 +1492,62 @@ TEST(run_and_stop_have_their_own_icons) {
     QColor middle = stopImage.pixelColor(16, 16);
     CHECK(middle.red() > 200 && middle.green() < 130 && middle.blue() < 150);
     CHECK(stopImage.pixelColor(2, 2).alpha() < 20);
+}
+
+// One button: Run when nothing runs, Pause while the script runs, Continue while it is paused (there is no separate Pause action).
+TEST(one_button_runs_pauses_and_continues) {
+    StudioFixture f;
+    QAction* run = nullptr;
+    QAction* stop = nullptr;
+    int pauseActions = 0;
+    for (auto* a : f.win.findChildren<QAction*>()) {
+        if (a->text() == "Run") run = a;
+        if (a->text() == "Stop") stop = a;
+        if (a->text() == "Pause") ++pauseActions;
+    }
+    CHECK(run && stop);
+    if (!run || !stop) return;
+    CHECK_EQ(pauseActions, 0);
+    auto image = [](const QIcon& icon) { return icon.pixmap(32, 32).toImage(); };
+    Document* doc = f.win.document();
+
+    // a script that waits: Main -> Delay(30 s) -> Print
+    doc->edit("Delay", [&](fg::Script& s) {
+        auto& g = s.graphs[0];
+        fg::NodeId d = g.addNode("flow.delay").id;
+        g.findNode(d)->defaults["Duration"] = fg::Value(30.0);
+        g.connections.clear();
+        g.connections.push_back({1, "Then", d, "In"});
+        g.connections.push_back({d, "Then", 2, "In"});
+    });
+    CHECK(run->isEnabled() && !stop->isEnabled());
+    CHECK(image(run->icon()) == image(QIcon(":/Icons/continue.svg")));
+    run->trigger();                                                    // Run
+    CHECK(spinUntil([&] { return run->text() == "Pause"; }));
+    CHECK(run->isEnabled() && stop->isEnabled());
+    CHECK(image(run->icon()) == image(QIcon(":/Icons/interrupt.svg")));
+    run->trigger();                                                    // Pause (the script waits; it keeps being "running")
+    QCoreApplication::processEvents();
+    CHECK(run->isEnabled());
+    stop->trigger();
+    CHECK(spinUntil([&] { return run->text() == "Run"; }));
+    CHECK(image(run->icon()) == image(QIcon(":/Icons/continue.svg")));
+    CHECK(!stop->isEnabled());
+
+    // a breakpoint: the same button continues
+    doc->edit("No delay", [&](fg::Script& s) {
+        auto& g = s.graphs[0];
+        g.connections.clear();
+        g.connections.push_back({1, "Then", 2, "In"});
+    });
+    doc->debugger().setBreakpoint("EventGraph", 2, true);
+    run->trigger();
+    CHECK(spinUntil([&] { return run->text() == "Continue"; }));
+    CHECK(run->isEnabled());
+    CHECK(image(run->icon()) == image(QIcon(":/Icons/continue.svg")));
+    doc->debugger().setBreakpoint("EventGraph", 2, false);
+    run->trigger();                                                    // Continue
+    CHECK(spinUntil([&] { return run->text() == "Run"; }));
 }
 
 int main(int argc, char** argv) {
