@@ -437,7 +437,7 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
                 p->restore();
             }
         }
-        p->setPen(pal.windowText().color());
+        p->setPen(v.hovered ? pal.highlight().color() : pal.windowText().color());       // the label lights up with the connector
         p->drawText(v.labelRect, Qt::AlignCenter, v.label);
         if (v.isConst) {
             // padlock: shackle + body

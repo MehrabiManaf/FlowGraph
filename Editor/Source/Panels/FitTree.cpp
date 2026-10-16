@@ -2,6 +2,7 @@
 
 #include <QHeaderView>
 #include <QMimeData>
+#include <QTreeWidgetItemIterator>
 
 namespace fged {
 
@@ -21,8 +22,14 @@ FitTree::FitTree(QWidget* parent) : QTreeWidget(parent) {
 }
 
 QSize FitTree::sizeHint() const {
-    int rows = topLevelItemCount();
-    int rowH = rows > 0 ? sizeHintForRow(0) : fontMetrics().height() + 6;
+    int rows = 0;
+    for (QTreeWidgetItemIterator it(const_cast<FitTree*>(this)); *it; ++it) {
+        // children of collapsed items are not visible
+        bool visible = true;
+        for (QTreeWidgetItem* p = (*it)->parent(); p; p = p->parent()) visible &= p->isExpanded();
+        rows += visible;
+    }
+    int rowH = topLevelItemCount() > 0 ? sizeHintForRow(0) : fontMetrics().height() + 6;
     if (rowH <= 0) rowH = fontMetrics().height() + 6;
     if (rows == 0) rows = 1;
     return QSize(160, rows * rowH + 6);

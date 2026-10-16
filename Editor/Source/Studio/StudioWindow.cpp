@@ -154,6 +154,9 @@ void StudioWindow::createDocks() {
 
     connect(myScript_, &MyScriptPanel::openGraph, this, [this](const QString& n) { openGraph(n); });
     connect(myScript_, &MyScriptPanel::eventActivated, this, [this](const QString& g, int n) { focusNode(g, n); });
+    connect(myScript_, &MyScriptPanel::eventSelected, this, [this](const QString& g, int n) {
+        if (GraphView* v = openGraph(g)) v->graphScene()->selectOnly(n);        // shows the event details
+    });
     connect(myScript_, &MyScriptPanel::selectionChanged, this, [this](int kind, const QString& owner, const QString& name) {
         using K = MyScriptPanel::Kind;
         switch (K(kind)) {
