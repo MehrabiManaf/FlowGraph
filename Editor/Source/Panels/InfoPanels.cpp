@@ -1,9 +1,18 @@
 #include "InfoPanels.hpp"
 #include "../Graph/Style.hpp"
 
+#include <QAction>
+#include <QApplication>
+#include <QClipboard>
+#include <QFont>
+#include <QGuiApplication>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
+#include <QSettings>
 #include <QSplitter>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -74,14 +83,65 @@ void LogPanel::append(int level, const QString& text) {
 
 // ------------------------------------------------------------------ debug
 namespace {
-void addView(QTreeWidgetItem* parent, const fg::ValueView& v) {
-    auto* it = new QTreeWidgetItem(parent);
+
+// Roles of the items of the variable and watch trees.
+constexpr int kPathRole = Qt::UserRole + 10;     // expression that addresses the value (QString, empty = not addressable)
+constexpr int kKeyRole = Qt::UserRole + 11;      // stable identity across refreshes: tree + root + path
+constexpr int kMoreRole = Qt::UserRole + 12;     // bool: this is the "N more" row of its parent
+constexpr int kEndRole = Qt::UserRole + 13;      // qulonglong: index after the last loaded child of a container
+constexpr int kTotalRole = Qt::UserRole + 14;    // qulonglong: number of children the container has
+constexpr int kWatchRole = Qt::UserRole + 15;    // bool: a top level item of the watch tree
+
+constexpr size_t kFirstPage = 64;                // children loaded with a container (InspectOptions::maxItems)
+constexpr size_t kPage = 256;                    // what double-clicking "more" loads
+constexpr size_t kMaxLoad = 50000;               // most children one request loads
+
+QString thousands(qulonglong n) { return QLocale(QLocale::English).toString(n); }
+
+bool isMoreRow(const QTreeWidgetItem* it) { return it && it->data(0, kMoreRole).toBool(); }
+
+QTreeWidgetItem* findMoreRow(QTreeWidgetItem* container) {
+    for (int i = container->childCount() - 1; i >= 0; --i)
+        if (isMoreRow(container->child(i))) return container->child(i);
+    return nullptr;
+}
+
+// Keeps one "N more" row at the end of a container whose children are not all loaded.
+void updateMoreRow(QTreeWidgetItem* container) {
+    delete findMoreRow(container);
+    qulonglong total = container->data(0, kTotalRole).toULongLong();
+    qulonglong end = container->data(0, kEndRole).toULongLong();
+    if (container->data(0, kPathRole).toString().isEmpty() || total <= end) return;
+    auto* more = new QTreeWidgetItem(container);
+    more->setData(0, kMoreRole, true);
+    more->setText(0, "...");
+    more->setText(1, QString("%1 more - double-click to load %2 more").arg(thousands(total - end), thousands(std::min<qulonglong>(kPage, total - end))));
+    QFont f = more->font(1);
+    f.setItalic(true);
+    more->setFont(1, f);
+    more->setForeground(1, qApp->palette().color(QPalette::PlaceholderText));
+}
+
+void buildItem(QTreeWidgetItem* it, const fg::ValueView& v, const QString& keyPrefix) {
     it->setText(0, qs(v.name));
     it->setText(1, qs(v.text));
     it->setText(2, qs(v.type));
     it->setForeground(2, qApp->palette().color(QPalette::PlaceholderText));
-    for (auto& c : v.children) addView(it, c);
+    QString path = qs(v.path);
+    it->setData(0, kPathRole, path);
+    it->setData(0, kKeyRole, path.isEmpty() ? QString() : keyPrefix + path);
+    it->setData(0, kTotalRole, qulonglong(v.total));
+    it->setData(0, kEndRole, qulonglong(v.offset + v.children.size()));
+    for (auto& c : v.children) buildItem(new QTreeWidgetItem(it), c, keyPrefix);
+    updateMoreRow(it);
 }
+
+QString keyPrefixOf(const QTreeWidgetItem* it) {
+    QString key = it->data(0, kKeyRole).toString();
+    QString path = it->data(0, kPathRole).toString();
+    return key.left(key.size() - path.size());
+}
+
 } // namespace
 
 DebugPanel::DebugPanel(Document* doc, RunController* run, QWidget* parent) : QWidget(parent), doc_(doc), run_(run) {
@@ -92,12 +152,39 @@ DebugPanel::DebugPanel(Document* doc, RunController* run, QWidget* parent) : QWi
     stack_ = new QTreeWidget(split);
     stack_->setHeaderLabels({"Call stack", "Node"});
     stack_->setRootIsDecorated(false);
+
+    auto setupTree = [](QTreeWidget* t, const QStringList& headers) {
+        t->setHeaderLabels(headers);
+        t->setUniformRowHeights(true);
+        t->setContextMenuPolicy(Qt::CustomContextMenu);
+        t->header()->setSectionResizeMode(0, QHeaderView::Interactive);
+        t->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+        t->setColumnWidth(0, 150);
+    };
     vars_ = new QTreeWidget(split);
-    vars_->setHeaderLabels({"Variable", "Value", "Type"});
-    vars_->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    vars_->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+    setupTree(vars_, {"Variable", "Value", "Type"});
+
+    auto* watchBox = new QWidget(split);
+    auto* wl = new QVBoxLayout(watchBox);
+    wl->setContentsMargins(0, 0, 0, 0);
+    wl->setSpacing(0);
+    watchEdit_ = new QLineEdit(watchBox);
+    watchEdit_->setClearButtonEnabled(true);
+    watchEdit_->setPlaceholderText("Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)");
+    watchEdit_->setToolTip("An expression to watch. A range name[a..b] loads those elements (inclusive); a big array is never loaded as a whole.\n"
+                           "Locals and parameters of the selected stack frame are found first, then the variables of the script.");
+    watches_ = new QTreeWidget(watchBox);
+    setupTree(watches_, {"Watch", "Value", "Type"});
+    wl->addWidget(watchEdit_);
+    wl->addWidget(watches_);
+
     split->addWidget(stack_);
     split->addWidget(vars_);
+    split->addWidget(watchBox);
+    split->setStretchFactor(0, 1);
+    split->setStretchFactor(1, 3);
+    split->setStretchFactor(2, 2);
+
     connect(run_, &RunController::stateChanged, this, [this] { refresh(); });
     connect(run_, &RunController::paused, this, [this] { refresh(); });
     connect(run_, &RunController::finished, this, [this] { refresh(); });
@@ -107,6 +194,39 @@ DebugPanel::DebugPanel(Document* doc, RunController* run, QWidget* parent) : QWi
         refresh();
         emit locationActivated(cur->data(0, Qt::UserRole + 1).toString(), cur->data(0, Qt::UserRole + 2).toInt());
     });
+
+    for (QTreeWidget* t : {vars_, watches_}) {
+        connect(t, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* it, int) {
+            if (isMoreRow(it)) loadMore(it->parent(), kPage);
+        });
+        connect(t, &QTreeWidget::itemExpanded, this, [this](QTreeWidgetItem* it) {
+            if (updating_) return;
+            QString key = it->data(0, kKeyRole).toString();
+            if (!key.isEmpty()) expanded_.insert(key);
+            // a container below the depth that was collected has no children yet: load the first ones when it is opened
+            if (it->data(0, kEndRole).toULongLong() == 0 && it->data(0, kTotalRole).toULongLong() > 0) loadMore(it, kFirstPage);
+        });
+        connect(t, &QTreeWidget::itemCollapsed, this, [this](QTreeWidgetItem* it) {
+            if (updating_) return;
+            expanded_.remove(it->data(0, kKeyRole).toString());
+        });
+        connect(t, &QTreeWidget::customContextMenuRequested, this, [this, t](const QPoint& pos) { showContextMenu(t, pos); });
+    }
+    connect(watchEdit_, &QLineEdit::returnPressed, this, [this] {
+        addWatch(watchEdit_->text());
+        watchEdit_->clear();
+    });
+    auto* removeKey = new QAction(watches_);
+    removeKey->setShortcut(QKeySequence::Delete);
+    removeKey->setShortcutContext(Qt::WidgetShortcut);
+    connect(removeKey, &QAction::triggered, this, [this] {
+        if (auto* it = watches_->currentItem())
+            if (it->data(0, kWatchRole).toBool()) removeWatch(it->text(0));
+    });
+    watches_->addAction(removeKey);
+
+    connect(doc_, &Document::titleChanged, this, [this] { onDocumentPath(); });
+    onDocumentPath();
 }
 
 void DebugPanel::refresh() {
@@ -127,18 +247,197 @@ void DebugPanel::refresh() {
     }
     if (stack_->topLevelItemCount())
         stack_->setCurrentItem(stack_->topLevelItem(std::min(run_->selectedFrame(), stack_->topLevelItemCount() - 1)));
-    updating_ = false;
 
     vars_->clear();
-    if (!have) return;
-    if (run_->state() == RunController::State::Paused) {
-        auto* locals = new QTreeWidgetItem(vars_, QStringList{"Locals / parameters"});
-        for (auto& v : snap.frameVariables) addView(locals, v.value);
-        locals->setExpanded(true);
+    if (have) {
+        if (run_->state() == RunController::State::Paused) {
+            auto* locals = new QTreeWidgetItem(vars_, QStringList{"Locals / parameters"});
+            for (auto& v : snap.frameVariables) buildItem(new QTreeWidgetItem(locals), v.value, "l:");
+            locals->setExpanded(true);
+        }
+        auto* globals = new QTreeWidgetItem(vars_, QStringList{"Variables"});
+        for (auto& v : snap.globals) buildItem(new QTreeWidgetItem(globals), v.value, "g:");
+        globals->setExpanded(true);
+        restore(vars_->invisibleRootItem());
     }
-    auto* globals = new QTreeWidgetItem(vars_, QStringList{"Variables"});
-    for (auto& v : snap.globals) addView(globals, v.value);
-    globals->setExpanded(true);
+    updating_ = false;
+    refreshWatches();
+}
+
+// Expansion and the number of loaded children survive a refresh (every step of the debugger refreshes the trees).
+void DebugPanel::restore(QTreeWidgetItem* item) {
+    for (int i = 0; i < item->childCount(); ++i) {
+        QTreeWidgetItem* c = item->child(i);
+        if (isMoreRow(c)) continue;
+        QString key = c->data(0, kKeyRole).toString();
+        if (!key.isEmpty()) {
+            qulonglong total = c->data(0, kTotalRole).toULongLong();
+            qulonglong want = std::min<qulonglong>(loaded_.value(key, 0), total);
+            qulonglong end = c->data(0, kEndRole).toULongLong();
+            if (expanded_.contains(key) && end == 0 && total > 0) want = std::max<qulonglong>(want, std::min<qulonglong>(total, kFirstPage));
+            if (want > end) loadChildren(c, end, std::min<qulonglong>(want - end, kMaxLoad));
+            if (expanded_.contains(key)) c->setExpanded(true);
+        }
+        restore(c);
+    }
+}
+
+void DebugPanel::refreshWatches() {
+    const bool wasUpdating = updating_;
+    updating_ = true;
+    watches_->clear();
+    std::vector<std::string> expressions;
+    for (auto& w : watchList_) expressions.push_back(ss(w));
+    std::vector<fg::EvalResult> results;
+    const bool have = !expressions.empty() && run_->evaluate(expressions, {}, results) && results.size() == expressions.size();
+    for (int i = 0; i < watchList_.size(); ++i) {
+        auto* it = new QTreeWidgetItem(watches_);
+        it->setData(0, kWatchRole, true);
+        it->setText(0, watchList_[i]);
+        const QString prefix = "w:" + watchList_[i] + "|";
+        if (!have) {
+            it->setText(1, "(not available: run the script first)");
+            it->setForeground(1, qApp->palette().color(QPalette::PlaceholderText));
+        } else if (!results[size_t(i)].ok) {
+            it->setText(1, "<" + qs(results[size_t(i)].error) + ">");
+            it->setForeground(1, QColor("#ff7b7b"));
+        } else {
+            fg::ValueView view = std::move(results[size_t(i)].view);
+            view.name = ss(watchList_[i]);
+            buildItem(it, view, prefix);
+            if (!view.children.empty() && !seenWatches_.contains(watchList_[i])) {       // a freshly added watch shows its elements at once
+                seenWatches_.insert(watchList_[i]);
+                expanded_.insert(prefix + qs(view.path));
+            }
+        }
+        it->setToolTip(0, watchList_[i]);
+    }
+    restore(watches_->invisibleRootItem());
+    updating_ = wasUpdating;
+}
+
+// Loads `count` more children of a container, continuing after the ones that are loaded.
+void DebugPanel::loadMore(QTreeWidgetItem* container, qulonglong count) {
+    if (!container) return;
+    qulonglong end = container->data(0, kEndRole).toULongLong();
+    loadChildren(container, end, count);
+}
+
+void DebugPanel::loadChildren(QTreeWidgetItem* container, qulonglong from, qulonglong count) {
+    QString path = container->data(0, kPathRole).toString();
+    qulonglong total = container->data(0, kTotalRole).toULongLong();
+    if (path.isEmpty() || count == 0 || from >= total) return;
+    count = std::min<qulonglong>(count, std::min<qulonglong>(kMaxLoad, total - from));
+    std::vector<fg::EvalResult> results;
+    QString expr = QString("%1[%2..%3]").arg(path).arg(from).arg(from + count - 1);
+    if (!run_->evaluate({ss(expr)}, {}, results) || results.size() != 1) return;
+    const bool wasUpdating = updating_;
+    updating_ = true;
+    if (!results[0].ok) {
+        if (auto* more = findMoreRow(container)) more->setText(1, "<" + qs(results[0].error) + ">");
+    } else {
+        const fg::ValueView& v = results[0].view;
+        const QString prefix = keyPrefixOf(container);
+        delete findMoreRow(container);
+        for (auto& c : v.children) buildItem(new QTreeWidgetItem(container), c, prefix);
+        container->setData(0, kTotalRole, qulonglong(v.total));
+        qulonglong end = from + v.children.size();
+        container->setData(0, kEndRole, end);
+        loaded_[container->data(0, kKeyRole).toString()] = end;
+        updateMoreRow(container);
+    }
+    updating_ = wasUpdating;
+}
+
+void DebugPanel::addWatch(const QString& expression) {
+    QString e = expression.trimmed();
+    if (e.isEmpty() || watchList_.contains(e)) return;
+    watchList_.push_back(e);
+    saveWatches();
+    refreshWatches();
+}
+
+void DebugPanel::removeWatch(const QString& expression) {
+    if (watchList_.removeAll(expression) == 0) return;
+    seenWatches_.remove(expression);
+    saveWatches();
+    refreshWatches();
+}
+
+void DebugPanel::showContextMenu(QTreeWidget* tree, const QPoint& pos) {
+    QTreeWidgetItem* item = tree->itemAt(pos);
+    if (!item) return;
+    QTreeWidgetItem* container = isMoreRow(item) ? item->parent() : item;
+    QString path = container->data(0, kPathRole).toString();
+    qulonglong total = container->data(0, kTotalRole).toULongLong();
+    qulonglong end = container->data(0, kEndRole).toULongLong();
+    QMenu menu(this);
+    if (!path.isEmpty() && total > end) {
+        for (qulonglong n : {qulonglong(kPage), qulonglong(1000), qulonglong(10000)})
+            menu.addAction("Load next " + thousands(n), [this, container, n] { loadMore(container, n); });
+        qulonglong rest = total - end;
+        menu.addAction(rest > kMaxLoad ? "Load next " + thousands(kMaxLoad) + " (of " + thousands(rest) + " left)" : "Load all (" + thousands(rest) + " left)",
+                       [this, container] { loadMore(container, kMaxLoad); });
+        menu.addSeparator();
+    }
+    if (!path.isEmpty()) {
+        if (total > 0)
+            menu.addAction("Watch a range...", [this, path, total] {
+                bool ok = false;
+                QString e = QInputDialog::getText(this, "Watch a range", "Expression (a range is inclusive):", QLineEdit::Normal,
+                                                  QString("%1[0..%2]").arg(path).arg(std::min<qulonglong>(total, 100) - 1), &ok);
+                if (ok) addWatch(e);
+            });
+        menu.addAction("Add to watch", [this, path] { addWatch(path); });
+    }
+    if (!isMoreRow(item) && !item->text(1).isEmpty())
+        menu.addAction("Copy value", [item] { QGuiApplication::clipboard()->setText(item->text(1)); });
+    if (tree == watches_ && item->data(0, kWatchRole).toBool()) {
+        menu.addSeparator();
+        QString expr = item->text(0);
+        menu.addAction("Edit watch...", [this, expr] {
+            bool ok = false;
+            QString e = QInputDialog::getText(this, "Edit watch", "Expression:", QLineEdit::Normal, expr, &ok).trimmed();
+            if (!ok || e.isEmpty() || e == expr) return;
+            int at = watchList_.indexOf(expr);
+            if (at < 0 || watchList_.contains(e)) return;
+            watchList_[at] = e;
+            seenWatches_.remove(expr);
+            saveWatches();
+            refreshWatches();
+        });
+        menu.addAction("Remove watch", [this, expr] { removeWatch(expr); });
+        menu.addAction("Remove all watches", [this] {
+            watchList_.clear();
+            saveWatches();
+            refreshWatches();
+        });
+    }
+    if (menu.isEmpty()) return;
+    menu.exec(tree->viewport()->mapToGlobal(pos));
+}
+
+// The watches belong to the script file: they are kept in the user's settings under its path.
+QString DebugPanel::settingsKey() const { return "debugger/watches/" + QString::fromLatin1(doc_->path().toUtf8().toBase64(QByteArray::Base64UrlEncoding)); }
+
+void DebugPanel::saveWatches() {
+    if (watchesFor_.isEmpty()) return;                     // an unsaved script: the watches live as long as the window
+    QSettings("FlowGraph", "FlowGraph Studio").setValue(settingsKey(), watchList_);
+}
+
+void DebugPanel::onDocumentPath() {
+    QString p = doc_->path();
+    if (p == watchesFor_) return;
+    if (watchesFor_.isEmpty() && !watchList_.isEmpty()) {  // "Save As" of a new script: its watches move to the file
+        watchesFor_ = p;
+        saveWatches();
+        return;
+    }
+    watchesFor_ = p;
+    watchList_.clear();
+    seenWatches_.clear();
+    if (!p.isEmpty()) watchList_ = QSettings("FlowGraph", "FlowGraph Studio").value(settingsKey()).toStringList();
+    refreshWatches();
 }
 
 } // namespace fged

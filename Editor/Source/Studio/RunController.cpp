@@ -221,6 +221,19 @@ bool RunController::snapshot(DebugSnapshot& out) const {
     });
 }
 
+bool RunController::evaluate(const std::vector<std::string>& expressions, const fg::InspectOptions& opt, std::vector<fg::EvalResult>& out) const {
+    if (!ax_) return false;
+    const bool paused = state_ == State::Paused;
+    const int frameSel = frame_;
+    return ax_->inspect([&](fg::Executor& ex) {
+        std::shared_ptr<fg::Task> task = paused ? ex.task(handle_) : nullptr;
+        size_t idx = 0;
+        if (task && task->depth() > 0) idx = task->depth() - 1 - size_t(std::min<int>(frameSel, int(task->depth()) - 1));
+        else task = nullptr;
+        for (auto& e : expressions) out.push_back(fg::evaluateExpression(ex.instance(), task.get(), idx, e, opt));
+    });
+}
+
 bool RunController::pinText(const QString& graph, fg::NodeId node, const std::string& pin, QString& out) const {
     if (!ax_ || state_ != State::Paused) return false;
     std::string g = ss(graph);

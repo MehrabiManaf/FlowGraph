@@ -128,3 +128,15 @@ Rules to keep it correct:
 - Plugins and hosts must be rebuilt with these headers (Registry, NodeCtx, Value and Frame layouts changed).
 - Ideas left: pooling Task objects for host calls (~9 allocations per `callFunction`), compiling pure expression trees to flat code, a call path
   for reflected functions without NodeCtx, a smaller Value (16 bytes) with an intrusive reference count.
+
+## Debugger: big containers and watches
+- Core (Inspect.hpp): `ValueView` now has `path` (an expression that addresses the value), `total` and `offset`; `inspect` still collects only
+  `InspectOptions::maxItems` (64) children. `evaluateExpression(inst, task, frame, "Name[500000..500099]")` evaluates a watch expression:
+  `Name`, `.Property`, `[3]`, `["key"]` / `[key]`, `[a..b]` (inclusive, open ends allowed, clamped, at most `maxRange` = 50000 children; arrays by
+  index, maps and objects by position). Frame locals / parameters are found before globals. Nothing is modified.
+- Editor: containers with unloaded children get a "N more - double-click to load" row (256 per double-click; the context menu loads 1,000 /
+  10,000 / up to 50,000, watches a range, adds to watch, copies the value). Opening a container below the collected depth loads its first 64.
+  The new Watch area under the variables takes expressions (Enter adds, Delete removes, context menu edits); a new range watch opens at once.
+  Expansion, loaded elements and the watch list survive every refresh (each debugger step rebuilds the trees); watches are stored in the
+  user's settings per script path (QSettings "FlowGraph" / "FlowGraph Studio"). RunController::evaluate runs the expressions on the worker.
+- Tests: inspect_* / evaluate_expression_* (Tests/Main.cpp), debugger_panel_pages_big_arrays_and_evaluates_watches (Tests/EditorTests.cpp).

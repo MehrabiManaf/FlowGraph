@@ -59,6 +59,9 @@ public:
     };
     // Reads the debugger state from the worker thread; false when no script was started.
     bool snapshot(DebugSnapshot& out) const;
+    // Evaluates watch expressions (see fg::evaluateExpression) on the worker thread, in the selected frame while the script is
+    // paused and among the globals otherwise. `out` gets one result per expression; false when no script was started.
+    bool evaluate(const std::vector<std::string>& expressions, const fg::InspectOptions& opt, std::vector<fg::EvalResult>& out) const;
 
     static fg::Value parseArgument(const fg::Registry& reg, const fg::TypeDesc* type, const QString& text);
 

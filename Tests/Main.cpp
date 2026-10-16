@@ -1767,6 +1767,193 @@ TEST(fast_paths_step_limit_and_stack_overflow_are_reported) {
     CHECK_EQ(r2.errorGraph, std::string("Down"));
 }
 
+// ---- inspection: paging and watch expressions ------------------------------------------------------------
+// A script that fills an array (and a map) with `count` entries; Main raises "Go".
+static std::shared_ptr<Program> bigContainers(TestRuntime& rt, int64_t count) {
+    Script s;
+    s.variables.push_back({"Big", "array<int>", Value(), "", ""});
+    s.variables.push_back({"Names", "map<string,int>", Value(), "", ""});
+    s.variables.push_back({"Nested", "array<array<int>>", Value(), "", ""});
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId l = fpLoop(g, ev, "Then", 0, count);
+    NodeId garr = fpVar(g, "var.get", "Big"), push = fpNode(g, "array.add"), sq = fpNode(g, "math.mul", "B", Value(2));
+    link(g, garr, "Value", push, "Array");
+    link(g, l, "Index", sq, "A");
+    link(g, sq, "Result", push, "Item");
+    link(g, l, "Loop Body", push, "In");
+    NodeId gm = fpVar(g, "var.get", "Names"), set = fpNode(g, "map.set");
+    NodeId key = fpNode(g, "fn:String.Concat", "A", Value("k"));
+    link(g, l, "Index", key, "B");
+    link(g, gm, "Value", set, "Map");
+    link(g, key, "Result", set, "Key");
+    link(g, l, "Index", set, "Value");
+    link(g, push, "Then", set, "In");
+    return build(rt, s);
+}
+
+TEST(inspect_collects_a_window_and_addresses_every_value) {
+    TestRuntime rt;
+    auto prog = bigContainers(rt, 1000);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    auto globals = inspectGlobals(inst);
+    const ValueView& big = globals[0].value;
+    CHECK_EQ(big.name, std::string("Big"));
+    CHECK_EQ(big.total, size_t(1000));
+    CHECK_EQ(big.children.size(), size_t(64));                  // only the first 64 are collected ...
+    CHECK(big.truncated);
+    CHECK_EQ(big.path, std::string("Big"));                     // ... and every value knows how to be addressed
+    CHECK_EQ(big.children[3].path, std::string("Big[3]"));
+    CHECK_EQ(big.children[3].text, std::string("6"));
+    const ValueView& names = globals[1].value;
+    CHECK_EQ(names.total, size_t(1000));
+    CHECK_EQ(names.children.size(), size_t(64));
+    CHECK_EQ(names.children[0].path, std::string("Names[\"k0\"]"));
+    // a container below the depth limit knows how many children it has, but has none yet
+    InspectOptions shallow;
+    shallow.maxDepth = 0;
+    auto flat = inspectGlobals(inst, shallow);
+    CHECK_EQ(flat[0].value.children.size(), size_t(0));
+    CHECK_EQ(flat[0].value.total, size_t(1000));
+}
+
+TEST(evaluate_expression_pages_through_big_containers) {
+    TestRuntime rt;
+    auto prog = bigContainers(rt, 1000);
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    auto eval = [&](const std::string& e) { return evaluateExpression(inst, nullptr, 0, e); };
+
+    auto r = eval("Big[64..127]");                               // the next window (inclusive)
+    CHECK(r.ok);
+    CHECK_EQ(r.view.children.size(), size_t(64));
+    CHECK_EQ(r.view.offset, size_t(64));
+    CHECK_EQ(r.view.total, size_t(1000));
+    CHECK_EQ(r.view.path, std::string("Big"));
+    CHECK_EQ(r.view.children.front().name, std::string("[64]"));
+    CHECK_EQ(r.view.children.front().text, std::string("128"));
+    CHECK_EQ(r.view.children.back().path, std::string("Big[127]"));
+    CHECK(r.view.truncated);
+
+    r = eval("Big[990..5000]");                                  // clamped to the end
+    CHECK(r.ok);
+    CHECK_EQ(r.view.children.size(), size_t(10));
+    CHECK(!r.view.truncated);
+    r = eval("Big[ ..2 ]");
+    CHECK_EQ(r.view.children.size(), size_t(3));
+    r = eval("Big[998..]");
+    CHECK_EQ(r.view.children.size(), size_t(2));
+    CHECK_EQ(r.view.children.back().text, std::string("1998"));
+    r = eval("Big[2000..2100]");                                 // beyond the end: nothing, not an error
+    CHECK(r.ok);
+    CHECK_EQ(r.view.children.size(), size_t(0));
+
+    InspectOptions small;
+    small.maxRange = 10;                                         // a request is limited, the rest stays "more"
+    r = evaluateExpression(inst, nullptr, 0, "Big[0..999]", small);
+    CHECK_EQ(r.view.children.size(), size_t(10));
+    CHECK(r.view.truncated);
+
+    r = eval("Big[500]");
+    CHECK(r.ok);
+    CHECK_EQ(r.view.text, std::string("1000"));
+    CHECK_EQ(r.view.path, std::string("Big[500]"));
+    r = eval("Big[1000]");
+    CHECK(!r.ok);
+    CHECK_EQ(r.error, std::string("index 1000 is out of range (size 1000)"));
+    r = eval("Names[\"k7\"]");
+    CHECK(r.ok);
+    CHECK_EQ(r.view.text, std::string("7"));
+    r = eval("Names[k8]");                                       // a bare word is a string key
+    CHECK_EQ(r.view.text, std::string("8"));
+    r = eval("Names[\"nope\"]");
+    CHECK(!r.ok);
+    r = eval("Names[10..12]");                                   // entries by position (the keys are ordered as text)
+    CHECK(r.ok);
+    CHECK_EQ(r.view.children.size(), size_t(3));
+    CHECK_EQ(r.view.children[0].name, std::string("\"k107\""));
+    CHECK_EQ(r.view.children[0].path, std::string("Names[\"k107\"]"));
+    CHECK_EQ(r.view.total, size_t(1000));
+}
+
+TEST(evaluate_expression_reports_mistakes) {
+    TestRuntime rt;
+    auto prog = bigContainers(rt, 10);
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    auto err = [&](const std::string& e) {
+        auto r = evaluateExpression(inst, nullptr, 0, e);
+        CHECK(!r.ok);
+        return r.error;
+    };
+    CHECK_EQ(err("Missing"), std::string("unknown variable 'Missing'"));
+    CHECK_EQ(err(""), std::string("expected a variable name"));
+    CHECK_EQ(err("Big["), std::string("missing ']'"));
+    CHECK_EQ(err("Big[]"), std::string("empty []"));
+    CHECK_EQ(err("Big[1..2][0]"), std::string("a range can only be the last step"));
+    CHECK_EQ(err("Big[x..2]"), std::string("'x' is not a number"));
+    CHECK_EQ(err("Big.Length"), std::string("'Big' has no properties"));
+    CHECK_EQ(err("Big[k]"), std::string("'Big' is an array: use a number as index"));
+    CHECK_EQ(err("Big[2][1]"), std::string("'Big[2]' is not an array, map or object"));
+    CHECK_EQ(err("Big[2..3].X"), std::string("a range can only be the last step"));
+    auto ok = evaluateExpression(inst, nullptr, 0, "  Big [ 3 ]  ");       // blanks are fine
+    CHECK(ok.ok);
+    CHECK_EQ(ok.view.text, std::string("6"));
+}
+
+TEST(evaluate_expression_finds_locals_and_nested_values) {
+    TestRuntime rt;
+    registerSample(rt);
+    Script s;
+    s.variables.push_back({"G", "int", Value(3), "", ""});
+    s.variables.push_back({"Pets", "array<Dog>", Value(), "", ""});
+    Graph& f = s.addFunction("F", {{"P", "array<int>", false, false, Value()}});
+    f.locals.push_back({"G", "string", Value("local wins"), "", ""});      // hides the global G inside F
+    f.connections.clear();
+    NodeId entry = f.nodes[0].id;
+    NodeId d = f.addNode("flow.delay").id;
+    link(f, entry, "Then", d, "In");
+    Graph& g = s.addEventGraph();
+    NodeId ev = fpNode(g, "event:Go");
+    NodeId mk = fpNode(g, "new:Dog"), garr = fpVar(g, "var.get", "Pets"), push = fpNode(g, "array.add");
+    link(g, ev, "Then", mk, "In");
+    link(g, garr, "Value", push, "Array");
+    link(g, mk, "Object", push, "Item");
+    link(g, mk, "Then", push, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    auto r = evaluateExpression(inst, nullptr, 0, "Pets[0].Fetched");
+    CHECK(r.ok);
+    CHECK_EQ(r.view.text, std::string("0"));
+    CHECK_EQ(r.view.path, std::string("Pets[0].Fetched"));
+    r = evaluateExpression(inst, nullptr, 0, "Pets[0].Name");
+    CHECK(r.ok);
+    CHECK_EQ(r.view.text, std::string("\"animal\""));
+    r = evaluateExpression(inst, nullptr, 0, "Pets[0].Wings");
+    CHECK(!r.ok);
+    r = evaluateExpression(inst, nullptr, 0, "Pets[0][0..2]");                   // the properties of an object, by position
+    CHECK(r.ok);
+    CHECK_EQ(r.view.children.size(), size_t(3));
+    CHECK_EQ(r.view.children[0].path.rfind("Pets[0].", 0), size_t(0));
+    // inside a call: the frame's own names come first
+    auto call = inst.callFunction("F", {Value()});
+    CHECK(call.waiting());
+    r = evaluateExpression(inst, nullptr, 0, "G");
+    CHECK_EQ(r.view.text, std::string("3"));
+    r = evaluateExpression(inst, call.task.get(), 0, "G");
+    CHECK_EQ(r.view.text, std::string("\"local wins\""));
+    r = evaluateExpression(inst, call.task.get(), 0, "P");
+    CHECK(r.ok);
+    CHECK_EQ(r.view.text, std::string("array[0]"));
+    r = evaluateExpression(inst, call.task.get(), 0, "Pets");                     // globals stay visible
+    CHECK(r.ok);
+    CHECK_EQ(r.view.total, size_t(1));
+}
+
 int main(int argc, char** argv) {
     g_exeDir = std::filesystem::path(argv[0]).parent_path().string();
     std::setvbuf(stdout, nullptr, _IONBF, 0);

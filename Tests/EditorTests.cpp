@@ -4,6 +4,7 @@
 #include "Graph/LinkItem.hpp"
 #include "Graph/PalettePopup.hpp"
 #include "Panels/DetailsPanel.hpp"
+#include "Panels/InfoPanels.hpp"
 #include "Panels/MyScriptPanel.hpp"
 #include "Panels/TypeSpec.hpp"
 #include "Studio/RunController.hpp"
@@ -376,6 +377,122 @@ TEST(run_controller_is_not_flooded_by_a_script_that_follows_millions_of_links) {
     CHECK(links > 0);                                       // the animation still hears about the links ...
     CHECK(links < 20000);                                   // ... but not about every one of the 3 million
     CHECK(clock.elapsed() < 30000);
+}
+
+// The debugger panel never loads a whole big container: it shows the first elements, a "more" row loads the next ones and the Watch area
+// evaluates expressions for exactly what the user wants to see.
+static QTreeWidgetItem* childNamed(QTreeWidgetItem* parent, const QString& name) {
+    for (int i = 0; i < parent->childCount(); ++i)
+        if (parent->child(i)->text(0) == name) return parent->child(i);
+    return nullptr;
+}
+static int realChildren(QTreeWidgetItem* it) {      // without the "N more" row
+    int n = it->childCount();
+    if (n > 0 && it->child(n - 1)->text(0) == "...") --n;
+    return n;
+}
+static bool hasMoreRow(QTreeWidgetItem* it) { return it->childCount() > 0 && it->child(it->childCount() - 1)->text(0) == "..."; }
+
+TEST(debugger_panel_pages_big_arrays_and_evaluates_watches) {
+    Fixture f;
+    f.doc.edit("Big array", [&](fg::Script& s) {
+        s.variables.push_back({"IntArray", "array<int>", fg::Value(), "", ""});
+        auto& g = s.graphs[0];
+        g.connections.clear();
+        fg::NodeId loop = g.addNode("flow.for").id;
+        g.findNode(loop)->defaults["Last"] = fg::Value(int64_t(5000));
+        fg::NodeId get = g.addNode("var.get").id;
+        g.findNode(get)->props = {{"name", "IntArray"}, {"scope", "global"}};
+        fg::NodeId add = g.addNode("array.add").id;
+        fg::NodeId dbl = g.addNode("math.mul").id;
+        g.findNode(dbl)->defaults["B"] = fg::Value(int64_t(2));
+        g.connections.push_back({1, "Then", loop, "In"});
+        g.connections.push_back({loop, "Loop Body", add, "In"});
+        g.connections.push_back({get, "Value", add, "Array"});
+        g.connections.push_back({loop, "Index", dbl, "A"});
+        g.connections.push_back({dbl, "Result", add, "Item"});
+    });
+    RunController run(&f.doc);
+    DebugPanel panel(&f.doc, &run);
+    QTreeWidget* vars = nullptr;
+    QTreeWidget* watches = nullptr;
+    for (auto* t : panel.findChildren<QTreeWidget*>()) {
+        if (t->headerItem()->text(0) == "Variable") vars = t;
+        if (t->headerItem()->text(0) == "Watch") watches = t;
+    }
+    CHECK(vars && watches);
+    if (!vars || !watches) return;
+    auto arrayItem = [&]() -> QTreeWidgetItem* {
+        for (int i = 0; i < vars->topLevelItemCount(); ++i)
+            if (QTreeWidgetItem* it = childNamed(vars->topLevelItem(i), "IntArray")) return it;
+        return nullptr;
+    };
+
+    panel.addWatch("IntArray[4990..4999]");               // watches can be added before the script runs
+    panel.addWatch("IntArray[2500]");
+    panel.addWatch("Missing");
+    bool finished = false;
+    QObject::connect(&run, &RunController::finished, [&](bool, const QString&) { finished = true; });
+    CHECK(run.start("Main", {}));
+    CHECK(spinUntil([&] { return finished; }));
+    QCoreApplication::processEvents();
+
+    // 1. 5000 elements, but only 64 are loaded and a row says so
+    QTreeWidgetItem* arr = arrayItem();
+    CHECK(arr != nullptr);
+    if (!arr) return;
+    CHECK_EQ(arr->text(1), QString("array[5000]"));
+    CHECK_EQ(realChildren(arr), 64);
+    CHECK(hasMoreRow(arr));
+    CHECK(arr->child(arr->childCount() - 1)->text(1).startsWith("4,936 more"));
+    CHECK_EQ(arr->child(63)->text(1), QString("126"));
+
+    // 2. double-clicking the row loads the next 256
+    arr->setExpanded(true);
+    emit vars->itemDoubleClicked(arr->child(arr->childCount() - 1), 1);
+    CHECK_EQ(realChildren(arr), 64 + 256);
+    CHECK_EQ(arr->child(64)->text(0), QString("[64]"));
+    CHECK_EQ(arr->child(319)->text(1), QString("638"));
+    CHECK(hasMoreRow(arr));
+    CHECK(arr->child(arr->childCount() - 1)->text(1).startsWith("4,680 more"));
+
+    // 3. the watches: a range, one element, a mistake
+    CHECK_EQ(watches->topLevelItemCount(), 3);
+    QTreeWidgetItem* range = watches->topLevelItem(0);
+    CHECK_EQ(range->text(0), QString("IntArray[4990..4999]"));
+    CHECK_EQ(range->text(1), QString("array[5000]"));
+    CHECK_EQ(realChildren(range), 10);
+    CHECK(!hasMoreRow(range));
+    CHECK_EQ(range->child(0)->text(0), QString("[4990]"));
+    CHECK_EQ(range->child(9)->text(1), QString("9998"));
+    CHECK(range->isExpanded());
+    CHECK_EQ(watches->topLevelItem(1)->text(1), QString("5000"));
+    CHECK(watches->topLevelItem(2)->text(1).startsWith("<unknown variable"));
+
+    // 4. a watch of a window in the middle can be paged on as well
+    panel.addWatch("IntArray[1000..1009]");
+    QTreeWidgetItem* mid = watches->topLevelItem(3);
+    CHECK(hasMoreRow(mid));
+    emit watches->itemDoubleClicked(mid->child(mid->childCount() - 1), 1);
+    CHECK_EQ(realChildren(mid), 10 + 256);
+    CHECK_EQ(mid->child(10)->text(0), QString("[1010]"));
+
+    // 5. what the user opened and loaded survives the next refresh (a new run refreshes every tree)
+    finished = false;
+    CHECK(run.start("Main", {}));
+    CHECK(spinUntil([&] { return finished; }));
+    QCoreApplication::processEvents();
+    arr = arrayItem();
+    CHECK(arr != nullptr);
+    if (!arr) return;
+    CHECK(arr->isExpanded());
+    CHECK_EQ(realChildren(arr), 64 + 256);
+    CHECK_EQ(realChildren(watches->topLevelItem(3)), 10 + 256);
+
+    // 6. removing a watch
+    panel.removeWatch("Missing");
+    CHECK_EQ(watches->topLevelItemCount(), 3);
+    CHECK_EQ(panel.watchExpressions().size(), 3);
 }
 
 TEST(editing_stops_a_running_script) {
