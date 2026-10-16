@@ -2,6 +2,7 @@
 #include "Document.hpp"
 #include "Graph/GraphScene.hpp"
 #include "Graph/LinkItem.hpp"
+#include "Graph/PalettePopup.hpp"
 #include "Panels/MyScriptPanel.hpp"
 #include "Panels/TypeSpec.hpp"
 #include "Studio/RunController.hpp"
@@ -12,6 +13,8 @@
 
 #include <QApplication>
 #include <QKeyEvent>
+#include <QLineEdit>
+#include <QTreeWidget>
 #include <QMouseEvent>
 #include <QScrollBar>
 #include <QClipboard>
@@ -518,6 +521,35 @@ TEST(typing_in_a_pin_editor_resizes_the_node_live) {
     QCoreApplication::processEvents();
     CHECK(std::abs(n->boundingRect().width() - widthBefore) < 1.0);
     CHECK(std::abs(n->pinScenePos("Then", fg::PinDir::Out).x() - outBefore) < 1.0);
+}
+
+TEST(palette_search_keeps_the_category_tree) {
+    Fixture f;
+    PalettePopup popup(&f.scene, PinRef());
+    auto* search = popup.findChild<QLineEdit*>();
+    auto* tree = popup.findChild<QTreeWidget*>();
+    CHECK(search && tree);
+    if (!search || !tree) return;
+    search->setText("add");
+    CHECK(tree->topLevelItemCount() > 0);
+    bool onlyFoldersAtTop = true, foundLeafInFolder = false;
+    for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* top = tree->topLevelItem(i);
+        onlyFoldersAtTop &= !top->data(0, Qt::UserRole).isValid() && top->isExpanded();
+        std::function<void(QTreeWidgetItem*)> walk = [&](QTreeWidgetItem* it) {
+            for (int c = 0; c < it->childCount(); ++c) {
+                QTreeWidgetItem* ch = it->child(c);
+                if (ch->data(0, Qt::UserRole).isValid() && ch->text(0).contains("Add", Qt::CaseInsensitive)) foundLeafInFolder = true;
+                walk(ch);
+            }
+        };
+        walk(top);
+    }
+    CHECK(onlyFoldersAtTop);             // matches stay below their category folders instead of forming a flat list
+    CHECK(foundLeafInFolder);
+    CHECK(tree->currentItem() && tree->currentItem()->data(0, Qt::UserRole).isValid());       // the best match is selected
+    search->setText("");
+    CHECK(tree->topLevelItemCount() > 0);
 }
 
 TEST(type_spec_splits_containers) {

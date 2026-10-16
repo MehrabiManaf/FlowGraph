@@ -60,40 +60,42 @@ void PalettePopup::popup(const QPoint& screenPos) {
 
 void PalettePopup::rebuild() {
     tree_->clear();
-    QString q = search_->text().trimmed();
-    auto addLeaf = [&](QTreeWidgetItem* parent, size_t index, bool showCategory) {
-        const fg::NodeTemplate& t = all_[index];
-        auto* it = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(tree_);
-        it->setText(0, qs(t.title));
-        if (showCategory) {
-            it->setText(1, qs(t.category).replace('|', " > "));
-            it->setForeground(1, qApp->palette().color(QPalette::PlaceholderText));
-        }
-        it->setData(0, Qt::UserRole, qulonglong(index));
-        it->setToolTip(0, qs(t.doc));
-        return it;
-    };
-    if (!q.isEmpty()) {
-        auto hits = fg::searchPalette(all_, ss(q));
-        // map back to indices by identity of (defId, props, title)
-        for (auto& h : hits) {
+    const QString q = search_->text().trimmed();
+
+    // Which templates are shown, in which order. Without a query: everything sorted by category and title.
+    // With a query: only the matches. They keep the category tree; the folders are ordered by their best match
+    // and inside a folder the best match comes first.
+    std::vector<size_t> order;
+    if (q.isEmpty()) {
+        order.resize(all_.size());
+        for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+        std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+            if (all_[a].category != all_[b].category) return all_[a].category < all_[b].category;
+            return all_[a].title < all_[b].title;
+        });
+    } else {
+        auto hits = fg::searchPalette(all_, ss(q));       // best match first
+        std::vector<size_t> ranked;
+        for (auto& h : hits)
             for (size_t i = 0; i < all_.size(); ++i)
                 if (all_[i].defId == h.defId && all_[i].title == h.title && all_[i].props == h.props && all_[i].category == h.category) {
-                    addLeaf(nullptr, i, true);
+                    ranked.push_back(i);
                     break;
                 }
-        }
-        if (tree_->topLevelItemCount()) tree_->setCurrentItem(tree_->topLevelItem(0));
-        return;
+        std::map<std::string, size_t> bestRank;           // category -> position of its best match
+        for (size_t pos = 0; pos < ranked.size(); ++pos) bestRank.emplace(all_[ranked[pos]].category, pos);
+        std::vector<size_t> position(all_.size(), 0);
+        for (size_t pos = 0; pos < ranked.size(); ++pos) position[ranked[pos]] = pos;
+        order = ranked;
+        std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+            size_t ra = bestRank[all_[a].category], rb = bestRank[all_[b].category];
+            if (ra != rb) return ra < rb;
+            return position[a] < position[b];
+        });
     }
-    // categorised view
+
     std::map<QString, QTreeWidgetItem*> folders;
-    std::vector<size_t> order(all_.size());
-    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
-    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-        if (all_[a].category != all_[b].category) return all_[a].category < all_[b].category;
-        return all_[a].title < all_[b].title;
-    });
+    std::map<size_t, QTreeWidgetItem*> leafOf;
     for (size_t i : order) {
         QStringList path = qs(all_[i].category).split('|', Qt::SkipEmptyParts);
         QTreeWidgetItem* parent = nullptr;
@@ -112,9 +114,20 @@ void PalettePopup::rebuild() {
             }
             parent = it->second;
         }
-        addLeaf(parent, i, false);
+        const fg::NodeTemplate& t = all_[i];
+        auto* leaf = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(tree_);
+        leaf->setText(0, qs(t.title));
+        leaf->setData(0, Qt::UserRole, qulonglong(i));
+        leaf->setToolTip(0, qs(t.doc));
+        leafOf[i] = leaf;
     }
-    if (from_.valid()) tree_->expandAll();
+    if (!q.isEmpty() || from_.valid()) tree_->expandAll();
+    if (!q.isEmpty() && !order.empty()) {
+        // the best match is the first leaf of the first folder
+        QTreeWidgetItem* best = leafOf[order.front()];
+        tree_->setCurrentItem(best);
+        tree_->scrollToItem(best);
+    }
 }
 
 void PalettePopup::accept(QTreeWidgetItem* item) {
