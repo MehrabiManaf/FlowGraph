@@ -15,6 +15,16 @@ enum class PinDir : uint8_t { In, Out };
 // Type expressions are plain strings: "int", "string", "Actor", "array<T>", "map<string,float>".
 // A name that is declared as a type parameter of the node (see NodeDef::typeParams) is a
 // wildcard that gets resolved when the node is connected ("T", "K", "V").
+// How a built-in node uses an array / map on a pin. Containers are references inside a graph: a node does not copy the one it is
+// connected to. The editor draws such pins as references (diamonds; a padlock too for Read); a pin whose type is not a container is
+// not affected, so the same annotation serves "array<T>" pins and "T" pins that may or may not resolve to a container.
+enum class PinAccess : uint8_t {
+    Value,      // an ordinary value
+    Read,       // input: reads the connected container without copying it - a const reference
+    Modify,     // input: modifies the connected container in place - a reference
+    Alias,      // output: refers to a container that exists elsewhere (an element, a variable, an input) instead of a new one - a reference
+};
+
 struct PinDef {
     std::string name;
     PinKind kind = PinKind::Data;
@@ -24,6 +34,7 @@ struct PinDef {
     std::string doc;
     bool byRef = false;               // function parameter passed by reference
     bool isConst = false;             // const function parameter
+    PinAccess access = PinAccess::Value;
     bool hidden = false;              // not shown in the editor (still evaluated)
     bool advanced = false;
 };
@@ -40,6 +51,10 @@ inline PinDef dataIn(std::string name, std::string type, Value def = Value()) {
 inline PinDef dataOut(std::string name, std::string type) {
     PinDef p; p.name = std::move(name); p.dir = PinDir::Out; p.type = std::move(type); return p;
 }
+
+inline PinDef reads(PinDef p) { p.access = PinAccess::Read; return p; }
+inline PinDef modifies(PinDef p) { p.access = PinAccess::Modify; return p; }
+inline PinDef aliases(PinDef p) { p.access = PinAccess::Alias; return p; }
 
 // A node type parameter ("T"). `allowed` restricts the types it can take (empty = anything);
 // `fallback` is used while the parameter is still unresolved.

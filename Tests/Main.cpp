@@ -1954,36 +1954,93 @@ TEST(evaluate_expression_finds_locals_and_nested_values) {
     CHECK_EQ(r.view.total, size_t(1));
 }
 
-TEST(container_nodes_that_modify_their_container_take_it_by_reference) {
+// Containers are references inside a graph: a built-in node that works with an array / map does not copy it. The pins say so (by reference
+// when the node modifies the container, const reference when it only reads it, reference on outputs that hand out an existing container).
+TEST(builtin_nodes_show_how_they_use_containers) {
     TestRuntime rt;
     Script s;
+    s.variables.push_back({"Ints", "array<int>", Value(), "", ""});
+    s.variables.push_back({"Nested", "array<array<int>>", Value(), "", ""});
+    s.variables.push_back({"Lists", "map<string,array<int>>", Value(), "", ""});
+    s.variables.push_back({"Num", "int", Value(0), "", ""});
     Graph& g = s.addEventGraph();
     fpNode(g, "event:Go");
-    struct Case { const char* node; const char* pin; bool byRef; };
-    const Case cases[] = {
-        {"array.add", "Array", true},     {"array.insert", "Array", true}, {"array.set", "Array", true}, {"array.remove", "Array", true},
-        {"array.clear", "Array", true},   {"map.set", "Map", true},        {"map.remove", "Map", true}, {"map.clear", "Map", true},
-        {"array.get", "Array", false},    {"array.length", "Array", false}, {"array.contains", "Array", false}, {"array.find", "Array", false},
-        {"map.get", "Map", false},        {"map.contains", "Map", false},  {"map.length", "Map", false},      {"map.keys", "Map", false},
-        {"map.values", "Map", false},     {"flow.foreach", "Array", false},
-    };
+    struct Case { const char* node; const char* pin; PinDir dir; bool byRef; bool isConst; };
+    std::vector<Case> cases;
     std::vector<NodeId> ids;
-    for (auto& c : cases) ids.push_back(fpNode(g, c.node));
+    auto add = [&](const char* node, std::vector<Case> pins) {
+        NodeId id = fpNode(g, node);
+        for (auto& c : pins) { cases.push_back(c); ids.push_back(id); }
+        return id;
+    };
+    const PinDir in = PinDir::In, out = PinDir::Out;
+    // nodes that modify their container: by reference
+    for (const char* n : {"array.add", "array.insert", "array.set", "array.remove", "array.clear"}) add(n, {{n, "Array", in, true, false}});
+    for (const char* n : {"map.set", "map.remove", "map.clear"}) add(n, {{n, "Map", in, true, false}});
+    // nodes that only read it: const reference
+    for (const char* n : {"array.get", "array.length", "array.contains", "array.find", "flow.foreach"}) add(n, {{n, "Array", in, true, true}});
+    for (const char* n : {"map.get", "map.contains", "map.length", "map.keys", "map.values"}) add(n, {{n, "Map", in, true, true}});
+    // new containers and plain values are not references
+    add("array.make", {{"array.make", "Array", out, false, false}, {"array.make", "[0]", in, false, false}});
+    add("map.keys", {{"map.keys", "Keys", out, false, false}});
+    add("array.add", {{"array.add", "Item", in, false, false}, {"array.add", "Array", in, true, false}});
+
+    // pins of type T are references only when T turns out to be a container
+    NodeId nested = fpVar(g, "var.get", "Nested"), ints = fpVar(g, "var.get", "Ints"), num = fpVar(g, "var.get", "Num"), lists = fpVar(g, "var.get", "Lists");
+    ids.push_back(nested); cases.push_back({"var.get Nested", "Value", out, true, false});
+    ids.push_back(ints); cases.push_back({"var.get Ints", "Value", out, true, false});
+    ids.push_back(num); cases.push_back({"var.get Num", "Value", out, false, false});
+    NodeId getOuter = fpNode(g, "array.get"), getInner = fpNode(g, "array.get");
+    link(g, nested, "Value", getOuter, "Array");
+    link(g, ints, "Value", getInner, "Array");
+    ids.push_back(getOuter); cases.push_back({"array.get of arrays", "Item", out, true, false});
+    ids.push_back(getInner); cases.push_back({"array.get of ints", "Item", out, false, false});
+    NodeId each = fpNode(g, "flow.foreach"), eachInts = fpNode(g, "flow.foreach");
+    link(g, nested, "Value", each, "Array");
+    link(g, ints, "Value", eachInts, "Array");
+    ids.push_back(each); cases.push_back({"foreach of arrays", "Element", out, true, false});
+    ids.push_back(eachInts); cases.push_back({"foreach of ints", "Element", out, false, false});
+    NodeId mapGet = fpNode(g, "map.get");
+    link(g, lists, "Value", mapGet, "Map");
+    ids.push_back(mapGet); cases.push_back({"map.get of arrays", "Value", out, true, false});
+    ids.push_back(mapGet); cases.push_back({"map.get of arrays", "Key", in, false, false});
+    ids.push_back(mapGet); cases.push_back({"map.get of arrays", "Found", out, false, false});
+    NodeId sel = fpNode(g, "flow.select"), selInts = fpNode(g, "flow.select");
+    link(g, nested, "Value", sel, "A");
+    link(g, num, "Value", selInts, "A");
+    ids.push_back(sel); cases.push_back({"select of arrays", "A", in, true, true});
+    ids.push_back(sel); cases.push_back({"select of arrays", "Result", out, true, false});
+    ids.push_back(selInts); cases.push_back({"select of ints", "A", in, false, false});
+    ids.push_back(selInts); cases.push_back({"select of ints", "Result", out, false, false});
+    NodeId eq = fpNode(g, "cmp.eq"), eqNum = fpNode(g, "cmp.eq");
+    link(g, ints, "Value", eq, "A");
+    link(g, num, "Value", eqNum, "A");
+    ids.push_back(eq); cases.push_back({"cmp.eq of arrays", "A", in, true, true});
+    ids.push_back(eq); cases.push_back({"cmp.eq of arrays", "Result", out, false, false});
+    ids.push_back(eqNum); cases.push_back({"cmp.eq of ints", "A", in, false, false});
+    NodeId addNested = fpNode(g, "array.add");
+    link(g, nested, "Value", addNested, "Array");
+    ids.push_back(addNested); cases.push_back({"array.add to arrays", "Array", in, true, false});
+    ids.push_back(addNested); cases.push_back({"array.add to arrays", "Item", in, false, false});   // the item is copied into the array
+    NodeId set = fpVar(g, "var.set", "Ints");
+    ids.push_back(set); cases.push_back({"var.set", "Value", in, false, false});                  // assignment copies
+
     auto prog = build(rt, s);
     CHECK(prog->ok());
     const CompiledGraph& cg = prog->graphs[0];
-    for (size_t i = 0; i < ids.size(); ++i) {
+    CHECK_EQ(ids.size(), cases.size());
+    for (size_t i = 0; i < ids.size() && i < cases.size(); ++i) {
         const CompiledNode* n = cg.findNode(ids[i]);
-        const CompiledPin* pin = n ? n->findPin(cases[i].pin, PinDir::In, PinKind::Data) : nullptr;
-        CHECK(pin != nullptr);
-        if (pin) {
-            CHECK_EQ(pin->byRef, cases[i].byRef);
-            CHECK(!pin->isConst);
+        const CompiledPin* pin = n ? n->findPin(cases[i].pin, cases[i].dir, PinKind::Data) : nullptr;
+        if (!pin) {
+            if (std::string(cases[i].pin).empty()) continue;
+            CHECK(pin != nullptr);
+            continue;
         }
-        // only the container pin: the other inputs (index, item, key, value) are plain values
-        if (n)
-            for (int pi : n->dataIn)
-                if (n->pins[size_t(pi)].name != cases[i].pin) CHECK(!n->pins[size_t(pi)].byRef);
+        if (pin->byRef != cases[i].byRef || pin->isConst != cases[i].isConst)
+            std::printf("  %s.%s: byRef=%d const=%d, expected byRef=%d const=%d%c", cases[i].node, cases[i].pin, int(pin->byRef), int(pin->isConst), int(cases[i].byRef), int(cases[i].isConst), 10);
+        CHECK_EQ(pin->byRef, cases[i].byRef);
+        CHECK_EQ(pin->isConst, cases[i].isConst);
     }
 }
 

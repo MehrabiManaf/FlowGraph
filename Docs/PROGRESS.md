@@ -147,3 +147,9 @@ Rules to keep it correct:
   element color, its connector is 15 px wide); map = 2 x 2 matrix, left column in the key type color, right column in the value type color;
   by reference: the circles become diamonds (the small diamond on top of reference containers is gone); const keeps the padlock. Items are
   filled when connected, hollow otherwise. Test: pin_connectors_show_the_container_kind (renders the glyphs and samples pixels).
+- Built-in nodes and containers (PinDef::access = PinAccess::Read / Modify / Alias, helpers reads() / modifies() / aliases(); the compiler turns
+  it into CompiledPin::byRef / isConst only when the pin's resolved type is an array / map): nodes that change a container (Add, Insert, Set
+  Item, Remove At, Clear, Set Entry, Remove Entry, Clear) take it by reference; nodes that only read it (Get Item, Length, Contains, Find, Get
+  Entry, Contains Key, Keys, Values, For Each, Select and Reroute inputs, comparisons) take a const reference; outputs that hand out a container
+  that exists elsewhere (Get Variable, Get Item, Get Entry, For Each element, Select result, Reroute) are references. Visual only: the compiler
+  and interpreter use byRef / isConst of a pin for function calls only. Test: builtin_nodes_show_how_they_use_containers.

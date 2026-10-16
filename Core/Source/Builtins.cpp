@@ -173,7 +173,7 @@ void registerScriptNodes(Registry& r) {
             if (c.graph && (n.prop("scope").empty() || n.prop("scope") == "param") && !c.graph->findLocal(n.prop("name")))
                 for (auto& p : c.graph->inputs)
                     if (p.name == n.prop("name") && p.isConst) constParam = true;
-            PinDef d = isSet ? dataIn("Value", t) : dataOut("Value", t);
+            PinDef d = isSet ? dataIn("Value", t) : aliases(dataOut("Value", t));      // a container variable is read without a copy
             d.isConst = constParam;
             pins.push_back(std::move(d));
         };
@@ -208,8 +208,8 @@ void registerScriptNodes(Registry& r) {
         d.userCreatable = false;
         d.aliasesFirstInput = true;
         d.typeParams.push_back({"T", {}, "any"});
-        d.pins.push_back(dataIn("In", "T"));
-        d.pins.push_back(dataOut("Out", "T"));
+        d.pins.push_back(reads(dataIn("In", "T")));
+        d.pins.push_back(aliases(dataOut("Out", "T")));
         r.addNode(std::move(d));
     }
 }
@@ -268,7 +268,7 @@ void registerFlow(Registry& r) {
         d.keywords = "loop array iterate";
         d.breakPin = 0;
         d.typeParams.push_back({"T", {}, "int"});
-        d.pins = {execIn(), dataIn("Array", "array<T>"), execOut("Completed"), execOut("Loop Body"), dataOut("Element", "T"), dataOut("Index", "int")};
+        d.pins = {execIn(), reads(dataIn("Array", "array<T>")), execOut("Completed"), execOut("Loop Body"), aliases(dataOut("Element", "T")), dataOut("Index", "int")};
         d.run = [](NodeCtx& c) {
             int64_t i = c.resumed() ? c.state() + 1 : 0;
             auto* a = c.in(0).arrayPtr();
@@ -312,7 +312,7 @@ void registerFlow(Registry& r) {
         NodeDef d = pureNode("flow.select", "Select", "Flow");
         d.keywords = "ternary choose if";
         d.typeParams.push_back({"T", {}, "int"});
-        d.pins = {dataIn("Condition", "bool", Value(false)), dataIn("A", "T"), dataIn("B", "T"), dataOut("Result", "T")};
+        d.pins = {dataIn("Condition", "bool", Value(false)), reads(dataIn("A", "T")), reads(dataIn("B", "T")), aliases(dataOut("Result", "T"))};
         d.run = [](NodeCtx& c) { c.out(0, c.inBool(0) ? c.in(1) : c.in(2)); };
         r.addNode(std::move(d));
     }
@@ -403,7 +403,7 @@ void registerMath(Registry& r) {
         d.keywords = kw;
         if (ordered) d.typeParams.push_back({"T", {"int", "float", "string"}, "int"});
         else d.typeParams.push_back({"T", {}, "int"});
-        d.pins = {dataIn("A", "T"), dataIn("B", "T"), dataOut("Result", "bool")};
+        d.pins = {reads(dataIn("A", "T")), reads(dataIn("B", "T")), dataOut("Result", "bool")};
         d.run = [fn](NodeCtx& c) { c.out(0, Value(fn(c.in(0), c.in(1)))); };
         r.addNode(std::move(d));
     };
@@ -491,12 +491,12 @@ void registerStrings(Registry& r) {
 }
 
 // ------------------------------------------------------------------ containers
-// A node that modifies its container changes the one it is connected to (containers are references inside a graph), so its first data
-// input is a by-reference pin, like a by-reference parameter of a function.
-void markContainerByRef(NodeDef& d) {
+// The first data input of an Array / Map node is the container: a node that modifies it changes the one it is connected to (containers
+// are references inside a graph), every other node only reads it. Neither copies it.
+void markContainerAccess(NodeDef& d, bool mutating) {
     for (auto& p : d.pins)
         if (p.kind == PinKind::Data && p.dir == PinDir::In) {
-            p.byRef = true;
+            p.access = mutating ? PinAccess::Modify : PinAccess::Read;
             return;
         }
 }
@@ -508,7 +508,7 @@ void registerContainers(Registry& r) {
         d.typeParams.push_back({"T", {}, "int"});
         for (auto& p : pins) d.pins.push_back(std::move(p));
         d.mutatesFirstInput = mutates;
-        if (mutates) markContainerByRef(d);
+        markContainerAccess(d, mutates);
         d.keywords = "array list vector";
         d.run = std::move(run);
         r.addNode(std::move(d));
@@ -529,17 +529,17 @@ void registerContainers(Registry& r) {
         a.items.erase(a.items.begin() + checkIndex(c, c.inInt(1), a.items.size()));
     });
     arrayNode("array.clear", Intrinsic::None, "Clear", false, true, {dataIn("Array", "array<T>")}, [](NodeCtx& c) { arrayArg(c, 0).items.clear(); });
-    arrayNode("array.get", Intrinsic::ArrayGet, "Get Item", true, false, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataOut("Item", "T")}, [](NodeCtx& c) {
+    arrayNode("array.get", Intrinsic::ArrayGet, "Get Item", true, false, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), aliases(dataOut("Item", "T"))}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         c.out(0, a.items[static_cast<size_t>(checkIndex(c, c.inInt(1), a.items.size()))]);
     });
     arrayNode("array.length", Intrinsic::ArrayLength, "Length", true, false, {dataIn("Array", "array<T>"), dataOut("Length", "int")},
               [](NodeCtx& c) { c.out(0, Value(static_cast<int64_t>(arrayArg(c, 0).items.size()))); });
-    arrayNode("array.contains", Intrinsic::None, "Contains", true, false, {dataIn("Array", "array<T>"), dataIn("Item", "T"), dataOut("Contains", "bool")}, [](NodeCtx& c) {
+    arrayNode("array.contains", Intrinsic::None, "Contains", true, false, {dataIn("Array", "array<T>"), reads(dataIn("Item", "T")), dataOut("Contains", "bool")}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         c.out(0, Value(std::find(a.items.begin(), a.items.end(), c.in(1)) != a.items.end()));
     });
-    arrayNode("array.find", Intrinsic::None, "Find", true, false, {dataIn("Array", "array<T>"), dataIn("Item", "T"), dataOut("Index", "int")}, [](NodeCtx& c) {
+    arrayNode("array.find", Intrinsic::None, "Find", true, false, {dataIn("Array", "array<T>"), reads(dataIn("Item", "T")), dataOut("Index", "int")}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         auto it = std::find(a.items.begin(), a.items.end(), c.in(1));
         c.out(0, Value(it == a.items.end() ? int64_t(-1) : static_cast<int64_t>(it - a.items.begin())));
@@ -571,7 +571,7 @@ void registerContainers(Registry& r) {
         d.typeParams.push_back({"V", {}, "int"});
         for (auto& p : pins) d.pins.push_back(std::move(p));
         d.mutatesFirstInput = mutates;
-        if (mutates) markContainerByRef(d);
+        markContainerAccess(d, mutates);
         d.keywords = "map dictionary table";
         d.run = std::move(run);
         r.addNode(std::move(d));
@@ -580,13 +580,13 @@ void registerContainers(Registry& r) {
             [](NodeCtx& c) { mapArg(c, 0).items[c.in(1)] = c.in(2).deepCopy(); });
     mapNode("map.remove", Intrinsic::None, "Remove Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K")}, [](NodeCtx& c) { mapArg(c, 0).items.erase(c.in(1)); });
     mapNode("map.clear", Intrinsic::None, "Clear", false, true, {dataIn("Map", "map<K,V>")}, [](NodeCtx& c) { mapArg(c, 0).items.clear(); });
-    mapNode("map.get", Intrinsic::MapGet, "Get Entry", true, false, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataOut("Value", "V"), dataOut("Found", "bool")}, [](NodeCtx& c) {
+    mapNode("map.get", Intrinsic::MapGet, "Get Entry", true, false, {dataIn("Map", "map<K,V>"), reads(dataIn("Key", "K")), aliases(dataOut("Value", "V")), dataOut("Found", "bool")}, [](NodeCtx& c) {
         auto& m = mapArg(c, 0);
         auto it = m.items.find(c.in(1));
         c.out(0, it == m.items.end() ? c.registry().defaultValue(m.val) : it->second);
         c.out(1, Value(it != m.items.end()));
     });
-    mapNode("map.contains", Intrinsic::MapContains, "Contains Key", true, false, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataOut("Contains", "bool")},
+    mapNode("map.contains", Intrinsic::MapContains, "Contains Key", true, false, {dataIn("Map", "map<K,V>"), reads(dataIn("Key", "K")), dataOut("Contains", "bool")},
             [](NodeCtx& c) { c.out(0, Value(mapArg(c, 0).items.count(c.in(1)) > 0)); });
     mapNode("map.length", Intrinsic::MapLength, "Length", true, false, {dataIn("Map", "map<K,V>"), dataOut("Length", "int")},
             [](NodeCtx& c) { c.out(0, Value(static_cast<int64_t>(mapArg(c, 0).items.size()))); });

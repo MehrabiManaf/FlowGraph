@@ -516,10 +516,16 @@ void NodeItem::hoverMoveEvent(QGraphicsSceneHoverEvent* e) {
     if (changed) update();
     if (under) {
         QString tip = gscene_->pinTooltip(refFor(*under), under->doc);
-        if (under->isConst) tip += QChar('\n') + QString("const: cannot be modified by the function");
-        if (under->byRef)
-            tip += QChar('\n') + (cn_.op == fg::NodeOp::CallFunction ? QString("by reference: refers to the caller's variable")
-                                                                    : QString("by reference: this node modifies the container in place"));
+        const bool call = cn_.op == fg::NodeOp::CallFunction;
+        const bool input = under->dir == fg::PinDir::In;
+        if (under->isConst)
+            tip += QChar('\n') + (call ? QString("const: cannot be modified by the function")
+                                       : input ? QString("const reference: this node reads the container without copying it")
+                                               : QString("const reference: the container cannot be modified"));
+        if (under->byRef && !(under->isConst && !call))
+            tip += QChar('\n') + (call ? QString("by reference: refers to the caller's variable")
+                                       : input ? QString("by reference: this node modifies the container in place")
+                                               : QString("reference: refers to a container that exists elsewhere, not a copy"));
         if (under->containerKind == 1) tip += QChar('\n') + QString("array");
         else if (under->containerKind == 2) tip += QChar('\n') + QString("map");
         setToolTip(tip);

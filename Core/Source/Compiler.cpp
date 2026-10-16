@@ -58,6 +58,10 @@ void resolvePins(const Registry& reg, Work& w) {
         }
         cp.type = reg.resolveType(e.substitute(eff));
         if (!cp.type) cp.type = reg.tAny();
+        if (pd.access != PinAccess::Value && cp.type->isContainer()) {       // the node refers to the container it is connected to
+            cp.byRef = true;
+            if (pd.access == PinAccess::Read) cp.isConst = true;
+        }
         if (cp.dir == PinDir::In) {
             Value d = pd.def;
             auto it = w.node->defaults.find(pd.name);
