@@ -14,6 +14,7 @@
 #include <QMimeData>
 #include <QRegularExpressionValidator>
 #include <algorithm>
+#include <cmath>
 
 #include <set>
 
@@ -55,9 +56,15 @@ GraphScene::GraphScene(Document* doc, const QString& graphName, QObject* parent)
     addItem(editorProxy_);
     editorProxy_->hide();
     connect(editor_, &QLineEdit::textChanged, this, [this](const QString& t) {
-        if (auto* n = nodeItem(editNode_)) n->setEditorPreview(editPin_, t);
-        QFontMetrics fm(editor_->font());
-        editor_->setFixedWidth(std::clamp(fm.horizontalAdvance(t) + 16, 24, 400));
+        if (editNode_ == 0) return;
+        if (auto* n = nodeItem(editNode_)) {
+            n->setEditorPreview(editPin_, t);              // re-lays out the node for the new text
+            QRectF r = n->editorSceneRect(editPin_);       // the editor widget covers the pin's editor box
+            if (!r.isNull()) {
+                editor_->setFixedWidth(int(std::ceil(r.width())));
+                editorProxy_->setPos(r.topLeft());
+            }
+        }
     });
     connect(editor_, &QLineEdit::editingFinished, this, [this] { onInplaceFinished(); });
     connect(this, &QGraphicsScene::selectionChanged, this, [this] {
@@ -354,10 +361,8 @@ void GraphScene::onInplaceFinished() {
     hideInplace();
     NodeItem* item = nodeItem(id);
     if (!item) return;
-    if (cancelled || text == editOriginal_) {
-        item->setEditorPreview(pin, editOriginal_);
-        return;
-    }
+    item->clearEditorPreview();
+    if (cancelled || text == editOriginal_) return;
     for (auto& p : item->compiled().pins)
         if (p.name == pin && p.dir == fg::PinDir::In && p.kind == fg::PinKind::Data) {
             setPinDefault(id, pin, parseDefault(p, text));

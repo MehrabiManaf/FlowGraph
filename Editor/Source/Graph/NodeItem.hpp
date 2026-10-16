@@ -4,6 +4,7 @@
 #include <QGraphicsObject>
 #include <QPainterPath>
 
+#include <map>
 #include <optional>
 #include <vector>
 
@@ -37,6 +38,8 @@ public:
     QPointF pinScenePos(const std::string& name, fg::PinDir dir) const;
     // Updates the preview text of a pin editor while it is being edited.
     void setEditorPreview(const std::string& pin, const QString& text);
+    void clearEditorPreview();
+    QRectF editorSceneRect(const std::string& pin) const;       // where the editor of an input pin is drawn
 
     void flash() { flashStamp_ = nowMicros(); update(); }
 
@@ -93,6 +96,7 @@ private:
     std::vector<PinView> inExec_, inData_, outExec_, outData_;
     bool hovered_ = false;
     qint64 flashStamp_ = 0;
+    std::map<std::string, QString> preview_;   // text currently typed into pin editors (not committed yet)
 };
 
 } // namespace fged

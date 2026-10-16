@@ -490,6 +490,36 @@ TEST(backspace_in_pin_editor_does_not_delete_the_node) {
     CHECK(sc->nodeItem(2) != nullptr);
 }
 
+TEST(typing_in_a_pin_editor_resizes_the_node_live) {
+    StudioFixture f;
+    CHECK(f.view != nullptr);
+    if (!f.view) return;
+    GraphScene* sc = f.scene();
+    NodeItem* n = sc->nodeItem(2);
+    sc->selectOnly(2);
+    double widthBefore = n->boundingRect().width();
+    double outBefore = n->pinScenePos("Then", fg::PinDir::Out).x();
+    sc->startInplaceEdit(n, "String", n->scenePos() + QPointF(10, 40), 80, "Hi", f.rt.registry().tString());
+    QCoreApplication::processEvents();
+    for (int i = 0; i < 30; ++i) {
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, "x");
+        QApplication::sendEvent(f.view, &press);
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_X, Qt::NoModifier, "x");
+        QApplication::sendEvent(f.view, &release);
+    }
+    QCoreApplication::processEvents();
+    // nothing was committed yet, but the node already grew and the output pins moved with it
+    CHECK(n->boundingRect().width() > widthBefore + 40);
+    CHECK(n->pinScenePos("Then", fg::PinDir::Out).x() > outBefore + 40);
+    CHECK(!f.win.document()->isDirty());
+    // Escape restores the original layout
+    QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QApplication::sendEvent(f.view, &esc);
+    QCoreApplication::processEvents();
+    CHECK(std::abs(n->boundingRect().width() - widthBefore) < 1.0);
+    CHECK(std::abs(n->pinScenePos("Then", fg::PinDir::Out).x() - outBefore) < 1.0);
+}
+
 TEST(type_spec_splits_containers) {
     TypeSpec a = TypeSpec::parse("array<float>");
     CHECK(a.container == TypeSpec::Container::Array && a.value == "float");

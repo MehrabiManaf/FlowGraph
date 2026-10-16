@@ -124,7 +124,11 @@ void NodeItem::layout() {
             case fg::TypeKind::Enum: v.editor = Editor::Choice; break;
             default: break;
             }
-            if (v.editor != Editor::None) v.editorText = defaultText(p);
+            if (v.editor != Editor::None) {
+                v.editorText = defaultText(p);
+                auto pv = preview_.find(p.name);       // text that is being typed right now
+                if (pv != preview_.end() && v.editor == Editor::Line) v.editorText = pv->second;
+            }
         }
         inData_.push_back(std::move(v));
     }
@@ -282,17 +286,27 @@ QPointF NodeItem::pinScenePos(const std::string& name, fg::PinDir dir) const {
 }
 
 void NodeItem::setEditorPreview(const std::string& pin, const QString& text) {
-    for (auto& v : inData_)
-        if (v.name == pin) {
-            v.editorText = text;
-            QFontMetricsF fm(metrics().font);
-            const Metrics& M = metrics();
-            if (v.editor == Editor::Line) {
-                double w = std::clamp(fm.horizontalAdvance(text) + 12.0, M.editorMin, M.editorMax);
-                v.editorRect.setWidth(w);
-            }
-        }
+    // the whole node follows the text that is being typed: node width, output pins and links
+    prepareGeometryChange();
+    preview_[pin] = text;
+    layout();
     update();
+    gscene_->nodeMoved(this);
+}
+
+void NodeItem::clearEditorPreview() {
+    if (preview_.empty()) return;
+    prepareGeometryChange();
+    preview_.clear();
+    layout();
+    update();
+    gscene_->nodeMoved(this);
+}
+
+QRectF NodeItem::editorSceneRect(const std::string& pin) const {
+    for (auto& v : inData_)
+        if (v.name == pin) return mapRectToScene(v.editorRect);
+    return QRectF();
 }
 
 // ------------------------------------------------------------------ painting
