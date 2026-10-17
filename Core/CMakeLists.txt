@@ -1,4 +1,4 @@
-add_library(FlowGraphCore STATIC
+add_library(FlowGraphCore ${FG_LIB_TYPE}
     Source/Json.cpp
     Source/TypeExpr.cpp
     Source/Value.cpp

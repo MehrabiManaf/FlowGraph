@@ -12,6 +12,15 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(FG_BUILD_EDITOR   "Build the Qt based editor and FlowGraph Studio" ON)
 option(FG_BUILD_TESTS    "Build the unit tests"                            ON)
 option(FG_BUILD_EXAMPLES "Build examples and sample plugins"               ON)
+option(FG_SHARED         "Build FlowGraphCore and FlowGraphEditor as shared libraries" ON)
+
+if(FG_SHARED)
+    set(FG_LIB_TYPE SHARED)
+    # MSVC: export every symbol of the libraries (there is no per-class export macro).
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+else()
+    set(FG_LIB_TYPE STATIC)
+endif()
 
 if(MSVC)
     add_compile_options(/W4 /permissive- /Zc:__cplusplus /utf-8 /wd4100 /wd4127 /wd4251 /wd4275)
