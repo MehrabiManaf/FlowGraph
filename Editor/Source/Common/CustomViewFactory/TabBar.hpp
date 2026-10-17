@@ -30,6 +30,8 @@ private slots:
     void OnCurrentDockWidgetChanged(KDDockWidgets::Core::DockWidget* pDockWidget);
 public:
     void SetTabBarHidden(bool Hidden);
+    // Shows or collapses the tab bar the way the state of its dock says, without animation (after a layout was restored).
+    void RefreshTabBarVisibility();
 private:
     double AnimationProgress() const { return m_AnimationProgress; }
     void SetAnimationProgress(const double& Progress);

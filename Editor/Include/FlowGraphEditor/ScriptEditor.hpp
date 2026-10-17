@@ -80,7 +80,7 @@ public:
     virtual void scriptChanged(ScriptEditor&, ScriptChange) {}
     // The entry that is preselected in the toolbar when the list of entries is rebuilt.
     virtual QString preferredEntry() const { return QStringLiteral("Main"); }
-    // Text in front of the entries box of the toolbar ("Run:" / "Launch configuration:") and its tooltip.
+    // Title of the tooltip of the entries box of the toolbar ("Run" / "Launch configuration"; a trailing colon is dropped) and the text below it.
     virtual QString launchLabel() const { return QStringLiteral("Run:"); }
     virtual QString launchToolTip() const { return QStringLiteral("Event or function to run"); }
     // The user picked another entry in the toolbar.

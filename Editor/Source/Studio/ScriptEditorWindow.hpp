@@ -53,6 +53,9 @@ public:
     void devProbe(const QString& file, bool coordinates);
     // Developer aid: renders the current graph at 2x into a PNG.
     void devSceneShot(const QString& file);
+    // Puts the docks, tabs, floating windows and the window itself back where the user left them the last time
+    // (QSettings), and saves them again when the window is closed. Called by ScriptEditor::show().
+    void restoreSavedLayout();
 
 protected:
     void closeEvent(QCloseEvent* e) override;
@@ -106,6 +109,7 @@ private:
     CDockWidget* dMy_ = nullptr;
     CDockWidget* dDetails_ = nullptr;
     bool sizesApplied_ = false;
+    bool persistLayout_ = false;
 
     bool runShown_ = false;
     QComboBox* entryCombo_ = nullptr;

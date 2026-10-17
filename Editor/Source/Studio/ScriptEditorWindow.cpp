@@ -1,5 +1,6 @@
 #include "ScriptEditorWindow.hpp"
 #include "../Common/CustomViewFactory/DockWidget.hpp"
+#include "../Common/CustomViewFactory/TabBar.hpp"
 #include "../Graph/GraphScene.hpp"
 #include "../Graph/GraphView.hpp"
 #include "../Graph/Style.hpp"
@@ -29,11 +30,13 @@
 #include <QTabWidget>
 #include <QTimer>
 #include <set>
+#include "../Common/Settings.hpp"
 #include <QSettings>
 #include <QToolBar>
 #include <QToolButton>
 
 #include <kddockwidgets/Config.h>
+#include <kddockwidgets/LayoutSaver.h>
 #include <kddockwidgets/core/DockWidget.h>
 
 namespace fged {
@@ -43,11 +46,19 @@ const char* kFilter = "FlowGraph scripts (*.flow);;All files (*)";
 }
 
 namespace {
-int g_windowCounter = 0;
+// The name of a main window is part of the saved layout, so the first window is always "ScriptEditor0": a number
+// is handed out again once its window is gone.
+std::set<int> g_windowIds;
+QString takeWindowName() {
+    int id = 0;
+    while (g_windowIds.count(id)) ++id;
+    g_windowIds.insert(id);
+    return QString("ScriptEditor%1").arg(id);
+}
 }
 
 ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, QWidget* parent)
-    : KDDockWidgets::QtWidgets::MainWindow(QString("ScriptEditor%1").arg(g_windowCounter++), KDDockWidgets::MainWindowOption_HasCentralWidget, parent),
+    : KDDockWidgets::QtWidgets::MainWindow(takeWindowName(), KDDockWidgets::MainWindowOption_HasCentralWidget, parent),
       host_(host), facade_(facade), rt_(host.runtime()), doc_(host.runtime()), run_(&doc_) {
     setMinimumSize(QSize(900, 520));
     resize(QSize(1500, 900));
@@ -110,6 +121,7 @@ ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, Q
 }
 
 ScriptEditorWindow::~ScriptEditorWindow() {
+    g_windowIds.erase(uniqueName().mid(QString("ScriptEditor").size()).toInt());
     run_.stop();
     // the scenes and views are children of the tab widget / owned here
     for (auto& [v, s] : views_) {
@@ -208,7 +220,7 @@ void ScriptEditorWindow::createActions() {
     actComment_ = act("Add Co&mment\tC");
     actFrame_ = act("&Frame All\tHome");
     {
-        QSettings settings("FlowGraph", "FlowGraph Studio");
+        QSettings settings = editorSettings();
         snapToGrid_ = settings.value("editor/snapToGrid", true).toBool();
         snapStep_ = settings.value("editor/snapStep", 20.0).toDouble();
         if (snapStep_ != 10.0 && snapStep_ != 20.0 && snapStep_ != 40.0) snapStep_ = 20.0;
@@ -254,7 +266,7 @@ void ScriptEditorWindow::createActions() {
     connect(actFrame_, &QAction::triggered, this, [this] { if (auto* v = currentView()) v->frameAll(); });
     connect(actSnap_, &QAction::toggled, this, [this](bool on) {
         snapToGrid_ = on;
-        QSettings("FlowGraph", "FlowGraph Studio").setValue("editor/snapToGrid", on);
+        editorSettings().setValue("editor/snapToGrid", on);
         applySnap();
     });
     connect(actRun_, &QAction::triggered, this, [this] {
@@ -303,7 +315,7 @@ void ScriptEditorWindow::createMenus() {
         snapSizeGroup_->addAction(a);
         connect(a, &QAction::triggered, this, [this, step] {
             snapStep_ = step;
-            QSettings("FlowGraph", "FlowGraph Studio").setValue("editor/snapStep", step);
+            editorSettings().setValue("editor/snapStep", step);
             applySnap();
         });
     }
@@ -338,11 +350,12 @@ void ScriptEditorWindow::createToolBar() {
     tb->setIconSize(QSize(22, 22));
     tb->addActions({actNew_, actOpen_, actSave_});
     tb->addSeparator();
-    auto* launchLabel = new QLabel(host_.launchLabel() + " ", tb);
-    tb->addWidget(launchLabel);
     entryCombo_ = new QComboBox(tb);
     entryCombo_->setMinimumWidth(200);
-    entryCombo_->setToolTip(host_.launchToolTip());
+    // The label that used to stand in front of the box is the title of its tooltip.
+    QString launchTitle = host_.launchLabel().trimmed();
+    if (launchTitle.endsWith(':')) launchTitle.chop(1);
+    entryCombo_->setToolTip(launchTitle.isEmpty() ? host_.launchToolTip() : "<b>" + launchTitle.toHtmlEscaped() + "</b><br>" + host_.launchToolTip().toHtmlEscaped());
     tb->addWidget(entryCombo_);
     connect(entryCombo_, qOverload<int>(&QComboBox::activated), this, [this](int) { host_.launchEntrySelected(entryCombo_->currentData().toString()); });
     tb->addActions({actRun_, actStop_});
@@ -587,7 +600,28 @@ void ScriptEditorWindow::applyInitialSizes() {
 void ScriptEditorWindow::closeEvent(QCloseEvent* e) {
     if (!maybeSave()) { e->ignore(); return; }
     run_.stop();
+    if (persistLayout_) {
+        // Before the window closes: afterwards the floating windows and the docks are gone.
+        editorSettings().setValue("editor/layout", KDDockWidgets::LayoutSaver().serializeLayout());
+    }
     KDDockWidgets::QtWidgets::MainWindow::closeEvent(e);
+}
+
+void ScriptEditorWindow::restoreSavedLayout() {
+    persistLayout_ = true;
+    const QByteArray saved = editorSettings().value("editor/layout").toByteArray();
+    if (saved.isEmpty()) return;
+    // The saved sizes replace the initial ones. Set before restoring: the saved layout shows the window, and the first
+    // showEvent would otherwise schedule applyInitialSizes().
+    sizesApplied_ = true;
+    if (!KDDockWidgets::LayoutSaver().restoreLayout(saved)) {
+        sizesApplied_ = false;
+        return;
+    }
+    // which single tabs the user had collapsed
+    for (auto* dock : docks_) dock->LoadTabBarState();
+    for (auto* tabBar : QApplication::allWidgets())
+        if (auto* ct = dynamic_cast<CTabBar*>(tabBar)) ct->RefreshTabBarVisibility();
 }
 
 // ------------------------------------------------------------------ state

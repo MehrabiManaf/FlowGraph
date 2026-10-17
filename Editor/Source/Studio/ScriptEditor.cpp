@@ -140,7 +140,10 @@ ScriptEditor::ScriptEditor(EditorHost& host) : host_(host) {
 ScriptEditor::~ScriptEditor() { delete window_; }
 
 QWidget* ScriptEditor::window() const { return window_; }
-void ScriptEditor::show() { window_->show(); }
+void ScriptEditor::show() {
+    window_->restoreSavedLayout();
+    window_->show();
+}
 bool ScriptEditor::open(const QString& path) { return window_->openFile(path); }
 void ScriptEditor::newScript() { window_->newScript(); }
 bool ScriptEditor::save() { return window_->fileSave(); }

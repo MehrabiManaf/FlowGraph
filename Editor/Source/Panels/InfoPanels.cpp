@@ -12,6 +12,7 @@
 #include <QLineEdit>
 #include <QLocale>
 #include <QMenu>
+#include "../Common/Settings.hpp"
 #include <QSettings>
 #include <QSplitter>
 #include <QTreeWidget>
@@ -423,7 +424,7 @@ QString DebugPanel::settingsKey() const { return "debugger/watches/" + QString::
 
 void DebugPanel::saveWatches() {
     if (watchesFor_.isEmpty()) return;                     // an unsaved script: the watches live as long as the window
-    QSettings settings("FlowGraph", "FlowGraph Studio");
+    QSettings settings = editorSettings();
     if (watchList_.isEmpty()) settings.remove(settingsKey());          // no watches: leave nothing behind
     else settings.setValue(settingsKey(), watchList_);
 }
@@ -435,7 +436,7 @@ void DebugPanel::onScriptOpened() {
     seenWatches_.clear();
     watchesFor_ = doc_->path();
     watchList_.clear();
-    if (!watchesFor_.isEmpty()) watchList_ = QSettings("FlowGraph", "FlowGraph Studio").value(settingsKey()).toStringList();
+    if (!watchesFor_.isEmpty()) watchList_ = editorSettings().value(settingsKey()).toStringList();
     refresh();
 }
 
@@ -450,7 +451,7 @@ void DebugPanel::onDocumentPath() {
     watchesFor_ = p;
     watchList_.clear();
     seenWatches_.clear();
-    if (!p.isEmpty()) watchList_ = QSettings("FlowGraph", "FlowGraph Studio").value(settingsKey()).toStringList();
+    if (!p.isEmpty()) watchList_ = editorSettings().value(settingsKey()).toStringList();
     refreshWatches();
 }
 

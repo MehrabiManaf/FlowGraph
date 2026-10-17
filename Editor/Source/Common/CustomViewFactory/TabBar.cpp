@@ -102,6 +102,20 @@ void CTabBar::SetTabBarHidden(bool Hidden)
     mp_ExpandCollapseAnimation->start();
 }
 
+void CTabBar::RefreshTabBarVisibility()
+{
+    double Progress = 1.0;
+    auto pController = static_cast<KDDockWidgets::Core::TabBar*>(controller());
+    if((count() == 1) && pController && pController->currentDockWidget())
+    {
+        auto pDockWidget = dynamic_cast<CDockWidget*>(pController->currentDockWidget()->view());
+        if(pDockWidget && pDockWidget->IsTabBarHidden())
+            Progress = 0.0;
+    }
+    mp_ExpandCollapseAnimation->stop();
+    SetAnimationProgress(Progress);
+}
+
 int CTabBar::TabBarFixedHeight() const
 {
     return KDDockWidgets::QtWidgets::TabBar::sizeHint().height();

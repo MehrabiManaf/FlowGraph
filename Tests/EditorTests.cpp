@@ -22,7 +22,10 @@
 #include <QTableWidget>
 #include <QToolButton>
 #include <kddockwidgets/core/DockWidget.h>
+#include <kddockwidgets/core/DockRegistry.h>
 #include "Common/CustomViewFactory/DockWidget.hpp"
+#include "Common/CustomViewFactory/TabBar.hpp"
+#include <kddockwidgets/core/TabBar.h>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
 #include <QMouseEvent>
@@ -35,6 +38,9 @@
 #include <QAbstractItemView>
 #include <QHeaderView>
 #include <QTimer>
+#include <QSettings>
+#include <QLabel>
+#include <QToolBar>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -1098,6 +1104,78 @@ TEST(renaming_a_function_in_the_list_keeps_the_details_in_sync) {
     CHECK(nameShown);
 }
 
+TEST(launch_label_is_the_tooltip_of_the_entries_box) {
+    StudioFixture f;
+    auto* combo = f.win.mainToolBar()->findChild<QComboBox*>();
+    CHECK(combo != nullptr);
+    if (!combo) return;
+    CHECK(combo->toolTip().contains("Run") && combo->toolTip().contains("Event or function to run"));
+    for (auto* l : f.win.mainToolBar()->findChildren<QLabel*>()) CHECK(!l->text().contains("Run"));
+}
+
+// The tab bar of the group in which `dock` is the only tab.
+static CTabBar* singleTabBarOf(const char* dock) {
+    for (auto* w : QApplication::allWidgets()) {
+        auto* t = dynamic_cast<CTabBar*>(w);
+        auto* c = t ? static_cast<KDDockWidgets::Core::TabBar*>(t->controller()) : nullptr;
+        if (c && t->count() == 1 && c->currentDockWidget() && c->currentDockWidget()->uniqueName() == dock) return t;
+    }
+    return nullptr;
+}
+
+TEST(dock_layout_is_restored_at_the_next_start) {
+    int detailsWidth = 0;
+    {
+        StandardRuntime rt;
+        TestHost host(rt);
+        fged::ScriptEditor editor(host);
+        auto& win = *static_cast<ScriptEditorWindow*>(editor.window());
+        editor.show();
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+        auto* details = KDDockWidgets::DockRegistry::self()->dockByName("Details");
+        auto* log = KDDockWidgets::DockRegistry::self()->dockByName("Output Log");
+        CHECK(details && log);
+        if (!details || !log) return;
+        details->resizeInLayout(150, 0, 0, 0);
+        singleTabBarOf("My Script")->SetTabBarHidden(true);       // collapse the tab of the only dock of its group
+        QCoreApplication::processEvents();
+        log->close();
+        QCoreApplication::processEvents();
+        win.resize(1234, 777);
+        QCoreApplication::processEvents();
+        detailsWidth = details->sizeInLayout().width();
+        CHECK(win.close());
+    }
+    {
+        StandardRuntime rt;
+        TestHost host(rt);
+        fged::ScriptEditor editor(host);
+        auto& win = *static_cast<ScriptEditorWindow*>(editor.window());
+        editor.show();
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+        auto* details = KDDockWidgets::DockRegistry::self()->dockByName("Details");
+        auto* log = KDDockWidgets::DockRegistry::self()->dockByName("Output Log");
+        CHECK(details && log);
+        if (!details || !log) return;
+        CHECK(!log->isOpen());
+        CTabBar* collapsed = singleTabBarOf("My Script");
+        CHECK(collapsed != nullptr);
+        if (collapsed) CHECK(collapsed->property("AnimationProgress").toDouble() == 0.0);
+        auto* myDock = dynamic_cast<CDockWidget*>(KDDockWidgets::DockRegistry::self()->dockByName("My Script")->view());
+        CHECK(myDock && myDock->IsTabBarHidden());
+        // a group with two tabs keeps showing them
+        for (auto* w : QApplication::allWidgets())
+            if (auto* t = dynamic_cast<CTabBar*>(w)) if (t->isVisible() && t->count() > 1) CHECK(t->property("AnimationProgress").toDouble() == 1.0);
+        CHECK(details->isOpen());
+        int restored = details->sizeInLayout().width();
+        CHECK(std::abs(restored - detailsWidth) < 25);
+        CHECK(std::abs(win.width() - 1234) < 20 && std::abs(win.height() - 777) < 20);
+        CHECK(win.close());
+    }
+}
+
 TEST(side_panels_follow_their_docks) {
     StudioFixture f;
     f.win.resize(QSize(1500, 900));
@@ -1554,6 +1632,10 @@ int main(int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
+    // the tests must neither read nor change the settings of the real application
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::temp().filePath("FlowGraphEditorTests-settings"));
+    QDir(QDir::temp().filePath("FlowGraphEditorTests-settings")).removeRecursively();
     fged::applyDarkTheme(app);
     fged::initEditor();
     for (auto& t : tests()) {
