@@ -86,7 +86,7 @@ void LogPanel::append(int level, const QString& text) {
 QMenu* LogPanel::buildContextMenu() {
     QMenu* menu = createStandardContextMenu();
     menu->addSeparator();
-    QAction* clearAction = menu->addAction("Clear");
+    QAction* clearAction = menu->addAction(QIcon(":/Icons/clear.svg"), "Clear");
     clearAction->setEnabled(!document()->isEmpty());
     connect(clearAction, &QAction::triggered, this, &QPlainTextEdit::clear);
     return menu;

@@ -218,6 +218,17 @@ void ScriptEditorWindow::createActions() {
     actDelete_ = act("De&lete\tDel");
     actSelectAll_ = act("Select &All\tCtrl+A");
     actComment_ = act("Add Co&mment\tC");
+    actSaveAs_->setIcon(QIcon(":/Icons/save-as.svg"));
+    actExit_->setIcon(QIcon(":/Icons/exit.svg"));
+    actUndo_->setIcon(QIcon(":/Icons/undo.svg"));
+    actRedo_->setIcon(QIcon(":/Icons/redo.svg"));
+    actCut_->setIcon(QIcon(":/Icons/cut.svg"));
+    actCopy_->setIcon(QIcon(":/Icons/copy.svg"));
+    actPaste_->setIcon(QIcon(":/Icons/paste.svg"));
+    actDuplicate_->setIcon(QIcon(":/Icons/duplicate.svg"));
+    actDelete_->setIcon(QIcon(":/Icons/delete.svg"));
+    actSelectAll_->setIcon(QIcon(":/Icons/select-all.svg"));
+    actComment_->setIcon(QIcon(":/Icons/comment.svg"));
     actFrame_ = act("&Frame All\tHome");
     {
         QSettings settings = editorSettings();
