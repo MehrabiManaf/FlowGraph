@@ -553,6 +553,22 @@ fg::NodeId GraphScene::addVariableNode(const QString& name, const QString& scope
     return id;
 }
 
+fg::NodeId GraphScene::addFunctionCall(const QString& function, const QPointF& where) {
+    const fg::Graph* callee = doc_->script().findGraph(ss(function));
+    if (!callee || callee->kind != fg::GraphKind::Function) return 0;
+    const QPointF pos = snapped(where);
+    fg::NodeId id = 0;
+    doc_->edit("Add call to " + function, [&](fg::Script& s) {
+        if (auto* g = mutableGraph(s)) {
+            fg::Node& n = g->addNode("func.call", pos.x(), pos.y());
+            n.props["function"] = ss(function);
+            id = n.id;
+        }
+    });
+    selectOnly(id);
+    return id;
+}
+
 void GraphScene::deleteSelected() {
     if (editNode_ != 0) cancelInplace();
     std::set<fg::NodeId> nodes;

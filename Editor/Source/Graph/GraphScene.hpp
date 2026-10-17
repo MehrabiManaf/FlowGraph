@@ -68,6 +68,7 @@ public:
     void insertReroute(const fg::Connection& c, const QPointF& scenePos);
     fg::NodeId addNodeFromTemplate(const fg::NodeTemplate& t, const QPointF& pos, const PinRef* from = nullptr);
     fg::NodeId addVariableNode(const QString& name, const QString& scope, bool isSet, const QPointF& pos);
+    fg::NodeId addFunctionCall(const QString& function, const QPointF& pos);        // a Call Function node for a function of the script; 0 when there is none
     void deleteSelected();
     void copySelected();
     bool canPaste() const;

@@ -20,7 +20,8 @@ public:
     QPointF sceneCenter() const { return mapToScene(viewport()->rect().center()); }
     void setSceneCenter(const QPointF& p) { centerOn(p); }
 
-    static const char* variableMime() { return "application/x-flowgraph-variable"; }
+    static const char* variableMime() { return "application/x-flowgraph-variable"; }      // "global|Name" or "local|Name"
+    static const char* functionMime() { return "application/x-flowgraph-function"; }      // the name of a function of the script
 
 protected:
     void wheelEvent(QWheelEvent* e) override;

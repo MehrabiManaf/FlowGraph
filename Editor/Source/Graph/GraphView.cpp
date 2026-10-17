@@ -12,6 +12,8 @@
 #include <QGraphicsProxyWidget>
 #include <QMenu>
 #include <QMimeData>
+#include <QPointer>
+#include <QTimer>
 #include <QScrollBar>
 #include <QResizeEvent>
 #include <QWheelEvent>
@@ -263,16 +265,25 @@ void GraphView::keyPressEvent(QKeyEvent* e) {
 }
 
 // ------------------------------------------------------------------ drag & drop of variables
+static bool isOurs(const QMimeData* m) { return m->hasFormat(GraphView::variableMime()) || m->hasFormat(GraphView::functionMime()); }
+
 void GraphView::dragEnterEvent(QDragEnterEvent* e) {
-    if (e->mimeData()->hasFormat(variableMime())) e->acceptProposedAction();
+    if (isOurs(e->mimeData())) e->acceptProposedAction();
     else QGraphicsView::dragEnterEvent(e);
 }
 void GraphView::dragMoveEvent(QDragMoveEvent* e) {
-    if (e->mimeData()->hasFormat(variableMime())) e->acceptProposedAction();
+    if (isOurs(e->mimeData())) e->acceptProposedAction();
     else QGraphicsView::dragMoveEvent(e);
 }
 
 void GraphView::dropEvent(QDropEvent* e) {
+    if (e->mimeData()->hasFormat(functionMime())) {
+        // a function dropped on the graph: a node that calls it
+        const QString function = QString::fromUtf8(e->mimeData()->data(functionMime()));
+        if (!function.isEmpty()) graphScene()->addFunctionCall(function, mapToScene(e->position().toPoint()));
+        e->acceptProposedAction();
+        return;
+    }
     if (!e->mimeData()->hasFormat(variableMime())) { QGraphicsView::dropEvent(e); return; }
     QStringList parts = QString::fromUtf8(e->mimeData()->data(variableMime())).split('|');
     if (parts.size() < 2) return;
@@ -282,13 +293,20 @@ void GraphView::dropEvent(QDropEvent* e) {
     if (e->modifiers() & Qt::ControlModifier) isSet = false;
     else if (e->modifiers() & Qt::AltModifier) isSet = true;
     else {
-        QMenu m;
-        QAction* g = m.addAction(QIcon(":/Icons/variable-get.svg"), "Get " + name);
-        QAction* s = m.addAction(QIcon(":/Icons/variable-set.svg"), "Set " + name);
-        QAction* a = m.exec(mapToGlobal(e->position().toPoint()));
-        if (!a) return;
-        isSet = a == s;
-        (void)g;
+        // Neither key: the user chooses in a menu. It is shown when the drop is over, not inside it: a popup that opens while the drag and
+        // drop of the system is still handing the drop over can lose the mouse at once and vanish before anybody sees it.
+        e->acceptProposedAction();
+        const QPoint at = viewport()->mapToGlobal(e->position().toPoint());
+        QPointer<GraphView> self(this);
+        QTimer::singleShot(0, this, [self, name, scope, sp, at] {
+            if (!self) return;
+            QMenu m;
+            m.addAction(QIcon(":/Icons/variable-get.svg"), "Get " + name)->setData(false);
+            m.addAction(QIcon(":/Icons/variable-set.svg"), "Set " + name)->setData(true);
+            QAction* a = m.exec(at);
+            if (a && self) self->graphScene()->addVariableNode(name, scope, a->data().toBool(), sp);
+        });
+        return;
     }
     graphScene()->addVariableNode(name, scope, isSet, sp);
     e->acceptProposedAction();

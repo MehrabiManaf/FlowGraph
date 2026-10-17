@@ -143,6 +143,8 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
         lay->addWidget(p);
         p->SetContentsExpaned(true);
     }
+    functions_->setDragEnabled(true);                     // a function dropped on a graph makes a node that calls it
+    functions_->setDragMimeType(GraphView::functionMime());
     vars_->setDragEnabled(true);
     vars_->setDragMimeType(GraphView::variableMime());
     locals_->setDragEnabled(true);
@@ -263,7 +265,8 @@ void MyScriptPanel::refresh() {
         if (g.kind != fg::GraphKind::Function) continue;
         QStringList in;
         for (auto& p : g.inputs) in << qs(p.name);
-        mk(functions_, nullptr, qs(g.name), "(" + in.join(", ") + ")", Kind::Function, true);
+        auto* it = mk(functions_, nullptr, qs(g.name), "(" + in.join(", ") + ")", Kind::Function, true);
+        it->setData(0, kMime, qs(g.name));                // what a drag of the function carries
     }
     // event graphs: only the events the script handles (the graphs themselves are not listed and cannot be created)
     for (auto& e : events) {

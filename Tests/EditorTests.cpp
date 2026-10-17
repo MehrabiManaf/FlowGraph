@@ -6,6 +6,7 @@
 #include "Graph/PalettePopup.hpp"
 #include "Panels/DetailsPanel.hpp"
 #include "Panels/InfoPanels.hpp"
+#include "Panels/FitTree.hpp"
 #include "Panels/MyScriptPanel.hpp"
 #include "Panels/TypeSpec.hpp"
 #include "Studio/RunController.hpp"
@@ -42,6 +43,8 @@
 #include <QLabel>
 #include <QToolBar>
 #include <QMenu>
+#include <QMimeData>
+#include <QDropEvent>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -1147,6 +1150,118 @@ TEST(output_log_context_menu_clears_the_log) {
     CHECK(log.document()->isEmpty());
     std::unique_ptr<QMenu> again(log.buildContextMenu());
     for (auto* a : again->actions()) if (a->text() == "Clear") CHECK(!a->isEnabled());    // nothing to clear
+}
+
+// ------------------------------------------------------------------ drag and drop of variables and functions onto a graph
+namespace {
+// Counts the nodes of a definition in the graph, optionally with a property.
+int countNodes(const fg::Graph& g, const std::string& def, const std::string& prop = "", const std::string& value = "") {
+    int n = 0;
+    for (auto& node : g.nodes)
+        if (node.def == def && (prop.empty() || node.prop(prop) == value)) ++n;
+    return n;
+}
+// What the user does: drops `mime` on the view (the keys held are `modifiers`).
+void dropOn(GraphView& view, const QMimeData& mime, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+    // the system always announces a drag before the drop
+    QDragEnterEvent enter(QPoint(200, 150), Qt::CopyAction, &mime, Qt::LeftButton, modifiers);
+    QApplication::sendEvent(view.viewport(), &enter);
+    QDropEvent drop(QPointF(200, 150), Qt::CopyAction, &mime, Qt::LeftButton, modifiers);
+    QApplication::sendEvent(view.viewport(), &drop);
+}
+QMenu* shownMenu() { return qobject_cast<QMenu*>(QApplication::activePopupWidget()); }
+void key(QWidget* w, Qt::Key k) {
+    QKeyEvent press(QEvent::KeyPress, k, Qt::NoModifier);
+    QApplication::sendEvent(w, &press);
+}
+} // namespace
+
+TEST(dropping_a_variable_on_the_graph_asks_whether_to_get_or_set_it) {
+    Fixture f;
+    f.doc.edit("Add var", [](fg::Script& s) { s.variables.push_back({"Score", "int", fg::Value(5), "", ""}); });
+    GraphView view(&f.scene);
+    view.resize(600, 400);
+    view.show();
+    QMimeData mime;
+    mime.setData(GraphView::variableMime(), "global|Score");
+    auto variableNodes = [&] { return countNodes(f.graph(), "var.get") + countNodes(f.graph(), "var.set"); };
+
+    // No key held: a menu with Get and Set appears, and the choice decides the node. The menu runs its own event loop, so the "user" is a timer.
+    QStringList texts;
+    int nodesWhileAsking = -1;
+    QTimer::singleShot(100, [&] {
+        QMenu* menu = shownMenu();
+        if (!menu) return;
+        for (auto* a : menu->actions()) texts << a->text();
+        nodesWhileAsking = variableNodes();
+        key(menu, Qt::Key_Down);
+        key(menu, Qt::Key_Down);
+        key(menu, Qt::Key_Return);                       // "Set Score"
+    });
+    dropOn(view, mime);
+    CHECK(shownMenu() == nullptr);                       // not inside the drop: the menu comes when the drop is over
+    CHECK(spinUntil([&] { return countNodes(f.graph(), "var.set", "name", "Score") == 1; }));
+    CHECK_EQ(texts, QStringList({"Get Score", "Set Score"}));
+    CHECK_EQ(nodesWhileAsking, 0);                       // nothing is made before the choice
+    CHECK_EQ(countNodes(f.graph(), "var.get"), 0);
+    CHECK(f.doc.program()->ok());
+
+    // Escape: no node
+    bool asked = false;
+    QTimer::singleShot(100, [&] {
+        if (QMenu* menu = shownMenu()) {
+            asked = true;
+            key(menu, Qt::Key_Escape);
+        }
+    });
+    dropOn(view, mime);
+    CHECK(spinUntil([&] { return asked; }));
+    spinUntil([] { return shownMenu() == nullptr; }, 1000);
+    CHECK_EQ(variableNodes(), 1);
+
+    // Ctrl = Get and Alt = Set at once, without a menu
+    dropOn(view, mime, Qt::ControlModifier);
+    CHECK_EQ(countNodes(f.graph(), "var.get", "name", "Score"), 1);
+    dropOn(view, mime, Qt::AltModifier);
+    CHECK_EQ(countNodes(f.graph(), "var.set", "name", "Score"), 2);
+    spinUntil([] { return false; }, 100);
+    CHECK(shownMenu() == nullptr);
+}
+
+TEST(dropping_a_function_on_the_graph_makes_a_node_that_calls_it) {
+    Fixture f;
+    f.doc.edit("Add function", [](fg::Script& s) { s.addFunction("Helper"); });
+    GraphView view(&f.scene);
+    view.resize(600, 400);
+    view.show();
+    QMimeData mime;
+    mime.setData(GraphView::functionMime(), "Helper");
+    dropOn(view, mime);
+    CHECK_EQ(countNodes(f.graph(), "func.call", "function", "Helper"), 1);
+    CHECK(f.doc.program()->ok());
+    CHECK(shownMenu() == nullptr);                      // no question: a function has only one thing to do
+    // a name that is not a function of the script makes nothing
+    QMimeData unknown;
+    unknown.setData(GraphView::functionMime(), "Nope");
+    dropOn(view, unknown);
+    CHECK_EQ(countNodes(f.graph(), "func.call"), 1);
+}
+
+TEST(functions_of_my_script_can_be_dragged) {
+    Fixture f;
+    f.doc.edit("Add function", [](fg::Script& s) { s.addFunction("Helper"); });
+    MyScriptPanel panel(&f.doc);
+    panel.show();
+    QCoreApplication::processEvents();
+    bool found = false;
+    for (auto* tree : panel.findChildren<FitTree*>())
+        for (int i = 0; i < tree->topLevelItemCount(); ++i)
+            if (tree->topLevelItem(i)->text(0) == "Helper") {
+                found = true;
+                CHECK(tree->dragEnabled());
+                CHECK_EQ(tree->topLevelItem(i)->data(0, Qt::UserRole + 2).toString(), QString("Helper"));     // what the drag carries
+            }
+    CHECK(found);
 }
 
 TEST(copying_nodes_never_duplicates_an_event_handler) {
