@@ -168,6 +168,27 @@ By default every event and function of the script can be run and the editor asks
 worker thread (`AsyncExecutor`): the editor never blocks, even when a script computes for a long time or a native
 function blocks; editing the script stops the run. `Apps/Studio` (`flowstudio`) is a complete host.
 
+**There is one `ScriptEditor` per program**: creating a second one while the first exists throws `std::logic_error`
+(`ScriptEditor::instance()` is the one that exists). An application with several things to edit lets the same editor edit them one
+after the other, `editor.edit(script, "title")`.
+
+The editor has two modes, chosen by `EditorHost::mode()`:
+
+* `EditorMode::Standalone` (the default; flowstudio): the user works with files (New, Open, Save, Save As) and *Run* starts an
+  event or function of the script, chosen in the toolbar (launch configurations).
+* `EditorMode::Embedded`: the application owns the scripts and runs them itself (it raises the events), so the editor has no files and
+  nothing to launch. The application hands a script over with `ScriptEditor::edit()` (there is no *New*, but *Open* works). **Only a
+  script that fits the application is taken**: the editor checks that the application provides everything the script uses (events,
+  nodes, types: a standalone script that handles `Main` is refused by an application that never raises it) and asks
+  `EditorHost::acceptsScript()` (e.g. "does it handle the event this application is made for?"). A script that does not fit is refused,
+  the reason goes to the log, and the editor keeps the script it has. *Save* does not write a file, it gives the
+  edited script back (`EditorHost::applyScript`: replace the running script, run it again...; return `false` to keep the changes
+  unsaved); *Save As* writes a copy. There is no *Run*: the debugger **attaches** to what the application runs. *Attach* asks
+  `EditorHost::debugTarget()` for the `fg::AsyncExecutor` that runs the script (or the application calls
+  `ScriptEditor::attach(executor)`); breakpoints stop its tasks, the Debugger panel shows them, Pause / Continue / Step control
+  them, *Detach* lets everything continue. When the application replaces the executor while the editor is attached it attaches the new
+  one before posting the first event.
+
 ## FlowGraph Studio keys
 
 | | |
@@ -185,7 +206,8 @@ function blocks; editing the script stops the run. `Apps/Studio` (`flowstudio`) 
 `.flow` files are JSON (`Script::toJson`): variables, and graphs of nodes with connections
 (`{"from": [nodeId, "Pin"], "to": [nodeId, "Pin"]}`). Script level node ids: `func.entry`, `func.return`, `func.call`, `var.get`,
 `var.set`, `reroute`; events are `event:<Name>`. Nodes of host events (`event:Name`) carry `props.sig`, the
-signature of the event when the script was made.
+signature of the event when the script was made. A node of a definition with `customInputs` / `customOutputs` (`NodeDef`) can carry
+the data pins the user added: `"inputs"` / `"outputs"` arrays of `{"name", "type", "default"}`, like the signature of a function.
 
 Developer aids of flowstudio: `FG_STUDIO_SCREENSHOT=file.png` (screenshot and quit), `FG_STUDIO_RUN=Main`,
 `FG_STUDIO_BREAK=Graph:id`, `FG_STUDIO_SELECT=node:Graph:id|var:name|graph:name`, `FG_STUDIO_SCENESHOT=file.png`.

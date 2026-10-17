@@ -8,6 +8,7 @@
 
 #include <array>
 #include <atomic>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -30,7 +31,17 @@ public:
 
     // Starts an event of the compiled program (or a function when `entry` names one).
     bool start(const QString& entry, const std::vector<fg::Value>& args);
-    void stop();                                  // returns when the script has stopped
+    void stop();                                  // returns when the script has stopped (an attached debugger detaches)
+
+    // Debugging a script that the application runs: the debugger of the document takes over the executor (breakpoints stop its tasks,
+    // pause / resume / step control them, the debug panels read it) until detach(). The state is Running while attached and Paused while a
+    // task is stopped. The application may run many tasks (one per message...): the debugger follows ONE task at a time. Continue / Step
+    // resume the task that is shown and the debugger waits for what happens to it: it stops again (the next node of a step, or a
+    // breakpoint) and that is what is shown, or it ends and the debugger goes on to the next task that was stopped (or waits for the next
+    // one to stop), so a script that is stepped to its end is followed by the same script for the next message.
+    bool attach(std::shared_ptr<fg::AsyncExecutor> executor);
+    void detach();                                // everything that was stopped continues; the executor is as it was before
+    bool isAttached() const { return attached_ != nullptr; }
     void pause();
     void resume();
     void stepOver() { step(fg::Debugger::Command::StepOver); }
@@ -73,12 +84,16 @@ signals:
     void logMessage(int level, const QString& text);
     void linkFired(const QString& graph, int from, int execOut, int to);
     void frameSelected(int frame);
+    void attachedChanged(bool attached);
 
 private:
     void setState(State s);
     void step(fg::Debugger::Command c);
     void post(uint64_t generation, std::function<void()> fn);
-    void onTaskState(fg::TaskState st);
+    void onTaskState(fg::AsyncExecutor::Handle handle, fg::TaskState st);
+    void showPaused(fg::AsyncExecutor::Handle handle);                 // the paused task `handle` is the one the user looks at
+    void commandAttached(fg::Debugger::Command c);
+    fg::AsyncExecutor* executor() const { return attached_ ? attached_.get() : ax_.get(); }
     void onCompleted(bool ok, bool exited, int exitCode, const QString& error, const QString& returns);
     void onDocumentChanged(bool structural);
     void onScriptOpened();
@@ -102,6 +117,10 @@ private:
 
     Document* doc_;
     std::unique_ptr<fg::AsyncExecutor> ax_;
+    std::shared_ptr<fg::AsyncExecutor> attached_;                       // an executor of the application, see attach()
+    fg::DebugHooks* previousHooks_ = nullptr;                           // what the attached executor used before we took it over
+    std::deque<fg::AsyncExecutor::Handle> pausedQueue_;                 // attached: the other tasks that are stopped (`handle_` is the one shown)
+    fg::AsyncExecutor::Handle awaiting_ = 0;                            // attached: the task that was resumed; its next stop or its end is what comes next
     fg::AsyncExecutor::Handle handle_ = 0;
     uint64_t generation_ = 0;          // callbacks of an older executor are ignored
     State state_ = State::Idle;

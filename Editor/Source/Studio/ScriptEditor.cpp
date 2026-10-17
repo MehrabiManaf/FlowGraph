@@ -13,6 +13,7 @@
 #include <QStyleFactory>
 
 #include <algorithm>
+#include <stdexcept>
 
 #include <kddockwidgets/Config.h>
 #include <kddockwidgets/KDDockWidgets.h>
@@ -132,12 +133,31 @@ bool EditorHost::prepareLaunch(const LaunchEntry& entry, LaunchSpec& spec, QWidg
 }
 
 // ------------------------------------------------------------------ ScriptEditor
-ScriptEditor::ScriptEditor(EditorHost& host) : host_(host) {
-    window_ = new ScriptEditorWindow(host, *this);
-    host_.attached(*this);
+namespace {
+ScriptEditor* g_instance = nullptr;
 }
 
-ScriptEditor::~ScriptEditor() { delete window_; }
+ScriptEditor* ScriptEditor::instance() { return g_instance; }
+
+ScriptEditor::ScriptEditor(EditorHost& host) : host_(host) {
+    if (g_instance)
+        throw std::logic_error("There is already a ScriptEditor: a program has only one script editor. Let it edit the other script with ScriptEditor::edit().");
+    g_instance = this;
+    try {
+        window_ = new ScriptEditorWindow(host, *this);
+        host_.attached(*this);
+    } catch (...) {
+        delete window_;
+        window_ = nullptr;
+        g_instance = nullptr;
+        throw;
+    }
+}
+
+ScriptEditor::~ScriptEditor() {
+    delete window_;
+    if (g_instance == this) g_instance = nullptr;
+}
 
 QWidget* ScriptEditor::window() const { return window_; }
 void ScriptEditor::show() {
@@ -145,6 +165,10 @@ void ScriptEditor::show() {
     window_->show();
 }
 bool ScriptEditor::open(const QString& path) { return window_->openFile(path); }
+bool ScriptEditor::edit(const fg::Script& script, const QString& title) { return window_->editScript(script, title); }
+bool ScriptEditor::attach(std::shared_ptr<fg::AsyncExecutor> executor) { return window_->attachExecutor(std::move(executor)); }
+void ScriptEditor::detach() { window_->detachExecutor(); }
+bool ScriptEditor::isAttached() const { return window_->isAttached(); }
 void ScriptEditor::newScript() { window_->newScript(); }
 bool ScriptEditor::save() { return window_->fileSave(); }
 bool ScriptEditor::saveAs() { return window_->fileSaveAs(); }
