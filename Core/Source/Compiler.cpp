@@ -550,6 +550,10 @@ std::vector<PinDef> collectPinDefs(const Node& node, const NodeDef& def, const R
         NodeBuildCtx ctx{reg, script, graph};
         def.dynamicPins(node, ctx, pins);
     }
+    if (def.customInputs)
+        for (auto& p : node.inputs) pins.push_back(dataIn(p.name, p.type, p.def));
+    if (def.customOutputs)
+        for (auto& p : node.outputs) pins.push_back(dataOut(p.name, p.type));
     return pins;
 }
 

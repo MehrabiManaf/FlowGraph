@@ -2148,6 +2148,66 @@ TEST(very_long_chain_of_pure_nodes_is_a_script_error) {
     CHECK(r.error.find("nested too deeply") != std::string::npos);
 }
 
+TEST(nodes_can_have_custom_pins_next_to_the_fixed_ones) {
+    TestRuntime rt;
+    {
+        NodeDef d;
+        d.id = "test.sum";
+        d.title = "Sum";
+        d.category = "Test";
+        d.style = NodeStyle::Function;
+        d.customInputs = true;                           // the user may add data inputs and outputs to nodes of this kind
+        d.customOutputs = true;
+        d.pins = {execIn(), execOut(), dataIn("Base", "int", Value(100))};
+        // the fixed input comes first (ordinal 0), then the custom ones; the only data output is the first custom output
+        d.run = [](NodeCtx& c) {
+            int64_t sum = 0;
+            for (size_t i = 0; i < c.inputCount(); ++i) sum += c.inInt(i);
+            c.out(0, Value(sum));
+        };
+        rt.registry().addNode(std::move(d));
+    }
+    Script s;
+    s.variables.push_back({"Result", "int", Value(), "", ""});
+    Graph& g = s.addEventGraph();
+    const NodeId ev = g.addNode("event:Go").id;
+    const NodeId sum = g.addNode("test.sum").id;
+    g.findNode(sum)->inputs = {{"A", "int", false, false, Value(5)}, {"B", "int", false, false, Value()}};
+    g.findNode(sum)->outputs = {{"Total", "int", false, false, Value()}};
+    g.findNode(sum)->defaults["B"] = Value(7);           // the literal of an unconnected custom input works like any other
+    Node& set = g.addNode("var.set");
+    set.props = {{"name", "Result"}, {"scope", "global"}};
+    const NodeId setId = set.id;
+    link(g, ev, "Then", sum, "In");
+    link(g, sum, "Then", setId, "In");
+    link(g, sum, "Total", setId, "Value");
+
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    const CompiledNode* cn = prog->graphs[0].findNode(sum);
+    CHECK(cn && cn->dataIn.size() == 3 && cn->pins[size_t(cn->dataIn[0])].name == "Base" && cn->pins[size_t(cn->dataIn[2])].name == "B");
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("Result").toInt(), int64_t(112));          // 100 + 5 + 7
+
+    // the pins are part of the script file; a node without custom pins keeps the old file format
+    CHECK(!s.toJson()["graphs"][size_t(0)]["nodes"][size_t(0)].has("inputs"));
+    Script back = Script::parse(s.toText());
+    const Node* n = back.graphs[0].findNode(sum);
+    CHECK(n && n->inputs.size() == 2 && n->inputs[0].name == "A" && n->inputs[0].def.toInt() == 5 && n->outputs.size() == 1);
+    Instance again(build(rt, back));
+    CHECK(again.callEvent("Go").ok);
+    CHECK_EQ(again.getVariable("Result").toInt(), int64_t(112));
+
+    // a definition that does not ask for custom pins ignores them
+    g.findNode(ev)->inputs = {{"X", "int", false, false, Value()}};
+    CHECK(build(rt, s)->ok());
+    // a pin of a type this application does not have is reported before the script is run
+    CHECK(checkCompatibility(s, rt.registry()).ok());
+    g.findNode(sum)->inputs[0].type = "Nope";
+    CHECK(!checkCompatibility(s, rt.registry()).ok());
+}
+
 int main(int argc, char** argv) {
     g_exeDir = std::filesystem::path(argv[0]).parent_path().string();
     std::setvbuf(stdout, nullptr, _IONBF, 0);

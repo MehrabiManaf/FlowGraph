@@ -266,6 +266,16 @@ Json nodeToJson(const Node& n) {
     if (!n.comment.empty()) j.set("comment", n.comment);
     if (!n.props.empty()) j.set("props", stringMapToJson(n.props));
     if (!n.typeArgs.empty()) j.set("typeArgs", stringMapToJson(n.typeArgs));
+    if (!n.inputs.empty()) {
+        Json a = Json::array();
+        for (auto& p : n.inputs) a.push(paramToJson(p));
+        j.set("inputs", std::move(a));
+    }
+    if (!n.outputs.empty()) {
+        Json a = Json::array();
+        for (auto& p : n.outputs) a.push(paramToJson(p));
+        j.set("outputs", std::move(a));
+    }
     if (!n.defaults.empty()) {
         Json o = Json::object();
         for (auto& [k, v] : n.defaults) o.set(k, valueToJson(v));
@@ -282,6 +292,8 @@ Node nodeFromJson(const Json& j) {
     n.comment = j["comment"].asString();
     stringMapFromJson(j["props"], n.props);
     stringMapFromJson(j["typeArgs"], n.typeArgs);
+    for (auto& p : j["inputs"].items()) n.inputs.push_back(paramFromJson(p));
+    for (auto& p : j["outputs"].items()) n.outputs.push_back(paramFromJson(p));
     for (auto& [k, v] : j["defaults"].members()) n.defaults[k] = jsonToValue(v);
     return n;
 }

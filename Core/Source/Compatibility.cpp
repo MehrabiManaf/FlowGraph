@@ -75,6 +75,10 @@ CompatibilityReport checkCompatibility(const Script& script, const Registry& reg
         for (auto& p : g.outputs) checkType(g.name, "output '" + p.name + "'", p.type);
         for (auto& v : g.locals) checkType(g.name, "local variable '" + v.name + "'", v.type);
         for (auto& n : g.nodes) {
+            for (auto* pins : {&n.inputs, &n.outputs})
+                for (auto& p : *pins)
+                    if (!reg.findType(p.type))
+                        add(CompatibilityIssue::Kind::UnknownType, g.name, n.id, p.type, "the type '" + p.type + "' of the pin '" + p.name + "' is not registered");
             const NodeDef* def = reg.findNode(n.def);
             if (!def) {
                 if (isHostEventDef(n.def)) {

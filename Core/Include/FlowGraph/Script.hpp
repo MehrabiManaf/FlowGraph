@@ -44,6 +44,7 @@ public:
     std::map<std::string, std::string> props;      // node specific settings (variable, function, event name, ...)
     std::map<std::string, std::string> typeArgs;   // resolved type parameters ("T" -> "float")
     std::map<std::string, Value> defaults;         // literal values of unconnected input pins (by pin name)
+    std::vector<ParamDecl> inputs, outputs;        // custom data pins the user added (only for NodeDef::customInputs / customOutputs)
 
     std::string prop(const std::string& k, const std::string& d = "") const {
         auto it = props.find(k);
