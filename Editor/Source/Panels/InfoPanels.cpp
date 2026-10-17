@@ -392,28 +392,29 @@ void DebugPanel::showContextMenu(QTreeWidget* tree, const QPoint& pos) {
     QMenu menu(this);
     if (!path.isEmpty() && total > end) {
         for (qulonglong n : {qulonglong(kPage), qulonglong(1000), qulonglong(10000)})
-            menu.addAction("Load next " + thousands(n), [this, container, n] { loadMore(container, n); });
+            menu.addAction(QIcon(":/Icons/load-more.svg"), "Load next " + thousands(n), [this, container, n] { loadMore(container, n); });
         qulonglong rest = total - end;
-        menu.addAction(rest > kMaxLoad ? "Load next " + thousands(kMaxLoad) + " (of " + thousands(rest) + " left)" : "Load all (" + thousands(rest) + " left)",
+        menu.addAction(QIcon(":/Icons/load-more.svg"),
+                       rest > kMaxLoad ? "Load next " + thousands(kMaxLoad) + " (of " + thousands(rest) + " left)" : "Load all (" + thousands(rest) + " left)",
                        [this, container] { loadMore(container, kMaxLoad); });
         menu.addSeparator();
     }
     if (!path.isEmpty()) {
         if (total > 0)
-            menu.addAction("Watch a range...", [this, path, total] {
+            menu.addAction(QIcon(":/Icons/watch-range.svg"), "Watch a range...", [this, path, total] {
                 bool ok = false;
                 QString e = QInputDialog::getText(this, "Watch a range", "Expression (a range is inclusive):", QLineEdit::Normal,
                                                   QString("%1[0..%2]").arg(path).arg(std::min<qulonglong>(total, 100) - 1), &ok);
                 if (ok) addWatch(e);
             });
-        menu.addAction("Add to watch", [this, path] { addWatch(path); });
+        menu.addAction(QIcon(":/Icons/watch-add.svg"), "Add to watch", [this, path] { addWatch(path); });
     }
     if (!isMoreRow(item) && !item->text(1).isEmpty())
-        menu.addAction("Copy value", [item] { QGuiApplication::clipboard()->setText(item->text(1)); });
+        menu.addAction(QIcon(":/Icons/copy.svg"), "Copy value",[item] { QGuiApplication::clipboard()->setText(item->text(1)); });
     if (tree == watches_ && item->data(0, kWatchRole).toBool()) {
         menu.addSeparator();
         QString expr = item->text(0);
-        menu.addAction("Edit watch...", [this, expr] {
+        menu.addAction(QIcon(":/Icons/watch-edit.svg"), "Edit watch...", [this, expr] {
             bool ok = false;
             QString e = QInputDialog::getText(this, "Edit watch", "Expression:", QLineEdit::Normal, expr, &ok).trimmed();
             if (!ok || e.isEmpty() || e == expr) return;
@@ -424,8 +425,8 @@ void DebugPanel::showContextMenu(QTreeWidget* tree, const QPoint& pos) {
             saveWatches();
             refreshWatches();
         });
-        menu.addAction("Remove watch", [this, expr] { removeWatch(expr); });
-        menu.addAction("Remove all watches", [this] {
+        menu.addAction(QIcon(":/Icons/watch-remove.svg"), "Remove watch", [this, expr] { removeWatch(expr); });
+        menu.addAction(QIcon(":/Icons/watch-clear.svg"), "Remove all watches", [this] {
             watchList_.clear();
             saveWatches();
             refreshWatches();

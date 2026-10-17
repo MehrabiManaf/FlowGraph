@@ -317,9 +317,9 @@ void MyScriptPanel::applyFilter() {
 void MyScriptPanel::showAddMenu() {
     QMenu* menu = addButton_->menu();
     menu->clear();
-    menu->addAction("Function", this, [this] { addFunction(); });
-    menu->addAction("Variable", this, [this] { addVariable(); });
-    if (!localsGraph_.isEmpty()) menu->addAction("Local Variable (" + localsGraph_ + ")", this, [this] { addLocal(); });
+    menu->addAction(QIcon(":/Icons/function.svg"), "Function", this, [this] { addFunction(); });
+    menu->addAction(QIcon(":/Icons/variable.svg"), "Variable", this, [this] { addVariable(); });
+    if (!localsGraph_.isEmpty()) menu->addAction(QIcon(":/Icons/local-variable.svg"), "Local Variable (" + localsGraph_ + ")", this, [this] { addLocal(); });
 }
 
 void MyScriptPanel::onSelection(FitTree* tree) {
@@ -403,12 +403,12 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     QMenu m;
     QAction *open = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr;
     if (isEvent) {
-        open = m.addAction("Go to handler");        // events belong to the application: they cannot be removed
+        open = m.addAction(QIcon(":/Icons/goto.svg"), "Go to handler");        // events belong to the application: they cannot be removed
     } else {
-        open = m.addAction("Open");
-        rename = m.addAction("Rename");
-        if (tree == functions_) dup = m.addAction("Duplicate");
-        del = m.addAction("Delete");
+        open = m.addAction(QIcon(":/Icons/open-function.svg"), "Open");
+        rename = m.addAction(QIcon(":/Icons/rename.svg"), "Rename");
+        if (tree == functions_) dup = m.addAction(QIcon(":/Icons/duplicate.svg"), "Duplicate");
+        del = m.addAction(QIcon(":/Icons/delete.svg"), "Delete");
     }
     QAction* a = m.exec(tree->viewport()->mapToGlobal(pos));
     if (!a) return;

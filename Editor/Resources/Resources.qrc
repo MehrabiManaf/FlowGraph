@@ -28,6 +28,17 @@
         <file alias="reroute.svg">Icons/reroute.svg</file>
         <file alias="variable-get.svg">Icons/variable-get.svg</file>
         <file alias="variable-set.svg">Icons/variable-set.svg</file>
+        <file alias="function.svg">Icons/function.svg</file>
+        <file alias="variable.svg">Icons/variable.svg</file>
+        <file alias="local-variable.svg">Icons/local-variable.svg</file>
+        <file alias="rename.svg">Icons/rename.svg</file>
+        <file alias="goto.svg">Icons/goto.svg</file>
+        <file alias="load-more.svg">Icons/load-more.svg</file>
+        <file alias="watch-add.svg">Icons/watch-add.svg</file>
+        <file alias="watch-range.svg">Icons/watch-range.svg</file>
+        <file alias="watch-edit.svg">Icons/watch-edit.svg</file>
+        <file alias="watch-remove.svg">Icons/watch-remove.svg</file>
+        <file alias="watch-clear.svg">Icons/watch-clear.svg</file>
         <file alias="step-into.svg">Icons/step-into.svg</file>
         <file alias="step-out.svg">Icons/step-out.svg</file>
         <file alias="step-over.svg">Icons/step-over.svg</file>
