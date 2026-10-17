@@ -128,6 +128,12 @@ void GraphView::mousePressEvent(QMouseEvent* e) {
 }
 
 void GraphView::mouseMoveEvent(QMouseEvent* e) {
+    // the release can be lost (e.g. a popup grabbed the mouse): never keep panning without the button held
+    if (panning_ && !(e->buttons() & panButton_)) {
+        panning_ = false;
+        pendingContext_ = false;
+        unsetCursor();
+    }
     if (panning_) {
         QPoint d = e->pos() - panLast_;
         if (!panMoved_ && (e->pos() - panLast_).manhattanLength() < 4 && panButton_ == Qt::RightButton) return;
@@ -148,12 +154,30 @@ void GraphView::mouseReleaseEvent(QMouseEvent* e) {
         unsetCursor();
         suppressContext_ = panMoved_ && panButton_ == Qt::RightButton;
         if (panButton_ == Qt::MiddleButton) { e->accept(); return; }
+        if (pendingContext_) {
+            pendingContext_ = false;
+            bool show = !suppressContext_;
+            suppressContext_ = false;
+            e->accept();
+            if (show) {
+                QContextMenuEvent ce(QContextMenuEvent::Mouse, e->pos(), e->globalPosition().toPoint(), e->modifiers());
+                contextMenuEvent(&ce);
+            }
+            return;
+        }
     }
     QGraphicsView::mouseReleaseEvent(e);
 }
 
 void GraphView::contextMenuEvent(QContextMenuEvent* e) {
     if (suppressContext_) { suppressContext_ = false; return; }
+    // platforms that send the context menu on press: wait for the release so a right-drag can pan
+    // and the popup doesn't swallow the release (which would leave the view stuck panning)
+    if (panning_ && panButton_ == Qt::RightButton && e->reason() == QContextMenuEvent::Mouse) {
+        pendingContext_ = true;
+        e->accept();
+        return;
+    }
     GraphScene* sc = graphScene();
     QPointF sp = mapToScene(e->pos());
     QGraphicsItem* under = nullptr;

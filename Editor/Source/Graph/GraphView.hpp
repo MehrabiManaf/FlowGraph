@@ -45,6 +45,7 @@ private:
     QPoint panLast_;
     Qt::MouseButton panButton_ = Qt::NoButton;
     bool suppressContext_ = false;
+    bool pendingContext_ = false; // a press-time context menu (X11/Wayland) deferred until the right button is released
 };
 
 } // namespace fged
