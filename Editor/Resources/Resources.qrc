@@ -20,6 +20,14 @@
         <file alias="select-all.svg">Icons/select-all.svg</file>
         <file alias="comment.svg">Icons/comment.svg</file>
         <file alias="clear.svg">Icons/clear.svg</file>
+        <file alias="break-links.svg">Icons/break-links.svg</file>
+        <file alias="breakpoint-add.svg">Icons/breakpoint-add.svg</file>
+        <file alias="breakpoint-remove.svg">Icons/breakpoint-remove.svg</file>
+        <file alias="edit-comment.svg">Icons/edit-comment.svg</file>
+        <file alias="open-function.svg">Icons/open-function.svg</file>
+        <file alias="reroute.svg">Icons/reroute.svg</file>
+        <file alias="variable-get.svg">Icons/variable-get.svg</file>
+        <file alias="variable-set.svg">Icons/variable-set.svg</file>
         <file alias="step-into.svg">Icons/step-into.svg</file>
         <file alias="step-out.svg">Icons/step-out.svg</file>
         <file alias="step-over.svg">Icons/step-over.svg</file>

@@ -187,21 +187,23 @@ void GraphView::contextMenuEvent(QContextMenuEvent* e) {
     if (auto* node = dynamic_cast<NodeItem*>(under)) {
         if (auto pin = node->pinAt(sp)) {
             QMenu m;
-            QAction* brk = m.addAction("Break all links");
+            QAction* brk = m.addAction(QIcon(":/Icons/break-links.svg"), "Break all links");
             if (m.exec(e->globalPos()) == brk) sc->breakPinLinks(*pin);
             return;
         }
         if (!node->isSelected()) { sc->clearSelection(); node->setSelected(true); }
         QMenu m;
-        QAction* cut = m.addAction("Cut");
-        QAction* copy = m.addAction("Copy");
-        QAction* dup = m.addAction("Duplicate");
-        QAction* del = m.addAction("Delete");
+        QAction* cut = m.addAction(QIcon(":/Icons/cut.svg"), "Cut");
+        QAction* copy = m.addAction(QIcon(":/Icons/copy.svg"), "Copy");
+        QAction* dup = m.addAction(QIcon(":/Icons/duplicate.svg"), "Duplicate");
+        QAction* del = m.addAction(QIcon(":/Icons/delete.svg"), "Delete");
         m.addSeparator();
-        QAction* bp = m.addAction(sc->isBreakpoint(node->nodeId()) ? "Remove breakpoint" : "Add breakpoint");
-        QAction* note = m.addAction("Edit node comment...");
+        const bool hasBreakpoint = sc->isBreakpoint(node->nodeId());
+        QAction* bp = m.addAction(QIcon(hasBreakpoint ? ":/Icons/breakpoint-remove.svg" : ":/Icons/breakpoint-add.svg"),
+                                  hasBreakpoint ? "Remove breakpoint" : "Add breakpoint");
+        QAction* note = m.addAction(QIcon(":/Icons/edit-comment.svg"), "Edit node comment...");
         QAction* open = nullptr;
-        if (node->compiled().op == fg::NodeOp::CallFunction) open = m.addAction("Open function graph");
+        if (node->compiled().op == fg::NodeOp::CallFunction) open = m.addAction(QIcon(":/Icons/open-function.svg"), "Open function graph");
         QAction* a = m.exec(e->globalPos());
         if (!a) return;
         if (a == cut) { sc->copySelected(); sc->deleteSelected(); }
@@ -218,8 +220,8 @@ void GraphView::contextMenuEvent(QContextMenuEvent* e) {
     }
     if (auto* link = dynamic_cast<LinkItem*>(under)) {
         QMenu m;
-        QAction* reroute = m.addAction("Add reroute node");
-        QAction* del = m.addAction("Delete link");
+        QAction* reroute = m.addAction(QIcon(":/Icons/reroute.svg"), "Add reroute node");
+        QAction* del = m.addAction(QIcon(":/Icons/delete.svg"), "Delete link");
         QAction* a = m.exec(e->globalPos());
         if (a == reroute) sc->insertReroute(link->connection(), sp);
         else if (a == del) { sc->clearSelection(); link->setSelected(true); sc->deleteSelected(); }
@@ -281,8 +283,8 @@ void GraphView::dropEvent(QDropEvent* e) {
     else if (e->modifiers() & Qt::AltModifier) isSet = true;
     else {
         QMenu m;
-        QAction* g = m.addAction("Get " + name);
-        QAction* s = m.addAction("Set " + name);
+        QAction* g = m.addAction(QIcon(":/Icons/variable-get.svg"), "Get " + name);
+        QAction* s = m.addAction(QIcon(":/Icons/variable-set.svg"), "Set " + name);
         QAction* a = m.exec(mapToGlobal(e->position().toPoint()));
         if (!a) return;
         isSet = a == s;
