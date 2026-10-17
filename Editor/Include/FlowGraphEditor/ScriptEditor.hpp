@@ -51,6 +51,20 @@ struct LaunchSpec {
     int stepDelayMs = -1;                    // slow motion while debugging; -1 keeps the current setting
 };
 
+// What the editor is for in an application.
+enum class EditorMode {
+    // The user works with script files: File > New / Open / Save / Save As, and Run starts an event or function of the script, chosen in
+    // the toolbar (launch configurations...). This is what flowstudio is, and the default.
+    Standalone,
+    // The application owns the scripts and runs them itself (it raises the events), so the editor has no files and nothing to launch:
+    //   - the application hands a script over with ScriptEditor::edit(), or the user opens a file; there is no New. Only a script that fits the
+//     application is taken (see EditorHost::acceptsScript): anything else is refused and the editor keeps the script it has;
+    //   - Save does not write a file: it gives the edited script back to the application (EditorHost::applyScript), which puts it to use;
+    //     Save As still writes a file;
+    //   - there is no Run: the debugger attaches to what the application runs instead (Attach / Detach, EditorHost::debugTarget).
+    Embedded,
+};
+
 // Implemented by the application that embeds the editor. Everything but runtime() has a sensible default.
 class EditorHost {
 public:
@@ -74,6 +88,18 @@ public:
     // The script already has no graphs; call script.addEventGraph() first. Default: one empty event graph.
     virtual void initializeNewScript(fg::Script& script) { script.addEventGraph("EventGraph"); }
 
+    // Standalone (default) or embedded, see EditorMode.
+    virtual EditorMode mode() const { return EditorMode::Standalone; }
+    // Embedded mode: can this script be edited here? Called before a script replaces the one in the editor (edit(), File > Open), after the
+    // editor itself has checked that the application provides everything the script uses (events, nodes, types: fg::checkCompatibility). Say
+    // what is wrong in `reason` and return false to refuse it, e.g. a script that does not handle the event this application is made for.
+    virtual bool acceptsScript(const fg::Script&, QString* reason) { (void)reason; return true; }
+    // Embedded mode: the user pressed Save. Take the script (replace the one that runs, run it again...). Return false when it cannot be
+    // used: the editor then keeps the changes as unsaved.
+    virtual bool applyScript(ScriptEditor&, const fg::Script&) { return false; }
+    // Embedded mode: the user pressed Attach. Return the executor that runs the script now, or null when nothing runs (see ScriptEditor::attach).
+    virtual std::shared_ptr<fg::AsyncExecutor> debugTarget(ScriptEditor&) { return nullptr; }
+
     // Called once when the editor window exists: add your own menus and toolbar buttons here.
     virtual void attached(ScriptEditor&) {}
     // Called after a script was created, opened (before it is checked) or saved (possibly under a new name).
@@ -87,11 +113,14 @@ public:
     virtual void launchEntrySelected(const QString& /*id*/) {}
 };
 
+// There is ONE script editor in a program: creating a second one while the first exists throws std::logic_error. An application with
+// several things to edit (several tables, objects...) lets the same editor edit them one after the other: edit().
 class ScriptEditor : public QObject {
     Q_OBJECT
 public:
     explicit ScriptEditor(EditorHost& host);
     ~ScriptEditor() override;
+    static ScriptEditor* instance();                 // the editor of this program; null when there is none
     ScriptEditor(const ScriptEditor&) = delete;
     ScriptEditor& operator=(const ScriptEditor&) = delete;
 
@@ -102,12 +131,25 @@ public:
     // Scripts. open() reports a script that needs events / plugins this application does not have (it is opened
     // anyway so that it can be fixed, but it will not compile). Returns false when the file cannot be read.
     bool open(const QString& path);
+    // Edits a script the application owns (no file): the title is what the window shows. Changes of the script that was edited before are
+    // asked for first (Save gives them to the application); false when the user cancelled. An embedded editor takes only a script that fits the
+    // application (EditorHost::acceptsScript); otherwise it returns false, says why in its log and keeps the script it has.
+    bool edit(const fg::Script& script, const QString& title);
     void newScript();
     bool save();
     bool saveAs();
     bool maybeSave();                                // asks the user when there are unsaved changes
     QString path() const;                            // empty for a script that was never saved
     bool isModified() const;
+
+    // Debugging a script the application runs (embedded mode). attach() makes the editor the debugger of the script that `executor` runs:
+    // breakpoints stop it, the Debugger panel shows its variables and call stack, Pause / Continue / Step control it. Attaching to another
+    // executor replaces the previous one; detach() lets everything that was stopped continue. The editor keeps `executor` alive while
+    // attached. Edit() of another script detaches. The application attaches the new executor itself when it replaces the one that runs
+    // while the editor is attached (isAttached()): do it before the events are posted.
+    bool attach(std::shared_ptr<fg::AsyncExecutor> executor);
+    void detach();
+    bool isAttached() const;
 
     // Customisation.
     QMenu* menu(const QString& title);               // a top level menu (created when it does not exist yet)
@@ -125,6 +167,7 @@ public:
 
 signals:
     void scriptChanged();                            // opened, created or saved
+    void attachedChanged(bool attached);             // the debugger attached to / detached from an executor
 
 private:
     friend class ScriptEditorWindow;

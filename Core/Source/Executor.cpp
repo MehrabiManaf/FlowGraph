@@ -32,6 +32,12 @@ Executor::Handle Executor::postFunction(const std::string& name, std::vector<Val
 }
 
 bool Executor::hasRunnable() const {
+    if (serial_) {                                   // only the oldest task can run (or end, when it was aborted); the others wait for it
+        if (entries_.empty()) return false;
+        const Entry& e = entries_.front();
+        const TaskState s = e.task->state();
+        return s == TaskState::Ready || (s == TaskState::Paused && e.resume) || e.task->done();
+    }
     for (auto& e : entries_) {
         TaskState s = e.task->state();
         if (s == TaskState::Ready || (s == TaskState::Paused && e.resume)) return true;
@@ -48,13 +54,35 @@ void Executor::finish(size_t index) {
     if (completion_) completion_(c);
 }
 
+// Serial mode: the oldest task runs, the others have not started. A task that has ended makes room for the next one in the same call (so
+// tasks that end at once, or were aborted, do not cost a call each), up to a limit that keeps the thread responsive.
+void Executor::pumpSerial(PumpStats& st, uint64_t nodesPerTask) {
+    constexpr int kBatch = 64;
+    for (int i = 0; i < kBatch && !entries_.empty(); ++i) {
+        Entry& front = entries_.front();
+        const Handle h = front.handle;
+        const TaskState s = front.task->state();
+        if (s == TaskState::Ready || (s == TaskState::Paused && front.resume)) {
+            front.resume = false;
+            std::shared_ptr<Task> task = front.task;
+            task->run(nodesPerTask);
+            ++st.ran;
+        }
+        auto it = std::find_if(entries_.begin(), entries_.end(), [&](const Entry& e) { return e.handle == h; });
+        if (it == entries_.end()) continue;           // a completion handler removed it
+        if (!it->task->done()) break;                 // it waits, is stopped, or used its slice: the others wait for it
+        finish(static_cast<size_t>(it - entries_.begin()));
+    }
+}
+
 Executor::PumpStats Executor::pump(double dt, uint64_t nodesPerTask) {
     PumpStats st;
     for (auto& t : inst_->advanceWaits(dt))
         if (wake_) wake_(handleOf(t.get()));
     // work on a snapshot of the handles: completion handlers may post or abort tasks
     std::vector<Handle> order;
-    for (auto& e : entries_) order.push_back(e.handle);
+    if (serial_) pumpSerial(st, nodesPerTask);
+    else for (auto& e : entries_) order.push_back(e.handle);
     for (Handle h : order) {
         auto it = std::find_if(entries_.begin(), entries_.end(), [&](const Entry& e) { return e.handle == h; });
         if (it == entries_.end()) continue;
@@ -106,8 +134,9 @@ Executor::Handle Executor::handleOf(const Task* t) const {
 }
 
 // ====================================================================== AsyncExecutor
-AsyncExecutor::AsyncExecutor(std::shared_ptr<const Program> program, Callbacks callbacks, Debugger* debugger)
+AsyncExecutor::AsyncExecutor(std::shared_ptr<const Program> program, Callbacks callbacks, Debugger* debugger, Options options)
     : debugger_(debugger), cb_(std::move(callbacks)), exec_(std::move(program), nullptr) {
+    exec_.setSerial(options.serial);
     if (!debugger_) {
         ownedDebugger_ = std::make_unique<Debugger>();
         debugger_ = ownedDebugger_.get();
@@ -206,6 +235,10 @@ void AsyncExecutor::abort(Handle h) {
 
 void AsyncExecutor::abortAll() {
     post([this] { exec_.abortAll(); });
+}
+
+void AsyncExecutor::setSerial(bool on) {
+    post([this, on] { exec_.setSerial(on); });
 }
 
 void AsyncExecutor::setStepDelay(int ms) {

@@ -59,7 +59,7 @@ QString takeWindowName() {
 
 ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, QWidget* parent)
     : KDDockWidgets::QtWidgets::MainWindow(takeWindowName(), KDDockWidgets::MainWindowOption_HasCentralWidget, parent),
-      host_(host), facade_(facade), rt_(host.runtime()), doc_(host.runtime()), run_(&doc_) {
+      host_(host), embedded_(host.mode() == EditorMode::Embedded), facade_(facade), rt_(host.runtime()), doc_(host.runtime()), run_(&doc_) {
     setMinimumSize(QSize(900, 520));
     resize(QSize(1500, 900));
     setAffinities(QStringList{windowTitle().isEmpty() ? QString("ScriptEditor") : QString("ScriptEditor")});
@@ -95,6 +95,10 @@ ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, Q
         }
     });
     connect(&run_, &RunController::logMessage, this, [this](int l, const QString& t) { log(l, t); });
+    connect(&run_, &RunController::attachedChanged, this, [this](bool on) {
+        updateRunActions();
+        emit facade_.attachedChanged(on);
+    });
     connect(&run_, &RunController::linkFired, this, [this](const QString& g, int from, int out, int to) {
         for (auto& [v, s] : views_)
             if (s->graphName() == g) s->fireLink(from, out, to);
@@ -252,6 +256,14 @@ void ScriptEditorWindow::createActions() {
     actStepOut_ = new QAction(QIcon(":/Icons/step-out.svg"), "Step Out", this);
     actStepOut_->setShortcut(QKeySequence("Shift+F11"));
     actBreakpoint_ = act("Toggle &Breakpoint", QKeySequence(Qt::Key_F9));
+    if (embedded_) {
+        // no Run: the application runs the script, the debugger attaches to it
+        actAttach_ = new QAction(QIcon(":/Icons/attach.svg"), "&Attach", this);
+        actAttach_->setToolTip("Debug the script that the application is running now: breakpoints stop it, and you can step through it");
+        actDetach_ = new QAction(QIcon(":/Icons/detach.svg"), "&Detach", this);
+        actDetach_->setToolTip("Stop debugging: whatever is stopped continues");
+        actRun_->setText("Continue");
+    }
     actAbout_ = act("&About " + host_.applicationName());
 
     connect(actNew_, &QAction::triggered, this, [this] { fileNew(); });
@@ -286,6 +298,10 @@ void ScriptEditorWindow::createActions() {
         else runOrContinue();
     });
     connect(actStop_, &QAction::triggered, this, [this] { run_.stop(); });
+    if (embedded_) {
+        connect(actAttach_, &QAction::triggered, this, [this] { attachToApplication(); });
+        connect(actDetach_, &QAction::triggered, this, [this] { run_.detach(); });
+    }
     connect(actStepOver_, &QAction::triggered, this, [this] { run_.stepOver(); });
     connect(actStepInto_, &QAction::triggered, this, [this] { run_.stepInto(); });
     connect(actStepOut_, &QAction::triggered, this, [this] { run_.stepOut(); });
@@ -301,9 +317,15 @@ void ScriptEditorWindow::createActions() {
 
 void ScriptEditorWindow::createMenus() {
     QMenu* file = menuBar()->addMenu("&File");
-    file->addActions({actNew_, actOpen_, actSave_, actSaveAs_});
-    file->addSeparator();
-    file->addAction(actExit_);
+    if (embedded_) {
+        // the application owns the script: no New / Exit; Open takes only scripts that fit the application; Save gives the script back,
+        // Save As writes a copy to a file
+        file->addActions({actOpen_, actSave_, actSaveAs_});
+    } else {
+        file->addActions({actNew_, actOpen_, actSave_, actSaveAs_});
+        file->addSeparator();
+        file->addAction(actExit_);
+    }
 
     QMenu* edit = menuBar()->addMenu("&Edit");
     edit->addActions({actUndo_, actRedo_});
@@ -333,21 +355,32 @@ void ScriptEditorWindow::createMenus() {
     view->addSeparator();
     for (auto* dw : docks_) view->addAction(dw->toggleAction());
 
-    QMenu* runMenu = menuBar()->addMenu("&Run");
-    runMenu->addActions({actRun_, actStop_});
-    runMenu->addSeparator();
-    runMenu->addActions({actStepOver_, actStepInto_, actStepOut_});
-    runMenu->addSeparator();
-    runMenu->addAction(actBreakpoint_);
-    QMenu* speed = runMenu->addMenu("Execution speed");
-    speedGroup_ = new QActionGroup(this);
-    for (auto [label, ms] : {std::pair<const char*, int>{"Full speed", 0}, {"Slow (100 ms / node)", 100}, {"Slower (300 ms / node)", 300}, {"Step by step (1 s / node)", 1000}}) {
-        QAction* a = speed->addAction(label);
-        a->setCheckable(true);
-        a->setData(ms);
-        a->setChecked(ms == 0);
-        speedGroup_->addAction(a);
-        connect(a, &QAction::triggered, this, [this, ms] { run_.setStepDelay(ms); });
+    if (embedded_) {
+        QMenu* debug = menuBar()->addMenu("&Debug");
+        debug->addActions({actAttach_, actDetach_});
+        debug->addSeparator();
+        debug->addAction(actRun_);
+        debug->addSeparator();
+        debug->addActions({actStepOver_, actStepInto_, actStepOut_});
+        debug->addSeparator();
+        debug->addAction(actBreakpoint_);
+    } else {
+        QMenu* runMenu = menuBar()->addMenu("&Run");
+        runMenu->addActions({actRun_, actStop_});
+        runMenu->addSeparator();
+        runMenu->addActions({actStepOver_, actStepInto_, actStepOut_});
+        runMenu->addSeparator();
+        runMenu->addAction(actBreakpoint_);
+        QMenu* speed = runMenu->addMenu("Execution speed");
+        speedGroup_ = new QActionGroup(this);
+        for (auto [label, ms] : {std::pair<const char*, int>{"Full speed", 0}, {"Slow (100 ms / node)", 100}, {"Slower (300 ms / node)", 300}, {"Step by step (1 s / node)", 1000}}) {
+            QAction* a = speed->addAction(label);
+            a->setCheckable(true);
+            a->setData(ms);
+            a->setChecked(ms == 0);
+            speedGroup_->addAction(a);
+            connect(a, &QAction::triggered, this, [this, ms] { run_.setStepDelay(ms); });
+        }
     }
 
     QMenu* help = menuBar()->addMenu("&Help");
@@ -359,6 +392,18 @@ void ScriptEditorWindow::createToolBar() {
     toolBar_ = tb;
     tb->setObjectName("MainToolBar");
     tb->setIconSize(QSize(22, 22));
+    if (embedded_) {
+        tb->addActions({actOpen_, actSave_});
+        tb->addSeparator();
+        tb->addActions({actAttach_, actDetach_});
+        tb->addSeparator();
+        tb->addAction(actRun_);
+        tb->addSeparator();
+        tb->addActions({actStepOver_, actStepInto_, actStepOut_});
+        entryCombo_ = new QComboBox(this);          // the application chooses what runs: the box is not shown, but the editor keeps its list of entries
+        entryCombo_->hide();
+        return;
+    }
     tb->addActions({actNew_, actOpen_, actSave_});
     tb->addSeparator();
     entryCombo_ = new QComboBox(tb);
@@ -511,6 +556,7 @@ bool ScriptEditorWindow::maybeSave() {
 }
 
 void ScriptEditorWindow::fileNew() {
+    if (embedded_) return;                              // the application hands the scripts over
     if (!maybeSave()) return;
     newScript();
 }
@@ -524,12 +570,47 @@ void ScriptEditorWindow::newScript() {
 }
 
 void ScriptEditorWindow::fileOpen() {
+    if (embedded_) {
+        // a script that does not fit is refused before anything is asked or changed
+        QString path = QFileDialog::getOpenFileName(this, "Open script", QString(), kFilter, nullptr, QFileDialog::DontUseNativeDialog);
+        if (path.isEmpty()) return;
+        fg::Script script;
+        QString reason;
+        try {
+            script = fg::Script::load(path.toStdString());
+        } catch (const std::exception& e) {
+            QMessageBox::critical(this, "Open script", "Cannot open '" + path + "':\n" + e.what());
+            return;
+        }
+        if (!acceptable(script, &reason)) {
+            showRejected(path, reason);
+            return;
+        }
+        if (!maybeSave()) return;
+        openFile(path);
+        return;
+    }
     if (!maybeSave()) return;
     QString path = QFileDialog::getOpenFileName(this, "Open script", QString(), kFilter, nullptr, QFileDialog::DontUseNativeDialog);
     if (!path.isEmpty()) openFile(path);
 }
 
 bool ScriptEditorWindow::openFile(const QString& path) {
+    if (embedded_) {
+        // an embedded editor takes only a script that fits the application; otherwise the script it has stays as it is
+        fg::Script script;
+        try {
+            script = fg::Script::load(path.toStdString());
+        } catch (const std::exception& e) {
+            QMessageBox::critical(this, "Open script", "Cannot open '" + path + "':\n" + e.what());
+            return false;
+        }
+        QString reason;
+        if (!acceptable(script, &reason)) {
+            showRejected(path, reason);
+            return false;
+        }
+    }
     run_.stop();
     QString err;
     while (tabs_->count()) closeTab(0);
@@ -556,7 +637,85 @@ bool ScriptEditorWindow::openFile(const QString& path) {
     return true;
 }
 
+// An embedded editor edits the scripts the application hands over, one after the other.
+bool ScriptEditorWindow::editScript(const fg::Script& script, const QString& title) {
+    if (embedded_) {
+        QString reason;
+        if (!acceptable(script, &reason)) {
+            log(int(fg::LogLevel::Warning), "'" + title + "' was not taken: " + reason.trimmed());
+            statusBar()->showMessage("The script '" + title + "' does not fit " + host_.applicationName() + ": see the Output Log", 8000);
+            return false;
+        }
+    }
+    if (!maybeSave()) return false;
+    if (!embedded_) run_.stop();
+    while (tabs_->count()) closeTab(0);
+    doc_.setScript(script, title);                         // another script: an attached debugger lets go of the executor of the old one
+    auto report = fg::checkCompatibility(doc_.script(), rt_.registry());
+    if (!report.ok()) {
+        const QString text = qs(report.toText());
+        log(int(fg::LogLevel::Warning), "This script needs things " + host_.applicationName() + " does not provide:\n" + text.trimmed());
+        statusBar()->showMessage("This script needs things " + host_.applicationName() + " does not provide - see the Output Log", 8000);
+    }
+    emit facade_.scriptChanged();
+    return true;
+}
+
+bool ScriptEditorWindow::attachExecutor(std::shared_ptr<fg::AsyncExecutor> executor) {
+    const bool ok = run_.attach(std::move(executor));
+    if (ok) {
+        log(int(fg::LogLevel::Info), "--- attached ---");
+        if (logDock_) logDock_->raise();
+    }
+    return ok;
+}
+
+void ScriptEditorWindow::attachToApplication() {
+    std::shared_ptr<fg::AsyncExecutor> target = host_.debugTarget(facade_);
+    if (!target) {
+        statusBar()->showMessage("Nothing is running in " + host_.applicationName() + " to attach to", 5000);
+        return;
+    }
+    attachExecutor(std::move(target));
+}
+
+bool ScriptEditorWindow::acceptable(const fg::Script& script, QString* reason) const {
+    const auto report = fg::checkCompatibility(script, rt_.registry());
+    if (!report.ok()) {
+        if (reason) *reason = "This script needs things " + host_.applicationName() + " does not provide:\n" + qs(report.toText());
+        return false;
+    }
+    QString why;
+    if (!host_.acceptsScript(script, &why)) {
+        if (reason) *reason = why.isEmpty() ? "This script does not fit " + host_.applicationName() + "." : why;
+        return false;
+    }
+    return true;
+}
+
+void ScriptEditorWindow::showRejected(const QString& what, const QString& reason) {
+    log(int(fg::LogLevel::Warning), "'" + what + "' was not opened: " + reason.trimmed());
+    statusBar()->showMessage("That script does not fit " + host_.applicationName() + " - it was not opened", 8000);
+    auto* box = new QMessageBox(QMessageBox::Warning, host_.applicationName(),
+                                "This script cannot be opened here:\n\n" + reason.trimmed() + "\n\nThe script that was open is unchanged.", QMessageBox::Ok, this);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();                                        // not modal for the flow of the program
+}
+
+// Save of an embedded editor: no file. The script goes to the application, which decides what to do with it.
+bool ScriptEditorWindow::embeddedSave() {
+    if (!host_.applyScript(facade_, doc_.script())) {
+        statusBar()->showMessage(host_.applicationName() + " did not take the script: the changes are still unsaved", 6000);
+        return false;
+    }
+    doc_.markSaved();
+    statusBar()->showMessage("The script was handed over to " + host_.applicationName(), 3000);
+    emit facade_.scriptChanged();
+    return true;
+}
+
 bool ScriptEditorWindow::fileSave() {
+    if (embedded_) return embeddedSave();
     if (doc_.path().isEmpty()) return fileSaveAs();
     QString err;
     if (!doc_.save(QString(), &err)) {
@@ -570,6 +729,20 @@ bool ScriptEditorWindow::fileSave() {
 }
 
 bool ScriptEditorWindow::fileSaveAs() {
+    if (embedded_) {
+        // a copy in a file: the script stays the application's (unsaved changes stay unsaved)
+        QString sel = kFilter;
+        QString file = QFileDialog::getSaveFileName(this, "Save a copy of the script", doc_.displayName().remove('*'), kFilter, &sel, QFileDialog::DontUseNativeDialog);
+        if (file.isEmpty()) return false;
+        if (!file.contains('.')) file += ".flow";
+        QString err;
+        if (!doc_.exportTo(file, &err)) {
+            QMessageBox::critical(this, "Save script", err);
+            return false;
+        }
+        statusBar()->showMessage("Saved " + file, 3000);
+        return true;
+    }
     QString sel = kFilter;
     QString path = QFileDialog::getSaveFileName(this, "Save script", doc_.path(), kFilter, &sel, QFileDialog::DontUseNativeDialog);
     if (path.isEmpty()) return false;
@@ -649,6 +822,20 @@ void ScriptEditorWindow::updateRunActions() {
     using S = RunController::State;
     S s = run_.state();
     const bool busy = s == S::Running || s == S::Waiting;       // the script runs: the button pauses it
+    if (embedded_) {
+        // the application runs the script: attach / detach, and pause / continue / step while attached
+        const bool attached = run_.isAttached();
+        actAttach_->setEnabled(!attached);
+        actDetach_->setEnabled(attached);
+        actRun_->setEnabled(attached);
+        actRun_->setText(s == S::Paused ? "Continue" : "Pause");
+        actRun_->setIcon(QIcon(s == S::Paused ? ":/Icons/continue.svg" : ":/Icons/interrupt.svg"));
+        actStop_->setEnabled(false);
+        actStepOver_->setEnabled(s == S::Paused);
+        actStepInto_->setEnabled(s == S::Paused);
+        actStepOut_->setEnabled(s == S::Paused);
+        return;
+    }
     actRun_->setText(busy ? "Pause" : s == S::Paused ? "Continue" : "Run");
     actRun_->setIcon(QIcon(busy ? ":/Icons/interrupt.svg" : ":/Icons/continue.svg"));
     actStop_->setEnabled(s != S::Idle);
@@ -673,6 +860,10 @@ void ScriptEditorWindow::refreshEntries() {
 }
 
 void ScriptEditorWindow::runOrContinue() {
+    if (embedded_) {                                    // the application starts the script: all there is to do is to continue
+        if (run_.state() == RunController::State::Paused) run_.resume();
+        return;
+    }
     if (run_.state() == RunController::State::Paused) { run_.resume(); return; }
     if (run_.state() != RunController::State::Idle) return;
     QString id = entryCombo_->currentData().toString();

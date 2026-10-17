@@ -87,6 +87,30 @@ void removePins(fg::Script& s, const std::string& graphName, bool isInput, const
         }
 }
 
+// A custom pin of a node (fg::Node::inputs / outputs) was renamed, or removed (`to` empty): its links, and the literal value of an
+// input, follow it.
+void moveNodePin(fg::Graph& g, fg::NodeId id, fg::PinDir dir, const std::string& from, const std::string& to) {
+    auto& v = g.connections;
+    if (to.empty()) {
+        v.erase(std::remove_if(v.begin(), v.end(), [&](const fg::Connection& c) {
+            return dir == fg::PinDir::In ? (c.toNode == id && c.toPin == from) : (c.fromNode == id && c.fromPin == from);
+        }), v.end());
+    } else {
+        for (auto& c : v) {
+            if (dir == fg::PinDir::In && c.toNode == id && c.toPin == from) c.toPin = to;
+            if (dir == fg::PinDir::Out && c.fromNode == id && c.fromPin == from) c.fromPin = to;
+        }
+    }
+    if (dir == fg::PinDir::In)
+        if (auto* n = g.findNode(id)) {
+            auto it = n->defaults.find(from);
+            if (it != n->defaults.end()) {
+                if (!to.empty()) n->defaults[to] = it->second;
+                n->defaults.erase(from);
+            }
+        }
+}
+
 } // namespace
 
 DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), doc_(doc) {
@@ -666,6 +690,136 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
 }
 
 // ------------------------------------------------------------------ nodes
+// "Inputs" and "Outputs" of a node. Every node shows its pins, read only: they belong to the definition of the node. A definition that
+// allows custom pins (NodeDef::customInputs / customOutputs) also gets a list of the pins the user added, edited like the inputs and
+// outputs of a function: "+" adds a pin, the cells are edited by double-click, "Remove" / "Move" are in the right click menu.
+// Renaming a pin moves its links with it; removing a pin removes them.
+void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& cn, const QString& graph) {
+    constexpr int kRowHeight = 24;
+    const fg::NodeId id = node.id;
+    for (bool inputs : {true, false}) {
+        const fg::PinDir dir = inputs ? fg::PinDir::In : fg::PinDir::Out;
+        const bool custom = cn.def && (inputs ? cn.def->customInputs : cn.def->customOutputs);
+        const std::vector<fg::ParamDecl>& mine = inputs ? node.inputs : node.outputs;
+        std::set<std::string> customNames;
+        if (custom)
+            for (auto& p : mine) customNames.insert(p.name);
+        // the pins of the definition: everything of this direction except the custom pins, which come last
+        std::vector<const fg::CompiledPin*> fixed;
+        std::set<std::string> fixedNames;                  // all of them, hidden or not: a custom pin may not take one of these names
+        for (auto& p : cn.pins) {
+            if (p.dir != dir) continue;
+            if (custom && p.kind == fg::PinKind::Data && customNames.count(p.name)) continue;
+            fixedNames.insert(p.name);
+            if (!p.hidden) fixed.push_back(&p);
+        }
+        if (fixed.empty() && !custom) continue;
+
+        auto* panel = new CCollapsiblePanel(inputs ? "Inputs" : "Outputs", nullptr, custom);
+        if (!fixed.empty()) {
+            auto* table = new QTableWidget(int(fixed.size()), 2);
+            table->setObjectName(inputs ? "fixedInputs" : "fixedOutputs");
+            table->horizontalHeader()->hide();
+            table->verticalHeader()->hide();
+            table->verticalHeader()->setDefaultSectionSize(kRowHeight);
+            table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+            table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+            table->setShowGrid(false);
+            table->setSelectionMode(QAbstractItemView::NoSelection);
+            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            table->setFocusPolicy(Qt::NoFocus);
+            table->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            table->setFixedHeight(int(fixed.size()) * kRowHeight + 2 * table->frameWidth() + 2);
+            const QBrush dimmed = table->palette().brush(QPalette::Disabled, QPalette::Text);
+            for (int r = 0; r < int(fixed.size()); ++r) {
+                const fg::CompiledPin& p = *fixed[size_t(r)];
+                auto* name = new QTableWidgetItem(qs(p.name));
+                auto* type = new QTableWidgetItem(p.kind == fg::PinKind::Exec ? QString("exec") : p.type ? qs(p.type->name) : QString("any"));
+                name->setToolTip(qs(p.doc.empty() ? std::string("Part of the definition of the node: it cannot be changed.") : p.doc));
+                for (auto* it : {name, type}) {
+                    it->setFlags(Qt::ItemIsEnabled);
+                    it->setForeground(dimmed);
+                }
+                table->setItem(r, 0, name);
+                table->setItem(r, 1, type);
+            }
+            panel->AddWidget(table);
+        }
+
+        if (custom) {
+            // every change is one undoable edit of the node and of the links that end at its custom pins
+            const QString gname = graph;
+            auto change = [this, gname, id, inputs](const QString& label, const std::function<void(std::vector<fg::ParamDecl>&, fg::Graph&)>& fn) {
+                edit(label, [=](fg::Script& s) {
+                    auto* gr = s.findGraph(ss(gname));
+                    auto* n = gr ? gr->findNode(id) : nullptr;
+                    if (n) fn(inputs ? n->inputs : n->outputs, *gr);
+                }, QString(), true);
+            };
+            auto apply = [=](std::vector<fg::ParamDecl> np) {
+                std::set<std::string> names = fixedNames;
+                for (auto& p : np)
+                    if (p.name.empty() || !names.insert(p.name).second) {
+                        QMessageBox::warning(this, "Pins", "Pin names must be unique and not empty.");
+                        QTimer::singleShot(0, this, [this] { rebuild(); });
+                        return;
+                    }
+                change("Edit node pins", [&](std::vector<fg::ParamDecl>& list, fg::Graph& gr) {
+                    for (size_t i = 0; i < np.size(); ++i) {
+                        if (list.size() == np.size() && list[i].name != np[i].name) moveNodePin(gr, id, dir, list[i].name, np[i].name);
+                        const fg::ParamDecl* old = nullptr;       // keep the default of a pin that is still the same
+                        if (list.size() == np.size()) old = &list[i];
+                        else for (auto& o : list) if (o.name == np[i].name) old = &o;
+                        if (old) np[i].def = old->def;
+                    }
+                    list = np;
+                });
+            };
+            auto* table = buildParamTable(false, mine, apply);
+            table->setObjectName(inputs ? "customInputs" : "customOutputs");
+            panel->AddWidget(table);
+            connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [=] {
+                change("Add pin", [&](std::vector<fg::ParamDecl>& list, fg::Graph&) {
+                    const std::string base = inputs ? "Input" : "Output";
+                    std::string n = base;
+                    auto taken = [&](const std::string& name) {
+                        return fixedNames.count(name) || std::any_of(list.begin(), list.end(), [&](const fg::ParamDecl& p) { return p.name == name; });
+                    };
+                    for (int i = 1; taken(n); ++i) n = base + std::to_string(i);
+                    list.push_back({n, "any", false, false, fg::Value()});
+                });
+            });
+            table->setContextMenuPolicy(Qt::CustomContextMenu);
+            connect(table, &QWidget::customContextMenuRequested, this, [=](const QPoint& pos) {
+                const int row = table->rowAt(pos.y());
+                if (row < 0) return;
+                table->selectRow(row);
+                QMenu menu;
+                QAction* remove = menu.addAction(QIcon(":/Icons/delete.svg"), "Remove");
+                QAction* up = menu.addAction("Move Up");
+                QAction* down = menu.addAction("Move Down");
+                up->setEnabled(row > 0);
+                down->setEnabled(row + 1 < table->rowCount());
+                QAction* chosen = menu.exec(table->viewport()->mapToGlobal(pos));
+                if (!chosen) return;
+                change(chosen == remove ? "Remove pin" : "Move pin", [&](std::vector<fg::ParamDecl>& list, fg::Graph& gr) {
+                    if (size_t(row) >= list.size()) return;
+                    if (chosen == remove) {
+                        moveNodePin(gr, id, dir, list[size_t(row)].name, std::string());
+                        list.erase(list.begin() + row);
+                    } else {
+                        const int to = chosen == up ? row - 1 : row + 1;
+                        if (to >= 0 && size_t(to) < list.size()) std::swap(list[size_t(row)], list[size_t(to)]);
+                    }
+                });
+            });
+        }
+        panel->ExpandImmediately();
+        form_->addRow(panel);
+    }
+}
+
 void DetailsPanel::buildNodes() {
     const fg::Graph* g = doc_->script().findGraph(ss(owner_));
     const fg::CompiledGraph* cg = doc_->compiledGraph(owner_);
@@ -743,6 +897,8 @@ void DetailsPanel::buildNodes() {
             });
             form_->addRow("Type " + pname, combo);
         }
+    // the inputs and outputs of the node (the function's own are shown above, where they can be edited)
+    if (!(g->kind == fg::GraphKind::Function && (cn->op == fg::NodeOp::FunctionEntry || cn->op == fg::NodeOp::Return))) buildNodePins(*node, *cn, graph);
     auto* comment = new QLineEdit(qs(node->comment));
     connect(comment, &QLineEdit::editingFinished, this, [=] {
         QString t = comment->text();

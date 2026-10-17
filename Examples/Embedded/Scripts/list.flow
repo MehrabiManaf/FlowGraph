@@ -1,0 +1,71 @@
+{
+  "format": "flowgraph",
+  "version": 1,
+  "name": "List",
+  "doc": "Handles NewMessage and adds one row per message: its line number and its text.",
+  "variables": [],
+  "graphs": [
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event:NewMessage",
+          "x": 0.0,
+          "y": 0.0
+        },
+        {
+          "id": 2,
+          "def": "table.addrow",
+          "x": 420.0,
+          "y": 0.0,
+          "inputs": [
+            {
+              "name": "Line",
+              "type": "int"
+            },
+            {
+              "name": "Text",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "def": "get:Message.Line",
+          "x": 180.0,
+          "y": 140.0
+        },
+        {
+          "id": 4,
+          "def": "get:Message.Text",
+          "x": 180.0,
+          "y": 260.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [2, "In"]
+        },
+        {
+          "from": [1, "Message"],
+          "to": [3, "Target"]
+        },
+        {
+          "from": [1, "Message"],
+          "to": [4, "Target"]
+        },
+        {
+          "from": [3, "Line"],
+          "to": [2, "Line"]
+        },
+        {
+          "from": [4, "Text"],
+          "to": [2, "Text"]
+        }
+      ]
+    }
+  ]
+}

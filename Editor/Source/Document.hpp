@@ -37,6 +37,12 @@ public:
     void newScript(const std::function<void(fg::Script&)>& init = {});
     bool load(const QString& path, QString* error = nullptr);
     bool save(const QString& path = QString(), QString* error = nullptr);
+    // A script that does not come from a file: the application owns it (an embedded editor). `title` is the name the window shows.
+    void setScript(const fg::Script& script, const QString& title);
+    // The script was handed over to whoever owns it: there is nothing left to save.
+    void markSaved() { markDirty(false); }
+    // Writes the script to a file without making that file the file of the document.
+    bool exportTo(const QString& path, QString* error = nullptr) const;
 
     // Runs `fn` (which mutates the script given as argument) as one undoable step. Edits with the same
     // non-empty `coalesceKey` that follow each other quickly share one undo step (typing in a field).
@@ -75,6 +81,7 @@ private:
     std::shared_ptr<fg::Program> program_;
     fg::Debugger debugger_;
     QString path_;
+    QString title_;                         // shown instead of the script's name when the script has no file (setScript)
     bool dirty_ = false;
     QStringList undo_, redo_, undoLabels_, redoLabels_;
     QString lastKey_;

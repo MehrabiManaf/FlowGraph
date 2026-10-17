@@ -7,7 +7,7 @@ namespace fged {
 Document::Document(fg::Runtime& rt, QObject* parent) : QObject(parent), rt_(rt) { newScript(); }
 
 QString Document::displayName() const {
-    QString n = path_.isEmpty() ? QString::fromStdString(script_.name) : QFileInfo(path_).fileName();
+    QString n = !path_.isEmpty() ? QFileInfo(path_).fileName() : !title_.isEmpty() ? title_ : QString::fromStdString(script_.name);
     return dirty_ ? n + "*" : n;
 }
 
@@ -34,6 +34,7 @@ void Document::newScript(const std::function<void(fg::Script&)>& init) {
     else script_.addEventGraph("EventGraph");
     fg::stampHostEvents(script_, registry());
     path_.clear();
+    title_.clear();
     undo_.clear(); redo_.clear(); undoLabels_.clear(); redoLabels_.clear();
     debugger_.clearBreakpoints();
     emit scriptOpened();
@@ -45,6 +46,32 @@ void Document::newScript(const std::function<void(fg::Script&)>& init) {
     emit titleChanged();
 }
 
+void Document::setScript(const fg::Script& script, const QString& title) {
+    script_ = script;
+    fg::stampHostEvents(script_, registry());
+    path_.clear();
+    title_ = title;
+    undo_.clear(); redo_.clear(); undoLabels_.clear(); redoLabels_.clear();
+    debugger_.clearBreakpoints();
+    emit scriptOpened();
+    recompile();
+    markDirty(false);
+    emit scriptReplaced();
+    emit changed(true);
+    emit undoStateChanged();
+    emit titleChanged();
+}
+
+bool Document::exportTo(const QString& path, QString* error) const {
+    try {
+        script_.save(path.toStdString());
+    } catch (const std::exception& e) {
+        if (error) *error = e.what();
+        return false;
+    }
+    return true;
+}
+
 bool Document::load(const QString& path, QString* error) {
     try {
         script_ = fg::Script::load(path.toStdString());
@@ -53,6 +80,7 @@ bool Document::load(const QString& path, QString* error) {
         return false;
     }
     path_ = path;
+    title_.clear();
     undo_.clear(); redo_.clear(); undoLabels_.clear(); redoLabels_.clear();
     debugger_.clearBreakpoints();
     emit scriptOpened();

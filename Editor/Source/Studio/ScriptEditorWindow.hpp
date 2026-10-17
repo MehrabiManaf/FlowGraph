@@ -35,6 +35,11 @@ public:
     ~ScriptEditorWindow() override;
 
     bool openFile(const QString& path);
+    bool editScript(const fg::Script& script, const QString& title);     // an embedded editor: the application's script
+    bool attachExecutor(std::shared_ptr<fg::AsyncExecutor> executor);
+    void detachExecutor() { run_.detach(); }
+    bool isAttached() const { return run_.isAttached(); }
+    bool embedded() const { return embedded_; }
     void newScript();
     bool fileSave();
     bool fileSaveAs();
@@ -45,6 +50,7 @@ public:
     void refreshEntries();
     void log(int level, const QString& text);
     Document* document() { return &doc_; }
+    RunController& run() { return run_; }
     // Selects `entry` in the toolbar and starts it (as the Run button would, but without the argument dialog).
     void runEntry(const QString& entry);
     // Developer aid: "node:<graph>:<id>", "var:<name>" or "graph:<name>" selects that item and shows its details.
@@ -79,6 +85,11 @@ private:
     void onCurrentTabChanged();
     void clearDebugMarks();
 
+    bool embeddedSave();                // Save of an embedded editor: the script goes back to the application
+    // Embedded: may this script replace the one in the editor? (the application provides what it uses, and the host agrees)
+    bool acceptable(const fg::Script& script, QString* reason) const;
+    void showRejected(const QString& what, const QString& reason);
+    void attachToApplication();         // the Attach button
     void fileNew();
     void fileOpen();
     void updateTitle();
@@ -87,6 +98,7 @@ private:
     void runOrContinue();
 
     EditorHost& host_;
+    const bool embedded_;               // host_.mode() == EditorMode::Embedded
     ScriptEditor& facade_;
     fg::Runtime& rt_;
     std::vector<LaunchEntry> entries_;
@@ -117,6 +129,7 @@ private:
     QAction *actNew_, *actOpen_, *actSave_, *actSaveAs_, *actExit_;
     QAction *actUndo_, *actRedo_, *actCut_, *actCopy_, *actPaste_, *actDuplicate_, *actDelete_, *actSelectAll_, *actComment_, *actFrame_;
     QAction *actRun_, *actStop_, *actStepOver_, *actStepInto_, *actStepOut_, *actBreakpoint_;
+    QAction *actAttach_ = nullptr, *actDetach_ = nullptr;     // embedded mode: the debugger attaches to what the application runs
     QAction* actAbout_;
     QAction* actSnap_ = nullptr;
     QActionGroup* speedGroup_ = nullptr;

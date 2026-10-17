@@ -25,6 +25,7 @@
 #include <kddockwidgets/core/DockWidget.h>
 #include <kddockwidgets/core/DockRegistry.h>
 #include "Common/CustomViewFactory/DockWidget.hpp"
+#include "Common/CollapsiblePanel/CollapsiblePanel.hpp"
 #include "Common/CustomViewFactory/TabBar.hpp"
 #include <kddockwidgets/core/TabBar.h>
 #include <QTreeWidget>
@@ -45,6 +46,10 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QDropEvent>
+#include <QMessageBox>
+#include <stdexcept>
+#include <QMenuBar>
+#include <QMainWindow>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -1262,6 +1267,390 @@ TEST(functions_of_my_script_can_be_dragged) {
                 CHECK_EQ(tree->topLevelItem(i)->data(0, Qt::UserRole + 2).toString(), QString("Helper"));     // what the drag carries
             }
     CHECK(found);
+}
+
+TEST(details_shows_the_pins_of_every_node_and_edits_only_the_custom_ones) {
+    StandardRuntime rt;
+    {
+        // a node of the application: fixed exec pins, and data inputs the user adds
+        fg::NodeDef d;
+        d.id = "test.row";
+        d.title = "Row";
+        d.category = "Test";
+        d.pins = {fg::execIn(), fg::execOut()};
+        d.customInputs = true;
+        d.run = [](fg::NodeCtx&) {};
+        rt.registry().addNode(std::move(d));
+    }
+    Document doc(rt);
+    doc.newScript([&](fg::Script& s) { fg::standard::createMainTemplate(s, rt.registry()); });
+    fg::NodeId row = 0, concat = 0;
+    doc.edit("Nodes", [&](fg::Script& s) {
+        fg::Graph& g = s.graphs[0];
+        row = g.addNode("test.row", 400, 200).id;
+        g.findNode(row)->inputs = {{"A", "string", false, false, fg::Value()}, {"B", "int", false, false, fg::Value()}};
+        concat = g.addNode("fn:String.Concat", 100, 200).id;
+        g.connections.push_back({concat, "Result", row, "A"});
+    });
+    CHECK(doc.program()->ok());
+
+    DetailsPanel panel(&doc);
+    panel.show();
+    auto table = [&](const char* name) { return panel.findChild<QTableWidget*>(name); };
+    auto show = [&](fg::NodeId id) {
+        panel.showNodes("EventGraph", {id});
+        QCoreApplication::processEvents();
+    };
+    auto customNode = [&]() { return doc.script().graphs[0].findNode(row); };
+    auto linkedTo = [&](const char* pin) {
+        for (auto& c : doc.script().graphs[0].connections)
+            if (c.toNode == row && c.toPin == pin) return true;
+        return false;
+    };
+
+    // a built-in node: its inputs and outputs are listed and nothing can be changed (they belong to the definition of the node)
+    show(concat);
+    QTableWidget* in = table("fixedInputs");
+    QTableWidget* out = table("fixedOutputs");
+    CHECK(in && in->rowCount() == 2 && out && out->rowCount() == 1);
+    if (in && out) {
+        CHECK_EQ(in->item(0, 0)->text(), QString("A"));
+        CHECK_EQ(in->item(0, 1)->text(), QString("string"));
+        CHECK_EQ(out->item(0, 0)->text(), QString("Result"));
+        CHECK(!(in->item(0, 0)->flags() & Qt::ItemIsEditable) && !(in->item(0, 1)->flags() & Qt::ItemIsEditable));
+    }
+    CHECK(table("customInputs") == nullptr && table("customOutputs") == nullptr);
+
+    // a node that allows custom pins: the fixed pins stay read only, the custom ones can be edited
+    show(row);
+    in = table("fixedInputs");
+    CHECK(in && in->rowCount() == 1 && in->item(0, 1)->text() == "exec");      // the "In" pin of the definition
+    QTableWidget* custom = table("customInputs");
+    CHECK(custom && custom->rowCount() == 2);
+    CHECK(table("customOutputs") == nullptr);                                  // this node has fixed outputs only
+    if (!custom) return;
+    CHECK_EQ(custom->item(0, 0)->text(), QString("A"));
+
+    custom->item(0, 0)->setText("Name");                                        // rename: the link follows the pin
+    QCoreApplication::processEvents();
+    CHECK_EQ(customNode()->inputs[0].name, std::string("Name"));
+    CHECK(linkedTo("Name") && !linkedTo("A"));
+    CHECK(doc.program()->ok());
+
+    for (auto* p : panel.findChildren<CCollapsiblePanel*>()) emit p->PlusButtonClicked();       // "+" of the Inputs panel
+    QCoreApplication::processEvents();
+    CHECK_EQ(customNode()->inputs.size(), size_t(3));
+    CHECK_EQ(customNode()->inputs[2].name, std::string("Input"));
+    CHECK(doc.program()->ok());
+
+    custom = table("customInputs");
+    custom->item(1, 1)->setText("float");                                       // the type of a column
+    QCoreApplication::processEvents();
+    CHECK_EQ(customNode()->inputs[1].type, std::string("float"));
+
+    doc.undo();                                                                 // each change is one undoable edit
+    doc.undo();
+    doc.undo();
+    QCoreApplication::processEvents();
+    CHECK_EQ(customNode()->inputs.size(), size_t(2));
+    CHECK_EQ(customNode()->inputs[0].name, std::string("A"));
+    CHECK(linkedTo("A"));
+}
+
+// ------------------------------------------------------------------ the editor in an application that owns the scripts
+namespace {
+// An application that embeds the editor: it owns the scripts, runs them itself and takes the script back when the user saves.
+struct EmbeddedHost : fged::EditorHost {
+    fg::Runtime& rt;
+    fg::Script applied;
+    int applyCount = 0;
+    bool accept = true;
+    std::shared_ptr<fg::AsyncExecutor> target;
+    std::string requiredEvent;                      // the event this application is made for: a script must handle it
+    explicit EmbeddedHost(fg::Runtime& r) : rt(r) {}
+    fg::Runtime& runtime() override { return rt; }
+    QString applicationName() const override { return "Embedded test"; }
+    fged::EditorMode mode() const override { return fged::EditorMode::Embedded; }
+    bool acceptsScript(const fg::Script& s, QString* reason) override {
+        if (requiredEvent.empty()) return true;
+        for (auto& g : s.graphs)
+            for (auto& n : g.nodes)
+                if (n.def == "event:" + requiredEvent) return true;
+        if (reason) *reason = QString("The script does not handle the event %1.").arg(QString::fromStdString(requiredEvent));
+        return false;
+    }
+    bool applyScript(fged::ScriptEditor&, const fg::Script& s) override {
+        ++applyCount;
+        if (accept) applied = s;
+        return accept;
+    }
+    std::shared_ptr<fg::AsyncExecutor> debugTarget(fged::ScriptEditor&) override { return target; }
+};
+
+fg::Script mainScript(fg::Runtime& rt) {
+    fg::Script s;
+    fg::standard::createMainTemplate(s, rt.registry());
+    return s;
+}
+
+QAction* actionNamed(QWidget* w, const QString& text) {
+    for (auto* a : w->findChildren<QAction*>())
+        if (QString(a->text()).remove('&') == text) return a;
+    return nullptr;
+}
+
+QStringList menuTexts(QMenu* m) {
+    QStringList out;
+    for (auto* a : m->actions())
+        if (!a->isSeparator()) out << QString(a->text()).remove('&');
+    return out;
+}
+
+QMenu* menuTitled(QMainWindow* w, const QString& title) {
+    for (auto* a : w->menuBar()->actions())
+        if (a->menu() && QString(a->menu()->title()).remove('&') == title) return a->menu();
+    return nullptr;
+}
+} // namespace
+
+TEST(a_program_has_one_script_editor) {
+    StandardRuntime rt;
+    flowstudio::StandardEditorHost host(rt);
+    CHECK(fged::ScriptEditor::instance() == nullptr);
+    {
+        fged::ScriptEditor first(host);
+        CHECK(fged::ScriptEditor::instance() == &first);
+        bool threw = false;
+        try {
+            fged::ScriptEditor second(host);
+        } catch (const std::logic_error&) {
+            threw = true;
+        }
+        CHECK(threw);
+        CHECK(fged::ScriptEditor::instance() == &first);          // the first one is not harmed
+    }
+    CHECK(fged::ScriptEditor::instance() == nullptr);
+    fged::ScriptEditor again(host);                               // once it is gone another one can be made
+    CHECK(fged::ScriptEditor::instance() == &again);
+}
+
+TEST(standalone_editor_keeps_its_files_and_run_commands) {
+    StandardRuntime rt;
+    flowstudio::StandardEditorHost host(rt);
+    fged::ScriptEditor editor(host);
+    auto* win = static_cast<ScriptEditorWindow*>(editor.window());
+    CHECK(!win->embedded());
+    QMenu* file = menuTitled(win, "File");
+    CHECK(file && menuTexts(file) == QStringList({"New", "Open...", "Save", "Save As...", "Exit"}));
+    CHECK(menuTitled(win, "Run") != nullptr && menuTitled(win, "Debug") == nullptr);
+    CHECK(actionNamed(win, "Attach") == nullptr);
+}
+
+TEST(embedded_editor_edits_the_script_of_the_application_and_save_gives_it_back) {
+    StandardRuntime rt;
+    EmbeddedHost host(rt);
+    fged::ScriptEditor editor(host);
+    auto* win = static_cast<ScriptEditorWindow*>(editor.window());
+    CHECK(win->embedded());
+    // no New / Exit, no Run: Open (of scripts that fit), Save, Save As and the debugger's Attach / Detach instead
+    QMenu* file = menuTitled(win, "File");
+    CHECK(file && menuTexts(file) == QStringList({"Open...", "Save", "Save As..."}));
+    CHECK(menuTitled(win, "Run") == nullptr);
+    QMenu* debug = menuTitled(win, "Debug");
+    CHECK(debug && menuTexts(debug).contains("Attach") && menuTexts(debug).contains("Detach"));
+    CHECK(actionNamed(win, "Attach") && actionNamed(win, "Attach")->isEnabled());
+    CHECK(actionNamed(win, "Detach") && !actionNamed(win, "Detach")->isEnabled());
+    CHECK(actionNamed(win, "Stop") && !actionNamed(win, "Stop")->isEnabled());
+
+    // the application hands a script over
+    CHECK(editor.edit(mainScript(rt), "Table 1"));
+    CHECK(win->windowTitle().startsWith("Table 1"));
+    CHECK(!win->document()->isDirty() && win->document()->path().isEmpty());
+    CHECK(win->document()->program()->ok());
+
+    // Save does not ask for a file: it gives the edited script to the application
+    win->document()->edit("Change", [](fg::Script& s) { s.graphs[0].nodes[1].defaults["String"] = fg::Value("changed"); });
+    CHECK(win->document()->isDirty());
+    actionNamed(win, "Save")->trigger();
+    CHECK_EQ(host.applyCount, 1);
+    CHECK(!win->document()->isDirty());
+    CHECK(host.applied.graphs[0].nodes[1].defaults.at("String").toString() == "changed");
+
+    // an application that cannot use the script keeps the changes unsaved
+    host.accept = false;
+    win->document()->edit("Change again", [](fg::Script& s) { s.graphs[0].nodes[1].defaults["String"] = fg::Value("again"); });
+    actionNamed(win, "Save")->trigger();
+    CHECK_EQ(host.applyCount, 2);
+    CHECK(win->document()->isDirty());
+    host.accept = true;
+    actionNamed(win, "Save")->trigger();
+    CHECK(!win->document()->isDirty());
+    CHECK(host.applied.graphs[0].nodes[1].defaults.at("String").toString() == "again");
+
+    // another script: nothing of the first one is left
+    CHECK(editor.edit(mainScript(rt), "Table 2"));
+    CHECK(win->windowTitle().startsWith("Table 2"));
+    CHECK(win->document()->script().graphs[0].nodes[1].defaults.count("String") == 0);
+    CHECK(!win->document()->canUndo());
+}
+
+TEST(embedded_editor_takes_only_scripts_that_fit_the_application) {
+    StandardRuntime rt;                              // the application raises one event: Main
+    EmbeddedHost host(rt);
+    host.requiredEvent = "Main";                     // and a script has to handle it
+    fged::ScriptEditor editor(host);
+    auto* win = static_cast<ScriptEditorWindow*>(editor.window());
+    CHECK(editor.edit(mainScript(rt), "Good"));
+    auto stillGood = [&] {
+        return win->windowTitle().startsWith("Good") && win->document()->script().graphs.size() == 1 &&
+               win->document()->script().graphs[0].nodes.size() == 2 && win->document()->program()->ok();
+    };
+    CHECK(stillGood());
+
+    // a script made for another application: it uses an event this one never raises. Nothing is loaded.
+    fg::Script foreign;
+    foreign.name = "Foreign";
+    foreign.addEventGraph().addNode("event:Explode");
+    CHECK(!editor.edit(foreign, "Foreign"));
+    CHECK(stillGood());
+    // a script the runtime understands but that does not handle the event the application is made for
+    fg::Script empty;
+    empty.name = "Empty";
+    empty.addEventGraph();
+    CHECK(!editor.edit(empty, "Empty"));
+    CHECK(stillGood());
+
+    // File > Open has the same rule: the files of scripts that do not fit are refused and the editor is unchanged
+    const QString dir = QDir::temp().filePath("embedded-editor-accept");
+    QDir().mkpath(dir);
+    foreign.save((dir + "/foreign.flow").toStdString());
+    empty.save((dir + "/empty.flow").toStdString());
+    mainScript(rt).save((dir + "/good.flow").toStdString());
+    CHECK(!editor.open(dir + "/foreign.flow"));
+    CHECK(!editor.open(dir + "/empty.flow"));
+    CHECK(stillGood() && win->document()->path().isEmpty());
+    // a script that fits is taken, by edit() and by Open
+    CHECK(editor.open(dir + "/good.flow"));
+    CHECK(win->document()->path() == dir + "/good.flow" && win->document()->program()->ok());
+    CHECK(editor.edit(mainScript(rt), "Again"));
+    CHECK(win->windowTitle().startsWith("Again"));
+    for (auto* b : win->findChildren<QMessageBox*>()) b->close();       // the notices about the refused scripts
+}
+
+TEST(embedded_debugger_attaches_to_the_executor_of_the_application) {
+    StandardRuntime rt;
+    EmbeddedHost host(rt);
+    fged::ScriptEditor editor(host);
+    auto* win = static_cast<ScriptEditorWindow*>(editor.window());
+    RunController& run = win->run();
+    fg::Script script = mainScript(rt);
+    CHECK(editor.edit(script, "Table 1"));
+    auto executor = std::make_shared<fg::AsyncExecutor>(rt.compile(script));      // the application runs the script
+    host.target = executor;
+    bool attachedSignal = false;
+    QObject::connect(&editor, &fged::ScriptEditor::attachedChanged, [&](bool on) { attachedSignal = on; });
+
+    // Attach asks the application for its executor
+    CHECK(!editor.isAttached());
+    actionNamed(win, "Attach")->trigger();
+    CHECK(editor.isAttached() && attachedSignal);
+    CHECK(!actionNamed(win, "Attach")->isEnabled() && actionNamed(win, "Detach")->isEnabled());
+    CHECK(actionNamed(win, "Pause") && actionNamed(win, "Pause")->isEnabled());                  // the one button of Run is Pause while attached
+
+    // a breakpoint stops the tasks the application starts; two events stop two tasks
+    win->document()->debugger().setBreakpoint("EventGraph", 2, true);
+    executor->postEvent("Main");
+    executor->postEvent("Main");
+    CHECK(spinUntil([&] { return run.state() == RunController::State::Paused; }));
+    RunController::DebugSnapshot snap;
+    CHECK(run.snapshot(snap) && !snap.stack.empty() && snap.stack.front().graph == "EventGraph");
+    CHECK(actionNamed(win, "Step Over")->isEnabled());
+    run.stepInto();                                    // runs the node of the first task; the second task is stopped at the same place
+    CHECK(spinUntil([&] { return run.state() == RunController::State::Paused; }));
+    run.resume();
+    CHECK(spinUntil([&] { return run.state() == RunController::State::Running; }));
+    CHECK(executor->waitIdle(5000));                   // both tasks finished
+
+    // Pause stops the next task that runs
+    run.pause();
+    executor->postEvent("Main");
+    CHECK(spinUntil([&] { return run.state() == RunController::State::Paused; }));
+
+    // Detach lets what is stopped continue, and the application's script no longer stops
+    editor.detach();
+    CHECK(!editor.isAttached() && !attachedSignal);
+    CHECK(run.state() == RunController::State::Idle);
+    CHECK(executor->waitIdle(5000));
+    executor->postEvent("Main");                       // the breakpoint is still there, but nobody listens
+    CHECK(executor->waitIdle(5000));
+
+    // a structural edit does not end the session (the application keeps running the script it has); another script does
+    actionNamed(win, "Attach")->trigger();
+    CHECK(editor.isAttached());
+    win->document()->edit("Change", [](fg::Script& s) { s.graphs[0].nodes[1].defaults["String"] = fg::Value("x"); });
+    CHECK(editor.isAttached());
+    actionNamed(win, "Save")->trigger();
+    CHECK(editor.edit(mainScript(rt), "Table 2"));
+    CHECK(!editor.isAttached());
+    executor.reset();
+}
+
+TEST(attached_debugger_steps_through_one_task_and_goes_on_with_the_next_when_it_ends) {
+    StandardRuntime rt;
+    EmbeddedHost host(rt);
+    fged::ScriptEditor editor(host);
+    auto* win = static_cast<ScriptEditorWindow*>(editor.window());
+    RunController& run = win->run();
+    // Main -> Print (node 2) -> Print (node 3): a script of three nodes
+    fg::Script script = mainScript(rt);
+    {
+        fg::Graph& g = script.graphs[0];
+        const fg::NodeId second = g.addNode("util.print", 600, 0).id;
+        g.connections.push_back({2, "Then", second, "In"});
+    }
+    CHECK(editor.edit(script, "T"));
+    auto executor = std::make_shared<fg::AsyncExecutor>(rt.compile(script));
+    host.target = executor;
+    int stops = 0;
+    int lastNode = 0;
+    QObject::connect(&run, &RunController::paused, [&](const QString&, int node) { ++stops; lastNode = node; });
+    CHECK(win->attachExecutor(executor));
+    win->document()->debugger().setBreakpoint("EventGraph", 2, true);
+    // three messages: three tasks, all stopped at the breakpoint
+    executor->postEvent("Main");
+    executor->postEvent("Main");
+    executor->postEvent("Main");
+    CHECK(spinUntil([&] { return run.state() == RunController::State::Paused; }));
+    spinUntil([] { return false; }, 150);                // the other two reach their breakpoint too
+    CHECK_EQ(lastNode, 2);
+    const int stopsBefore = stops;
+
+    // Step Over: the SAME task goes on to the next node; the other tasks stay where they are
+    run.stepOver();
+    CHECK(spinUntil([&] { return stops > stopsBefore; }));
+    CHECK_EQ(lastNode, 3);
+    CHECK(run.state() == RunController::State::Paused);
+    // Step Into at the last node: the task ends, and the debugger goes on with the next task, stopped at the breakpoint
+    const int stops2 = stops;
+    run.stepInto();
+    CHECK(spinUntil([&] { return stops > stops2; }));
+    CHECK_EQ(lastNode, 2);
+    // the same for the third task, then nothing is stopped
+    run.stepOver();
+    CHECK(spinUntil([&] { return lastNode == 3 && run.state() == RunController::State::Paused; }));
+    const int stops3 = stops;
+    run.stepOver();
+    CHECK(spinUntil([&] { return stops > stops3; }));
+    CHECK_EQ(lastNode, 2);
+    // Continue runs the task to its end
+    run.resume();
+    CHECK(executor->waitIdle(5000));
+    CHECK(spinUntil([&] { return run.state() == RunController::State::Running; }));
+    // a task that is started later stops at the breakpoint
+    executor->postEvent("Main");
+    CHECK(spinUntil([&] { return run.state() == RunController::State::Paused; }));
+    editor.detach();
+    CHECK(executor->waitIdle(5000));
 }
 
 TEST(copying_nodes_never_duplicates_an_event_handler) {

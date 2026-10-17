@@ -842,6 +842,68 @@ TEST(executor_runs_several_tasks_fairly) {
     CHECK(pumps > 2);
 }
 
+TEST(serial_executor_runs_one_task_at_a_time_in_the_order_they_were_posted) {
+    TestRuntime rt;
+    auto prog = build(rt, printScript(0.1, "x"));                  // Go: wait 0.1 s, then print
+    auto run = [&](bool serial, std::vector<Executor::Handle>& order, Executor::Handle* third, size_t* doneAt15) {
+        Executor ex(prog);
+        ex.setSerial(serial);
+        ex.setCompletionHandler([&](const Executor::Completion& c) { order.push_back(c.handle); });
+        const auto h1 = ex.postEvent("Go");
+        ex.postEvent("Go");
+        const auto h3 = ex.postEvent("Go");
+        (void)h1;
+        for (int i = 0; i < 15; ++i) ex.pump(0.01);                  // 0.15 s of script time
+        *doneAt15 = order.size();
+        if (third) *third = h3;
+        if (serial) CHECK(ex.task(h3) && ex.task(h3)->state() == TaskState::Ready);       // queued: it has not even started
+        for (int i = 0; i < 40; ++i) ex.pump(0.01);
+        CHECK(ex.idle());
+    };
+    std::vector<Executor::Handle> together, serial;
+    size_t togetherAt = 0, serialAt = 0;
+    run(false, together, nullptr, &togetherAt);
+    Executor::Handle third = 0;
+    run(true, serial, &third, &serialAt);
+    CHECK_EQ(togetherAt, size_t(3));                                // without the mode all three waited together: done after 0.1 s
+    CHECK_EQ(serialAt, size_t(1));                                  // serial: the second one started when the first ended (0.1 s) and ends at 0.2 s
+    CHECK_EQ(serial.size(), size_t(3));
+    CHECK(serial[0] < serial[1] && serial[1] < serial[2] && serial[2] == third);       // in the order they were posted
+}
+
+TEST(serial_executor_is_held_up_by_a_task_that_a_breakpoint_stopped) {
+    TestRuntime rt;
+    auto prog = build(rt, printScript(-1, "x"));                     // Go: event (1) -> print (2)
+    std::atomic<int> paused{0};
+    std::mutex mu;
+    std::vector<Executor::Handle> completed;
+    AsyncExecutor::Callbacks cb;
+    cb.taskState = [&](AsyncExecutor::Handle, TaskState st) { if (st == TaskState::Paused) ++paused; };
+    cb.completed = [&](const Executor::Completion& c) { std::lock_guard lk(mu); completed.push_back(c.handle); };
+    AsyncExecutor::Options options;
+    options.serial = true;                                          // all an application has to say
+    AsyncExecutor ax(prog, cb, nullptr, options);
+    ax.debugger().setBreakpoint("EventGraph", 2, true);
+    const auto h1 = ax.postEvent("Go");
+    const auto h2 = ax.postEvent("Go");
+    const auto h3 = ax.postEvent("Go");
+    for (int i = 0; i < 300 && paused.load() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    CHECK_EQ(paused.load(), 1);                                     // only the first task started: it stands at the breakpoint
+    TaskState s2 = TaskState::Finished;
+    CHECK(ax.inspect([&](Executor& ex) { if (auto t = ex.task(h2)) s2 = t->state(); }));
+    CHECK(s2 == TaskState::Ready);                                  // the second one waits for it
+    ax.resume(h1);                                                  // the first runs to its end ...
+    for (int i = 0; i < 300 && paused.load() < 2; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    CHECK_EQ(paused.load(), 2);                                     // ... and the next one is at the breakpoint
+    ax.debugger().setBreakpoint("EventGraph", 2, false);
+    ax.resume(h2);
+    CHECK(ax.waitIdle(3000));
+    std::lock_guard lk(mu);
+    CHECK_EQ(completed.size(), size_t(3));
+    CHECK(completed.size() == 3 && completed[0] == h1 && completed[1] == h2 && completed[2] == h3);
+}
+
 TEST(async_executor_runs_on_its_own_thread) {
     TestRuntime rt;
     auto prog = build(rt, printScript(0.1, "async"));
@@ -2146,6 +2208,66 @@ TEST(very_long_chain_of_pure_nodes_is_a_script_error) {
     auto r = inst.callEvent("Go");
     CHECK(!r.ok);
     CHECK(r.error.find("nested too deeply") != std::string::npos);
+}
+
+TEST(nodes_can_have_custom_pins_next_to_the_fixed_ones) {
+    TestRuntime rt;
+    {
+        NodeDef d;
+        d.id = "test.sum";
+        d.title = "Sum";
+        d.category = "Test";
+        d.style = NodeStyle::Function;
+        d.customInputs = true;                           // the user may add data inputs and outputs to nodes of this kind
+        d.customOutputs = true;
+        d.pins = {execIn(), execOut(), dataIn("Base", "int", Value(100))};
+        // the fixed input comes first (ordinal 0), then the custom ones; the only data output is the first custom output
+        d.run = [](NodeCtx& c) {
+            int64_t sum = 0;
+            for (size_t i = 0; i < c.inputCount(); ++i) sum += c.inInt(i);
+            c.out(0, Value(sum));
+        };
+        rt.registry().addNode(std::move(d));
+    }
+    Script s;
+    s.variables.push_back({"Result", "int", Value(), "", ""});
+    Graph& g = s.addEventGraph();
+    const NodeId ev = g.addNode("event:Go").id;
+    const NodeId sum = g.addNode("test.sum").id;
+    g.findNode(sum)->inputs = {{"A", "int", false, false, Value(5)}, {"B", "int", false, false, Value()}};
+    g.findNode(sum)->outputs = {{"Total", "int", false, false, Value()}};
+    g.findNode(sum)->defaults["B"] = Value(7);           // the literal of an unconnected custom input works like any other
+    Node& set = g.addNode("var.set");
+    set.props = {{"name", "Result"}, {"scope", "global"}};
+    const NodeId setId = set.id;
+    link(g, ev, "Then", sum, "In");
+    link(g, sum, "Then", setId, "In");
+    link(g, sum, "Total", setId, "Value");
+
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    const CompiledNode* cn = prog->graphs[0].findNode(sum);
+    CHECK(cn && cn->dataIn.size() == 3 && cn->pins[size_t(cn->dataIn[0])].name == "Base" && cn->pins[size_t(cn->dataIn[2])].name == "B");
+    Instance inst(prog);
+    CHECK(inst.callEvent("Go").ok);
+    CHECK_EQ(inst.getVariable("Result").toInt(), int64_t(112));          // 100 + 5 + 7
+
+    // the pins are part of the script file; a node without custom pins keeps the old file format
+    CHECK(!s.toJson()["graphs"][size_t(0)]["nodes"][size_t(0)].has("inputs"));
+    Script back = Script::parse(s.toText());
+    const Node* n = back.graphs[0].findNode(sum);
+    CHECK(n && n->inputs.size() == 2 && n->inputs[0].name == "A" && n->inputs[0].def.toInt() == 5 && n->outputs.size() == 1);
+    Instance again(build(rt, back));
+    CHECK(again.callEvent("Go").ok);
+    CHECK_EQ(again.getVariable("Result").toInt(), int64_t(112));
+
+    // a definition that does not ask for custom pins ignores them
+    g.findNode(ev)->inputs = {{"X", "int", false, false, Value()}};
+    CHECK(build(rt, s)->ok());
+    // a pin of a type this application does not have is reported before the script is run
+    CHECK(checkCompatibility(s, rt.registry()).ok());
+    g.findNode(sum)->inputs[0].type = "Nope";
+    CHECK(!checkCompatibility(s, rt.registry()).ok());
 }
 
 int main(int argc, char** argv) {

@@ -3,6 +3,8 @@
 
 #include <QMetaObject>
 
+#include <algorithm>
+
 namespace fged {
 
 RunController::RunController(Document* doc, QObject* parent) : QObject(parent), doc_(doc) {
@@ -12,7 +14,10 @@ RunController::RunController(Document* doc, QObject* parent) : QObject(parent), 
     connect(&pendingTimer_, &QTimer::timeout, this, [this] { drainPending(); });
 }
 
-RunController::~RunController() { ax_.reset(); }
+RunController::~RunController() {
+    detach();
+    ax_.reset();
+}
 
 fg::Value RunController::parseArgument(const fg::Registry& reg, const fg::TypeDesc* type, const QString& text) {
     if (!type) return fg::Value(ss(text));
@@ -97,6 +102,7 @@ void RunController::setStepDelay(int ms) {
 }
 
 bool RunController::start(const QString& entry, const std::vector<fg::Value>& args) {
+    detach();
     if (isActive()) stop();
     auto program = doc_->program();
     if (!program || program->hasErrors) {
@@ -109,8 +115,8 @@ bool RunController::start(const QString& entry, const std::vector<fg::Value>& ar
     fg::AsyncExecutor::Callbacks cb;
     cb.log = [this, gen](fg::LogLevel l, const std::string& m) { reportLog(gen, int(l), m); };
     cb.linkFired = [this, gen](const std::string& g, fg::NodeId from, int out, fg::NodeId to) { reportLink(gen, g, from, out, to); };
-    cb.taskState = [this, gen](fg::AsyncExecutor::Handle, fg::TaskState st) {
-        post(gen, [this, st] { onTaskState(st); });
+    cb.taskState = [this, gen](fg::AsyncExecutor::Handle h, fg::TaskState st) {
+        post(gen, [this, h, st] { onTaskState(h, st); });
     };
     cb.completed = [this, gen](const fg::Executor::Completion& c) {
         QStringList rs;
@@ -133,6 +139,10 @@ bool RunController::start(const QString& entry, const std::vector<fg::Value>& ar
 }
 
 void RunController::stop() {
+    if (attached_) {
+        detach();
+        return;
+    }
     if (!isActive() || !ax_) return;
     ax_->abortAll();
     if (!ax_->waitIdle(2000)) ax_.reset();         // a native function that never returns: abandon the worker
@@ -145,10 +155,18 @@ void RunController::stop() {
 }
 
 void RunController::pause() {
+    if (attached_) {
+        if (state_ == State::Running) doc_->debugger().pauseNext();     // the next node any task is about to run is not run
+        return;
+    }
     if ((state_ == State::Running || state_ == State::Waiting) && ax_) ax_->pause(handle_);
 }
 
 void RunController::resume() {
+    if (attached_) {
+        if (state_ == State::Paused) commandAttached(fg::Debugger::Command::Continue);
+        return;
+    }
     if (state_ != State::Paused || !ax_) return;
     emit resumed();
     setState(State::Running);
@@ -156,14 +174,141 @@ void RunController::resume() {
 }
 
 void RunController::step(fg::Debugger::Command c) {
+    if (attached_) {
+        if (state_ == State::Paused) commandAttached(c);
+        return;
+    }
     if (state_ != State::Paused || !ax_) return;
     emit resumed();
     setState(State::Running);
     ax_->step(handle_, c);
 }
 
-void RunController::onTaskState(fg::TaskState st) {
+// ---- attached to the executor of the application
+bool RunController::attach(std::shared_ptr<fg::AsyncExecutor> ax) {
+    if (!ax) return false;
+    detach();
+    if (isActive()) stop();
+    ax_.reset();
+    clearPending();
+    const uint64_t gen = ++generation_;
+    frame_ = 0;
+    handle_ = 0;
+    awaiting_ = 0;
+    pausedQueue_.clear();
+    fg::Debugger* dbg = &doc_->debugger();
+    fg::DebugHooks* previous = nullptr;
+    // on the worker thread, between two slices: the executor's instance reports to the debugger of the document from now on
+    const bool ok = ax->inspect([&](fg::Executor& ex) {
+        previous = ex.instance().debugHooks();
+        dbg->linkFired = [this, gen](const std::string& g, fg::NodeId from, int out, fg::NodeId to) { reportLink(gen, g, from, out, to); };
+        fg::Executor* exec = &ex;
+        dbg->taskStateChanged = [this, gen, exec](fg::Task& t) {
+            const auto h = exec->handleOf(&t);
+            const auto st = t.state();
+            post(gen, [this, h, st] { onTaskState(h, st); });
+        };
+        ex.instance().setDebugHooks(dbg);
+    });
+    if (!ok) return false;                          // the executor has stopped
+    previousHooks_ = previous;
+    attached_ = std::move(ax);
+    pendingTimer_.start();
+    setState(State::Running);
+    emit attachedChanged(true);
+    return true;
+}
+
+void RunController::detach() {
+    if (!attached_) return;
+    std::shared_ptr<fg::AsyncExecutor> ax = std::move(attached_);
+    ++generation_;                                  // what the session still reports is ignored
+    fg::Debugger* dbg = &doc_->debugger();
+    std::vector<fg::AsyncExecutor::Handle> stopped(pausedQueue_.begin(), pausedQueue_.end());
+    if (state_ == State::Paused && handle_) stopped.push_back(handle_);
+    fg::DebugHooks* previous = previousHooks_;
+    ax->inspect([&](fg::Executor& ex) {
+        for (auto h : stopped)
+            if (auto t = ex.task(h)) {
+                dbg->command(*t, fg::Debugger::Command::Continue);
+                ex.resume(h);
+            }
+        dbg->taskStateChanged = nullptr;
+        dbg->linkFired = nullptr;
+        ex.instance().setDebugHooks(previous);
+    });
+    previousHooks_ = nullptr;
+    pausedQueue_.clear();
+    awaiting_ = 0;
+    clearPending();
+    pendingTimer_.stop();
+    handle_ = 0;
+    frame_ = 0;
+    emit resumed();
+    setState(State::Idle);
+    emit attachedChanged(false);
+}
+
+void RunController::showPaused(fg::AsyncExecutor::Handle handle) {
+    handle_ = handle;
+    QString graph;
+    int node = 0;
+    if (auto* ax = executor()) ax->inspect([&](fg::Executor& ex) {
+        if (auto t = ex.task(handle)) { graph = qs(t->currentGraph()); node = t->currentNode(); }
+    });
+    frame_ = 0;
+    setState(State::Paused);
+    emit paused(graph, node);
+}
+
+void RunController::commandAttached(fg::Debugger::Command c) {
+    const auto h = handle_;
+    emit resumed();
+    // From now on this task is the one we follow: its next stop (the next node of a step, a breakpoint) or its end decides what is shown next.
+    // Other tasks that are stopped wait until then.
+    awaiting_ = h;
+    handle_ = 0;
+    setState(State::Running);
+    executor()->inspect([&](fg::Executor& ex) {
+        if (auto t = ex.task(h)) {
+            doc_->debugger().command(*t, c);
+            ex.resume(h);
+        }
+    });
+}
+
+void RunController::onTaskState(fg::AsyncExecutor::Handle handle, fg::TaskState st) {
     drainPending();                                 // what the script printed before it changed state comes first
+    if (attached_) {
+        const bool followed = handle == awaiting_;
+        auto showNext = [this] {                          // the task we followed is out of the way: the next stopped task, if there is one
+            awaiting_ = 0;
+            if (pausedQueue_.empty()) return;
+            const auto next = pausedQueue_.front();
+            pausedQueue_.pop_front();
+            showPaused(next);
+        };
+        switch (st) {
+        case fg::TaskState::Paused:
+            if (followed) {                               // the task we followed stopped again: this is where it is now
+                awaiting_ = 0;
+                showPaused(handle);
+            } else if (state_ != State::Paused && awaiting_ == 0) {
+                showPaused(handle);
+            } else if (std::find(pausedQueue_.begin(), pausedQueue_.end(), handle) == pausedQueue_.end()) {
+                pausedQueue_.push_back(handle);           // another task, while one is shown or followed: it waits its turn
+            }
+            break;
+        case fg::TaskState::Finished:
+        case fg::TaskState::Failed:
+        case fg::TaskState::Aborted:
+        case fg::TaskState::Waiting:                      // a task that waits (Delay...) is not running through its nodes: do not hold the others up
+            if (followed) showNext();
+            break;
+        default: break;
+        }
+        return;
+    }
     switch (st) {
     case fg::TaskState::Paused: {
         QString graph;
@@ -209,17 +354,17 @@ void RunController::onScriptOpened() {
 }
 
 void RunController::onDocumentChanged(bool structural) {
-    if (structural && isActive()) {
+    if (structural && isActive() && !attached_) {            // an attached application keeps running the script it has, whatever is edited
         stop();
         emit logMessage(int(fg::LogLevel::Warning), "The script was modified: the run was stopped.");
     }
 }
 
 bool RunController::snapshot(DebugSnapshot& out) const {
-    if (!ax_) return false;
+    if (!executor()) return false;
     const bool paused = state_ == State::Paused;
     const int frameSel = frame_;
-    return ax_->inspect([&](fg::Executor& ex) {
+    return executor()->inspect([&](fg::Executor& ex) {
         if (paused) {
             if (auto t = ex.task(handle_)) {
                 for (auto& e : t->callStack()) out.stack.push_back({qs(e.graph), e.node, e.isEvent});
@@ -234,10 +379,10 @@ bool RunController::snapshot(DebugSnapshot& out) const {
 }
 
 bool RunController::evaluate(const std::vector<std::string>& expressions, const fg::InspectOptions& opt, std::vector<fg::EvalResult>& out) const {
-    if (!ax_) return false;
+    if (!executor()) return false;
     const bool paused = state_ == State::Paused;
     const int frameSel = frame_;
-    return ax_->inspect([&](fg::Executor& ex) {
+    return executor()->inspect([&](fg::Executor& ex) {
         std::shared_ptr<fg::Task> task = paused ? ex.task(handle_) : nullptr;
         size_t idx = 0;
         if (task && task->depth() > 0) idx = task->depth() - 1 - size_t(std::min<int>(frameSel, int(task->depth()) - 1));
@@ -247,10 +392,10 @@ bool RunController::evaluate(const std::vector<std::string>& expressions, const 
 }
 
 bool RunController::pinText(const QString& graph, fg::NodeId node, const std::string& pin, QString& out) const {
-    if (!ax_ || state_ != State::Paused) return false;
+    if (!executor() || state_ != State::Paused) return false;
     std::string g = ss(graph);
     bool found = false;
-    ax_->inspect([&](fg::Executor& ex) {
+    executor()->inspect([&](fg::Executor& ex) {
         auto task = ex.task(handle_);
         if (!task) return;
         for (size_t i = task->depth(); i-- > 0;) {

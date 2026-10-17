@@ -117,6 +117,12 @@ struct NodeDef {
     bool pure = false;                // evaluated lazily when an output is pulled; no exec pins
     bool eventGraphOnly = false;
     bool functionGraphOnly = false;
+    // Custom pins: the user adds data pins to a node of this definition, like the inputs / outputs of a function. The pins are kept in the
+    // node of the script (Node::inputs / Node::outputs: name, type, default) and come after the pins of `pins` and of `dynamicPins`. At run
+    // time they are ordinary data pins of the compiled node: nothing is slower, and `run` reads them like any other input / output (by ordinal,
+    // after the fixed ones). Definitions without these flags are not affected in any way.
+    bool customInputs = false;
+    bool customOutputs = false;
     bool userCreatable = true;        // shown in the palette
     bool generated = false;           // produced by the registry from types / functions
     // Const checking: the node modifies the object / container connected to its first data input
