@@ -10,6 +10,7 @@
 
 class QLabel;
 class QLineEdit;
+class QMenu;
 class QTreeWidget;
 class QTreeWidgetItem;
 
@@ -36,6 +37,10 @@ class LogPanel : public QPlainTextEdit {
 public:
     explicit LogPanel(QWidget* parent = nullptr);
     void append(int level, const QString& text);   // level: fg::LogLevel
+    // The right click menu: the standard entries of a read-only text (Copy, Select All) and "Clear". The caller owns the menu.
+    QMenu* buildContextMenu();
+protected:
+    void contextMenuEvent(QContextMenuEvent* e) override;
 };
 
 // Call stack, variables and watches of the running / paused task.

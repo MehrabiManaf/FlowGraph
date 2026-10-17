@@ -4,6 +4,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QContextMenuEvent>
 #include <QFont>
 #include <QGuiApplication>
 #include <QHeaderView>
@@ -80,6 +81,21 @@ void LogPanel::append(int level, const QString& text) {
     QString html = text.toHtmlEscaped().replace(' ', "&nbsp;");
     if (!color.isEmpty()) html = "<span style='color:" + color + "'>" + html + "</span>";
     appendHtml(html);
+}
+
+QMenu* LogPanel::buildContextMenu() {
+    QMenu* menu = createStandardContextMenu();
+    menu->addSeparator();
+    QAction* clearAction = menu->addAction("Clear");
+    clearAction->setEnabled(!document()->isEmpty());
+    connect(clearAction, &QAction::triggered, this, &QPlainTextEdit::clear);
+    return menu;
+}
+
+void LogPanel::contextMenuEvent(QContextMenuEvent* e) {
+    QMenu* menu = buildContextMenu();
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->popup(e->globalPos());
 }
 
 // ------------------------------------------------------------------ debug

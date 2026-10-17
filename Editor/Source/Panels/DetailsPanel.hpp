@@ -4,6 +4,8 @@
 #include <QWidget>
 
 class QFormLayout;
+class QLabel;
+class QLineEdit;
 class QTableWidget;
 
 namespace fged {
@@ -26,6 +28,7 @@ private:
     enum class Mode { None, Variable, Graph, Nodes };
 
     void rebuild();
+    void applyFilter();         // hides the rows that do not contain the search text
     void clearForm();
     void edit(const QString& label, const std::function<void(fg::Script&)>& fn, const QString& key = QString(), bool rebuildAfter = false);
 
@@ -42,6 +45,8 @@ private:
     QList<int> ids_;
     QFormLayout* form_ = nullptr;
     QWidget* body_ = nullptr;
+    QLineEdit* search_ = nullptr;
+    QLabel* noMatch_ = nullptr;
     bool selfEdit_ = false;
     bool rebuildQueued_ = false;
 };

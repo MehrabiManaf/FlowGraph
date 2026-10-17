@@ -1093,6 +1093,62 @@ TEST(my_script_search_filters_and_the_add_button_offers_what_can_be_added) {
     CHECK_EQ(f.doc.script().variables.size(), size_t(3));
 }
 
+TEST(details_search_shows_only_the_matching_properties) {
+    Fixture f;
+    f.doc.edit("Add", [](fg::Script& sc) { sc.variables.push_back({"Counter", "int", fg::Value(int64_t(0)), "", ""}); });
+    DetailsPanel panel(&f.doc);
+    panel.show();
+    panel.showVariable("", "Counter");
+    QCoreApplication::processEvents();
+    auto* search = panel.findChild<QLineEdit*>();
+    CHECK(search != nullptr);
+    if (!search) return;
+    auto visibleLabels = [&] {
+        QStringList out;
+        for (auto* l : panel.findChildren<QLabel*>()) if (l->isVisibleTo(&panel) && !l->text().isEmpty()) out << l->text();
+        return out;
+    };
+    auto hasLabel = [&](const QString& name) { return visibleLabels().contains(name); };
+    CHECK(hasLabel("Name") && hasLabel("Type") && hasLabel("Category"));
+    search->setText("categ");                         // ignores the case, matches the name of a property
+    QCoreApplication::processEvents();
+    CHECK(hasLabel("Category") && !hasLabel("Name") && !hasLabel("Type"));
+    search->setText("Counter");                       // matches a value: the Name field holds it
+    QCoreApplication::processEvents();
+    CHECK(hasLabel("Name") && !hasLabel("Category"));
+    search->setText("zzz");
+    QCoreApplication::processEvents();
+    CHECK(!hasLabel("Name") && !hasLabel("Category"));
+    bool noMatch = false;
+    for (auto* l : panel.findChildren<QLabel*>()) noMatch |= l->isVisibleTo(&panel) && l->text().contains("Nothing matches");
+    CHECK(noMatch);
+    // the filter stays when another item is shown
+    panel.showNothing();
+    panel.showVariable("", "Counter");
+    QCoreApplication::processEvents();
+    CHECK(!hasLabel("Name"));
+    search->clear();
+    QCoreApplication::processEvents();
+    CHECK(hasLabel("Name") && hasLabel("Category"));
+}
+
+TEST(output_log_context_menu_clears_the_log) {
+    LogPanel log;
+    log.append(0, "first");
+    log.append(2, "second");
+    CHECK(!log.document()->isEmpty());
+    std::unique_ptr<QMenu> menu(log.buildContextMenu());
+    QAction* clear = nullptr;
+    for (auto* a : menu->actions()) if (a->text() == "Clear") clear = a;
+    CHECK(clear != nullptr);
+    if (!clear) return;
+    CHECK(clear->isEnabled());
+    clear->trigger();
+    CHECK(log.document()->isEmpty());
+    std::unique_ptr<QMenu> again(log.buildContextMenu());
+    for (auto* a : again->actions()) if (a->text() == "Clear") CHECK(!a->isEnabled());    // nothing to clear
+}
+
 TEST(copying_nodes_never_duplicates_an_event_handler) {
     Fixture f;
     f.scene.clearSelection();

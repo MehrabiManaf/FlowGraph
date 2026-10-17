@@ -7,6 +7,7 @@
 #include "TypeEdit.hpp"
 #include "TypeSpec.hpp"
 
+#include <QAbstractButton>
 #include <QApplication>
 #include <QCheckBox>
 #include <QCompleter>
@@ -39,6 +40,7 @@ namespace {
 
 QLabel* heading(const QString& t) {
     auto* l = new QLabel("<b>" + t.toHtmlEscaped() + "</b>");
+    l->setProperty("fgHeading", true);
     return l;
 }
 
@@ -91,11 +93,20 @@ DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), do
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(6, 6, 6, 6);
     outer->setAlignment(Qt::AlignTop);
+    search_ = new QLineEdit(this);
+    search_->setPlaceholderText("Search");
+    search_->setClearButtonEnabled(true);
+    search_->setToolTip("Shows only the properties whose name or value contains this text");
+    outer->addWidget(search_);
+    connect(search_, &QLineEdit::textChanged, this, [this] { applyFilter(); });
     body_ = new QWidget(this);
     form_ = new QFormLayout(body_);
     form_->setContentsMargins(0, 0, 0, 0);
     form_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     outer->addWidget(body_);
+    noMatch_ = dim("Nothing matches the search.");
+    noMatch_->hide();
+    outer->addWidget(noMatch_);
     outer->addStretch(1);
     connect(doc_, &Document::scriptReplaced, this, [this] { rebuild(); });
     connect(doc_, &Document::compiled, this, [this] {
@@ -136,6 +147,58 @@ void DetailsPanel::rebuild() {
     case Mode::Graph: buildGraph(); break;
     case Mode::Nodes: buildNodes(); break;
     }
+    applyFilter();
+}
+
+namespace {
+// Everything a user can read in a widget (and its children): labels, edit fields, the selected entry of combo boxes, table cells.
+QString searchableText(QWidget* w) {
+    QString out;
+    auto add = [&](const QString& t) { out += t + QChar('\n'); };
+    auto collect = [&](QWidget* x) {
+        if (auto* l = qobject_cast<QLabel*>(x)) add(l->text());
+        else if (auto* e = qobject_cast<QLineEdit*>(x)) add(e->text());
+        else if (auto* c = qobject_cast<QComboBox*>(x)) add(c->currentText());
+        else if (auto* b = qobject_cast<QAbstractButton*>(x)) add(b->text());
+        else if (auto* s = qobject_cast<QSpinBox*>(x)) add(s->text());
+        else if (auto* t = qobject_cast<QTableWidget*>(x))
+            for (int r = 0; r < t->rowCount(); ++r)
+                for (int col = 0; col < t->columnCount(); ++col) {
+                    if (auto* it = t->item(r, col)) add(it->text());
+                    if (auto* cw = t->cellWidget(r, col)) {
+                        if (auto* cb = qobject_cast<QComboBox*>(cw)) add(cb->currentText());
+                        else if (auto* le = qobject_cast<QLineEdit*>(cw)) add(le->text());
+                    }
+                }
+    };
+    collect(w);
+    for (auto* child : w->findChildren<QWidget*>()) collect(child);
+    return out;
+}
+} // namespace
+
+void DetailsPanel::applyFilter() {
+    const QString text = search_ ? search_->text().trimmed() : QString();
+    int shown = 0, total = 0;
+    for (int row = 0; row < form_->rowCount(); ++row) {
+        QLayoutItem* label = form_->itemAt(row, QFormLayout::LabelRole);
+        QLayoutItem* field = form_->itemAt(row, QFormLayout::FieldRole);
+        QLayoutItem* span = form_->itemAt(row, QFormLayout::SpanningRole);
+        QWidget* lw = label ? label->widget() : nullptr;
+        QWidget* fw = field ? field->widget() : nullptr;
+        QWidget* sw = span ? span->widget() : nullptr;
+        // the headings tell what is shown: they stay while something below them matches
+        const bool isHeading = sw && sw->property("fgHeading").toBool();
+        bool match = text.isEmpty() || isHeading;
+        if (!match) {
+            QString all;
+            for (QWidget* w : {lw, fw, sw}) if (w) all += searchableText(w);
+            match = all.contains(text, Qt::CaseInsensitive);
+        }
+        form_->setRowVisible(row, match);
+        if (!isHeading) { ++total; shown += match; }
+    }
+    noMatch_->setVisible(!text.isEmpty() && total > 0 && shown == 0);
 }
 
 // ------------------------------------------------------------------ variables
