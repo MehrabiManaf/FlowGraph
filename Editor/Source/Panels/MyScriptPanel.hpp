@@ -3,6 +3,8 @@
 
 #include <QWidget>
 
+class QLineEdit;
+class QToolButton;
 class QTreeWidgetItem;
 class CCollapsiblePanel;
 
@@ -36,6 +38,8 @@ private:
     };
 
     void scheduleRefresh();
+    void applyFilter();          // hides the items that do not match the search text (and the sections without a match)
+    void showAddMenu();
     void refresh();
     std::vector<EventEntry> collectEvents() const;
     FitTree* makeSection(const QString& title, bool plus, CCollapsiblePanel*& panel);
@@ -52,6 +56,8 @@ private:
     QString localsGraph_;      // the function whose local variables are listed (empty = section hidden)
     FitTree *graphs_ = nullptr, *functions_ = nullptr, *vars_ = nullptr, *locals_ = nullptr;
     CCollapsiblePanel *graphsPanel_ = nullptr, *functionsPanel_ = nullptr, *varsPanel_ = nullptr, *localsPanel_ = nullptr;
+    QLineEdit* search_ = nullptr;
+    QToolButton* addButton_ = nullptr;
     bool building_ = false;
     bool refreshQueued_ = false;
     QString lastSignature_;

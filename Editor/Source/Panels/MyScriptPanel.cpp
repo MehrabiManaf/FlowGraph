@@ -6,13 +6,21 @@
 
 #include <FlowGraph/Compatibility.hpp>
 
+#include <QComboBox>
 #include <QCursor>
+#include <QImage>
+#include <QHBoxLayout>
+#include <QLineEdit>
+#include <QToolButton>
 #include <QMenu>
 #include <QTreeWidgetItemIterator>
+#include <cmath>
 #include <map>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPixmap>
+#include <QStyle>
+#include <QStyleOption>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -34,6 +42,65 @@ QIcon dotIcon(const QColor& c) {
     p.drawEllipse(1, 1, 10, 10);
     return QIcon(pm);
 }
+
+// The drop-down arrow of a combo box of the current style, cut out of a rendered combo box (so that it has exactly the
+// size and shape of the arrow of the launch box). The pixels that differ from the background of the box are kept,
+// with the strongest one as the colour and the difference as the opacity.
+QImage comboArrow(qreal dpr) {
+    QComboBox box;
+    box.ensurePolished();
+    box.resize(120, box.sizeHint().height());    QImage full(box.size() * dpr, QImage::Format_ARGB32_Premultiplied);
+    full.setDevicePixelRatio(dpr);
+    full.fill(Qt::transparent);
+    box.render(&full);
+
+    QStyleOptionComboBox opt;
+    opt.initFrom(&box);
+    opt.rect = box.rect();
+    opt.editable = false;
+    const QRect cell = box.style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, &box);
+    const QRect px = QRect(cell.topLeft() * dpr, cell.size() * dpr).intersected(full.rect()).adjusted(0, 3, -2, -3);   // not the frame
+    auto lum = [](QRgb c) { return qRed(c) * 3 + qGreen(c) * 6 + qBlue(c); };
+    // the box has a vertical gradient: the background of a row is the pixel at the left edge of the cell
+    auto diff = [&](int x, int y) { return std::abs(lum(full.pixel(x, y)) - lum(full.pixel(px.left(), y))); };
+    int best = 0;
+    QRgb arrowColor = 0;
+    for (int y = px.top(); y <= px.bottom(); ++y)
+        for (int x = px.left(); x <= px.right(); ++x)
+            if (diff(x, y) > best) { best = diff(x, y); arrowColor = full.pixel(x, y); }
+    QImage out(px.size(), QImage::Format_ARGB32_Premultiplied);
+    out.setDevicePixelRatio(dpr);
+    out.fill(Qt::transparent);
+    if (best == 0) return out;
+    for (int y = 0; y < px.height(); ++y)
+        for (int x = 0; x < px.width(); ++x) {
+            const double a = std::clamp((double(diff(px.left() + x, px.top() + y)) / best - 0.04) / 0.96, 0.0, 1.0);
+            QColor c(arrowColor);
+            c.setAlphaF(a);
+            out.setPixelColor(x, y, c);
+        }
+    return out;
+}
+
+// The icon of the add button: the green plus and, behind a gap, the drop-down arrow of the combo boxes (the launch
+// box of the toolbar), so the button reads as "opens a list".
+QIcon addMenuIcon(const QWidget* ref, int height, QSize* logicalSize) {
+    const qreal dpr = ref->devicePixelRatioF();
+    QImage arrow = comboArrow(dpr);
+    arrow.setDevicePixelRatio(1.0);
+    // everything in device pixels, so that nothing is resampled when the icon is drawn
+    const int plusPx = qRound(14 * dpr), gapPx = qRound(12 * dpr), heightPx = qRound(height * dpr);
+    const int logicalWidth = int(std::ceil((plusPx + gapPx + arrow.width()) / dpr));
+    QImage img(qRound(logicalWidth * dpr), heightPx, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.drawPixmap(QRect(0, (heightPx - plusPx) / 2, plusPx, plusPx), QIcon(":/Icons/add.svg").pixmap(QSize(plusPx, plusPx)));
+    p.drawImage(QPoint(plusPx + gapPx, (heightPx - arrow.height()) / 2), arrow);
+    p.end();
+    img.setDevicePixelRatio(dpr);
+    if (logicalSize) *logicalSize = QSize(logicalWidth, height);
+    return QIcon(QPixmap::fromImage(img));
+}
 } // namespace
 
 MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), doc_(doc) {
@@ -41,6 +108,32 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(2);
     lay->setAlignment(Qt::AlignTop);
+
+    // search box on the left, "add" button with its menu on the right
+    auto* top = new QHBoxLayout;
+    top->setContentsMargins(4, 4, 4, 2);
+    top->setSpacing(4);
+    search_ = new QLineEdit(this);
+    search_->setPlaceholderText("Search");
+    search_->setClearButtonEnabled(true);
+    search_->setToolTip("Shows only the events, functions and variables whose name contains this text");
+    addButton_ = new QToolButton(this);
+    QSize iconSize;
+    addButton_->setIcon(addMenuIcon(search_, search_->sizeHint().height(), &iconSize));       // a plus and a drop-down arrow: the button opens a menu
+    addButton_->setIconSize(iconSize);
+    addButton_->setText("+");                         // not shown (icon only), but names the button
+    addButton_->setToolTip("Add a function or a variable");
+    addButton_->setPopupMode(QToolButton::InstantPopup);
+    addButton_->setFixedSize(iconSize.width() + 12, search_->sizeHint().height());
+    addButton_->setStyleSheet("QToolButton::menu-indicator { image: none; }");                    // the arrow is part of the icon
+    top->addWidget(search_, 1);
+    top->addWidget(addButton_);
+    lay->addLayout(top);
+    auto* menu = new QMenu(addButton_);
+    addButton_->setMenu(menu);
+    connect(menu, &QMenu::aboutToShow, this, [this] { showAddMenu(); });
+    connect(search_, &QLineEdit::textChanged, this, [this] { applyFilter(); });
+
     graphs_ = makeSection("Event Graphs", false, graphsPanel_);       // no "+": events are not created here
     graphs_->setRootIsDecorated(true);
     functions_ = makeSection("Functions", true, functionsPanel_);
@@ -195,13 +288,38 @@ void MyScriptPanel::refresh() {
         localsPanel_->SetTitle("Local Variables (" + localsGraph_ + ")");
     }
     localsPanel_->setVisible(!localsGraph_.isEmpty());
-    for (auto* t : {graphs_, functions_, vars_, locals_}) t->fit();
-    for (auto* p : {graphsPanel_, functionsPanel_, varsPanel_, localsPanel_}) p->UpdateContentsHeight();
+    applyFilter();
     if (keepTree) {
         for (QTreeWidgetItemIterator it(keepTree); *it; ++it)
             if ((*it)->data(0, kName).toString() + "@" + (*it)->data(0, kMime).toString() == keepName) { keepTree->setCurrentItem(*it); break; }
     }
     building_ = false;
+}
+
+void MyScriptPanel::applyFilter() {
+    const QString text = search_ ? search_->text().trimmed() : QString();
+    const std::pair<FitTree*, CCollapsiblePanel*> sections[] = {{graphs_, graphsPanel_}, {functions_, functionsPanel_}, {vars_, varsPanel_}, {locals_, localsPanel_}};
+    for (auto& [tree, panel] : sections) {
+        int shown = 0;
+        for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+            const bool match = text.isEmpty() || (*it)->text(0).contains(text, Qt::CaseInsensitive);
+            (*it)->setHidden(!match);
+            shown += match;
+        }
+        // local variables only exist while a function is selected; a section without a match is not shown while searching
+        const bool available = tree != locals_ || !localsGraph_.isEmpty();
+        panel->setVisible(available && (text.isEmpty() || shown > 0));
+        tree->fit();
+        panel->UpdateContentsHeight();
+    }
+}
+
+void MyScriptPanel::showAddMenu() {
+    QMenu* menu = addButton_->menu();
+    menu->clear();
+    menu->addAction("Function", this, [this] { addFunction(); });
+    menu->addAction("Variable", this, [this] { addVariable(); });
+    if (!localsGraph_.isEmpty()) menu->addAction("Local Variable (" + localsGraph_ + ")", this, [this] { addLocal(); });
 }
 
 void MyScriptPanel::onSelection(FitTree* tree) {
@@ -319,6 +437,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
 }
 
 void MyScriptPanel::addFunction() {
+    search_->clear();                // the new item would be hidden by the filter
     QString name = qs(doc_->script().uniqueGraphName("NewFunction"));
     doc_->edit("Add function", [&](fg::Script& s) { s.addFunction(ss(name)); });
     emit openGraph(name);
@@ -326,6 +445,7 @@ void MyScriptPanel::addFunction() {
 }
 
 void MyScriptPanel::addVariable() {
+    search_->clear();
     QString name = qs(doc_->script().uniqueVariableName("NewVar"));
     doc_->edit("Add variable", [&](fg::Script& s) { s.variables.push_back({ss(name), "int", fg::Value(int64_t(0)), "", ""}); });
     beginRename(vars_, name);
@@ -334,6 +454,7 @@ void MyScriptPanel::addVariable() {
 void MyScriptPanel::addLocal() {
     const fg::Graph* g = doc_->script().findGraph(ss(localsGraph_));
     if (!g || g->kind != fg::GraphKind::Function) return;
+    search_->clear();
     QString name = "NewLocal";
     for (int i = 1; g->findLocal(ss(name)); ++i) name = "NewLocal_" + QString::number(i);
     doc_->edit("Add local variable", [&](fg::Script& s) {

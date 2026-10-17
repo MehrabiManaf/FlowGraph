@@ -41,6 +41,7 @@
 #include <QSettings>
 #include <QLabel>
 #include <QToolBar>
+#include <QMenu>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -1011,7 +1012,7 @@ TEST(event_list_shows_only_the_events_the_script_handles) {
     // the section has no "+" button (functions, variables and local variables have one)
     int plus = 0;
     for (auto* b : panel.findChildren<QToolButton*>()) plus += b->text() == "+";
-    CHECK_EQ(plus, 3);
+    CHECK_EQ(plus, 4);                                 // those three and the "add" button next to the search box
     // a second event graph (made by a file or a host) is not listed: the section holds events only, and there is no
     // way to create event graphs from it
     f.doc.edit("Second event graph", [](fg::Script& sc) { sc.addEventGraph("Other"); });
@@ -1020,6 +1021,76 @@ TEST(event_list_shows_only_the_events_the_script_handles) {
     CHECK(find("EventGraph") == nullptr);
     for (QTreeWidgetItemIterator it(events); *it; ++it) CHECK((*it)->parent() == nullptr);
     CHECK_EQ(events->topLevelItemCount(), 2);          // Main and Tick
+}
+
+TEST(my_script_search_filters_and_the_add_button_offers_what_can_be_added) {
+    Fixture f;
+    f.doc.edit("Add", [](fg::Script& s) {
+        s.addFunction("Compute");
+        s.addFunction("Other");
+        s.variables.push_back({"Counter", "int", fg::Value(int64_t(0)), "", ""});
+        s.variables.push_back({"Name", "string", fg::Value(std::string()), "", ""});
+        s.findGraph("Compute")->locals.push_back({"countdown", "int", fg::Value(int64_t(0)), "", ""});
+    });
+    MyScriptPanel panel(&f.doc);
+    panel.show();
+    QCoreApplication::processEvents();
+    auto trees = panel.findChildren<QTreeWidget*>();
+    CHECK_EQ(trees.size(), 4);
+    if (trees.size() != 4) return;
+    auto visibleRows = [](QTreeWidget* t) {
+        int n = 0;
+        for (QTreeWidgetItemIterator it(t); *it; ++it) n += !(*it)->isHidden();
+        return n;
+    };
+    auto* search = panel.findChild<QLineEdit*>();
+    CHECK(search != nullptr);
+    if (!search) return;
+    CHECK_EQ(visibleRows(trees[1]), 2);                    // functions
+    CHECK_EQ(visibleRows(trees[2]), 2);                    // variables
+    // select a function: its local variables are listed
+    trees[1]->setCurrentItem(trees[1]->topLevelItem(0));
+    for (int i = 0; i < trees[1]->topLevelItemCount(); ++i)
+        if (trees[1]->topLevelItem(i)->text(0) == "Compute") trees[1]->setCurrentItem(trees[1]->topLevelItem(i));
+    QCoreApplication::processEvents();
+    CHECK_EQ(visibleRows(trees[3]), 1);
+    // the search matches every section, ignoring the case
+    search->setText("CO");
+    QCoreApplication::processEvents();
+    CHECK_EQ(visibleRows(trees[1]), 1);                    // Compute
+    CHECK_EQ(visibleRows(trees[2]), 1);                    // Counter
+    CHECK_EQ(visibleRows(trees[3]), 1);                    // countdown
+    CHECK(!trees[0]->isVisibleTo(&panel) || visibleRows(trees[0]) == 0);     // Main does not match: its section disappears
+    search->setText("zzz");
+    QCoreApplication::processEvents();
+    for (auto* t : trees) CHECK(!t->isVisibleTo(&panel));
+    search->clear();
+    QCoreApplication::processEvents();
+    for (auto* t : trees) CHECK(t->isVisibleTo(&panel));
+    // the add button: function and variable always, local variable only while a function is selected
+    QToolButton* add = nullptr;
+    for (auto* b : panel.findChildren<QToolButton*>()) if (b->menu()) add = b;
+    CHECK(add != nullptr);
+    if (!add) return;
+    auto entries = [&] {
+        emit add->menu()->aboutToShow();
+        QStringList out;
+        for (auto* a : add->menu()->actions()) out << a->text();
+        return out;
+    };
+    auto withLocal = entries();
+    CHECK_EQ(withLocal.size(), 3);
+    CHECK(withLocal.value(0) == "Function" && withLocal.value(1) == "Variable" && withLocal.value(2).startsWith("Local Variable"));
+    trees[0]->setCurrentItem(trees[0]->topLevelItem(0));      // an event is selected: no function any more
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    CHECK_EQ(entries().size(), 2);
+    // adding clears the search so that the new item is visible
+    search->setText("Counter");
+    add->menu()->actions().at(1)->trigger();
+    QCoreApplication::processEvents();
+    CHECK(search->text().isEmpty());
+    CHECK_EQ(f.doc.script().variables.size(), size_t(3));
 }
 
 TEST(copying_nodes_never_duplicates_an_event_handler) {

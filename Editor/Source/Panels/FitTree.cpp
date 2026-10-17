@@ -25,7 +25,7 @@ QSize FitTree::sizeHint() const {
     int rows = 0;
     for (QTreeWidgetItemIterator it(const_cast<FitTree*>(this)); *it; ++it) {
         // children of collapsed items are not visible
-        bool visible = true;
+        bool visible = !(*it)->isHidden();
         for (QTreeWidgetItem* p = (*it)->parent(); p; p = p->parent()) visible &= p->isExpanded();
         rows += visible;
     }
