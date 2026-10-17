@@ -50,7 +50,7 @@ struct Bench {
     double iterations;                          // loop iterations / calls, for the per-iteration figure
     std::function<void(Script&)> build;
     // Optional: drives the instance from C++ instead of running the Main event. Returns false (and sets `error`) on a wrong result.
-    std::function<bool(Instance&, std::string& error)> drive;
+    std::function<bool(Instance&, std::string& error)> drive = {};
 };
 
 // For (0, n) { body }: returns {loop, bodyTail}; the caller chains nodes after `tail` ("Then").

@@ -184,7 +184,7 @@ void DetailsPanel::buildVariable() {
         containerBox->setCurrentIndex(int(spec.container));
         auto* keyEdit = new TypeEdit(doc_->registry());
         keyEdit->setType(spec.key);
-        auto apply = [=]() {
+        auto apply = [=, this]() {
             TypeSpec ns;
             ns.container = TypeSpec::Container(containerBox->currentIndex());
             ns.key = keyEdit->type();
@@ -208,11 +208,11 @@ void DetailsPanel::buildVariable() {
         if (t->kind == fg::TypeKind::Bool) {
             auto* cb = new QCheckBox;
             cb->setChecked(cp.def.toBool());
-            connect(cb, &QCheckBox::toggled, this, [=](bool on) { mutate([&](fg::VariableDecl& d) { d.def = fg::Value(on); }, "Edit default value", "vardef:" + name_); });
+            connect(cb, &QCheckBox::toggled, this, [=, this](bool on) { mutate([&](fg::VariableDecl& d) { d.def = fg::Value(on); }, "Edit default value", "vardef:" + name_); });
             form_->addRow("Default", cb);
         } else {
             auto* le = new QLineEdit(t->isEnum() ? qs(t->enumName(cp.def.toInt())) : qs(cp.def.toString() == "null" ? "" : (cp.def.isString() ? cp.def.str() : cp.def.toString())));
-            connect(le, &QLineEdit::editingFinished, this, [=] {
+            connect(le, &QLineEdit::editingFinished, this, [=, this] {
                 fg::Value nv = RunController::parseArgument(doc_->registry(), t, le->text());
                 mutate([&](fg::VariableDecl& d) { d.def = nv; }, "Edit default value", "vardef:" + name_);
             });
@@ -222,10 +222,10 @@ void DetailsPanel::buildVariable() {
         form_->addRow("Default", dim(t && t->isContainer() ? "Containers start empty." : "Objects start as null."));
     }
     auto* cat = new QLineEdit(qs(v->category));
-    connect(cat, &QLineEdit::editingFinished, this, [=] { mutate([&](fg::VariableDecl& d) { d.category = ss(cat->text()); }, "Edit category", "varcat:" + name_); });
+    connect(cat, &QLineEdit::editingFinished, this, [=, this] { mutate([&](fg::VariableDecl& d) { d.category = ss(cat->text()); }, "Edit category", "varcat:" + name_); });
     form_->addRow("Category", cat);
     auto* doc = new QLineEdit(qs(v->doc));
-    connect(doc, &QLineEdit::editingFinished, this, [=] { mutate([&](fg::VariableDecl& d) { d.doc = ss(doc->text()); }, "Edit description", "vardoc:" + name_); });
+    connect(doc, &QLineEdit::editingFinished, this, [=, this] { mutate([&](fg::VariableDecl& d) { d.doc = ss(doc->text()); }, "Edit description", "vardoc:" + name_); });
     form_->addRow("Description", doc);
 }
 

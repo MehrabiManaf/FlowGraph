@@ -1067,7 +1067,7 @@ TEST(standard_app_main_really_sleeps_for_delays) {
 
 TEST(launch_file_roundtrip_and_defaults) {
     std::string path = standard::LaunchFile::pathFor("some/dir/script.flow");
-    CHECK(path.size() > 10 && path.substr(path.size() - 11) == "script.flowlaunch" || path.find("script.flowlaunch") != std::string::npos);
+    CHECK(path.find("script.flowlaunch") != std::string::npos);
     auto missing = standard::LaunchFile::load("definitely/not/there.flowlaunch");
     CHECK_EQ(missing.configs.size(), size_t(1));          // a missing file yields one default configuration
     CHECK_EQ(missing.current().name, std::string("Default"));
