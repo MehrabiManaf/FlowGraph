@@ -149,6 +149,20 @@ async.stop();                                      // aborts everything and join
 ```
 Breakpoints, stepping, the `Debugger` callbacks and `Task::run(maxNodes)` time slicing are available in both.
 
+**Serial mode.** By default every posted event is a task and all of them run together, a slice at a time. A host that wants the events
+handled *one after the other* (messages, requests, commands: the script keeps state, and a breakpoint should stop the whole sequence)
+only says so:
+
+```cpp
+fg::AsyncExecutor::Options o; o.serial = true;           // or: executor.setSerial(true)
+fg::AsyncExecutor async(program, cb, nullptr, o);
+async.postEvent("NewMessage", {msg1}); async.postEvent("NewMessage", {msg2}); ...   // queued, in this order
+```
+
+There is one task at a time; the next event starts when the previous task has ended. A task that waits (`Delay`) or is stopped by a
+debugger holds the others up, so a script is followed from its first node to its last for one event before the next begins. Off by
+default: nothing changes for hosts that do not ask for it.
+
 ## Embedding the script editor
 
 ```cpp

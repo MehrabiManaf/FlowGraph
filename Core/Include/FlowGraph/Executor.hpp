@@ -4,6 +4,7 @@
 //   Executor       cooperative scheduler. The host calls pump() from its own loop (game frame, Qt timer, ...);
 //                  every call advances Delay nodes and runs each ready task for a bounded number of nodes.
 //                  Single threaded: never call it from two threads.
+//   Both can run SERIALLY (setSerial / AsyncExecutor::Options): one task at a time, in the order the events were posted. See Executor::setSerial.
 //   AsyncExecutor  an Executor that lives on a thread of its own. Events are posted from any thread, results
 //                  and log lines arrive through callbacks (on the worker thread), and the script can be paused,
 //                  stepped or stopped from outside. Use it when a blocked script or a slow native function must
@@ -34,6 +35,15 @@ public:
     using CompletionHandler = std::function<void(const Completion&)>;
 
     explicit Executor(std::shared_ptr<const Program> program, DebugHooks* hooks = nullptr);
+
+    // Serial mode (off by default): ONE task at a time. The events that are posted wait in a queue, in the order they were posted, and the next
+    // one starts when the previous task has ended; a task that waits (Delay...) or is stopped by a debugger holds the others up. So a
+    // script is followed from its first node to its last for one event before the next event begins: a breakpoint stops the whole
+    // sequence, and stepping to the end of the script goes on with the next event. The variables of the instance are shared, as always:
+    // with serial tasks a script can count, sum or keep the last value without any two handlers touching them at the same time.
+    // Without it all posted tasks run together, each a slice at a time. Switching it on or off while tasks are queued is allowed.
+    void setSerial(bool on) { serial_ = on; }
+    bool serial() const { return serial_; }
 
     Instance& instance() { return *inst_; }
     const Instance& instance() const { return *inst_; }
@@ -74,6 +84,7 @@ private:
     };
     Handle add(std::shared_ptr<Task> t, const std::string& name, Handle forced);
     void finish(size_t index);
+    void pumpSerial(PumpStats& st, uint64_t nodesPerTask);
 
     std::shared_ptr<const Program> program_;
     std::unique_ptr<Instance> inst_;
@@ -81,6 +92,7 @@ private:
     CompletionHandler completion_;
     std::function<void(Handle)> wake_;
     Handle next_ = 1;
+    bool serial_ = false;
 };
 
 class AsyncExecutor {
@@ -94,8 +106,12 @@ public:
         std::function<void(const std::string& graph, NodeId from, int execOut, NodeId to)> linkFired;
     };
 
+    struct Options {
+        bool serial = false;           // one task at a time, in the order the events were posted (see Executor::setSerial)
+    };
+
     // `debugger` (optional, not owned) keeps its breakpoints across runs; its callbacks are taken over.
-    AsyncExecutor(std::shared_ptr<const Program> program, Callbacks callbacks = {}, Debugger* debugger = nullptr);
+    AsyncExecutor(std::shared_ptr<const Program> program, Callbacks callbacks = {}, Debugger* debugger = nullptr, Options options = {});
     ~AsyncExecutor();
     AsyncExecutor(const AsyncExecutor&) = delete;
     AsyncExecutor& operator=(const AsyncExecutor&) = delete;
@@ -109,6 +125,7 @@ public:
     void step(Handle h, Debugger::Command cmd);      // StepInto / StepOver / StepOut
     void abort(Handle h);
     void abortAll();
+    void setSerial(bool on);                         // see Executor::setSerial
     void setStepDelay(int milliseconds);             // slow motion: one node per task every `milliseconds`
 
     // Runs `fn` on the worker thread between two slices and waits for it. This is the safe way to look at

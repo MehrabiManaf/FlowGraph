@@ -842,6 +842,68 @@ TEST(executor_runs_several_tasks_fairly) {
     CHECK(pumps > 2);
 }
 
+TEST(serial_executor_runs_one_task_at_a_time_in_the_order_they_were_posted) {
+    TestRuntime rt;
+    auto prog = build(rt, printScript(0.1, "x"));                  // Go: wait 0.1 s, then print
+    auto run = [&](bool serial, std::vector<Executor::Handle>& order, Executor::Handle* third, size_t* doneAt15) {
+        Executor ex(prog);
+        ex.setSerial(serial);
+        ex.setCompletionHandler([&](const Executor::Completion& c) { order.push_back(c.handle); });
+        const auto h1 = ex.postEvent("Go");
+        ex.postEvent("Go");
+        const auto h3 = ex.postEvent("Go");
+        (void)h1;
+        for (int i = 0; i < 15; ++i) ex.pump(0.01);                  // 0.15 s of script time
+        *doneAt15 = order.size();
+        if (third) *third = h3;
+        if (serial) CHECK(ex.task(h3) && ex.task(h3)->state() == TaskState::Ready);       // queued: it has not even started
+        for (int i = 0; i < 40; ++i) ex.pump(0.01);
+        CHECK(ex.idle());
+    };
+    std::vector<Executor::Handle> together, serial;
+    size_t togetherAt = 0, serialAt = 0;
+    run(false, together, nullptr, &togetherAt);
+    Executor::Handle third = 0;
+    run(true, serial, &third, &serialAt);
+    CHECK_EQ(togetherAt, size_t(3));                                // without the mode all three waited together: done after 0.1 s
+    CHECK_EQ(serialAt, size_t(1));                                  // serial: the second one started when the first ended (0.1 s) and ends at 0.2 s
+    CHECK_EQ(serial.size(), size_t(3));
+    CHECK(serial[0] < serial[1] && serial[1] < serial[2] && serial[2] == third);       // in the order they were posted
+}
+
+TEST(serial_executor_is_held_up_by_a_task_that_a_breakpoint_stopped) {
+    TestRuntime rt;
+    auto prog = build(rt, printScript(-1, "x"));                     // Go: event (1) -> print (2)
+    std::atomic<int> paused{0};
+    std::mutex mu;
+    std::vector<Executor::Handle> completed;
+    AsyncExecutor::Callbacks cb;
+    cb.taskState = [&](AsyncExecutor::Handle, TaskState st) { if (st == TaskState::Paused) ++paused; };
+    cb.completed = [&](const Executor::Completion& c) { std::lock_guard lk(mu); completed.push_back(c.handle); };
+    AsyncExecutor::Options options;
+    options.serial = true;                                          // all an application has to say
+    AsyncExecutor ax(prog, cb, nullptr, options);
+    ax.debugger().setBreakpoint("EventGraph", 2, true);
+    const auto h1 = ax.postEvent("Go");
+    const auto h2 = ax.postEvent("Go");
+    const auto h3 = ax.postEvent("Go");
+    for (int i = 0; i < 300 && paused.load() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    CHECK_EQ(paused.load(), 1);                                     // only the first task started: it stands at the breakpoint
+    TaskState s2 = TaskState::Finished;
+    CHECK(ax.inspect([&](Executor& ex) { if (auto t = ex.task(h2)) s2 = t->state(); }));
+    CHECK(s2 == TaskState::Ready);                                  // the second one waits for it
+    ax.resume(h1);                                                  // the first runs to its end ...
+    for (int i = 0; i < 300 && paused.load() < 2; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    CHECK_EQ(paused.load(), 2);                                     // ... and the next one is at the breakpoint
+    ax.debugger().setBreakpoint("EventGraph", 2, false);
+    ax.resume(h2);
+    CHECK(ax.waitIdle(3000));
+    std::lock_guard lk(mu);
+    CHECK_EQ(completed.size(), size_t(3));
+    CHECK(completed.size() == 3 && completed[0] == h1 && completed[1] == h2 && completed[2] == h3);
+}
+
 TEST(async_executor_runs_on_its_own_thread) {
     TestRuntime rt;
     auto prog = build(rt, printScript(0.1, "async"));
