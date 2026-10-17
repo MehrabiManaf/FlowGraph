@@ -265,6 +265,39 @@ int runSelfTest(fg::Runtime& rt, MessageStore& store) {
     check(t1->table()->rowCount() == 2 && number(t1->table(), 1, "Count") == 2, "the tables show the new messages only");
     check(window.tables().size() == 2, "the window has two tables");
 
+    std::printf("the messages are handled one at a time\n");
+    // a script that waits 0.15 s for every message (a Delay node) before it adds its row
+    const QString slow = dir + "/slow.flow";
+    {
+        fg::Script sc;
+        sc.name = "Slow";
+        fg::Graph& g = sc.addEventGraph();
+        const fg::NodeId ev = g.addNode(std::string("event:") + kNewMessageEvent).id;
+        const fg::NodeId delay = g.addNode("flow.delay").id;
+        g.findNode(delay)->defaults["Duration"] = fg::Value(0.15);
+        const fg::NodeId row = g.addNode(kAddRowNode).id;
+        g.findNode(row)->inputs = {{"Line", "int", false, false, fg::Value()}};
+        const fg::NodeId line = g.addNode("get:Message.Line").id;
+        g.connections.push_back({ev, "Then", delay, "In"});
+        g.connections.push_back({delay, "Then", row, "In"});
+        g.connections.push_back({ev, "Message", line, "Target"});
+        g.connections.push_back({line, "Line", row, "Line"});
+        sc.save(slow.toStdString());
+    }
+    store.clear();
+    check(t1->openScript(slow), "a script that waits 0.15 s for every message");
+    QElapsedTimer clock;
+    clock.start();
+    for (int i = 0; i < 3; ++i) store.addMessage("2026-10-17 11:00:00 INFO  message");
+    check(waitFor([&] { return caughtUp(t1, 3); }), "three messages arrive at once and are all handled");
+    check(clock.elapsed() >= 400, "one after the other: three handlers of 0.15 s took more than 0.4 s, not 0.15 s (no two run together)");
+    check(t1->table()->rowCount() == 3 && number(t1->table(), 0, "Line") == 1 && number(t1->table(), 1, "Line") == 2 && number(t1->table(), 2, "Line") == 3,
+          "and the rows are in the order of the messages");
+    clock.restart();
+    for (int i = 0; i < 2000; ++i) store.addMessage("2026-10-17 11:00:01 INFO  burst");
+    check(waitFor([&] { return caughtUp(t2, 2003); }, 30000), "2000 messages that arrive at once are all handled, one at a time");
+    std::printf("      (%d ms)\n", int(clock.elapsed()));
+
     std::printf("%s\n", g_failures ? "SOME CHECKS FAILED" : "all checks passed");
     return g_failures;
 }

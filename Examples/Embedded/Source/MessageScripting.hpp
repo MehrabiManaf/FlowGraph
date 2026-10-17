@@ -56,7 +56,10 @@ std::vector<std::string> declaredColumns(const fg::Program& program);
 inline constexpr size_t kMaxLog = 200;
 
 // A running script. ONE instance lives as long as the run: the event NewMessage is raised for the messages one after the other as they come
-// (post()), and the variables of the script keep their values from message to message. A run starts with the messages the store already has
+// (post()), and the variables of the script keep their values from message to message. The messages are handled SERIALLY: the executor is
+// created with AsyncExecutor::Options::serial, which is all it takes. There is one task at a time, the next message starts when the handler of
+// the previous one has ended (the others wait in the executor's queue), so a script is followed from the first node to the last for one
+// message before the next message begins, and a breakpoint stops the whole sequence. A run starts with the messages the store already has
 // and goes on with the new ones; another script (or the same one saved again) is another run, with fresh variables.
 // Every Add Row node that runs puts a row into the run; takeUpdate() collects what happened since it was last called.
 //
@@ -72,7 +75,7 @@ public:
 
     std::shared_ptr<fg::AsyncExecutor> executor() const { return executor_; }
     void post(const MessagePtr& message);          // raises NewMessage for it (after the ones posted before)
-    size_t pending() const;                        // messages posted whose handler has not finished (a handler may wait, or be stopped by a debugger)
+    size_t pending() const;                        // messages posted whose handler has not finished: the one that runs and the ones that wait
     const std::vector<std::string>& declared() const { return declared_; }     // the columns the script declares (Add Row pins)
 
     struct Update {

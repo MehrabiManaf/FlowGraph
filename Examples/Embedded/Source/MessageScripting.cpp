@@ -194,7 +194,9 @@ ScriptRun::ScriptRun(Runtime& rt, std::shared_ptr<const Program> program) : rt_(
         for (auto& r : state->sink.rows) state->update.rows.push_back(std::move(r));
         state->sink.rows.clear();
     };
-    executor_ = std::make_shared<AsyncExecutor>(std::move(program), std::move(cb));
+    AsyncExecutor::Options options;
+    options.serial = true;                             // one task at a time: this is all the application has to say
+    executor_ = std::make_shared<AsyncExecutor>(std::move(program), std::move(cb), nullptr, options);
     // before anything runs: the Add Row nodes of this instance write into the sink of this run
     executor_->inspect([this](Executor& ex) { ex.instance().setUserData(&state_->sink); });
 }
@@ -202,14 +204,13 @@ ScriptRun::ScriptRun(Runtime& rt, std::shared_ptr<const Program> program) : rt_(
 ScriptRun::~ScriptRun() { cancel(); }
 
 void ScriptRun::post(const MessagePtr& m) {
-    const Registry& reg = rt_.registry();
     // the lock is held while the task is posted, so the completion of a fast task finds its line number
     std::lock_guard lk(state_->mu);
     if (state_->cancelled) return;
     // wrap() hands the C++ object to the script without copying it; the script cannot change it (the properties are read only)
-    const auto handle = executor_->postEvent(kNewMessageEvent, {reg.wrap(std::const_pointer_cast<Message>(m))});
+    const auto handle = executor_->postEvent(kNewMessageEvent, {rt_.registry().wrap(std::const_pointer_cast<Message>(m))});
     state_->lineOf[handle] = m->line;
-    ++state_->posted;
+    ++state_->posted;                                  // it starts now when no other message runs, otherwise it waits its turn
 }
 
 size_t ScriptRun::pending() const {

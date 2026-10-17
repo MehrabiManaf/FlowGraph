@@ -22,6 +22,10 @@ table:
 * **the script keeps its state**: a table runs ONE instance of its script for as long as the script is not replaced, so a global variable
   (a counter, a sum, the last value...) keeps its value from message to message. The run starts again, with fresh variables, over the
   messages received so far, when a table is created, a script is loaded, or the script is saved in the editor;
+* **messages are handled one at a time**: the run's executor is created with `AsyncExecutor::Options::serial`, so there is one task at a
+  time and the next message starts only when the handler of the previous one has ended; the others wait in the executor's queue. A script is followed from its first node to its last for one message before the next message
+  begins, so a breakpoint stops the whole sequence (and while it is stopped nothing else runs, no other link fires), and stepping to
+  the end of the script goes on with the next message;
 * the run is on a worker thread; a timer brings the rows into the table (it shows the latest 5 000).
 
 *Load Script* and the editor's *Open* take only a script that fits this application: it must use only what the application provides (a
@@ -59,6 +63,7 @@ messages are processed and you can step through it; saving while attached attach
 | The row is added when the node runs, to the table of the run that executes it | `NodeCtx::instance().userData()` | no |
 | One instance for as long as the script runs, a `NewMessage` task per message, state kept between messages | `AsyncExecutor::postEvent` on one executor (one `Instance`) | no |
 | Stopping a run that is going on (the script was replaced) | `AsyncExecutor::abortAll` | no |
+| The messages are handled serially: one task at a time, a breakpoint stops the whole sequence | `AsyncExecutor::Options::serial` (`Executor::setSerial`) | **yes**: new, ~40 lines, off by default |
 | Messages are handed to the script without copying | `Registry::wrap(shared_ptr)` | no |
 | Is the script usable here? (missing event, missing node...) | `Runtime::loadScript`, `CompatibilityReport` | no |
 | A script that does not compile is reported in the table | `Runtime::compile`, `Program::diagnostics` | no |
@@ -70,9 +75,17 @@ messages are processed and you can step through it; saving while attached attach
 | Add Row has no pins of its own; the user adds columns like the inputs of a function | `NodeDef::customInputs` (the node keeps the pins in `Node::inputs`) | **yes**: new, see below |
 | Every node shows its inputs and outputs in the Details panel; the custom ones can be edited | `DetailsPanel` (editor library) | no (editor library) |
 
-The only change of `Core/` for this example is the one marked **yes**: custom pins (27 lines, see below).
+The changes of `Core/` for this example are the two marked **yes**: serial mode and custom pins (see below).
 
-### Custom pins: the one change of FlowGraphCore
+### Serial mode: the second change of FlowGraphCore
+
+A host that wants its events handled one after the other used to have to build the queue itself (post the next event when the previous
+one has completed). Now it only says `AsyncExecutor::Options{.serial = true}` (or `setSerial(true)` on an `Executor` / `AsyncExecutor`):
+the executor keeps the posted tasks in order and runs only the oldest; the next starts when it has ended, also when it was aborted. A task
+that waits or is stopped by a debugger holds the others up. It is off by default and only changes `Executor::pump` / `hasRunnable` when
+on, so existing hosts and the speed of the interpreter are not affected.
+
+### Custom pins: the first change of FlowGraphCore
 
 Until now the pins of a node were fixed by its definition (or by a few properties, like the output count of `Sequence`). Add Row
 needs pins that the *user* chooses, with names and types, next to fixed ones. This is a new, optional kind of node:
