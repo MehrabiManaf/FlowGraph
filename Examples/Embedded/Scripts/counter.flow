@@ -1,0 +1,121 @@
+{
+  "format": "flowgraph",
+  "version": 1,
+  "name": "Counter",
+  "doc": "Counts the messages in the global variable Count (it keeps its value from message to message) and shows it next to the line number.",
+  "variables": [
+    {
+      "name": "Count",
+      "type": "int",
+      "default": 0
+    }
+  ],
+  "graphs": [
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event:NewMessage",
+          "x": 0.0,
+          "y": 0.0
+        },
+        {
+          "id": 2,
+          "def": "var.set",
+          "x": 420.0,
+          "y": 0.0,
+          "props": {
+            "name": "Count",
+            "scope": "global"
+          }
+        },
+        {
+          "id": 3,
+          "def": "var.get",
+          "x": 0.0,
+          "y": 220.0,
+          "props": {
+            "name": "Count",
+            "scope": "global"
+          }
+        },
+        {
+          "id": 4,
+          "def": "math.add",
+          "x": 220.0,
+          "y": 220.0,
+          "typeArgs": {
+            "T": "int"
+          },
+          "defaults": {
+            "B": 1
+          }
+        },
+        {
+          "id": 5,
+          "def": "table.addrow",
+          "x": 700.0,
+          "y": 0.0,
+          "inputs": [
+            {
+              "name": "Line",
+              "type": "int"
+            },
+            {
+              "name": "Count",
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "def": "get:Message.Line",
+          "x": 420.0,
+          "y": 320.0
+        },
+        {
+          "id": 7,
+          "def": "var.get",
+          "x": 420.0,
+          "y": 440.0,
+          "props": {
+            "name": "Count",
+            "scope": "global"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [2, "In"]
+        },
+        {
+          "from": [3, "Value"],
+          "to": [4, "A"]
+        },
+        {
+          "from": [4, "Result"],
+          "to": [2, "Value"]
+        },
+        {
+          "from": [2, "Then"],
+          "to": [5, "In"]
+        },
+        {
+          "from": [1, "Message"],
+          "to": [6, "Target"]
+        },
+        {
+          "from": [6, "Line"],
+          "to": [5, "Line"]
+        },
+        {
+          "from": [7, "Value"],
+          "to": [5, "Count"]
+        }
+      ]
+    }
+  ]
+}
