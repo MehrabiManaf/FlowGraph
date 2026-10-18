@@ -474,6 +474,19 @@ bool GraphScene::connectPins(const PinRef& a, const PinRef& b, QString* why) {
     }
     fg::Connection c{out.node, out.pin, in.node, in.pin};
     bool exec = out.kind == fg::PinKind::Exec;
+    // links that would close a loop the script cannot run: a cycle of pure data nodes (a value made of itself) and an execution
+    // loop with no way out (no Branch, Delay or other flow node in it). Loops with a way out are fine (a Delay loop that repeats).
+    if (const fg::CompiledGraph* cg = doc_->compiledGraph(name_)) {
+        auto index = [&](fg::NodeId id) {
+            auto it = cg->nodeIndex.find(id);
+            return it == cg->nodeIndex.end() ? -1 : it->second;
+        };
+        const int from = index(out.node), to = index(in.node);
+        if (!exec && fg::closesPureDataCycle(*cg, from, to))
+            return fail("This link would make the value depend on itself (the data links would form a cycle)");
+        if (exec && fg::closesEndlessExecLoop(*cg, from, to))
+            return fail("This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first");
+    }
     doc_->edit("Connect pins", [&](fg::Script& s) {
         if (auto* g = mutableGraph(s)) addConnection(*g, c, exec);
     });

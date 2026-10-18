@@ -191,6 +191,105 @@ TEST(incompatible_pins_are_rejected) {
     CHECK(!f.scene.connectPins(pinOf(f.scene, br, "True", fg::PinDir::Out), pinOf(f.scene, mk, "[0]", fg::PinDir::In), &why));
 }
 
+// A link that would close an endless execution loop or a cycle of pure data nodes is refused with a reason; a loop that waits
+// (a Delay) or has a way out (a Branch) is a loop a script may have.
+TEST(editor_refuses_endless_loops_and_data_cycles) {
+    Fixture f;
+    auto all = f.palette();
+    // the default script: Main -> Print (node 2); add Print 3 and Print 4 after it
+    fg::NodeId p3 = f.scene.addNodeFromTemplate(*findTemplate(all, "util.print"), QPointF(300, 0));
+    fg::NodeId p4 = f.scene.addNodeFromTemplate(*findTemplate(all, "util.print"), QPointF(600, 0));
+    f.scene.sync();
+    QString why;
+    CHECK(f.scene.connectPins(pinOf(f.scene, 2, "Then", fg::PinDir::Out), pinOf(f.scene, p3, "In", fg::PinDir::In), &why));
+    CHECK(f.scene.connectPins(pinOf(f.scene, p3, "Then", fg::PinDir::Out), pinOf(f.scene, p4, "In", fg::PinDir::In), &why));
+    const size_t links = f.graph().connections.size();
+    CHECK(!f.scene.connectPins(pinOf(f.scene, p4, "Then", fg::PinDir::Out), pinOf(f.scene, 2, "In", fg::PinDir::In), &why));
+    CHECK(why.contains("endless loop"));
+    CHECK_EQ(f.graph().connections.size(), links);
+    // with a Delay in it the loop repeats every second: allowed
+    fg::NodeId d = f.scene.addNodeFromTemplate(*findTemplate(all, "flow.delay"), QPointF(900, 0));
+    f.scene.sync();
+    CHECK(f.scene.connectPins(pinOf(f.scene, p4, "Then", fg::PinDir::Out), pinOf(f.scene, d, "In", fg::PinDir::In), &why));
+    CHECK(f.scene.connectPins(pinOf(f.scene, d, "Then", fg::PinDir::Out), pinOf(f.scene, 2, "In", fg::PinDir::In), &why));
+    CHECK(f.doc.program()->ok());
+    // data: Add1 -> Add2 -> Add1 is a value made of itself
+    fg::NodeId a1 = f.scene.addNodeFromTemplate(*findTemplate(all, "math.add"), QPointF(0, 300));
+    fg::NodeId a2 = f.scene.addNodeFromTemplate(*findTemplate(all, "math.add"), QPointF(300, 300));
+    f.scene.sync();
+    CHECK(f.scene.connectPins(pinOf(f.scene, a1, "Result", fg::PinDir::Out), pinOf(f.scene, a2, "A", fg::PinDir::In), &why));
+    f.scene.sync();
+    why.clear();
+    CHECK(!f.scene.connectPins(pinOf(f.scene, a2, "Result", fg::PinDir::Out), pinOf(f.scene, a1, "B", fg::PinDir::In), &why));
+    CHECK(why.contains("depend on itself"));
+    CHECK(f.doc.program()->ok());
+}
+
+// An enum literal shows its value in its title, and the Details panel chooses it.
+TEST(enum_literal_value_is_shown_and_chosen) {
+    Fixture f;
+    const fg::NodeTemplate* friday = nullptr;
+    auto all = f.palette();
+    for (auto& t : all)
+        if (t.title == "Weekday.Friday") friday = &t;
+    CHECK(friday != nullptr);
+    if (!friday) return;
+    fg::NodeId id = f.scene.addNodeFromTemplate(*friday, QPointF(0, 300));
+    f.scene.sync();
+    CHECK_EQ(f.doc.compiledGraph("EventGraph")->findNode(id)->title, std::string("Weekday.Friday"));
+    DetailsPanel details(&f.doc);
+    details.show();
+    details.showNodes("EventGraph", {id});
+    QCoreApplication::processEvents();
+    QComboBox* value = nullptr;
+    for (auto* c : details.findChildren<QComboBox*>())
+        if (c->currentText() == "Friday") value = c;
+    CHECK(value != nullptr);
+    if (!value) return;
+    CHECK_EQ(value->count(), 7);
+    const int sunday = value->findText("Sunday");
+    value->setCurrentIndex(sunday);
+    emit value->activated(sunday);
+    QCoreApplication::processEvents();
+    CHECK_EQ(f.graph().findNode(id)->prop("value"), std::string("Sunday"));
+    CHECK_EQ(f.doc.compiledGraph("EventGraph")->findNode(id)->title, std::string("Weekday.Sunday"));
+}
+
+// The Ref / Const check boxes of a parameter table can be seen when they are not checked, on both kinds of rows.
+TEST(unchecked_boxes_are_visible_on_every_row) {
+    Fixture f;
+    f.doc.edit("Function", [](fg::Script& s) {
+        s.addFunction("Fn", {{"A", "int", false, false, fg::Value()}, {"B", "int", false, false, fg::Value()}, {"C", "int", true, false, fg::Value()}});
+    });
+    DetailsPanel details(&f.doc);
+    details.resize(500, 600);
+    details.show();
+    details.showGraph("Fn");
+    QCoreApplication::processEvents();
+    QTableWidget* table = nullptr;
+    for (auto* t : details.findChildren<QTableWidget*>())
+        if (t->rowCount() == 3) table = t;
+    CHECK(table != nullptr);
+    if (!table) return;
+    const QImage img = table->viewport()->grab().toImage();
+    auto distance = [](QColor a, QColor b) { return std::abs(a.red() - b.red()) + std::abs(a.green() - b.green()) + std::abs(a.blue() - b.blue()); };
+    int boxes = 0;
+    for (int row = 0; row < 2; ++row)                       // A and B: nothing checked; row 0 is a plain row, row 1 an alternate one
+        for (int col = 0; col < table->columnCount(); ++col) {
+            QTableWidgetItem* it = table->item(row, col);
+            if (!it || !(it->flags() & Qt::ItemIsUserCheckable)) continue;
+            const QRect r = table->visualRect(table->model()->index(row, col));
+            const QColor bg = img.pixelColor(r.left() + 1, r.top() + 1);
+            int contrast = 0;
+            for (int y = r.top(); y <= r.bottom(); ++y)
+                for (int x = r.left(); x <= r.right(); ++x)
+                    if (distance(img.pixelColor(x, y), bg) > 90) ++contrast;
+            CHECK(contrast >= 12);                          // the frame of the box (a few dozen pixels)
+            ++boxes;
+        }
+    CHECK(boxes >= 4);                                      // Ref and Const of two rows
+}
+
 TEST(connecting_replaces_existing_link) {
     Fixture f;
     auto all = f.palette();

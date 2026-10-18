@@ -149,10 +149,17 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
   Switch on Int / String / any enum (*Switch on Mood*), Do Once, Gate (Enter / Open / Close / Toggle) and Flip Flop. Do Once,
   Gate and Flip Flop remember their state for the life of the instance (`NodeCtx::nodeState`; `Instance::resetVariables` forgets it).
   For Each and For Each Entry have a *Descending* input: last element (greatest key) first; Index stays the element's position.
+* Delay waits at the node: the next node runs when the time is up, and that is when the link out of the Delay fires (the editor
+  animates it then). Loops: a link that would make a value depend on itself (pure data nodes in a cycle) or an execution loop with
+  no way out (no Branch, Delay or other flow node in it) is refused by the editor, and the compiler warns about such a loop in a
+  script from a file. A loop through a Delay (repeat every second) or a Branch (a way out) is fine. A custom node that waits sets
+  `NodeDef::waits`.
+* An enum literal (*Weekday.Friday* in the palette) shows its value in its title; *Details > Value* chooses another one.
 * Print String, Print Warning and Print Error write to the log at their level (the Output Log colours them; `flow` writes
   warnings and errors to stderr). Print Error does not stop the script.
 * Time: a timestamp is seconds since 1970-01-01 00:00 UTC as a float (milliseconds included). *Now* and *Seconds Since Start*
-  (a steady clock of the instance, for measuring) are exec nodes, one reading per run. *Break Date Time* / *Make Date Time*
+  (a steady clock of the instance, for measuring) are pure: the clock is read when a node needs the value (after a Delay that
+  is a new reading). Dates from year -1000000 to 1000000; beyond that a script error. *Break Date Time* / *Make Date Time*
   convert to and from year, month, day, hour, minute, second, millisecond (plus the Weekday enum and the day of the year), in
   local time or UTC; out of range values carry over (month 13 is January). *Format Date Time* writes `%Y-%m-%d %H:%M:%S`
   style text (`%f` milliseconds, `%A` weekday, `%B` month, `%z` offset...; unknown codes are kept as they are), *Parse Date

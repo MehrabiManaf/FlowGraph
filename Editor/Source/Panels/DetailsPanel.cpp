@@ -451,12 +451,36 @@ public:
         o.text.clear();
         QStyle* style = o.widget ? o.widget->style() : QApplication::style();
         style->drawControl(QStyle::CE_ItemViewItem, &o, painter, o.widget);
-        QStyleOptionButton b;
+        // Drawn here rather than by the style: the style's box takes its colours from the palette's Base / Window, which are the
+        // colours of the rows themselves, so an unchecked box vanished on one kind of row. This frame contrasts with every row.
         const int w = style->pixelMetric(QStyle::PM_IndicatorWidth, &o, o.widget), h = style->pixelMetric(QStyle::PM_IndicatorHeight, &o, o.widget);
-        b.rect = QRect(o.rect.center().x() - w / 2, o.rect.center().y() - h / 2, w, h);
-        b.state = (o.state & QStyle::State_Enabled) | (checked ? QStyle::State_On : QStyle::State_Off);
-        b.palette = o.palette;
-        style->drawPrimitive(QStyle::PE_IndicatorCheckBox, &b, painter, o.widget);
+        const int side = std::min(w, h);
+        const QRectF box(o.rect.center().x() - side / 2.0 + 0.5, o.rect.center().y() - side / 2.0 + 0.5, side - 1, side - 1);
+        const bool enabled = o.state & QStyle::State_Enabled;
+        QColor frame = o.palette.color(QPalette::Text);
+        frame.setAlpha(enabled ? 150 : 70);
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing);
+        if (checked) {
+            QColor fill = o.palette.color(QPalette::Highlight);
+            if (!enabled) fill.setAlpha(110);
+            painter->setPen(QPen(fill.lighter(115), 1));
+            painter->setBrush(fill);
+            painter->drawRoundedRect(box, 2.5, 2.5);
+            QPen tick(o.palette.color(QPalette::HighlightedText), 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter->setPen(tick);
+            painter->setBrush(Qt::NoBrush);
+            const QPointF pts[] = {{box.left() + box.width() * 0.22, box.top() + box.height() * 0.52},
+                                   {box.left() + box.width() * 0.43, box.top() + box.height() * 0.73},
+                                   {box.left() + box.width() * 0.79, box.top() + box.height() * 0.30}};
+            painter->drawPolyline(pts, 3);
+        } else {
+            QColor fill = o.palette.color(QPalette::Base).darker(130);
+            painter->setPen(QPen(frame, 1));
+            painter->setBrush(fill);
+            painter->drawRoundedRect(box, 2.5, 2.5);
+        }
+        painter->restore();
     }
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
@@ -899,6 +923,17 @@ void DetailsPanel::buildNodes() {
                     mutateNode([&](fg::Node& n) { n.props[key] = std::to_string(v); }, "Change " + label.toLower(), qs(key) + ":" + graph + QString::number(id));
                 });
                 editor = sp;
+            } else if (setting.kind == fg::NodeSetting::Kind::Choice) {
+                auto* combo = new QComboBox;
+                for (auto& c : setting.choices) combo->addItem(qs(c));
+                const QString current = qs(node->prop(key, setting.def));
+                if (combo->findText(current) < 0) combo->addItem(current);      // a value the definition does not have (any more)
+                combo->setCurrentText(current);
+                connect(combo, qOverload<int>(&QComboBox::activated), this, [=](int i) {
+                    const std::string v = ss(combo->itemText(i));
+                    mutateNode([&](fg::Node& n) { n.props[key] = v; }, "Change " + label.toLower(), QString());
+                });
+                editor = combo;
             } else {
                 // one text per line; applied when the editor loses the focus, so that a case being typed does not rename its pin at every key
                 auto* te = new LinesEdit;
