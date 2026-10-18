@@ -28,6 +28,7 @@ public:
 private:
     double AnimationProgress() const { return m_AnimationProgress; }
     void SetAnimationProgress(const double& Progress);
+    int ComputedHeight() const;
 
     void resizeEvent(QResizeEvent* pEvent) override;
     QSize sizeHint() const override;

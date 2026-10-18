@@ -1743,6 +1743,8 @@ TEST(adding_a_parameter_keeps_the_function_details_visible) {
     }
     const fg::Graph* g = f.win.document()->graph("NewFunction");
     CHECK(g && g->inputs.size() == 2 && g->outputs.size() == 1);
+    // the signature shown next to the function's name in the list follows its inputs, like it follows its name
+    CHECK_EQ(functions->topLevelItem(0)->text(1), QString("(Input, Input1)"));
 }
 
 TEST(renaming_a_function_in_the_list_keeps_the_details_in_sync) {
@@ -1931,6 +1933,24 @@ TEST(typing_in_a_pin_editor_resizes_the_node_live) {
     QCoreApplication::processEvents();
     CHECK(std::abs(n->boundingRect().width() - widthBefore) < 1.0);
     CHECK(std::abs(n->pinScenePos("Then", fg::PinDir::Out).x() - outBefore) < 1.0);
+}
+
+// The panel's sizeHint() must track AnimationProgress, not just whether it is checked: the enclosing layout reads
+// sizeHint() to place the row below it, and if that jumps to its final value before the real height has animated
+// there too, the row below moves into place early and visibly overlaps the still-animating panel.
+TEST(collapsible_panel_size_hint_follows_the_animation) {
+    CCollapsiblePanel panel("Section", nullptr, false);
+    QWidget& base = panel;         // sizeHint() is a private override: call it through the public QWidget interface
+    auto* content = new QWidget;
+    content->setFixedHeight(100);
+    panel.AddWidget(content);
+    panel.show();
+    QCoreApplication::processEvents();
+    CHECK_EQ(base.sizeHint().height(), panel.height());
+    for (double progress : {0.0, 0.25, 0.5, 0.75, 1.0}) {
+        panel.setProperty("AnimationProgress", progress);
+        CHECK_EQ(base.sizeHint().height(), panel.height());
+    }
 }
 
 TEST(palette_search_keeps_the_category_tree) {

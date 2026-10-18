@@ -235,7 +235,11 @@ void MyScriptPanel::refresh() {
     auto events = collectEvents();
     // signature of everything that is displayed: skip the rebuild when nothing changed (keeps editors open)
     QString sig = localsGraph_ + "#";
-    for (auto& g : s.graphs) sig += qs(g.name) + (g.kind == fg::GraphKind::Event ? "E" : "F") + "|";
+    for (auto& g : s.graphs) {
+        sig += qs(g.name) + (g.kind == fg::GraphKind::Event ? "E" : "F") + "|";
+        if (g.kind == fg::GraphKind::Function)      // the "(...)" shown next to the function's name follows its inputs
+            for (auto& p : g.inputs) sig += qs(p.name) + ":" + qs(p.type) + ",";
+    }
     for (auto& v : s.variables) sig += qs(v.name) + ":" + qs(v.type) + "|";
     if (auto* g = s.findGraph(ss(localsGraph_)))
         for (auto& v : g->locals) sig += "L" + qs(v.name) + ":" + qs(v.type) + "|";

@@ -133,16 +133,21 @@ void CCollapsiblePanel::SetAnimationProgress(const double& Progress)
     if((Progress < 0.0) || (Progress > 1.0) /*|| (Progress == m_AnimationProgress)*/)
         return;
     m_AnimationProgress = Progress;
-    // update height
+    setFixedHeight(ComputedHeight());
+    mp_Icon->RotateIcon(m_AnimationProgress * 90);
+}
+
+// The height the panel must have right now, between the collapsed and the fully expanded height according to
+// m_AnimationProgress. sizeHint() uses the same formula: the enclosing layout must always agree with the actual,
+// still-animating height, or the row below starts the move to its final position before this panel has shrunk (or
+// grown) to match, and the two widgets overlap for the rest of the animation.
+int CCollapsiblePanel::ComputedHeight() const
+{
     int CollapsedHeight = mp_PanelButton->sizeHint().height();
     int ExpandedHeight = CollapsedHeight;
     if(mp_Contents->layout()->count() > 0)
         ExpandedHeight += mp_Contents->sizeHint().height();
-    int ComputedHeight = CollapsedHeight + (m_AnimationProgress * (ExpandedHeight - CollapsedHeight));
-    // setMaximumHeight(ComputedHeight);
-    // setMinimumHeight(ComputedHeight);
-    setFixedHeight(ComputedHeight);
-    mp_Icon->RotateIcon(m_AnimationProgress * 90);
+    return CollapsedHeight + (m_AnimationProgress * (ExpandedHeight - CollapsedHeight));
 }
 
 void CCollapsiblePanel::resizeEvent(QResizeEvent* pEvent)
@@ -159,8 +164,7 @@ void CCollapsiblePanel::resizeEvent(QResizeEvent* pEvent)
 QSize CCollapsiblePanel::sizeHint() const
 {
     QSize SizeHint = mp_PanelButton->sizeHint();
-    if(mp_PanelButton->isChecked() && mp_Contents->layout()->count() > 0)
-        SizeHint.setHeight(SizeHint.height() + mp_Contents->sizeHint().height());
+    SizeHint.setHeight(ComputedHeight());
     return SizeHint;
 }
 
