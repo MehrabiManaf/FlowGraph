@@ -179,6 +179,7 @@ CollapseResult collapseToFunction(Script& script, const Registry& reg, const std
     std::vector<Node> moved;
     for (NodeId id : sel) moved.push_back(*g->findNode(id));
     Graph& fn = script.addFunction(name, inputs, outputs);       // a deque: `g` stays valid
+    fn.connections.clear();                                      // addFunction links its entry to its return: the links come from the selection
     NodeId entryId = 0, returnId = 0;
     for (auto& n : fn.nodes) {
         if (n.def == "func.entry") { entryId = n.id; n.x = 0; n.y = 100; }
@@ -226,12 +227,16 @@ CollapseResult collapseToFunction(Script& script, const Registry& reg, const std
         if (!used) g->nodes.erase(std::remove_if(g->nodes.begin(), g->nodes.end(), [&](const Node& n) { return n.id == id; }), g->nodes.end());
     }
 
-    // a safety net: the script must not get compile errors it did not have
+    // a safety net: the script must not get compile errors or warnings it did not have (the ones of the moved nodes move with them)
     const auto after = compile(script, reg);
-    if (after->hasErrors && !before->hasErrors) {
-        std::string why = "the result would not compile";
+    auto count = [](const Program& p, Diagnostic::Severity s) {
+        return std::count_if(p.diagnostics.begin(), p.diagnostics.end(), [&](const Diagnostic& d) { return d.severity == s; });
+    };
+    for (auto sev : {Diagnostic::Severity::Error, Diagnostic::Severity::Warning}) {
+        if (count(*after, sev) <= count(*before, sev)) continue;
+        std::string why = sev == Diagnostic::Severity::Error ? "the result would not compile" : "the result would have a new warning";
         for (auto& d : after->diagnostics)
-            if (d.severity == Diagnostic::Severity::Error) { why += ": " + d.message; break; }
+            if (d.severity == sev) { why += ": " + d.message; break; }
         script = backup;
         return fail(why);
     }

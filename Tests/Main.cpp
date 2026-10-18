@@ -2902,6 +2902,34 @@ TEST(collapse_to_function_keeps_what_the_script_does) {
     CHECK(eg.findNode(getTotal) == nullptr);                              // it fed nothing else
     CHECK_EQ(eg.nodes.size(), size_t(5));                                 // event, call, Mul, Set Double, Print end
     CHECK_EQ(runIt(s), expected);
+    CHECK_EQ(Script::parse(s.toText()).toText(), s.toText());
+    // no exec output has two links, and the result compiles without a diagnostic of any kind
+    auto execOutsLinkedOnce = [&](const Script& sc) {
+        auto prog = rt.compile(sc);
+        for (auto& g : sc.graphs) {
+            std::map<std::pair<NodeId, std::string>, int> links;
+            for (auto& c : g.connections) {
+                const CompiledNode* cn = prog->findGraph(g.name)->findNode(c.fromNode);
+                const CompiledPin* p = cn ? cn->findPin(c.fromPin, PinDir::Out, PinKind::Exec) : nullptr;
+                if (p && ++links[{c.fromNode, c.fromPin}] > 1) return false;
+            }
+        }
+        return prog->diagnostics.empty();
+    };
+    CHECK(execOutsLinkedOnce(s));
+    // the default script of the standard applications: an event and one Print String; collapse the Print
+    {
+        GoGraph one;
+        NodeId p = one.say("hello");
+        one.link(one.ev, "Then", p, "In");
+        CollapseResult r = collapseToFunction(one.s, rt.registry(), "EventGraph", {p}, "Hello");
+        CHECK(r.ok);
+        const Graph* hg = one.s.findGraph("Hello");
+        CHECK(hg && hg->connections.size() == 1);                        // entry -> Print, nothing else (no entry -> Return)
+        CHECK(execOutsLinkedOnce(one.s));
+        GoRun run(rt, one.s);
+        CHECK_EQ(run.go(), std::string("hello,"));
+    }
 
     // a value computed outside that reads what the selection changes becomes an input: the function sees the value of the call
     {
