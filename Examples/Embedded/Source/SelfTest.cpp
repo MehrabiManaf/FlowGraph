@@ -32,7 +32,6 @@ bool waitFor(const std::function<bool()>& done, int timeoutMs = 10000) {
     }
     return true;
 }
-void pause(int ms) { waitFor([] { return false; }, ms); }
 
 // The table has handled `n` messages (the run started and caught up) and shows what they produced.
 bool caughtUp(TableDock* t, int n) { return t->processed() == n && !t->busy(); }

@@ -757,7 +757,7 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
                     if (n) fn(inputs ? n->inputs : n->outputs, *gr);
                 }, QString(), true);
             };
-            auto apply = [=](std::vector<fg::ParamDecl> np) {
+            auto apply = [this, fixedNames, dir, id, change](std::vector<fg::ParamDecl> np) {
                 std::set<std::string> names = fixedNames;
                 for (auto& p : np)
                     if (p.name.empty() || !names.insert(p.name).second) {

@@ -108,6 +108,8 @@ public:
 
     struct Options {
         bool serial = false;           // one task at a time, in the order the events were posted (see Executor::setSerial)
+        Options() {}                   // GCC rejects the implicit default ctor here: a default member initializer in a
+                                        // nested class can't be used by a default argument of the enclosing class.
     };
 
     // `debugger` (optional, not owned) keeps its breakpoints across runs; its callbacks are taken over.

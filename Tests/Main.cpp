@@ -2253,7 +2253,8 @@ TEST(nodes_can_have_custom_pins_next_to_the_fixed_ones) {
     CHECK_EQ(inst.getVariable("Result").toInt(), int64_t(112));          // 100 + 5 + 7
 
     // the pins are part of the script file; a node without custom pins keeps the old file format
-    CHECK(!s.toJson()["graphs"][size_t(0)]["nodes"][size_t(0)].has("inputs"));
+    const Json json = s.toJson();         // const: avoids an ambiguous operator[](size_t)/operator[](const char*) overload pick
+    CHECK(!json["graphs"][size_t(0)]["nodes"][size_t(0)].has("inputs"));
     Script back = Script::parse(s.toText());
     const Node* n = back.graphs[0].findNode(sum);
     CHECK(n && n->inputs.size() == 2 && n->inputs[0].name == "A" && n->inputs[0].def.toInt() == 5 && n->outputs.size() == 1);
