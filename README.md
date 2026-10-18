@@ -295,7 +295,7 @@ The editor has two modes, chosen by `EditorHost::mode()`:
 | Variables | drag a variable from *My Script* onto the canvas (Ctrl = Get, Alt = Set, otherwise a menu) |
 | Edit | Ctrl+Z / Ctrl+Y, Ctrl+C / X / V, Ctrl+D duplicate, Del delete, `C` add comment box (wraps the selection) |
 | Navigate | wheel zooms, middle / right drag pans, Home frames everything |
-| Refactor | *Edit > Collapse to Function* (or right-click a node) moves the selected nodes into a new function and calls it in their place: links that come in become inputs (a *Get* of a variable is copied in, so it keeps reading the live value), links that go out become outputs; the execution must enter at one pin and leave towards one place. One undo step |
+| Refactor | *Edit > Collapse to Function* (or right-click a node) moves the selected nodes (two or more) into a new function and calls it in their place: links that come in become inputs (a *Get* of a variable is copied in, so it keeps reading the live value), links that go out become outputs; the execution must enter at one pin and leave towards one place. One undo step |
 | Files | *File > Open Recent* lists the last 10 scripts opened or saved (per application) |
 | Find | Ctrl+F finds nodes by title, comment or value in every graph; Shift+F12 (or right-click > *Find References*) lists the nodes that use the selected variable or function, or the nodes of the selected kind; double-click a result to go there |
 | Run | F5 (or F6) runs the entry chosen in the toolbar; the same button pauses the running script and continues a paused one; Shift+F5 stop |
