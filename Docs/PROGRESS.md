@@ -158,3 +158,45 @@ Rules to keep it correct:
   corner while the user drags them (NodeItem::itemChange, only while the left button is down and not during sync), new nodes snap where they
   are placed, Alt while dragging moves freely. Comments are not snapped. Tests: snap_to_grid_places_and_moves_nodes_on_the_grid,
   view_menu_snap_to_grid_switches_every_graph.
+
+## Robustness, tooling and language round (2026-10-18)
+- Files: `.flow` / `.flowlaunch` files of a newer `version` are refused (Script::kFileVersion; migrations go in Script::fromJson).
+- Plugins: FG_PLUGIN also exports `fgPluginAbi` (PluginAbi: ABI version FG_PLUGIN_ABI_VERSION, compiler family, Debug/Release flavour,
+  hash of shared class sizes); Runtime::loadPlugin refuses a mismatch or a plugin without it, with the reason. A library that failed to
+  load is no longer remembered as loaded. Test plugins: Tests/AbiPlugin.cpp -> bin/testplugins.
+- Integers: + - * negate abs wrap around through addInt / subInt / mulInt / negInt (Value.hpp) instead of signed overflow (UB).
+- Build: CMakePresets.json (windows-*, linux-*, core-only; QT_DIR), build.bat finds VS with vswhere, CI in .github/workflows/ci.yml
+  (MSVC, GCC, core under ASan/UBSan). `.gitattributes` keeps .bat files CRLF. vcvars64 itself prints "'vswhere.exe' is not recognized": harmless.
+- Nodes: Switch on Int / String / Enum, Do Once, Gate, Flip Flop, For Each Entry, Format (custom inputs), String Trim / Starts With /
+  Ends With / Find / Is Empty, Array Sort / Reverse / Slice / Remove Item / Is Empty, Math Pi / Asin / Acos / Atan / Atan2 / Exp / Log.
+  VM: NodeCtx::entryPin (Frame::entryPin, set by follow), NodeCtx::nodeState (per instance, cleared by resetVariables),
+  NodeDef::settings (Count / Lines) edited generically in Details (Lines apply on focus out).
+- Find: Core Search.hpp (findReferences, referenceTargetOf, searchScript); editor Find Results dock (tab of Output Log), Edit > Find in
+  Script (Ctrl+F), Find References (Shift+F12, node and My Script context menus). A saved dock layout records its docks
+  ("editor/layoutDocks"); a dock newer than the layout is added where it belongs.
+- Async: a host function returning std::future / std::shared_future is latent (FunctionDesc::latent / start, PendingCall); its node
+  uses NodeCtx::waitThenResume (wait, then re-run with Continuation::native kept) and is never pure.
+- Hot reload: Instance / Executor / AsyncExecutor::reload(program) -> ReloadReport; variables kept by name (converted / reset when the
+  type changed), node state kept by graph name + node id, waiting / paused tasks aborted (Task::program_ keeps their program alive).
+- Speed: interleaved best-of runs vs the previous commit are within this machine's noise (total +1..2% plain, +4..7% with a debugger,
+  no benchmark consistently slower).
+
+## Second round (2026-10-18): random, limits, collapse, recent files, reference, exports, install
+- Random Int / Float are exec nodes (one number per run, read by every connected pin); the generator is per instance
+  (Instance::random, Math.Set Random Seed). New compiler warning: an exec node whose outputs are used but that is not in the execution flow.
+- Limits (Instance::Limits: maxContainerSize, maxStringLength, maxTaskSeconds; checked in NodeCtx::out, Array Add / Insert, Map Set - run
+  and intrinsics alike - and every 1024 nodes / at the start of each run() for the time) and CompileOptions::allowNode.
+- Collapse to Function (Core Refactor.hpp collapseToFunction; Edit menu / node context menu): one exec entry, one exec exit, data in ->
+  inputs, data out -> outputs; a Get of a script variable that feeds the selection is COPIED in (an input would be a snapshot and change
+  what the script does when the selection sets the variable); refusals leave the script unchanged; the result must compile.
+- File > Open Recent (QSettings "editor/recentFiles/<application>", 10 entries). The menu is rebuilt with deleteLater, not clear(): it
+  is rebuilt while one of its actions is triggered.
+- Node reference: Core Reference.hpp nodeReferenceMarkdown; `flow --reference [file]`, `flow --no-plugins`; Docs/NodeReference.md
+  (target node_reference; CI checks it is current).
+- Exports: no CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS; generated FlowGraph/Export.hpp and FlowGraphEditor/Export.hpp (FG_CORE_EXPORT,
+  FG_EDITOR_EXPORT), hidden visibility on GCC / Clang. Core 7753 -> 527 exported symbols, editor 7311 -> 59. Rules: mark classes with
+  out-of-line members, exception classes and polymorphic bases; nested classes and out-of-line friends need their own mark; an exported
+  class must not have implicitly copyable members that cannot be copied (Task deletes its copy). The editor tests compile the editor
+  sources with FG_EDITOR_STATIC_DEFINE.
+- Install: `cmake --install <build> --prefix <dir> --component FlowGraph` (KDDockWidgets' own rules are in another component);
+  FlowGraphConfig.cmake (FlowGraph::Core, FlowGraph::ScriptEditor), Tests/Consumer is built against an install in CI.

@@ -38,6 +38,31 @@ Tools\build.bat Release        # configures with Ninja and builds everything int
 ```
 `FG_BUILD_EDITOR`, `FG_BUILD_TESTS` and `FG_BUILD_EXAMPLES` switch parts off. The runtime has no Qt dependency; `flow`
 needs only the runtime. (`build.bat` builds Release unless you pass `Debug`: rebuild the configuration you launch.)
+`build.bat` finds Visual Studio 2022 (any edition) with `vswhere` and takes Qt from `QT_DIR` (default `C:\Qt\6.9.0\msvc2022_64`).
+
+CMake presets do the same on every platform (`QT_DIR` names the Qt kit; builds go to `build/<preset>`):
+```
+cmake --preset windows-release      # or linux-release, windows-debug, linux-debug
+cmake --build --preset windows-release
+ctest --preset windows-release
+cmake --preset core-only            # the runtime, flow, tests and examples without Qt
+```
+CI (`.github/workflows/ci.yml`) builds and tests everything with MSVC on Windows and GCC on Linux, and the runtime alone under
+AddressSanitizer / UndefinedBehaviorSanitizer.
+
+### Installing, and using FlowGraph from another CMake project
+
+```
+cmake --install build/Release --prefix C:/FlowGraph --component FlowGraph
+```
+installs the libraries, their headers, `flow` / `flowstudio` and a CMake package. A host project then only needs
+```cmake
+find_package(FlowGraph 0.2 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
+target_link_libraries(myapp PRIVATE FlowGraph::Core FlowGraph::ScriptEditor)
+```
+with `CMAKE_PREFIX_PATH` pointing at the prefix (and at Qt). `Tests/Consumer` is such a project; CI builds it against an install.
+Only the public API is exported from the libraries (`FG_CORE_EXPORT` / `FG_EDITOR_EXPORT`, generated `Export.hpp`); everything
+else stays inside them, also on Linux (hidden visibility). The editor is installed when it is built as a shared library (FG_SHARED).
 
 ```
 build\Release\bin\flow.exe Examples\Scripts\hello.flow a b c
@@ -52,6 +77,8 @@ build\Release\bin\FlowGraphEditorTests.exe
 flow [options] script.flow [arguments...]
   --check          load and compile the script, but do not run it
   --plugins DIR    load the plugins in DIR as well (repeatable)
+  --no-plugins     skip FLOW_PLUGIN_PATH and the plugins folder
+  --reference [F]  write the Markdown reference of every node, event, class and enum (plugins included) and exit
   --launch NAME    use configuration NAME of script.flowlaunch (arguments, environment, working directory, plugins)
 ```
 
@@ -114,13 +141,69 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
 * Classes, enums, methods, properties, constructors, free functions and events become nodes automatically
   (`fn:`, `m:`, `get:`/`set:`, `new:`, `cast:`, `enum:`, `event:` node ids). Inheritance (also multiple) is honoured. Enum
   values print by name and may be given by name in scripts (`"default": "Sad"`).
+* **[Docs/NodeReference.md](Docs/NodeReference.md)** lists every built-in node with its pins, types and defaults (regenerate it with
+  `cmake --build build/Release --target node_reference`). An application writes its own, plugins and classes included, with
+  `fg::nodeReferenceMarkdown(registry)`; `flow --reference` does it for the standard applications.
 * The For Loop node visits `First <= Index < Last` (Last is excluded).
+* Flow nodes: Branch, Sequence, For Loop, For Each, For Each Entry (maps, in key order), While, Break, Delay, Select,
+  Switch on Int / String / any enum (*Switch on Mood*), Do Once, Gate (Enter / Open / Close / Toggle) and Flip Flop. Do Once,
+  Gate and Flip Flop remember their state for the life of the instance (`NodeCtx::nodeState`; `Instance::resetVariables` forgets it).
+* Random Int / Random Float are exec nodes: each run draws one number that every connected pin reads. The numbers come from the
+  instance (`Instance::random()`); *Set Random Seed* makes a run repeatable on any thread. The compiler warns about an exec node
+  whose results are used but that is not connected to the execution flow (its outputs would keep their defaults).
+* Format (`"{Name} is {Age}"`): add an input per placeholder in *Details > Inputs*; `{{` and `}}` are literal braces.
+* Settings of a node (pin counts, the cases of a Switch on String) are described by `NodeDef::settings` and edited in *Details*;
+  a custom node gets the same editors by declaring them. A node with several exec inputs asks `NodeCtx::entryPin()` which one fired.
 * Nodes are generic where it makes sense (`T` in Add / Select / For Each / array and map nodes); the type is inferred from
   the connections. Function parameters can be passed by value, by reference or as const (checked at compile time).
 * Plugins are shared libraries exporting `FG_PLUGIN(reg) { ... }` (see `Plugins/ExamplePlugin`): `loadPlugin`,
   `loadPluginsFrom(dir)`, `loadPluginsFromPathList("a;b")`, `loadPluginsFromEnvironment("VAR")`. Build them with the same
-  compiler and FlowGraphCore version. A plugin that is reachable through several directories is loaded once.
+  compiler and FlowGraphCore version: `FG_PLUGIN` also exports how the plugin was built (plugin ABI version, compiler family,
+  Debug / Release runtime, sizes of the shared classes) and the loader refuses a plugin that does not match, with the reason,
+  instead of crashing later. A plugin that is reachable through several directories is loaded once.
 * Custom nodes: `registry.addNode(fg::NodeDef{...})` with pins, optional dynamic pins and a `run` callback.
+* **Asynchronous functions.** A function that returns a `std::future<T>` (or `std::shared_future<T>`) becomes a node that waits:
+  ```cpp
+  rt.registry().addFunction("Net.Get", [](const std::string& url) {
+      return std::async(std::launch::async, [url] { return httpGet(url); });     // copy what the work needs
+  }, {"Url"});
+  ```
+  The task waits like a Delay (the thread does not: `callEvent` returns with the task waiting, `tick` / `Executor::pump` / the
+  `AsyncExecutor` poll it every 10 ms) and goes on with the result; an exception of the work is a script error at the node. Such a
+  node is never pure. Called from C++ (`FunctionDesc::invoke`) the function waits for its result. A custom node gets the same
+  behaviour with `NodeCtx::waitThenResume(poll)`, which runs the node again when the wait is over.
+
+### Scripts you do not trust
+
+A script that comes from somewhere else (a user, the network) can be kept in bounds; all of this is off by default:
+
+```cpp
+fg::CompileOptions opts;                                       // which nodes a script may use at all
+opts.allowNode = [](const fg::NodeDef& d) { return d.source != "FilesPlugin"; };
+auto program = rt.compile(script, opts);                       // a refused node is a compile error
+
+fg::Instance::Limits lim;
+lim.maxContainerSize = 100'000;                                // elements of one array / map
+lim.maxStringLength = 1 << 20;                                 // bytes of one string
+lim.maxTaskSeconds = 0.5;                                      // time one task may spend executing nodes
+instance.setLimits(lim);
+instance.setStepLimit(10'000'000);                             // nodes per run (default 50 million)
+instance.setMaxCallDepth(64);                                  // nested function calls (default 256)
+```
+A script that goes beyond a limit fails with a script error at the node that did it; the host goes on.
+
+### Hot reload
+
+A host that keeps a script running (a game level, a server) can swap in a changed script without losing its state:
+
+```cpp
+auto report = instance.reload(rt.compile(changedScript));   // or executor.reload(...) / asyncExecutor.reload(...)
+if (!report.ok()) log(report.error);                          // compile errors, another registry...: nothing changed
+```
+Variables that still exist keep their values (converted when their type changed, `report.reset` lists the ones that could not be),
+new ones get their defaults, and Do Once / Gate / Flip Flop nodes that are still there keep their state. Tasks of the old program
+that wait or are paused are aborted (`report.abortedTasks`); the executors report them to their completion handlers before
+`reload` returns. Call it between events, not from inside a running script.
 
 ### The standard application
 
@@ -212,12 +295,16 @@ The editor has two modes, chosen by `EditorHost::mode()`:
 | Variables | drag a variable from *My Script* onto the canvas (Ctrl = Get, Alt = Set, otherwise a menu) |
 | Edit | Ctrl+Z / Ctrl+Y, Ctrl+C / X / V, Ctrl+D duplicate, Del delete, `C` add comment box (wraps the selection) |
 | Navigate | wheel zooms, middle / right drag pans, Home frames everything |
+| Refactor | *Edit > Collapse to Function* (or right-click a node) moves the selected nodes into a new function and calls it in their place: links that come in become inputs (a *Get* of a variable is copied in, so it keeps reading the live value), links that go out become outputs; the execution must enter at one pin and leave towards one place. One undo step |
+| Files | *File > Open Recent* lists the last 10 scripts opened or saved (per application) |
+| Find | Ctrl+F finds nodes by title, comment or value in every graph; Shift+F12 (or right-click > *Find References*) lists the nodes that use the selected variable or function, or the nodes of the selected kind; double-click a result to go there |
 | Run | F5 (or F6) runs the entry chosen in the toolbar; the same button pauses the running script and continues a paused one; Shift+F5 stop |
 | Debug | F9 toggles a breakpoint, F10 / F11 / Shift+F11 step over / into / out; hover pins while paused to see values; *Run > Execution speed* slows execution so the animated links are visible |
 
 ## Script file format
 
-`.flow` files are JSON (`Script::toJson`): variables, and graphs of nodes with connections
+`.flow` files are JSON (`Script::toJson`) with `"format": "flowgraph"` and `"version"` (`Script::kFileVersion`; a file of a newer
+version is refused rather than read partially and overwritten): variables, and graphs of nodes with connections
 (`{"from": [nodeId, "Pin"], "to": [nodeId, "Pin"]}`). Script level node ids: `func.entry`, `func.return`, `func.call`, `var.get`,
 `var.set`, `reroute`; events are `event:<Name>`. Nodes of host events (`event:Name`) carry `props.sig`, the
 signature of the event when the script was made. A node of a definition with `customInputs` / `customOutputs` (`NodeDef`) can carry
