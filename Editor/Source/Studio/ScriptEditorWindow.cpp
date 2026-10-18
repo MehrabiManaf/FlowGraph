@@ -73,6 +73,7 @@ ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, Q
     tabs_->setDocumentMode(true);
     setPersistentCentralWidget(tabs_);
 
+    migrateAppSettings();
     createDocks();
     createActions();
     createMenus();
@@ -722,7 +723,36 @@ void ScriptEditorWindow::openPath(const QString& path, bool alreadyAsked) {
 }
 
 // ------------------------------------------------------------------ recent files
-QString ScriptEditorWindow::recentKey() const { return "editor/recentFiles/" + host_.applicationName(); }
+// ------------------------------------------------------------------ settings of this application
+// Several applications embed the editor and share its settings store; what belongs to one of them (its dock layout, its recent
+// files) is kept in a group of its own, apps/<application name>/.
+QString ScriptEditorWindow::appKey(const QString& name) const {
+    QString app = host_.applicationName();
+    app.replace('/', '_').replace('\\', '_');       // a separator would make groups of the name
+    return "apps/" + app + "/" + name;
+}
+
+// Earlier versions kept the dock layout in editor/layout for every application, and the recent files in editor/recentFiles/<app>.
+// They move to the application's group once: the recent files to their own application, the layout to the standalone editor
+// (flowstudio wrote it); an embedded application starts with its own default layout.
+void ScriptEditorWindow::migrateAppSettings() {
+    QSettings s = editorSettings();
+    const QString oldRecent = "editor/recentFiles/" + host_.applicationName();
+    if (s.contains(oldRecent)) {
+        if (!s.contains(appKey("recentFiles"))) s.setValue(appKey("recentFiles"), s.value(oldRecent));
+        s.remove(oldRecent);
+    }
+    if (!embedded_ && s.contains("editor/layout")) {
+        if (!s.contains(appKey("layout"))) {
+            s.setValue(appKey("layout"), s.value("editor/layout"));
+            if (s.contains("editor/layoutDocks")) s.setValue(appKey("layoutDocks"), s.value("editor/layoutDocks"));
+        }
+        s.remove("editor/layout");
+        s.remove("editor/layoutDocks");
+    }
+}
+
+QString ScriptEditorWindow::recentKey() const { return appKey("recentFiles"); }
 
 QStringList ScriptEditorWindow::recentFiles() const { return editorSettings().value(recentKey()).toStringList(); }
 
@@ -970,17 +1000,17 @@ void ScriptEditorWindow::closeEvent(QCloseEvent* e) {
     run_.stop();
     if (persistLayout_) {
         // Before the window closes: afterwards the floating windows and the docks are gone.
-        editorSettings().setValue("editor/layout", KDDockWidgets::LayoutSaver().serializeLayout());
+        editorSettings().setValue(appKey("layout"), KDDockWidgets::LayoutSaver().serializeLayout());
         QStringList names;                 // the docks this layout knows (see restoreSavedLayout)
         for (auto* dock : docks_) names << dock->uniqueName();
-        editorSettings().setValue("editor/layoutDocks", names);
+        editorSettings().setValue(appKey("layoutDocks"), names);
     }
     KDDockWidgets::QtWidgets::MainWindow::closeEvent(e);
 }
 
 void ScriptEditorWindow::restoreSavedLayout() {
     persistLayout_ = true;
-    const QByteArray saved = editorSettings().value("editor/layout").toByteArray();
+    const QByteArray saved = editorSettings().value(appKey("layout")).toByteArray();
     if (saved.isEmpty()) return;
     // The saved sizes replace the initial ones. Set before restoring: the saved layout shows the window, and the first
     // showEvent would otherwise schedule applyInitialSizes().
@@ -991,7 +1021,7 @@ void ScriptEditorWindow::restoreSavedLayout() {
     }
     // A dock that is newer than the saved layout would stay closed: put it where it goes by default. (A layout saved before this list
     // was kept knows the docks the editor had then.) Docks the layout knows keep whatever the user did with them, closed or not.
-    QStringList known = editorSettings().value("editor/layoutDocks").toStringList();
+    QStringList known = editorSettings().value(appKey("layoutDocks")).toStringList();
     if (known.isEmpty()) known = {"My Script", "Details", "Compile Results", "Output Log", "Debugger"};
     if (findDock_ && !known.contains(findDock_->uniqueName()) && logDock_) {
         logDock_->addDockWidgetAsTab(findDock_);

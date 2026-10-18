@@ -1,5 +1,6 @@
 // Tests of the editor logic that do not need a visible window (run with QT_QPA_PLATFORM=offscreen).
 #include "Document.hpp"
+#include "Common/Settings.hpp"
 #include "Graph/GraphScene.hpp"
 #include "Graph/Style.hpp"
 #include "Graph/LinkItem.hpp"
@@ -1228,6 +1229,74 @@ TEST(search_fields_look_the_same) {
         for (QAction* act : e->actions()) leading += !act->icon().isNull();
         CHECK(leading >= 1);                                          // the magnifier (the clear button is not one of these actions)
     }
+}
+
+// Every application that embeds the editor keeps its own dock layout and recent files (QSettings group apps/<application>/);
+// what earlier versions kept under editor/ moves there once (the shared layout to the standalone editor that wrote it).
+struct NamedHost : TestHost {
+    QString name;
+    fged::EditorMode m;
+    NamedHost(fg::Runtime& r, QString n, fged::EditorMode mode) : TestHost(r), name(std::move(n)), m(mode) {}
+    QString applicationName() const override { return name; }
+    fged::EditorMode mode() const override { return m; }
+};
+
+TEST(layout_and_recent_files_are_per_application) {
+    QDir(QDir::temp().filePath("FlowGraphEditorTests-apps")).removeRecursively();
+    QDir().mkpath(QDir::temp().filePath("FlowGraphEditorTests-apps"));
+    const QString script = QDir::temp().filePath("FlowGraphEditorTests-apps/s.flow");
+    StandardRuntime rt;
+    {
+        fg::Script s;
+        fg::standard::createMainTemplate(s, rt.registry());
+        s.save(script.toStdString());
+    }
+    // what an earlier version left behind
+    editorSettings().setValue("editor/layout", QByteArray("{not a layout}"));
+    editorSettings().setValue("editor/layoutDocks", QStringList{"My Script"});
+    editorSettings().setValue("editor/recentFiles/Studio A", QStringList{script});
+    auto recentOf = [](ScriptEditorWindow& w) {
+        QStringList out;
+        if (auto* m = w.findChild<QMenu*>("recentFiles"))
+            for (QAction* a : m->actions())
+                if (a->toolTip().endsWith(".flow")) out << QFileInfo(a->toolTip()).fileName();
+        return out;
+    };
+    {   // an embedded application does not take the old shared layout, and has no recent files of its own yet
+        NamedHost host(rt, "Embedded B", fged::EditorMode::Embedded);
+        fged::ScriptEditor editor(host);
+        auto& win = *static_cast<ScriptEditorWindow*>(editor.window());
+        CHECK(recentOf(win).isEmpty());
+        CHECK(editorSettings().contains("editor/layout"));
+        CHECK(!editorSettings().contains("apps/Embedded B/layout"));
+        editor.show();                                              // restores (nothing) and saves its layout when closed
+        QCoreApplication::processEvents();
+        win.close();
+        QCoreApplication::processEvents();
+        CHECK(editorSettings().contains("apps/Embedded B/layout"));
+    }
+    const QByteArray layoutOfB = editorSettings().value("apps/Embedded B/layout").toByteArray();
+    {   // the standalone application takes over the old keys
+        NamedHost host(rt, "Studio A", fged::EditorMode::Standalone);
+        fged::ScriptEditor editor(host);
+        auto& win = *static_cast<ScriptEditorWindow*>(editor.window());
+        CHECK(!editorSettings().contains("editor/layout") && !editorSettings().contains("editor/layoutDocks"));
+        CHECK(!editorSettings().contains("editor/recentFiles/Studio A"));
+        CHECK_EQ(editorSettings().value("apps/Studio A/layout").toByteArray(), QByteArray("{not a layout}"));
+        CHECK_EQ(recentOf(win), QStringList({"s.flow"}));
+        editor.show();                                              // an unreadable layout is ignored: the default one is used
+        QCoreApplication::processEvents();
+        win.close();
+        QCoreApplication::processEvents();
+        CHECK(editorSettings().value("apps/Studio A/layout").toByteArray() != QByteArray("{not a layout}"));
+    }
+    CHECK_EQ(editorSettings().value("apps/Embedded B/layout").toByteArray(), layoutOfB);    // A saved its own layout, not B's
+    {   // what one application opened is not in the other's list
+        NamedHost host(rt, "Embedded B", fged::EditorMode::Embedded);
+        fged::ScriptEditor editor(host);
+        CHECK(recentOf(*static_cast<ScriptEditorWindow*>(editor.window())).isEmpty());
+    }
+    QDir(QDir::temp().filePath("FlowGraphEditorTests-apps")).removeRecursively();
 }
 
 // File > Open Recent lists what was opened and saved, newest first, and opens it again; a file that is gone is dropped.

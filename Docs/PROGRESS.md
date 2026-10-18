@@ -200,3 +200,7 @@ Rules to keep it correct:
   sources with FG_EDITOR_STATIC_DEFINE.
 - Install: `cmake --install <build> --prefix <dir> --component FlowGraph` (KDDockWidgets' own rules are in another component);
   FlowGraphConfig.cmake (FlowGraph::Core, FlowGraph::ScriptEditor), Tests/Consumer is built against an install in CI.
+- Settings per application: the dock layout, its list of known docks and the recent files live in the QSettings group
+  apps/<application name>/ (ScriptEditorWindow::appKey), so flowstudio and an embedding application no longer overwrite each other's
+  layout. Earlier keys move over once (migrateAppSettings): recent files to their own application, the shared editor/layout to the
+  standalone editor. The embedded example's --selftest uses a temporary settings location, like the editor tests.

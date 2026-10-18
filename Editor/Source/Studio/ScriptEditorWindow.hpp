@@ -98,7 +98,10 @@ private:
     void fileNew();
     void fileOpen();
     void openPath(const QString& path, bool alreadyAsked);   // what Open does once the file is chosen (asks to save unless alreadyAsked)
-    // File > Open Recent: the last kMaxRecentFiles scripts opened or saved, per application (QSettings "editor/recentFiles/<app>")
+    // Settings of this application (QSettings group apps/<application name>/): the dock layout and the recent files
+    QString appKey(const QString& name) const;
+    void migrateAppSettings();          // moves what earlier versions kept under editor/ into the group
+    // File > Open Recent: the last kMaxRecentFiles scripts opened or saved (appKey("recentFiles"))
     static constexpr int kMaxRecentFiles = 10;
     QString recentKey() const;
     QStringList recentFiles() const;

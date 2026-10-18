@@ -13,6 +13,8 @@
 #include <FlowGraphEditor/ScriptEditor.hpp>
 
 #include <QApplication>
+#include <QDir>
+#include <QSettings>
 #include <QTimer>
 
 int main(int argc, char** argv) {
@@ -43,7 +45,14 @@ int main(int argc, char** argv) {
     }
 
     msgapp::MessageStore store;
-    if (selftest) return msgapp::runSelfTest(runtime, store) ? 1 : 0;
+    if (selftest) {
+        // the self test must neither read nor change the settings of the real application (dock layout, recent files)
+        const QString dir = QDir::temp().filePath("FlowGraph-embedded-selftest-settings");
+        QDir(dir).removeRecursively();
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir);
+        return msgapp::runSelfTest(runtime, store) ? 1 : 0;
+    }
 
     msgapp::MainWindow window(runtime, store);
     window.newTable();
