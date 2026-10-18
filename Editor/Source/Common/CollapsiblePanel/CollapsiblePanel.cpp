@@ -135,6 +135,14 @@ void CCollapsiblePanel::SetAnimationProgress(const double& Progress)
     m_AnimationProgress = Progress;
     setFixedHeight(ComputedHeight());
     mp_Icon->RotateIcon(m_AnimationProgress * 90);
+    // setFixedHeight() only posts a LayoutRequest to the parent (via updateGeometry()): the parent's layout would only
+    // reposition the row below this panel on a later iteration of the event loop, one or more animation frames from
+    // now. Until then this panel is already its new (say, shorter) height but the row below hasn't moved up yet, so a
+    // sliver of this panel's clipped contents shows through the gap between them. Activating the layout here keeps
+    // every row in sync with this frame's height, every frame.
+    if (QWidget* parent = parentWidget())
+        if (QLayout* parentLayout = parent->layout())
+            parentLayout->activate();
 }
 
 // The height the panel must have right now, between the collapsed and the fully expanded height according to
