@@ -777,6 +777,52 @@ TEST(rename_function_updates_calls) {
     CHECK_EQ(f.graph().nodes.back().prop("function"), std::string("Bar"));
 }
 
+// Selecting a call node edits the signature of the function it calls, exactly like selecting that function's entry or return
+// node would: it is the same Inputs / Outputs editor, not the read only pin list of an ordinary node.
+TEST(selecting_a_call_node_edits_the_called_function) {
+    Fixture f;
+    f.doc.edit("Add function", [](fg::Script& s) { s.addFunction("Foo"); });
+    fg::NodeId call = 0;
+    f.doc.edit("Call", [&](fg::Script& s) {
+        call = s.graphs[0].addNode("func.call").id;
+        s.graphs[0].findNode(call)->props["function"] = "Foo";
+    });
+    CHECK(f.doc.program()->ok());
+
+    DetailsPanel panel(&f.doc);
+    panel.show();
+    panel.showNodes("EventGraph", {call});
+    QCoreApplication::processEvents();
+
+    // a plain node (built in or not) would show read only "fixedInputs" / "fixedOutputs" tables; the call node shows none of those
+    CHECK(panel.findChild<QTableWidget*>("fixedInputs") == nullptr);
+    CHECK(panel.findChild<QTableWidget*>("fixedOutputs") == nullptr);
+    auto tables = panel.findChildren<QTableWidget*>();
+    CHECK_EQ(tables.size(), 2);                 // Foo's Inputs and Outputs editor, same as buildGraphFor("Foo")
+    if (tables.size() != 2) return;
+    CHECK_EQ(tables[0]->rowCount(), 0);
+    CHECK_EQ(tables[1]->rowCount(), 0);
+
+    auto panels = panel.findChildren<CCollapsiblePanel*>();
+    CHECK(!panels.isEmpty());
+    if (panels.isEmpty()) return;
+    emit panels[0]->PlusButtonClicked();        // "+" of the Inputs editor: adds a parameter to Foo itself
+    QCoreApplication::processEvents();
+
+    const fg::Graph* foo = f.doc.script().findGraph("Foo");
+    CHECK(foo && foo->inputs.size() == size_t(1) && foo->inputs[0].name == "Input");
+    CHECK(f.doc.program()->ok());
+
+    // the call node's own compiled pins follow the function's signature
+    const fg::CompiledGraph* cg = f.doc.compiledGraph("EventGraph");
+    const fg::CompiledNode* cn = cg ? cg->findNode(call) : nullptr;
+    CHECK(cn && cn->dataIn.size() == 1 && cn->pins[size_t(cn->dataIn[0])].name == "Input");
+
+    f.doc.undo();
+    foo = f.doc.script().findGraph("Foo");                  // undo replaces the script: the old pointer no longer applies
+    CHECK(foo && foo->inputs.empty());
+}
+
 TEST(save_and_load_roundtrip) {
     Fixture f;
     f.doc.edit("Add var", [](fg::Script& s) { s.variables.push_back({"Score", "int", fg::Value(5), "", ""}); });

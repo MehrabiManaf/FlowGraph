@@ -587,8 +587,9 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
 // ------------------------------------------------------------------ graphs / functions
 void DetailsPanel::buildGraph() { buildGraphFor(name_); }
 
-// The function / graph editor: name, description and the parameter tables. Shown for a selected function and
-// also while the entry or a return node of a function graph is selected.
+// The function / graph editor: name, description and the parameter tables. Shown for a selected function, while the
+// entry or a return node of a function graph is selected, and while a node that calls a function is selected (for the
+// function it calls).
 void DetailsPanel::buildGraphFor(const QString& graphName) {
     graphTarget_ = graphName;
     const fg::Graph* g = doc_->script().findGraph(ss(graphName));
@@ -831,8 +832,12 @@ void DetailsPanel::buildNodes() {
     const fg::Node* node = g->findNode(ids_.front());
     const fg::CompiledNode* cn = cg->findNode(ids_.front());
     if (!node || !cn) { form_->addRow(dim("")); return; }
-    if (g->kind == fg::GraphKind::Function && (cn->op == fg::NodeOp::FunctionEntry || cn->op == fg::NodeOp::Return)) {
-        buildGraphFor(owner_);                 // the function's name and its inputs / outputs
+    const bool isEntryOrReturn = g->kind == fg::GraphKind::Function && (cn->op == fg::NodeOp::FunctionEntry || cn->op == fg::NodeOp::Return);
+    // a call node edits the signature of the function it calls, exactly like selecting that function's entry or return node
+    const QString calledFunction = cn->op == fg::NodeOp::CallFunction ? qs(node->prop("function")) : QString();
+    const bool isCall = !calledFunction.isEmpty();
+    if (isEntryOrReturn || isCall) {
+        buildGraphFor(isCall ? calledFunction : owner_);     // the function's name and its inputs / outputs
         form_->addRow(new QLabel(QString()));
     }
     form_->addRow(heading(cn->op == fg::NodeOp::FunctionEntry ? QString("Function entry node") : qs(cn->title)));
@@ -898,7 +903,7 @@ void DetailsPanel::buildNodes() {
             form_->addRow("Type " + pname, combo);
         }
     // the inputs and outputs of the node (the function's own are shown above, where they can be edited)
-    if (!(g->kind == fg::GraphKind::Function && (cn->op == fg::NodeOp::FunctionEntry || cn->op == fg::NodeOp::Return))) buildNodePins(*node, *cn, graph);
+    if (!(isEntryOrReturn || isCall)) buildNodePins(*node, *cn, graph);
     auto* comment = new QLineEdit(qs(node->comment));
     connect(comment, &QLineEdit::editingFinished, this, [=] {
         QString t = comment->text();
