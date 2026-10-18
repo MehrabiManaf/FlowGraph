@@ -5,6 +5,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
+#include <map>
 #include <filesystem>
 #include <mutex>
 #include <set>
@@ -734,10 +736,15 @@ TEST(palette_search_and_pin_filter) {
     PinFilter f;
     f.kind = PinKind::Data; f.dir = PinDir::Out; f.type = rt.registry().tInt();
     auto fit = filterPalette(rt.registry(), all, f);
-    bool hasAdd = false, hasForeach = false;
-    for (auto& t : fit) { hasAdd |= t.defId == "math.add"; hasForeach |= t.defId == "flow.foreach"; }
+    bool hasAdd = false;
+    for (auto& t : fit) {
+        hasAdd |= t.defId == "math.add";
+        if (t.defId == "flow.foreach") {      // its Array needs an array: an int can only go to Descending (a bool accepts an int)
+            std::string pin;
+            CHECK(templateAccepts(rt.registry(), t, f, &pin) && pin == "Descending");
+        }
+    }
     CHECK(hasAdd);
-    CHECK(!hasForeach);                       // needs an array
     // dragging an exec output: only nodes with an exec input
     PinFilter e; e.kind = PinKind::Exec; e.dir = PinDir::Out;
     for (auto& t : filterPalette(rt.registry(), all, e)) CHECK(t.defId != "math.add");
@@ -2989,6 +2996,182 @@ TEST(collapse_to_function_keeps_what_the_script_does) {
         CollapseResult r = collapseToFunction(f, rt.registry(), "F", {set.id});
         CHECK(!r.ok && r.error.find("local variable or parameter") != std::string::npos);
     }
+}
+
+// ---- For Each in descending order, Print Error, time ---------------------------------------------------
+// Runs Go -> [node, when it is an exec node] -> Set V0 = out0 -> Set V1 = out1 ...: the values of the given outputs of one node.
+static std::vector<Value> nodeOutputs(Runtime& rt, const std::string& def, std::map<std::string, Value> defaults, const std::vector<std::string>& outs) {
+    GoGraph t;
+    NodeId n = t.node(def, std::move(defaults));
+    NodeId prev = t.ev;
+    std::string prevPin = "Then";
+    if (!rt.registry().findNode(def)->pure) {
+        t.link(t.ev, "Then", n, "In");
+        prev = n;
+    }
+    for (size_t i = 0; i < outs.size(); ++i) {
+        const std::string v = "V" + std::to_string(i);
+        t.s.variables.push_back({v, "any", Value(), "", ""});
+        NodeId set = t.var("var.set", v.c_str());
+        t.link(n, outs[i], set, "Value");
+        t.link(prev, prevPin, set, "In");
+        prev = set;
+    }
+    GoRun r(rt, t.s);
+    std::vector<Value> out;
+    if (!r.prog->ok()) { std::printf("  %s", dumpDiagnostics(*r.prog).c_str()); return out; }
+    std::string log = r.go();
+    if (log.rfind("error:", 0) == 0) { std::printf("  %s\n", log.c_str()); return out; }
+    for (size_t i = 0; i < outs.size(); ++i) out.push_back(r.inst->getVariable("V" + std::to_string(i)));
+    return out;
+}
+
+TEST(for_each_runs_in_descending_order) {
+    TestRuntime rt;
+    {   // a copy without the intrinsic: the run function must do exactly what the interpreter does inline
+        NodeDef copy = *rt.registry().findNode("flow.foreach");
+        copy.id = "test.foreach";
+        copy.intrinsic = Intrinsic::None;
+        rt.registry().addNode(std::move(copy));
+    }
+    // Go -> For Each(A, Descending = D) { Print(Element:Index); Desc = !Desc (a change while it runs is not seen); Break at "stop" }
+    for (const char* def : {"flow.foreach", "test.foreach"}) {
+        GoGraph t;
+        t.s.variables.push_back({"A", "array<string>", Value(), "", ""});
+        t.s.variables.push_back({"D", "bool", Value(false), "", ""});
+        NodeId fe = t.node(def);
+        t.link(t.var("var.get", "A"), "Value", fe, "Array");
+        t.link(t.var("var.get", "D"), "Value", fe, "Descending");
+        NodeId fmt = t.g->addNode("string.format").id;
+        t.g->findNode(fmt)->inputs = {{"E", "string", false, false, Value()}, {"I", "int", false, false, Value()}};
+        t.g->findNode(fmt)->defaults["Format"] = Value("{E}{I}");
+        t.link(fe, "Element", fmt, "E");
+        t.link(fe, "Index", fmt, "I");
+        NodeId pr = t.node("util.print");
+        t.link(fmt, "Result", pr, "String");
+        NodeId notD = t.node("logic.not");
+        t.link(t.var("var.get", "D"), "Value", notD, "Value");
+        NodeId flip = t.var("var.set", "D");
+        t.link(notD, "Result", flip, "Value");
+        NodeId isStop = t.node("cmp.eq", {{"B", Value("stop")}});
+        t.link(fe, "Element", isStop, "A");
+        NodeId br = t.node("flow.branch");
+        t.link(isStop, "Result", br, "Condition");
+        t.link(t.ev, "Then", fe, "In");
+        t.link(fe, "Loop Body", pr, "In");
+        t.link(pr, "Then", flip, "In");
+        t.link(flip, "Then", br, "In");
+        t.link(br, "True", t.node("flow.break"), "In");
+        t.link(fe, "Completed", t.say("done"), "In");
+        GoRun r(rt, t.s);
+        CHECK(r.prog->ok());
+        auto setArray = [&](std::vector<const char*> items) {
+            Value a = rt.registry().makeArray(rt.registry().tString());
+            for (auto* s : items) a.arrayPtr()->items.push_back(Value(s));
+            r.inst->setVariable("A", a);
+        };
+        setArray({"a", "b", "c"});
+        r.inst->setVariable("D", Value(false));
+        CHECK_EQ(r.go(), std::string("a0,b1,c2,done,"));
+        r.inst->setVariable("D", Value(true));
+        CHECK_EQ(r.go(), std::string("c2,b1,a0,done,"));              // Index is the position in the array
+        r.inst->setVariable("D", Value(true));
+        setArray({"a", "stop", "c"});
+        CHECK_EQ(r.go(), std::string("c2,stop1,done,"));              // Break goes on with Completed
+        setArray({});
+        CHECK_EQ(r.go(), std::string("done,"));
+    }
+    // For Each Entry, keys from the greatest to the smallest
+    {
+        GoGraph t;
+        t.s.variables.push_back({"M", "map<string,int>", Value(), "", ""});
+        NodeId fe = t.node("flow.foreachmap", {{"Descending", Value(true)}});
+        t.link(t.var("var.get", "M"), "Value", fe, "Map");
+        NodeId pr = t.node("util.print");
+        t.link(fe, "Key", pr, "String");
+        t.link(t.ev, "Then", fe, "In");
+        t.link(fe, "Loop Body", pr, "In");
+        GoRun r(rt, t.s);
+        Value m = rt.registry().makeMap(rt.registry().tString(), rt.registry().tInt());
+        for (const char* k : {"b", "d", "a", "c"}) m.mapPtr()->items[Value(k)] = Value(1);
+        r.inst->setVariable("M", m);
+        CHECK_EQ(r.go(), std::string("d,c,b,a,"));
+        r.inst->setVariable("M", rt.registry().makeMap(rt.registry().tString(), rt.registry().tInt()));
+        CHECK_EQ(r.go(), std::string(""));
+    }
+    // Print Error writes an error to the log; the script goes on
+    {
+        GoGraph t;
+        NodeId e = t.node("util.error", {{"String", Value("disk full")}});
+        t.link(t.ev, "Then", e, "In");
+        t.link(e, "Then", t.say("after"), "In");
+        GoRun r(rt, t.s);
+        std::vector<std::pair<LogLevel, std::string>> lines;
+        r.inst->setLogHandler([&](LogLevel l, const std::string& m) { lines.push_back({l, m}); });
+        CHECK(r.inst->callEvent("Go").ok);
+        CHECK(lines.size() == 2 && lines[0].first == LogLevel::Error && lines[0].second == "disk full" && lines[1].first == LogLevel::Info);
+    }
+}
+
+TEST(time_nodes_convert_dates_and_read_the_clocks) {
+    TestRuntime rt;
+    const std::vector<std::string> fields = {"Year", "Month", "Day", "Hour", "Minute", "Second", "Millisecond", "Weekday", "Day Of Year"};
+    auto broken = [&](double ts, bool local) {
+        std::string s;
+        for (auto& v : nodeOutputs(rt, "time.break", {{"Timestamp", Value(ts)}, {"Local", Value(local)}}, fields)) s += std::to_string(v.toInt()) + " ";
+        return s;
+    };
+    auto made = [&](int64_t y, int64_t mo, int64_t d, int64_t h, int64_t mi, int64_t s, int64_t ms, bool local) {
+        auto v = nodeOutputs(rt, "time.make", {{"Year", Value(y)}, {"Month", Value(mo)}, {"Day", Value(d)}, {"Hour", Value(h)}, {"Minute", Value(mi)},
+                                               {"Second", Value(s)}, {"Millisecond", Value(ms)}, {"Local", Value(local)}}, {"Timestamp"});
+        return v.empty() ? -1.0 : v[0].toFloat();
+    };
+    // UTC: known instants (2024-02-29 was a Thursday, the 60th day of the year; 2000-01-01 a Saturday)
+    CHECK_EQ(made(1970, 1, 1, 0, 0, 0, 0, false), 0.0);
+    CHECK_EQ(made(2000, 1, 1, 0, 0, 0, 0, false), 946684800.0);
+    CHECK_EQ(made(2024, 2, 29, 12, 0, 0, 0, false), 1709208000.0);
+    CHECK_EQ(broken(1709208000.25, false), std::string("2024 2 29 12 0 0 250 4 60 "));
+    CHECK_EQ(broken(946684800, false), std::string("2000 1 1 0 0 0 0 6 1 "));
+    CHECK_EQ(broken(-0.5, false), std::string("1969 12 31 23 59 59 500 3 365 "));     // before 1970
+    // out of range values carry over
+    CHECK_EQ(made(2026, 13, 1, 0, 0, 0, 0, false), made(2027, 1, 1, 0, 0, 0, 0, false));
+    CHECK_EQ(made(2024, 3, 0, 0, 0, 0, 0, false), made(2024, 2, 29, 0, 0, 0, 0, false));
+    CHECK_EQ(made(2024, 1, 1, 0, 90, 0, 0, false), made(2024, 1, 1, 1, 30, 0, 0, false));
+    // local time: whatever the time zone of the machine, Make and Break agree
+    const double localTs = made(2026, 7, 4, 9, 15, 30, 125, true);
+    CHECK_EQ(broken(localTs, true).substr(0, 21), std::string("2026 7 4 9 15 30 125 "));
+    // the Weekday output is an enum: it prints by name
+    auto wd = nodeOutputs(rt, "time.break", {{"Timestamp", Value(1709208000.0)}, {"Local", Value(false)}}, {"Weekday"});
+    CHECK(!wd.empty() && rt.registry().toString(wd[0], rt.registry().findType("Weekday")) == "Thursday");
+
+    // format: every code, unknown codes stay as they are
+    auto format = [&](double ts, const char* f) {
+        auto v = nodeOutputs(rt, "fn:Time.Format Date Time", {{"Timestamp", Value(ts)}, {"Format", Value(f)}, {"Local", Value(false)}}, {"Result"});
+        return v.empty() ? std::string("?") : v[0].toString();
+    };
+    CHECK_EQ(format(1709208000.042, "%F %T.%f"), std::string("2024-02-29 12:00:00.042"));
+    CHECK_EQ(format(1709208000, "%a %A %b %B %j %u %y %I %p %z %% %Q"), std::string("Thu Thursday Feb February 060 4 24 12 PM +0000 % %Q"));
+    CHECK_EQ(format(1709208000 - 13 * 3600, "%I %p"), std::string("11 PM"));
+    // parse: ISO 8601 with and without a zone
+    auto parse = [&](const char* text, bool local) {
+        auto v = nodeOutputs(rt, "time.parse", {{"Text", Value(text)}, {"Local", Value(local)}}, {"Timestamp", "Valid"});
+        return v.size() == 2 && v[1].toBool() ? v[0].toFloat() : -1.0;
+    };
+    CHECK_EQ(parse("2024-02-29T12:00:00Z", true), 1709208000.0);
+    CHECK_EQ(parse("2024-02-29 14:00:00+02:00", true), 1709208000.0);
+    CHECK_EQ(parse("2024-02-29T07:30-0430", true), 1709208000.0);
+    CHECK_EQ(parse("2024-02-29T12:00:00.250Z", true), 1709208000.25);
+    CHECK_EQ(parse("2024-02-29", false), 1709164800.0);
+    CHECK_EQ(parse("2026-07-04 09:15:30.125", true), localTs);         // no zone: local time
+    for (const char* bad : {"2024-02-30", "2023-02-29", "2024-13-01", "2024-02-29T24:00", "2024-02-29 12:00 tomorrow", "yesterday", ""})
+        CHECK_EQ(parse(bad, true), -1.0);
+
+    // the clocks: Now is the system time, Seconds Since Start a steady clock of the instance; both are exec nodes (one reading per run)
+    CHECK(!rt.registry().findNode("fn:Time.Now")->pure && !rt.registry().findNode("fn:Time.Seconds Since Start")->pure);
+    auto now = nodeOutputs(rt, "fn:Time.Now", {}, {"Timestamp"});
+    CHECK(!now.empty() && std::fabs(now[0].toFloat() - static_cast<double>(std::time(nullptr))) < 5.0);
+    auto since = nodeOutputs(rt, "fn:Time.Seconds Since Start", {}, {"Seconds"});
+    CHECK(!since.empty() && since[0].toFloat() >= 0.0 && since[0].toFloat() < 5.0);
 }
 
 // ---- node reference ------------------------------------------------------------------------------------

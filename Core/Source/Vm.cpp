@@ -913,11 +913,16 @@ bool Task::execFast(Frame& f, const CompiledNode& n, bool resumed) {
         return true;
     }
     case Intrinsic::ForEach: {
+        // Descending is read like every input (the run function gathers it too) but only taken when the loop starts: then it is kept
+        // in the continuation's aux
         const Value* arr = peek(f, n, 0);
-        if (!arr) return false;
-        const int64_t i = resumed ? f.conts.back().state + 1 : 0;
+        const Value* descIn = peek(f, n, 1);
+        if (!arr || !descIn) return false;
+        const bool desc = resumed ? f.conts.back().aux.toBool() : descIn->toBool();
         const ArrayData* a = arr->arrayPtr();
-        if (a && static_cast<size_t>(i) < a->items.size()) {
+        const int64_t size = a ? static_cast<int64_t>(a->items.size()) : 0;
+        const int64_t i = !desc ? (resumed ? f.conts.back().state + 1 : 0) : std::min(resumed ? f.conts.back().state - 1 : size - 1, size - 1);
+        if (i >= 0 && i < size) {
             f.slotValues[static_cast<size_t>(n.outBase)] = a->items[static_cast<size_t>(i)];
             f.slotValues[static_cast<size_t>(n.outBase) + 1].setInt(i);
             if (resumed) {
@@ -926,6 +931,7 @@ bool Task::execFast(Frame& f, const CompiledNode& n, bool resumed) {
                 Continuation& c = f.conts.emplace_back();
                 c.node = n.index;
                 c.state = i;
+                c.aux.setBool(desc);
                 c.loop = true;
             }
             follow(f, n, 1);

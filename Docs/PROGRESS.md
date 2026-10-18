@@ -204,3 +204,8 @@ Rules to keep it correct:
   apps/<application name>/ (ScriptEditorWindow::appKey), so flowstudio and an embedding application no longer overwrite each other's
   layout. Earlier keys move over once (migrateAppSettings): recent files to their own application, the shared editor/layout to the
   standalone editor. The embedded example's --selftest uses a temporary settings location, like the editor tests.
+- Nodes (2026-10-18, third round): For Each / For Each Entry take Descending (read when the loop starts: For Each keeps it in the
+  continuation's aux, mirrored by Intrinsic::ForEach; For Each Entry in state()). Print Error (util.error). Time category
+  (Core/Source/BuiltinsTime.cpp): Now, Seconds Since Start (Instance::secondsSinceStart), Break / Make / Format / Parse Date Time and the
+  Weekday enum; dates are computed with civil-from-days arithmetic, not strftime / mktime (MSVC's strftime ends the process on an
+  unknown % code, mktime fails before 1970 on Windows); the local offset comes from localtime_s / localtime_r.

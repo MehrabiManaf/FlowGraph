@@ -148,6 +148,15 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
 * Flow nodes: Branch, Sequence, For Loop, For Each, For Each Entry (maps, in key order), While, Break, Delay, Select,
   Switch on Int / String / any enum (*Switch on Mood*), Do Once, Gate (Enter / Open / Close / Toggle) and Flip Flop. Do Once,
   Gate and Flip Flop remember their state for the life of the instance (`NodeCtx::nodeState`; `Instance::resetVariables` forgets it).
+  For Each and For Each Entry have a *Descending* input: last element (greatest key) first; Index stays the element's position.
+* Print String, Print Warning and Print Error write to the log at their level (the Output Log colours them; `flow` writes
+  warnings and errors to stderr). Print Error does not stop the script.
+* Time: a timestamp is seconds since 1970-01-01 00:00 UTC as a float (milliseconds included). *Now* and *Seconds Since Start*
+  (a steady clock of the instance, for measuring) are exec nodes, one reading per run. *Break Date Time* / *Make Date Time*
+  convert to and from year, month, day, hour, minute, second, millisecond (plus the Weekday enum and the day of the year), in
+  local time or UTC; out of range values carry over (month 13 is January). *Format Date Time* writes `%Y-%m-%d %H:%M:%S`
+  style text (`%f` milliseconds, `%A` weekday, `%B` month, `%z` offset...; unknown codes are kept as they are), *Parse Date
+  Time* reads ISO 8601 (`2026-10-18T14:30:05.250+02:00`; no zone = local time) and says whether the text was valid.
 * Random Int / Random Float are exec nodes: each run draws one number that every connected pin reads. The numbers come from the
   instance (`Instance::random()`); *Set Random Seed* makes a run repeatable on any thread. The compiler warns about an exec node
   whose results are used but that is not connected to the execution flow (its outputs would keep their defaults).

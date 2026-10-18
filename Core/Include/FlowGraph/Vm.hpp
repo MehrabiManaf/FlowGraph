@@ -6,6 +6,7 @@
 #include <FlowGraph/Program.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <functional>
 #include <memory>
@@ -361,6 +362,8 @@ public:
     // The random numbers of this instance's Random nodes. Seeded at random; Set Random Seed (or seed()) makes a run repeatable,
     // whatever thread runs it.
     std::mt19937_64& random() { return rng_; }
+    // Seconds since the instance was created (a steady clock: not affected by changes of the system time). Time.Seconds Since Start.
+    double secondsSinceStart() const { return std::chrono::duration<double>(std::chrono::steady_clock::now() - started_).count(); }
     void log(LogLevel level, const std::string& msg) const;
 
 private:
@@ -385,6 +388,7 @@ private:
     void* userData_ = nullptr;
     int nextTaskId_ = 1;
     std::mt19937_64 rng_{std::random_device{}()};
+    std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
 };
 
 // ---- Debugger -------------------------------------------------------------------------------------

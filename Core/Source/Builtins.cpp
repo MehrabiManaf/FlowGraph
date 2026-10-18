@@ -302,15 +302,25 @@ void registerFlow(Registry& r) {
     {
         NodeDef d = flowNode("flow.foreach", "For Each", "Flow");
         d.intrinsic = Intrinsic::ForEach;
-        d.keywords = "loop array iterate";
+        d.keywords = "loop array iterate reverse descending";
+        d.doc = "Runs the loop body for every element of the array: from the first to the last, or from the last to the first when "
+                "Descending is set (read when the loop starts). Index is the position of the element in the array.";
         d.breakPin = 0;
         d.typeParams.push_back({"T", {}, "int"});
-        d.pins = {execIn(), reads(dataIn("Array", "array<T>")), execOut("Completed"), execOut("Loop Body"), aliases(dataOut("Element", "T")), dataOut("Index", "int")};
+        d.pins = {execIn(), reads(dataIn("Array", "array<T>")), dataIn("Descending", "bool", Value(false)), execOut("Completed"), execOut("Loop Body"),
+                  aliases(dataOut("Element", "T")), dataOut("Index", "int")};
+        d.pins[2].doc = "From the last element to the first";
+        // state(): the index of the current element; aux(): the direction, taken when the loop starts. Elements added or removed while
+        // the loop runs: an ascending loop ends at the (new) end, a descending one goes on from the last element that still exists.
+        // Mirrored exactly by Intrinsic::ForEach in Vm.cpp.
         d.run = [](NodeCtx& c) {
-            int64_t i = c.resumed() ? c.state() + 1 : 0;
             auto* a = c.in(0).arrayPtr();
-            if (a && static_cast<size_t>(i) < a->items.size()) {
+            const bool desc = c.resumed() ? c.aux().toBool() : c.inBool(1);
+            const int64_t size = a ? static_cast<int64_t>(a->items.size()) : 0;
+            const int64_t i = !desc ? (c.resumed() ? c.state() + 1 : 0) : std::min(c.resumed() ? c.state() - 1 : size - 1, size - 1);
+            if (i >= 0 && i < size) {
                 c.state() = i;
+                c.aux() = Value(desc);
                 c.out(0, a->items[static_cast<size_t>(i)]);
                 c.out(1, Value(i));
                 c.call(1);
@@ -355,18 +365,30 @@ void registerFlow(Registry& r) {
     }
     {
         NodeDef d = flowNode("flow.foreachmap", "For Each Entry", "Flow");
-        d.keywords = "loop map dictionary iterate key value";
-        d.doc = "Runs the loop body for every entry of the map, in key order.";
+        d.keywords = "loop map dictionary iterate key value reverse descending";
+        d.doc = "Runs the loop body for every entry of the map, in key order (from the greatest key to the smallest when Descending "
+                "is set; read when the loop starts).";
         d.breakPin = 0;
         d.typeParams.push_back({"K", {}, "string"});
         d.typeParams.push_back({"V", {}, "int"});
-        d.pins = {execIn(), reads(dataIn("Map", "map<K,V>")), execOut("Completed"), execOut("Loop Body"), dataOut("Key", "K"), aliases(dataOut("Value", "V"))};
-        // The key of the current entry is kept in aux(): the next one is found from it (a changed map is still walked in key order).
+        d.pins = {execIn(), reads(dataIn("Map", "map<K,V>")), dataIn("Descending", "bool", Value(false)), execOut("Completed"), execOut("Loop Body"),
+                  dataOut("Key", "K"), aliases(dataOut("Value", "V"))};
+        d.pins[2].doc = "From the greatest key to the smallest";
+        // The key of the current entry is kept in aux(): the next one is found from it (a changed map is still walked in key order);
+        // state() is the direction (1 = descending), taken when the loop starts.
         d.run = [](NodeCtx& c) {
             auto* m = c.in(0).mapPtr();
             if (!m) { c.next(0); return; }
-            auto it = c.resumed() ? m->items.upper_bound(c.aux()) : m->items.begin();
-            if (it == m->items.end()) { c.next(0); return; }
+            const bool desc = c.resumed() ? c.state() != 0 : c.inBool(1);
+            auto& items = m->items;
+            auto it = items.end();
+            if (!desc) it = c.resumed() ? items.upper_bound(c.aux()) : items.begin();
+            else {
+                auto below = c.resumed() ? items.lower_bound(c.aux()) : items.end();      // the entries before it have smaller keys
+                if (below != items.begin()) it = std::prev(below);
+            }
+            if (it == items.end()) { c.next(0); return; }
+            c.state() = desc ? 1 : 0;
             c.aux() = it->first;
             c.out(0, it->first);
             c.out(1, it->second);
@@ -516,6 +538,14 @@ void registerFlow(Registry& r) {
         NodeDef d = execNode("util.warn", "Print Warning", "Utilities");
         d.pins.push_back(dataIn("String", "string", Value("Warning")));
         d.run = [](NodeCtx& c) { c.log(LogLevel::Warning, c.inString(0)); };
+        r.addNode(std::move(d));
+    }
+    {
+        NodeDef d = execNode("util.error", "Print Error", "Utilities");
+        d.keywords = "log error output fail";
+        d.doc = "Writes the text to the log as an error (red in the Output Log, on stderr in flow). The script goes on: it does not fail.";
+        d.pins.push_back(dataIn("String", "string", Value("Error")));
+        d.run = [](NodeCtx& c) { c.log(LogLevel::Error, c.inString(0)); };
         r.addNode(std::move(d));
     }
     {
@@ -900,6 +930,8 @@ void registerContainers(Registry& r) {
 
 } // namespace
 
+void registerTimeNodes(Registry& reg);     // BuiltinsTime.cpp
+
 void registerBuiltins(Registry& reg) {
     reg.beginSource("core");
     registerScriptNodes(reg);
@@ -907,6 +939,7 @@ void registerBuiltins(Registry& reg) {
     registerMath(reg);
     registerStrings(reg);
     registerContainers(reg);
+    registerTimeNodes(reg);
     reg.endSource();
 }
 
