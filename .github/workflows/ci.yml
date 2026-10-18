@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_VERSION: "6.9.0"
+
+jobs:
+  # Everything (runtime, editor, flowstudio, examples), MSVC 2022, both test suites.
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Configure
+        run: cmake --preset windows-release
+        env:
+          QT_DIR: ${{ env.QT_ROOT_DIR }}
+      - name: Build
+        run: cmake --build --preset windows-release
+      - name: Test
+        run: ctest --preset windows-release
+
+  # Everything with GCC on Linux (the editor tests run on the offscreen platform).
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libvulkan-dev libfontconfig1-dev
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+          cache: true
+      - name: Configure
+        run: cmake --preset linux-release
+        env:
+          QT_DIR: ${{ env.QT_ROOT_DIR }}
+      - name: Build
+        run: cmake --build --preset linux-release
+      - name: Test
+        run: ctest --preset linux-release
+
+  # The runtime alone must build without Qt; tests run under AddressSanitizer and UndefinedBehaviorSanitizer.
+  core-sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure
+        run: >
+          cmake --preset core-only -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer"
+          "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined"
+          "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"
+      - name: Build
+        run: cmake --build --preset core-only
+      - name: Test
+        run: ctest --preset core-only
+
+  # The installed package works for a host project: install, then build and run Tests/Consumer against it with find_package.
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build and install the runtime
+        run: |
+          cmake --preset core-only
+          cmake --build --preset core-only
+          cmake --install build/core-only --prefix "$PWD/prefix" --component FlowGraph
+      - name: Build and run a consumer of the package
+        run: |
+          cmake -S Tests/Consumer -B build/consumer -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/prefix"
+          cmake --build build/consumer
+          ./build/consumer/consumer
+      - name: The node reference is up to date
+        run: |
+          ./build/core-only/bin/flow --no-plugins --reference build/NodeReference.md
+          diff -u Docs/NodeReference.md build/NodeReference.md

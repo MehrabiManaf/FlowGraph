@@ -1,0 +1,49 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "CMAKE_PREFIX_PATH": "$env{QT_DIR}" }
+    },
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "cacheVariables": { "CMAKE_C_COMPILER": "cl", "CMAKE_CXX_COMPILER": "cl" }
+    },
+    { "name": "windows-release", "displayName": "Windows MSVC Release", "inherits": "windows-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+    { "name": "windows-debug", "displayName": "Windows MSVC Debug", "inherits": "windows-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    {
+      "name": "linux-base",
+      "hidden": true,
+      "inherits": "base",
+      "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    { "name": "linux-release", "displayName": "Linux / macOS Release", "inherits": "linux-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+    { "name": "linux-debug", "displayName": "Linux / macOS Debug", "inherits": "linux-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    {
+      "name": "core-only",
+      "displayName": "Runtime only (no Qt)",
+      "description": "FlowGraphCore, flow, tests and examples; no editor, so Qt is not needed",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "FG_BUILD_EDITOR": "OFF" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-release", "configurePreset": "windows-release" },
+    { "name": "windows-debug", "configurePreset": "windows-debug" },
+    { "name": "linux-release", "configurePreset": "linux-release" },
+    { "name": "linux-debug", "configurePreset": "linux-debug" },
+    { "name": "core-only", "configurePreset": "core-only" }
+  ],
+  "testPresets": [
+    { "name": "windows-release", "configurePreset": "windows-release", "output": { "outputOnFailure": true } },
+    { "name": "linux-release", "configurePreset": "linux-release", "output": { "outputOnFailure": true } },
+    { "name": "core-only", "configurePreset": "core-only", "output": { "outputOnFailure": true } }
+  ]
+}
