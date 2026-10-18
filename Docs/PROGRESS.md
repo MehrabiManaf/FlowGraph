@@ -209,7 +209,7 @@ Rules to keep it correct:
   (Core/Source/BuiltinsTime.cpp): Now, Seconds Since Start (Instance::secondsSinceStart), Break / Make / Format / Parse Date Time and the
   Weekday enum; dates are computed with civil-from-days arithmetic, not strftime / mktime (MSVC's strftime ends the process on an
   unknown % code, mktime fails before 1970 on Windows); the local offset comes from localtime_s / localtime_r.
-- Fourth round: Now / Seconds Since Start are pure. Enum literals: NodeSetting::Kind::Choice ("value"), nodeTitle "Weekday.Friday",
+- Fourth round: Now / Seconds Since Start stay exec nodes (made pure and reverted on request). Enum literals: NodeSetting::Kind::Choice ("value"), nodeTitle "Weekday.Friday",
   Switch on Enum titled "Switch on <Enum>". Details check boxes are painted by the delegate (the style's box vanished on rows of the same
   colour). Make Date Time carries over, years limited to +-1000000 (float arithmetic, no int overflow). A node that waits (Delay)
   follows its exec link when the wait ends (Task::waitingNext_ / pendingNextPin_, Task::run), so the debugger's link animation and

@@ -237,18 +237,17 @@ void registerTimeNodes(Registry& r) {
         .value("Monday", Weekday::Monday).value("Tuesday", Weekday::Tuesday).value("Wednesday", Weekday::Wednesday)
         .value("Thursday", Weekday::Thursday).value("Friday", Weekday::Friday).value("Saturday", Weekday::Saturday).value("Sunday", Weekday::Sunday);
 
-    // Pure: the clock is read whenever a node needs the value (after a Delay that is a new reading). Unlike Random, two readings that
-    // differ by microseconds are what a clock is, and a pure clock goes straight into a Print or a Subtract.
+    // Exec nodes, like Random: each run reads the clock once, and every pin connected to the node sees that reading.
     r.addFunction("Time.Now", [] {
         const auto now = std::chrono::system_clock::now().time_since_epoch();
         return static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count()) / 1000.0;
-    }).makePure().withResultName("Timestamp").withKeywords("time date clock current today unix epoch")
+    }).withResultName("Timestamp").withKeywords("time date clock current today unix epoch")
       .withDoc("The current time: seconds since 1970-01-01 00:00 UTC, with milliseconds.");
     r.addFunction("Time.Seconds Since Start", [] {
         static const auto processStart = std::chrono::steady_clock::now();
         if (Instance* inst = currentInstance()) return inst->secondsSinceStart();
         return std::chrono::duration<double>(std::chrono::steady_clock::now() - processStart).count();
-    }).makePure().withResultName("Seconds").withKeywords("time elapsed duration stopwatch measure")
+    }).withResultName("Seconds").withKeywords("time elapsed duration stopwatch measure")
       .withDoc("Seconds since the script instance started, from a steady clock (changes of the system time do not affect it): "
                "subtract two readings to measure how long something takes.");
 

@@ -3166,8 +3166,8 @@ TEST(time_nodes_convert_dates_and_read_the_clocks) {
     for (const char* bad : {"2024-02-30", "2023-02-29", "2024-13-01", "2024-02-29T24:00", "2024-02-29 12:00 tomorrow", "yesterday", ""})
         CHECK_EQ(parse(bad, true), -1.0);
 
-    // the clocks: Now is the system time, Seconds Since Start a steady clock of the instance; both are pure (read when needed)
-    CHECK(rt.registry().findNode("fn:Time.Now")->pure && rt.registry().findNode("fn:Time.Seconds Since Start")->pure);
+    // the clocks: Now is the system time, Seconds Since Start a steady clock of the instance; both are exec nodes (one reading per run)
+    CHECK(!rt.registry().findNode("fn:Time.Now")->pure && !rt.registry().findNode("fn:Time.Seconds Since Start")->pure);
     auto now = nodeOutputs(rt, "fn:Time.Now", {}, {"Timestamp"});
     CHECK(!now.empty() && std::fabs(now[0].toFloat() - static_cast<double>(std::time(nullptr))) < 5.0);
     auto since = nodeOutputs(rt, "fn:Time.Seconds Since Start", {}, {"Seconds"});

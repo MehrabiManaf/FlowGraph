@@ -158,8 +158,8 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
 * Print String, Print Warning and Print Error write to the log at their level (the Output Log colours them; `flow` writes
   warnings and errors to stderr). Print Error does not stop the script.
 * Time: a timestamp is seconds since 1970-01-01 00:00 UTC as a float (milliseconds included). *Now* and *Seconds Since Start*
-  (a steady clock of the instance, for measuring) are pure: the clock is read when a node needs the value (after a Delay that
-  is a new reading). Dates from year -1000000 to 1000000; beyond that a script error. *Break Date Time* / *Make Date Time*
+  (a steady clock of the instance, for measuring) are exec nodes: each run reads the clock once, and every pin connected to the
+  node sees that reading. Dates from year -1000000 to 1000000; beyond that a script error. *Break Date Time* / *Make Date Time*
   convert to and from year, month, day, hour, minute, second, millisecond (plus the Weekday enum and the day of the year), in
   local time or UTC; out of range values carry over (month 13 is January). *Format Date Time* writes `%Y-%m-%d %H:%M:%S`
   style text (`%f` milliseconds, `%A` weekday, `%B` month, `%z` offset...; unknown codes are kept as they are), *Parse Date
