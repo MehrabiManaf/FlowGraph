@@ -114,11 +114,13 @@ struct NodeSetting {
     enum class Kind : uint8_t {
         Count,      // a whole number from `min` to `max`
         Lines,      // a list of texts, one per line ('\n' separated in the prop)
+        Choice,     // one of `choices` (the value of an enum literal...)
     };
     std::string key, label, doc;
     Kind kind = Kind::Count;
     std::string def;                  // value when the node has no such prop
     int min = 0, max = 64;            // Count
+    std::vector<std::string> choices; // Choice
 };
 
 struct NodeDef {
@@ -144,6 +146,9 @@ struct NodeDef {
     bool aliasesFirstInput = false;
     // Loop nodes: ordinal of the exec output that is taken when a Break node unwinds to this node.
     int breakPin = -1;
+    // The node may wait (Delay, an asynchronous host function, a custom node that calls NodeCtx::wait / waitFor): an execution loop
+    // through it is not an endless loop (see isPlainExecNode).
+    bool waits = false;
 
     std::vector<TypeParam> typeParams;
     std::vector<NodeSetting> settings;   // shown by editors, stored in Node::props

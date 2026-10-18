@@ -3166,12 +3166,140 @@ TEST(time_nodes_convert_dates_and_read_the_clocks) {
     for (const char* bad : {"2024-02-30", "2023-02-29", "2024-13-01", "2024-02-29T24:00", "2024-02-29 12:00 tomorrow", "yesterday", ""})
         CHECK_EQ(parse(bad, true), -1.0);
 
-    // the clocks: Now is the system time, Seconds Since Start a steady clock of the instance; both are exec nodes (one reading per run)
-    CHECK(!rt.registry().findNode("fn:Time.Now")->pure && !rt.registry().findNode("fn:Time.Seconds Since Start")->pure);
+    // the clocks: Now is the system time, Seconds Since Start a steady clock of the instance; both are pure (read when needed)
+    CHECK(rt.registry().findNode("fn:Time.Now")->pure && rt.registry().findNode("fn:Time.Seconds Since Start")->pure);
     auto now = nodeOutputs(rt, "fn:Time.Now", {}, {"Timestamp"});
     CHECK(!now.empty() && std::fabs(now[0].toFloat() - static_cast<double>(std::time(nullptr))) < 5.0);
     auto since = nodeOutputs(rt, "fn:Time.Seconds Since Start", {}, {"Seconds"});
     CHECK(!since.empty() && since[0].toFloat() >= 0.0 && since[0].toFloat() < 5.0);
+}
+
+// ---- enum literals, date ranges, Delay and links, loops ----------------------------------------------
+TEST(enum_literals_show_their_value) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.variables.push_back({"W", "Weekday", Value(), "", ""});
+    Node& lit = t.g->addNode("enum:Weekday");
+    lit.props["value"] = "Friday";
+    const NodeId litId = lit.id;
+    const NodeId plain = t.g->addNode("enum:Weekday").id;                // no value chosen yet: the first one
+    NodeId sw = t.node("flow.switch.enum", {}, {{"enum", "Weekday"}});
+    NodeId set = t.var("var.set", "W");
+    t.link(litId, "Value", set, "Value");
+    t.link(t.ev, "Then", set, "In");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    const CompiledGraph& cg = r.prog->graphs[0];
+    CHECK_EQ(cg.findNode(litId)->title, std::string("Weekday.Friday"));
+    CHECK_EQ(cg.findNode(plain)->title, std::string("Weekday.Monday"));
+    CHECK_EQ(cg.findNode(sw)->title, std::string("Switch on Weekday"));
+    r.go();
+    CHECK_EQ(r.inst->getVariable("W").toInt(), int64_t(5));
+    const NodeDef* def = rt.registry().findNode("enum:Weekday");
+    CHECK(def && def->settings.size() == 1 && def->settings[0].kind == NodeSetting::Kind::Choice && def->settings[0].choices.size() == 7 &&
+          def->settings[0].choices[4] == "Friday");
+}
+
+TEST(make_date_time_carries_over_and_has_a_range) {
+    TestRuntime rt;
+    auto made = [&](int64_t y, int64_t mo, int64_t d, int64_t h) {
+        return nodeOutputs(rt, "time.make", {{"Year", Value(y)}, {"Month", Value(mo)}, {"Day", Value(d)}, {"Hour", Value(h)}, {"Local", Value(false)}},
+                           {"Timestamp"});
+    };
+    auto a = made(2024, 1, 1, 0), b = made(2024, 1, 1, 10000);
+    CHECK(a.size() == 1 && b.size() == 1 && b[0].toFloat() - a[0].toFloat() == 10000.0 * 3600);     // 416 days and 16 hours later
+    // beyond a million years: a script error, not an overflow
+    GoGraph t;
+    t.s.variables.push_back({"T", "float", Value(0.0), "", ""});
+    NodeId mk = t.node("time.make", {{"Hour", Value(std::numeric_limits<int64_t>::max())}});
+    NodeId set = t.var("var.set", "T");
+    t.link(mk, "Timestamp", set, "Value");
+    t.link(t.ev, "Then", set, "In");
+    GoRun r(rt, t.s);
+    RunResult res = r.inst->callEvent("Go");
+    CHECK(!res.ok && res.error.find("out of range") != std::string::npos);
+    t.g->findNode(mk)->defaults = {{"Year", Value(int64_t(5000000))}};
+    GoRun r2(rt, t.s);
+    CHECK(r2.inst->callEvent("Go").error.find("out of range") != std::string::npos);
+}
+
+TEST(a_delay_follows_its_link_when_the_wait_is_over) {
+    TestRuntime rt;
+    struct Links : DebugHooks {
+        std::vector<std::pair<int, int>> fired;          // node indices
+        void onExecLink(Task&, const CompiledGraph&, int from, int, int to) override { fired.push_back({from, to}); }
+    } hooks;
+    GoGraph t;
+    NodeId d = t.node("flow.delay", {{"Duration", Value(0.5)}});
+    NodeId p = t.say("after");
+    t.link(t.ev, "Then", d, "In");
+    t.link(d, "Then", p, "In");
+    GoRun r(rt, t.s);
+    r.inst->setDebugHooks(&hooks);
+    const CompiledGraph& cg = r.prog->graphs[0];
+    const int di = cg.nodeIndex.at(d), pi = cg.nodeIndex.at(p);
+    RunResult res = r.inst->callEvent("Go");
+    CHECK(res.waiting());
+    CHECK(hooks.fired.size() == 1 && hooks.fired[0].second == di);          // only the link into the Delay
+    CHECK_EQ(res.task->currentNode(), d);                                  // the task waits AT the Delay
+    CHECK(r.log.empty());
+    r.inst->tick(0.2);
+    CHECK(hooks.fired.size() == 1 && r.log.empty());
+    r.inst->tick(0.4);
+    CHECK(hooks.fired.size() == 2 && hooks.fired[1] == std::make_pair(di, pi));   // now the Delay's link, then the Print
+    CHECK(r.log.size() == 1 && res.task->state() == TaskState::Finished);
+}
+
+TEST(loops_without_a_way_out_and_data_cycles_are_found) {
+    TestRuntime rt;
+    // Go -> P1 -> P2 -> P3 (-> P1?)   and a Branch / a Delay variant
+    GoGraph t;
+    NodeId p1 = t.say("1"), p2 = t.say("2"), p3 = t.say("3");
+    t.link(t.ev, "Then", p1, "In");
+    t.link(p1, "Then", p2, "In");
+    t.link(p2, "Then", p3, "In");
+    auto cg = [&](const Script& s) { return rt.compile(s); };
+    auto prog = cg(t.s);
+    const CompiledGraph& g = prog->graphs[0];
+    auto idx = [&](NodeId id) { return g.nodeIndex.at(id); };
+    CHECK(isPlainExecNode(*g.findNode(p1)));
+    CHECK(closesEndlessExecLoop(g, idx(p3), idx(p1)));                     // P3 -> P1 would loop for ever
+    CHECK(!closesEndlessExecLoop(g, idx(p3), idx(t.ev)));
+    CHECK(!closesEndlessExecLoop(g, idx(p1), idx(p3)));                    // P3 does not lead back to P1
+    auto warned = [&](const Script& s) {
+        const auto compiled = cg(s);            // kept: a range-for over cg(s)->diagnostics would outlive the temporary program
+        for (auto& d : compiled->diagnostics)
+            if (d.severity == Diagnostic::Severity::Warning && d.message.find("no way out") != std::string::npos) return true;
+        return false;
+    };
+    CHECK(!warned(t.s));
+    Script loop = t.s;
+    loop.graphs[0].connections.push_back({p3, "Then", p1, "In"});
+    CHECK(warned(loop));
+    // a Branch in the loop is a way out, a Delay makes it wait: both are fine
+    for (const char* def : {"flow.branch", "flow.delay"}) {
+        GoGraph w;
+        NodeId a = w.say("a"), x = w.node(def), b = w.say("b");
+        w.link(w.ev, "Then", a, "In");
+        w.link(a, "Then", x, "In");
+        w.link(x, std::string(def) == "flow.branch" ? "True" : "Then", b, "In");
+        auto pw = cg(w.s);
+        CHECK(!closesEndlessExecLoop(pw->graphs[0], pw->graphs[0].nodeIndex.at(b), pw->graphs[0].nodeIndex.at(a)));
+        w.link(b, "Then", a, "In");
+        CHECK(!warned(w.s));
+    }
+    // data: Add1 -> Add2 -> Add1 would be a value made of itself; an exec node in the way breaks the cycle
+    GoGraph d;
+    d.s.variables.push_back({"X", "int", Value(0), "", ""});
+    NodeId add1 = d.node("math.add"), add2 = d.node("math.add");
+    d.link(add1, "Result", add2, "A");
+    NodeId set = d.var("var.set", "X");
+    d.link(add2, "Result", set, "Value");
+    auto pd = cg(d.s);
+    const CompiledGraph& dg = pd->graphs[0];
+    CHECK(closesPureDataCycle(dg, dg.nodeIndex.at(add2), dg.nodeIndex.at(add1)));
+    CHECK(!closesPureDataCycle(dg, dg.nodeIndex.at(add1), dg.nodeIndex.at(add2)));       // already that way round: no cycle
+    CHECK(!closesPureDataCycle(dg, dg.nodeIndex.at(set), dg.nodeIndex.at(add1)));        // an exec node's output is a stored value
 }
 
 // ---- node reference ------------------------------------------------------------------------------------

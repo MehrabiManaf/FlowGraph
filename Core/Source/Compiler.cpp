@@ -543,17 +543,85 @@ struct GraphCompiler {
                 break;
             }
         }
+        // execution loops with no way out: plain exec nodes have one way on, so following it from every node finds each loop once
+        // (a walk stops at a node an earlier walk has seen; arriving at a node of the current walk is a loop)
+        std::vector<int> walk(cg.nodes.size(), 0);
+        int walkId = 0;
+        for (auto& start : cg.nodes) {
+            if (walk[static_cast<size_t>(start.index)] || !isPlainExecNode(start)) continue;
+            ++walkId;
+            int cur = start.index;
+            while (cur >= 0 && !walk[static_cast<size_t>(cur)] && isPlainExecNode(cg.nodes[static_cast<size_t>(cur)])) {
+                walk[static_cast<size_t>(cur)] = walkId;
+                const CompiledNode& n = cg.nodes[static_cast<size_t>(cur)];
+                cur = n.execTarget.empty() ? -1 : n.execTarget[0];
+            }
+            if (cur >= 0 && walk[static_cast<size_t>(cur)] == walkId)
+                diag(Severity::Warning, g.name, cg.nodes[static_cast<size_t>(cur)].id,
+                     "These nodes form an execution loop with no way out (no Branch, Delay or other flow node in it): it runs until the "
+                     "step limit stops the script");
+        }
     }
 };
 
 } // namespace
 
 // ---------------------------------------------------------------------------- public API
+bool isPlainExecNode(const CompiledNode& n) {
+    if (!n.def || n.pure) return false;
+    if (n.op != NodeOp::Native && n.op != NodeOp::SetVariable) return false;     // calls (may Exit), events, returns...
+    if (n.def->style == NodeStyle::Flow || n.def->waits) return false;          // Branch, Delay, loops, Gate, Sequence...
+    return !n.execIn.empty() && n.execOut.size() == 1;
+}
+
+bool closesEndlessExecLoop(const CompiledGraph& g, int fromIndex, int toIndex) {
+    const int count = static_cast<int>(g.nodes.size());
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= count || toIndex >= count) return false;
+    if (!isPlainExecNode(g.nodes[static_cast<size_t>(fromIndex)])) return false;
+    // plain nodes have one way on: follow it from `toIndex`; arriving at `fromIndex` closes the loop
+    int cur = toIndex;
+    for (int steps = 0; steps <= count && cur >= 0; ++steps) {
+        if (cur == fromIndex) return true;
+        const CompiledNode& n = g.nodes[static_cast<size_t>(cur)];
+        if (!isPlainExecNode(n)) return false;
+        cur = n.execTarget.empty() ? -1 : n.execTarget[0];
+    }
+    return false;
+}
+
+bool closesPureDataCycle(const CompiledGraph& g, int fromIndex, int toIndex) {
+    const int count = static_cast<int>(g.nodes.size());
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= count || toIndex >= count) return false;
+    if (!g.nodes[static_cast<size_t>(fromIndex)].pure) return false;
+    // what `fromIndex` is computed from, through pure nodes: if `toIndex` is among it, the new link makes it depend on itself
+    std::vector<char> seen(g.nodes.size(), 0);
+    std::vector<int> todo{fromIndex};
+    while (!todo.empty()) {
+        const int i = todo.back();
+        todo.pop_back();
+        if (seen[static_cast<size_t>(i)]) continue;
+        seen[static_cast<size_t>(i)] = 1;
+        for (const DataSource& ds : g.nodes[static_cast<size_t>(i)].inputs) {
+            if (ds.kind == DataSource::Kind::Default || !ds.pure || ds.node < 0) continue;
+            if (ds.node == toIndex) return true;
+            todo.push_back(ds.node);
+        }
+    }
+    return false;
+}
+
 std::string nodeTitle(const Node& n, const NodeDef* def) {
     if (def) {
         if (def->op == NodeOp::CallFunction) return n.prop("function").empty() ? def->title : n.prop("function");
         if (def->op == NodeOp::GetVariable) return "Get " + n.prop("name");
         if (def->op == NodeOp::SetVariable) return "Set " + n.prop("name");
+        // an enum literal shows its value ("Weekday.Friday"), a Switch on Enum its enum ("Switch on Weekday"), as in the palette
+        if (def->id.rfind("enum:", 0) == 0) {
+            std::string v = n.prop("value");
+            if (v.empty() && !def->settings.empty()) v = def->settings.front().def;
+            return v.empty() ? def->title : def->title + "." + v;
+        }
+        if (def->id == "flow.switch.enum" && !n.prop("enum").empty()) return "Switch on " + n.prop("enum");
         return def->title;
     }
     return n.def;

@@ -436,6 +436,7 @@ void Registry::rebuildGenerated() const {
         nd.style = pure ? NodeStyle::Pure : NodeStyle::Function;
         nd.mutatesFirstInput = fd->isMethod() && !fd->isConst;
         if (latent) nd.keywords += (nd.keywords.empty() ? "" : " ") + std::string("async wait latent");
+        nd.waits = latent;
         if (!pure) {
             nd.pins.push_back(execIn());
             nd.pins.push_back(execOut());
@@ -563,6 +564,16 @@ void Registry::rebuildGenerated() const {
             e.pure = true;
             e.style = NodeStyle::Pure;
             e.pins.push_back(dataOut("Value", td->name));
+            e.doc = td->doc.empty() ? "A value of the enum " + td->name + "." : td->doc;
+            {   // the value is chosen in the Details panel; the node's title shows it (nodeTitle: "Weekday.Friday")
+                NodeSetting value;
+                value.key = "value";
+                value.label = "Value";
+                value.kind = NodeSetting::Kind::Choice;
+                for (auto& v : td->enumValues) value.choices.push_back(v.name);
+                if (!value.choices.empty()) value.def = value.choices.front();
+                e.settings.push_back(std::move(value));
+            }
             e.expand = [td](const NodeBuildCtx&, std::vector<NodeTemplate>& out) {
                 for (auto& v : td->enumValues) {
                     NodeTemplate nt;

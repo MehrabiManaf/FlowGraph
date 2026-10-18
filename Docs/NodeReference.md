@@ -329,6 +329,10 @@ Type parameters: `K` any type; `V` any type (from what is connected)
 
 `enum:Weekday` · pure
 
+A value of the enum Weekday.
+
+Settings (Details panel): **Value** (one of Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday)
+
 | | Pin | Type | Default | |
 |-|-|-|-|-|
 | out | Value | `Weekday` |  |  |
@@ -1224,14 +1228,12 @@ The timestamp of a calendar date and time of day, in local time or in UTC. Value
 
 ### Now
 
-`fn:Time.Now` · exec
+`fn:Time.Now` · pure
 
 The current time: seconds since 1970-01-01 00:00 UTC, with milliseconds.
 
 | | Pin | Type | Default | |
 |-|-|-|-|-|
-| in | In | exec |  |  |
-| out | Then | exec |  |  |
 | out | Timestamp | `float` |  |  |
 
 ### Parse Date Time
@@ -1249,14 +1251,12 @@ The timestamp of an ISO 8601 text: 2026-10-18, 2026-10-18 14:30, 2026-10-18T14:3
 
 ### Seconds Since Start
 
-`fn:Time.Seconds Since Start` · exec
+`fn:Time.Seconds Since Start` · pure
 
 Seconds since the script instance started, from a steady clock (changes of the system time do not affect it): subtract two readings to measure how long something takes.
 
 | | Pin | Type | Default | |
 |-|-|-|-|-|
-| in | In | exec |  |  |
-| out | Then | exec |  |  |
 | out | Seconds | `float` |  |  |
 
 ## Utilities

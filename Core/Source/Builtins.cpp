@@ -351,6 +351,7 @@ void registerFlow(Registry& r) {
         NodeDef d = execNode("flow.delay", "Delay", "Flow");
         d.style = NodeStyle::Flow;
         d.keywords = "wait sleep latent";
+        d.waits = true;
         d.pins.push_back(dataIn("Duration", "float", Value(1.0)));
         d.run = [](NodeCtx& c) { c.wait(c.inFloat(0)); };
         r.addNode(std::move(d));

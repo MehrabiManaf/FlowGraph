@@ -58,6 +58,10 @@ int64_t localOffsetAt(double timestamp) {
     return local - static_cast<int64_t>(t);
 }
 
+// Dates are supported for a million years either way: far beyond what a script needs, far below where the arithmetic would overflow.
+constexpr int64_t kMaxYears = 1000000;
+constexpr double kMaxSeconds = 3.2e13;            // about a million years
+
 struct DateTime {
     int64_t year = 1970, month = 1, day = 1, hour = 0, minute = 0, second = 0, millisecond = 0;
     int64_t weekday = 4;        // ISO: Monday 1 ... Sunday 7 (1970-01-01 was a Thursday)
@@ -67,6 +71,7 @@ struct DateTime {
 
 DateTime breakTimestamp(double timestamp, bool local) {
     if (!std::isfinite(timestamp)) throw ScriptError("the timestamp is not a number");
+    if (std::fabs(timestamp) > kMaxSeconds) throw ScriptError("the timestamp is out of range (years -1000000 to 1000000)");
     DateTime dt;
     dt.offset = local ? localOffsetAt(timestamp) : 0;
     const int64_t totalMs = static_cast<int64_t>(std::llround(timestamp * 1000.0)) + dt.offset * 1000;
@@ -84,12 +89,18 @@ DateTime breakTimestamp(double timestamp, bool local) {
     return dt;
 }
 
-// Fields out of range carry over, like a calendar would: month 13 is January of the next year, day 0 the last day of the month before.
+
+// Fields out of range carry over, like a calendar would (and JavaScript's Date, C's mktime): month 13 is January of the next year,
+// day 0 the last day of the month before, hour 36 noon of the next day.
 double makeTimestamp(int64_t y, int64_t mo, int64_t d, int64_t h, int64_t mi, int64_t s, int64_t ms, bool local) {
+    auto tooFar = [] { throw ScriptError("the date is out of range (years -1000000 to 1000000)"); };
+    if (y < -kMaxYears || y > kMaxYears || mo < -12 * kMaxYears || mo > 12 * kMaxYears) tooFar();
     y += floorDiv(mo - 1, 12);
     mo = (mo - 1) - floorDiv(mo - 1, 12) * 12 + 1;
-    const double utc = static_cast<double>(daysFromCivil(y, mo, 1) + (d - 1)) * 86400.0 + static_cast<double>(h * 3600 + mi * 60 + s) +
-                       static_cast<double>(ms) / 1000.0;
+    // the other fields are added as floating point numbers: any value carries over without an integer overflow
+    const double utc = static_cast<double>(daysFromCivil(y, mo, 1)) * 86400.0 + static_cast<double>(d - 1) * 86400.0 +
+                       static_cast<double>(h) * 3600.0 + static_cast<double>(mi) * 60.0 + static_cast<double>(s) + static_cast<double>(ms) / 1000.0;
+    if (!(std::fabs(utc) <= kMaxSeconds)) tooFar();
     if (!local) return utc;
     // the offset depends on the moment itself (daylight saving time): two steps find it
     double t = utc - static_cast<double>(localOffsetAt(utc));
@@ -226,17 +237,18 @@ void registerTimeNodes(Registry& r) {
         .value("Monday", Weekday::Monday).value("Tuesday", Weekday::Tuesday).value("Wednesday", Weekday::Wednesday)
         .value("Thursday", Weekday::Thursday).value("Friday", Weekday::Friday).value("Saturday", Weekday::Saturday).value("Sunday", Weekday::Sunday);
 
-    // Exec nodes, like Random: each run reads the clock once, and every pin connected to the node sees that reading.
+    // Pure: the clock is read whenever a node needs the value (after a Delay that is a new reading). Unlike Random, two readings that
+    // differ by microseconds are what a clock is, and a pure clock goes straight into a Print or a Subtract.
     r.addFunction("Time.Now", [] {
         const auto now = std::chrono::system_clock::now().time_since_epoch();
         return static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count()) / 1000.0;
-    }).withResultName("Timestamp").withKeywords("time date clock current today unix epoch")
+    }).makePure().withResultName("Timestamp").withKeywords("time date clock current today unix epoch")
       .withDoc("The current time: seconds since 1970-01-01 00:00 UTC, with milliseconds.");
     r.addFunction("Time.Seconds Since Start", [] {
         static const auto processStart = std::chrono::steady_clock::now();
         if (Instance* inst = currentInstance()) return inst->secondsSinceStart();
         return std::chrono::duration<double>(std::chrono::steady_clock::now() - processStart).count();
-    }).withResultName("Seconds").withKeywords("time elapsed duration stopwatch measure")
+    }).makePure().withResultName("Seconds").withKeywords("time elapsed duration stopwatch measure")
       .withDoc("Seconds since the script instance started, from a steady clock (changes of the system time do not affect it): "
                "subtract two readings to measure how long something takes.");
 

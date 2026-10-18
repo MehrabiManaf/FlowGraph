@@ -89,7 +89,11 @@ void writeNode(std::ostringstream& o, const NodeDef& d) {
             const NodeSetting& s = d.settings[i];
             o << (i ? "; " : "") << "**" << s.label << "**";
             if (s.kind == NodeSetting::Kind::Count) o << " (" << s.min << " to " << s.max << ", default " << s.def << ")";
-            else o << " (one per line)";
+            else if (s.kind == NodeSetting::Kind::Choice) {
+                o << " (one of ";
+                for (size_t k = 0; k < s.choices.size(); ++k) o << (k ? ", " : "") << s.choices[k];
+                o << ")";
+            } else o << " (one per line)";
             if (!s.doc.empty()) o << " - " << s.doc;
         }
         o << "\n\n";

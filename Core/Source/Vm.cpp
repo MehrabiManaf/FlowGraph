@@ -477,6 +477,11 @@ RunResult Task::run(uint64_t maxNodes) {
         fail("Time limit of " + std::to_string(timeLimit) + " s exceeded", f.pc >= 0 ? &f.graph->nodes[static_cast<size_t>(f.pc)] : nullptr);
     }
     try {
+        if (waitingNext_ && !expired && !frames_.empty()) {      // the wait of a Delay is over: now its exec link is followed
+            waitingNext_ = false;
+            Frame& f = *frames_.back();
+            if (f.pc >= 0) follow(f, f.graph->nodes[static_cast<size_t>(f.pc)], static_cast<size_t>(pendingNextPin_));
+        }
         while (!expired) {
             if (inst_->abort_) {
                 state_ = TaskState::Aborted;
@@ -1003,6 +1008,17 @@ void Task::execGeneric(Frame& f, const CompiledNode& n, bool resumed) {
     }
 
     using A = NodeCtx::Action;
+    if (ctx.waiting_ && !ctx.resumeAfterWait_ && (ctx.action_ == A::Default || ctx.action_ == A::Wait || ctx.action_ == A::Next)) {
+        // A Delay: the task waits AT this node, and the exec link is followed when the wait is over (Task::run). That is when the next
+        // node runs - and when a debugger is told the link fired, so the editor animates it then, not when the wait begins.
+        pendingNextPin_ = ctx.action_ == A::Next ? static_cast<int>(ctx.pin_) : 0;
+        waitingNext_ = true;
+        f.pc = n.index;
+        state_ = TaskState::Waiting;
+        waitRemaining_ = ctx.waitSeconds_;
+        waitPoll_ = ctx.poll_ ? std::move(*ctx.poll_) : nullptr;
+        return;
+    }
     if (ctx.waiting_ && ctx.resumeAfterWait_) {
         // waitThenResume: when the wait is over the run loop finds this continuation and runs the node again
         Continuation c;

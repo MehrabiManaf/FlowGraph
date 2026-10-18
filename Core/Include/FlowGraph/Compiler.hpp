@@ -23,6 +23,17 @@ FG_CORE_EXPORT std::vector<CompiledPin> buildNodePins(const Node& node, const Re
 // Raw pin definitions (static + dynamic) of a node.
 FG_CORE_EXPORT std::vector<PinDef> collectPinDefs(const Node& node, const NodeDef& def, const Registry& reg, const Script* script, const Graph* graph);
 
+// ---- loops ----------------------------------------------------------------------------------------
+// A node that cannot leave a loop it is part of: an exec node with a single exec output that is not flow control (Branch, Delay,
+// loops, Gate...), does not wait and does not call a function (which may end the task). An execution loop made only of such
+// nodes runs until the step limit stops it.
+FG_CORE_EXPORT bool isPlainExecNode(const CompiledNode& n);
+// Would a new exec link from node `fromIndex` to node `toIndex` close a loop made only of plain exec nodes?
+FG_CORE_EXPORT bool closesEndlessExecLoop(const CompiledGraph& g, int fromIndex, int toIndex);
+// Would a new data link from node `fromIndex` (its output) to node `toIndex` (its input) close a cycle of pure nodes (a compile
+// error: the values would depend on themselves)?
+FG_CORE_EXPORT bool closesPureDataCycle(const CompiledGraph& g, int fromIndex, int toIndex);
+
 // Display title of a node (function / variable / event name for the script level nodes).
 FG_CORE_EXPORT std::string nodeTitle(const Node& node, const NodeDef* def);
 
