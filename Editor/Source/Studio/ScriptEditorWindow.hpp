@@ -26,6 +26,7 @@ class DetailsPanel;
 class DiagnosticsPanel;
 class LogPanel;
 class DebugPanel;
+class FindPanel;
 
 // The FlowGraph Studio main window: docked panels around a tab widget of graph editors.
 class ScriptEditorWindow : public KDDockWidgets::QtWidgets::MainWindow {
@@ -53,6 +54,8 @@ public:
     RunController& run() { return run_; }
     // Selects `entry` in the toolbar and starts it (as the Run button would, but without the argument dialog).
     void runEntry(const QString& entry);
+    // Edit > Collapse to Function: the selected nodes of the current graph become a function (`name` empty: the user is asked for one)
+    bool collapseSelection(const QString& name);
     // Developer aid: "node:<graph>:<id>", "var:<name>" or "graph:<name>" selects that item and shows its details.
     void devSelect(const QString& spec);
     // Developer aid for real-input smoke tests: writes global screen coordinates / script state to a text file.
@@ -81,6 +84,8 @@ private:
     void closeTab(int index);
     void syncScenes();
     void focusNode(const QString& graph, int node);
+    void showReferences(const fg::RefTarget& target);   // Find References: fills and raises the Find Results
+    void findReferencesOfSelection();                    // of the item selected in My Script, or of the selected node
     void onSelectionNodes(GraphScene* scene, const QList<int>& ids);
     void onCurrentTabChanged();
     void clearDebugMarks();
@@ -92,6 +97,15 @@ private:
     void attachToApplication();         // the Attach button
     void fileNew();
     void fileOpen();
+    void openPath(const QString& path, bool alreadyAsked);   // what Open does once the file is chosen (asks to save unless alreadyAsked)
+    // File > Open Recent: the last kMaxRecentFiles scripts opened or saved, per application (QSettings "editor/recentFiles/<app>")
+    static constexpr int kMaxRecentFiles = 10;
+    QString recentKey() const;
+    QStringList recentFiles() const;
+    void addRecentFile(const QString& path);
+    void rebuildRecentMenu();
+    void openRecent(const QString& path);
+    QMenu* recentMenu_ = nullptr;
     void updateTitle();
     void updateEditActions();
     void updateRunActions();
@@ -114,6 +128,8 @@ private:
     DiagnosticsPanel* diagnostics_ = nullptr;
     LogPanel* log_ = nullptr;
     DebugPanel* debug_ = nullptr;
+    FindPanel* find_ = nullptr;
+    CDockWidget* findDock_ = nullptr;
     std::vector<CDockWidget*> docks_;
     CDockWidget* debugDock_ = nullptr;
     CDockWidget* diagDock_ = nullptr;
@@ -131,6 +147,7 @@ private:
     QAction *actRun_, *actStop_, *actStepOver_, *actStepInto_, *actStepOut_, *actBreakpoint_;
     QAction *actAttach_ = nullptr, *actDetach_ = nullptr;     // embedded mode: the debugger attaches to what the application runs
     QAction* actAbout_;
+    QAction *actFind_ = nullptr, *actFindRefs_ = nullptr, *actCollapse_ = nullptr;
     QAction* actSnap_ = nullptr;
     QActionGroup* speedGroup_ = nullptr;
     QActionGroup* snapSizeGroup_ = nullptr;

@@ -206,6 +206,9 @@ void GraphView::contextMenuEvent(QContextMenuEvent* e) {
         QAction* note = m.addAction(QIcon(":/Icons/edit-comment.svg"), "Edit node comment...");
         QAction* open = nullptr;
         if (node->compiled().op == fg::NodeOp::CallFunction) open = m.addAction(QIcon(":/Icons/open-function.svg"), "Open function graph");
+        QAction* refs = m.addAction(QIcon(":/Icons/find-references.svg"), "Find References");
+        refs->setShortcut(QKeySequence("Shift+F12"));
+        QAction* collapse = m.addAction(QIcon(":/Icons/function.svg"), "Collapse to Function...");
         QAction* a = m.exec(e->globalPos());
         if (!a) return;
         if (a == cut) { sc->copySelected(); sc->deleteSelected(); }
@@ -218,6 +221,8 @@ void GraphView::contextMenuEvent(QContextMenuEvent* e) {
             QString t = QInputDialog::getText(this, "Node comment", "Comment:", QLineEdit::Normal, qs(node->compiled().comment), &ok);
             if (ok) sc->setNodeComment(node->nodeId(), t);
         } else if (a == open) sc->nodeActivated(node->nodeId());
+        else if (a == refs) sc->findReferences(node->nodeId());
+        else if (a == collapse) sc->collapseSelection();
         return;
     }
     if (auto* link = dynamic_cast<LinkItem*>(under)) {

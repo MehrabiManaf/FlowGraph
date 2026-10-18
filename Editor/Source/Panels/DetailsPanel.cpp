@@ -28,6 +28,7 @@
 #include <QMenu>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTableWidget>
@@ -50,6 +51,20 @@ QLabel* dim(const QString& t) {
     l->setForegroundRole(QPalette::PlaceholderText);
     return l;
 }
+
+// A multi-line text field that reports when the user is done with it (it lost the focus), like QLineEdit::editingFinished.
+class LinesEdit : public QPlainTextEdit {
+public:
+    std::function<void()> commit;
+protected:
+    void focusOutEvent(QFocusEvent* e) override {
+        QPlainTextEdit::focusOutEvent(e);
+        if (commit && document()->isModified()) {
+            document()->setModified(false);
+            commit();
+        }
+    }
+};
 
 // After a parameter of a function was renamed, the pins of the nodes that use it must follow.
 void renamePins(fg::Script& s, const std::string& graphName, bool isInput, const std::string& from, const std::string& to) {
@@ -870,15 +885,38 @@ void DetailsPanel::buildNodes() {
     }
     if (cn->op == fg::NodeOp::GetVariable || cn->op == fg::NodeOp::SetVariable)
         form_->addRow("Variable", new QLabel(qs(node->prop("name")) + "  (" + qs(node->prop("scope")) + ")"));
-    if (cn->defId == "flow.sequence" || cn->defId == "array.make") {
-        auto* sp = new QSpinBox;
-        sp->setRange(cn->defId == "flow.sequence" ? 1 : 0, cn->defId == "flow.sequence" ? 32 : 64);
-        sp->setValue(qs(node->prop("count", "2")).toInt());
-        connect(sp, qOverload<int>(&QSpinBox::valueChanged), this, [=](int v) {
-            mutateNode([&](fg::Node& n) { n.props["count"] = std::to_string(v); }, "Change pin count", "count:" + graph + QString::number(id));
-        });
-        form_->addRow(cn->defId == "flow.sequence" ? "Output pins" : "Elements", sp);
-    }
+    // the settings of the node (NodeDef::settings): pin counts, the cases of a switch...
+    if (cn->def)
+        for (const fg::NodeSetting& setting : cn->def->settings) {
+            const std::string key = setting.key;
+            const QString label = qs(setting.label.empty() ? setting.key : setting.label);
+            QWidget* editor = nullptr;
+            if (setting.kind == fg::NodeSetting::Kind::Count) {
+                auto* sp = new QSpinBox;
+                sp->setRange(setting.min, setting.max);
+                sp->setValue(qs(node->prop(key, setting.def)).toInt());
+                connect(sp, qOverload<int>(&QSpinBox::valueChanged), this, [=](int v) {
+                    mutateNode([&](fg::Node& n) { n.props[key] = std::to_string(v); }, "Change " + label.toLower(), qs(key) + ":" + graph + QString::number(id));
+                });
+                editor = sp;
+            } else {
+                // one text per line; applied when the editor loses the focus, so that a case being typed does not rename its pin at every key
+                auto* te = new LinesEdit;
+                te->setPlainText(qs(node->prop(key, setting.def)));
+                te->setTabChangesFocus(true);
+                te->setFixedHeight(te->fontMetrics().lineSpacing() * 6 + 12);
+                te->commit = [=, this] {
+                    const std::string text = ss(te->toPlainText());
+                    const fg::Graph* gr = doc_->script().findGraph(ss(graph));
+                    const fg::Node* now = gr ? gr->findNode(id) : nullptr;
+                    if (!now || now->prop(key, setting.def) == text) return;
+                    mutateNode([&](fg::Node& n) { n.props[key] = text; }, "Change " + label.toLower(), QString());
+                };
+                editor = te;
+            }
+            if (!setting.doc.empty()) editor->setToolTip(qs(setting.doc));
+            form_->addRow(label, editor);
+        }
     // type parameters
     if (cn->def)
         for (auto& tp : cn->def->typeParams) {

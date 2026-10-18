@@ -66,6 +66,81 @@ void DiagnosticsPanel::refresh() {
     emit summaryChanged(errors, warnings);
 }
 
+// ------------------------------------------------------------------ find
+FindPanel::FindPanel(Document* doc, QWidget* parent) : QWidget(parent), doc_(doc) {
+    auto* lay = new QVBoxLayout(this);
+    lay->setContentsMargins(4, 4, 4, 4);
+    edit_ = new QLineEdit(this);
+    edit_->setPlaceholderText("Find in script (node titles, comments, values)");
+    edit_->setClearButtonEnabled(true);
+    edit_->addAction(QIcon(":/Icons/find.svg"), QLineEdit::LeadingPosition);
+    summary_ = new QLabel(this);
+    tree_ = new QTreeWidget(this);
+    tree_->setColumnCount(3);
+    tree_->setHeaderLabels({"Graph", "Node", "Where"});
+    tree_->setRootIsDecorated(false);
+    tree_->setUniformRowHeights(true);
+    tree_->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    tree_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    lay->addWidget(edit_);
+    lay->addWidget(summary_);
+    lay->addWidget(tree_);
+    connect(edit_, &QLineEdit::textEdited, this, [this](const QString& t) { search(t); });
+    connect(edit_, &QLineEdit::returnPressed, this, [this] {
+        if (auto* first = tree_->topLevelItem(0)) emit tree_->itemActivated(first, 0);
+    });
+    connect(tree_, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem* it, int) {
+        if (it) emit activated(it->data(0, Qt::UserRole).toString(), it->data(0, Qt::UserRole + 1).toInt());
+    });
+    connect(doc_, &Document::compiled, this, [this] { refresh(); });
+    refresh();
+}
+
+void FindPanel::findReferences(const fg::RefTarget& target) {
+    references_ = true;
+    target_ = target;
+    edit_->clear();
+    refresh();
+}
+
+void FindPanel::search(const QString& text) {
+    references_ = false;
+    if (edit_->text() != text) edit_->setText(text);
+    refresh();
+}
+
+void FindPanel::focusSearch() {
+    edit_->setFocus(Qt::ShortcutFocusReason);
+    edit_->selectAll();
+}
+
+int FindPanel::resultCount() const { return tree_->topLevelItemCount(); }
+
+void FindPanel::refresh() {
+    tree_->clear();
+    const fg::Program* prog = doc_->program().get();
+    std::vector<fg::ScriptRef> refs;
+    QString what;
+    if (references_) {
+        refs = fg::findReferences(doc_->script(), prog, target_);
+        what = "References of " + qs(target_.describe());
+    } else if (!edit_->text().isEmpty()) {
+        refs = fg::searchScript(doc_->script(), prog, ss(edit_->text()));
+        what = "\"" + edit_->text() + "\"";
+    }
+    for (auto& r : refs) {
+        auto* it = new QTreeWidgetItem(tree_);
+        it->setText(0, qs(r.graph));
+        it->setText(1, qs(r.title));
+        it->setText(2, qs(r.detail));
+        it->setToolTip(2, qs(r.detail));
+        it->setData(0, Qt::UserRole, qs(r.graph));
+        it->setData(0, Qt::UserRole + 1, r.node);
+    }
+    if (what.isEmpty()) summary_->setText("Type to search, or use Find References on a node, variable or function.");
+    else summary_->setText(what + ": " + (refs.empty() ? QString("nothing found") : QString("%1 found").arg(refs.size())));
+}
+
 // ------------------------------------------------------------------ log
 LogPanel::LogPanel(QWidget* parent) : QPlainTextEdit(parent) {
     setReadOnly(true);

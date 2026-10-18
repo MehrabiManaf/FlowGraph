@@ -59,6 +59,8 @@ public:
     void chooseEnumValue(NodeItem* item, const std::string& pin, const fg::TypeDesc* type, const QPoint& screenPos);
     void nodeMoved(NodeItem* item);
     void nodeActivated(fg::NodeId id) { emit nodeDoubleClicked(id); }
+    void findReferences(fg::NodeId id) { emit referencesRequested(id); }
+    void collapseSelection() { emit collapseRequested(); }
     void requestAnimation() { animating_ = true; }
     void editCommentText(int id);
 
@@ -92,6 +94,8 @@ signals:
     void selectionNodesChanged(const QList<int>& ids);
     void paletteRequested(const PinRef& from, const QPointF& scenePos, const QPoint& screenPos);
     void nodeDoubleClicked(int id);
+    void referencesRequested(int id);           // the user asked for the references of the node (its variable, function or kind)
+    void collapseRequested();                   // ... to collapse the selected nodes into a function
     void message(const QString& text);
 
 protected:

@@ -19,7 +19,9 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QToolButton>
 #include <kddockwidgets/core/DockWidget.h>
@@ -777,6 +779,65 @@ TEST(rename_function_updates_calls) {
     CHECK_EQ(f.graph().nodes.back().prop("function"), std::string("Bar"));
 }
 
+// The Details panel offers the settings a node definition describes (NodeDef::settings): a spin box for a count, a text field with
+// one line per entry for a list (applied when it loses the focus).
+TEST(details_panel_edits_node_settings) {
+    Fixture f;
+    fg::NodeId seq = 0, sw = 0, gate = 0;
+    f.doc.edit("Add", [&](fg::Script& s) {
+        seq = s.graphs[0].addNode("flow.sequence").id;
+        sw = s.graphs[0].addNode("flow.switch.string", 0, 200).id;
+        gate = s.graphs[0].addNode("flow.gate", 0, 400).id;
+    });
+    f.scene.sync();
+    auto execOuts = [&](fg::NodeId id) { return f.doc.compiledGraph("EventGraph")->findNode(id)->execOut.size(); };
+    CHECK_EQ(execOuts(sw), size_t(3));                            // A, B, Default
+
+    DetailsPanel panel(&f.doc);
+    panel.show();
+    panel.showNodes("EventGraph", {seq});
+    QCoreApplication::processEvents();
+    auto spins = panel.findChildren<QSpinBox*>();
+    CHECK_EQ(spins.size(), 1);
+    if (spins.size() == 1) {
+        CHECK_EQ(spins[0]->maximum(), 32);
+        spins[0]->setValue(4);
+        CHECK_EQ(f.graph().findNode(seq)->prop("count"), std::string("4"));
+        CHECK_EQ(execOuts(seq), size_t(4));
+    }
+
+    panel.showNodes("EventGraph", {sw});
+    QCoreApplication::processEvents();
+    auto texts = panel.findChildren<QPlainTextEdit*>();
+    CHECK_EQ(texts.size(), 1);
+    if (texts.size() == 1) {
+        CHECK_EQ(texts[0]->toPlainText(), QString("A\nB"));
+        texts[0]->setPlainText("Yes\nNo\nMaybe");
+        texts[0]->document()->setModified(true);                  // as if typed
+        CHECK_EQ(execOuts(sw), size_t(3));                        // nothing applied while the field has the focus
+        QFocusEvent out(QEvent::FocusOut);
+        QCoreApplication::sendEvent(texts[0], &out);
+        CHECK_EQ(f.graph().findNode(sw)->prop("cases"), std::string("Yes\nNo\nMaybe"));
+        CHECK_EQ(execOuts(sw), size_t(4));
+        CHECK(f.doc.canUndo());
+        f.doc.undo();
+        CHECK_EQ(execOuts(sw), size_t(3));
+    }
+
+    // a node with several exec inputs gets a connector for each of them
+    f.scene.sync();
+    NodeItem* g = f.scene.nodeItem(gate);
+    CHECK(g != nullptr);
+    if (g) {
+        std::set<std::pair<double, double>> at;
+        for (const char* pin : {"Enter", "Open", "Close", "Toggle"}) {
+            QPointF p = g->pinScenePos(pin, fg::PinDir::In);
+            at.insert({p.x(), p.y()});
+        }
+        CHECK_EQ(at.size(), size_t(4));
+    }
+}
+
 // Selecting a call node edits the signature of the function it calls, exactly like selecting that function's entry or return
 // node would: it is the same Inputs / Outputs editor, not the read only pin list of an ordinary node.
 TEST(selecting_a_call_node_edits_the_called_function) {
@@ -1005,6 +1066,175 @@ struct StudioFixture {
         send(QEvent::MouseButtonRelease, to, Qt::LeftButton, Qt::NoButton);
     }
 };
+
+// Edit > Find References lists the nodes that use the variable of the selected node, follows the edits of the script and brings a
+// result into view; Find in Script searches the text of the nodes.
+TEST(studio_find_references_and_find_in_script) {
+    StudioFixture f;
+    Document* doc = f.win.document();
+    const QString graph = f.scene()->graphName();
+    std::vector<fg::NodeId> gets;
+    doc->edit("Nodes", [&](fg::Script& s) {
+        s.variables.push_back({"Score", "int", fg::Value(int64_t(0)), "", ""});
+        fg::Graph* g = s.findGraph(ss(graph));
+        for (int i = 0; i < 2; ++i) {
+            fg::Node& n = g->addNode("var.get", 100.0 * i, 300);
+            n.props = {{"name", "Score"}, {"scope", "global"}};
+            gets.push_back(n.id);
+        }
+        fg::Node& set = g->addNode("var.set", 300, 300);
+        set.props = {{"name", "Score"}, {"scope", "global"}};
+        g->addNode("util.print", 500, 300).defaults["String"] = fg::Value("Final score");
+    });
+    QCoreApplication::processEvents();
+    f.scene()->selectOnly(gets[0]);
+    QCoreApplication::processEvents();
+
+    QAction* refs = nullptr;
+    QAction* find = nullptr;
+    for (QAction* a : f.win.findChildren<QAction*>()) {
+        if (a->text() == "Find &References") refs = a;
+        if (a->text() == "&Find in Script...") find = a;
+    }
+    auto* panel = f.win.findChild<FindPanel*>();
+    CHECK(refs && find && panel);
+    if (!refs || !find || !panel) return;
+    CHECK_EQ(refs->shortcut(), QKeySequence("Shift+F12"));
+    refs->trigger();
+    QCoreApplication::processEvents();
+    CHECK_EQ(panel->resultCount(), 3);                            // two Get Score, one Set Score
+
+    // the results follow the script
+    doc->edit("More", [&](fg::Script& s) {
+        fg::Node& n = s.findGraph(ss(graph))->addNode("var.get", 0, 500);
+        n.props = {{"name", "Score"}, {"scope", "global"}};
+    });
+    QCoreApplication::processEvents();
+    CHECK_EQ(panel->resultCount(), 4);
+
+    // activating a result selects that node
+    auto* tree = panel->findChild<QTreeWidget*>();
+    CHECK(tree != nullptr);
+    if (tree) {
+        QTreeWidgetItem* second = tree->topLevelItem(1);
+        CHECK(second != nullptr);
+        if (second) {
+            const int id = second->data(0, Qt::UserRole + 1).toInt();
+            emit tree->itemActivated(second, 0);
+            QCoreApplication::processEvents();
+            CHECK(f.scene()->selectedNodeIds() == QList<fg::NodeId>{id});
+        }
+    }
+
+    // Find in Script: the search field takes the focus; typing searches titles, comments and values
+    find->trigger();
+    QCoreApplication::processEvents();
+    auto* field = panel->findChild<QLineEdit*>();
+    CHECK(field != nullptr);
+    if (field) {
+        for (QChar ch : QString("final")) {                      // typed, so that textEdited fires
+            QKeyEvent press(QEvent::KeyPress, 0, Qt::NoModifier, QString(ch));
+            QApplication::sendEvent(field, &press);
+        }
+        CHECK_EQ(field->text(), QString("final"));
+        QCoreApplication::processEvents();
+        CHECK_EQ(panel->resultCount(), 1);
+    }
+}
+
+// Edit > Collapse to Function: one undoable step; the call node is selected; a selection that cannot be collapsed changes nothing.
+TEST(studio_collapse_to_function) {
+    StudioFixture f;
+    Document* doc = f.win.document();
+    const QString graph = f.scene()->graphName();
+    fg::NodeId a = 0, b = 0;
+    doc->edit("Nodes", [&](fg::Script& s) {
+        fg::Graph* g = s.findGraph(ss(graph));
+        fg::NodeId main = 0;
+        for (auto& n : g->nodes) if (n.def.rfind("event:", 0) == 0) main = n.id;
+        fg::Node& p1 = g->addNode("util.print", 300, 0);
+        p1.defaults["String"] = fg::Value("one");
+        fg::Node& p2 = g->addNode("util.print", 500, 0);
+        p2.defaults["String"] = fg::Value("two");
+        a = p1.id;
+        b = p2.id;
+        g->connections.erase(std::remove_if(g->connections.begin(), g->connections.end(), [&](const fg::Connection& c) { return c.fromNode == main; }),
+                             g->connections.end());
+        g->connections.push_back({main, "Then", a, "In"});
+        g->connections.push_back({a, "Then", b, "In"});
+    });
+    QCoreApplication::processEvents();
+    const std::string before = doc->script().toText();
+
+    // an event cannot be moved: nothing happens, no undo step
+    fg::NodeId mainId = 0;
+    for (auto& n : doc->graph(graph)->nodes) if (n.def.rfind("event:", 0) == 0) mainId = n.id;
+    f.scene()->selectOnly(mainId);
+    QTimer::singleShot(0, [] {
+        for (QWidget* w : QApplication::topLevelWidgets())
+            if (auto* box = qobject_cast<QMessageBox*>(w)) box->accept();
+    });
+    const QString undoBefore = doc->undoLabel();
+    CHECK(!f.win.collapseSelection("Nope"));
+    CHECK(doc->script().toText() == before && doc->undoLabel() == undoBefore);
+
+    f.scene()->clearSelection();
+    f.scene()->nodeItem(a)->setSelected(true);
+    f.scene()->nodeItem(b)->setSelected(true);
+    QCoreApplication::processEvents();
+    CHECK(f.win.collapseSelection("PrintBoth"));
+    QCoreApplication::processEvents();
+    CHECK(doc->script().findGraph("PrintBoth") != nullptr);
+    CHECK(doc->program()->ok());
+    const QList<fg::NodeId> sel = f.scene()->selectedNodeIds();
+    CHECK(sel.size() == 1 && doc->graph(graph)->findNode(sel.front())->def == "func.call");
+    CHECK_EQ(doc->undoLabel(), QString("Collapse to function"));
+    doc->undo();
+    QCoreApplication::processEvents();
+    CHECK(doc->script().toText() == before);
+}
+
+// File > Open Recent lists what was opened and saved, newest first, and opens it again; a file that is gone is dropped.
+TEST(studio_open_recent_files) {
+    const QString dir = QDir::temp().filePath("FlowGraphEditorTests-recent");
+    QDir(dir).removeRecursively();
+    QDir().mkpath(dir);
+    const QString a = QDir(dir).filePath("a.flow"), b = QDir(dir).filePath("b.flow");
+    StudioFixture f;
+    auto* recent = f.win.findChild<QMenu*>("recentFiles");
+    CHECK(recent != nullptr);
+    if (!recent) return;
+    auto entries = [&] {
+        QStringList out;
+        for (QAction* act : recent->actions())
+            if (!act->isSeparator() && !act->toolTip().isEmpty() && act->toolTip().endsWith(".flow")) out << QFileInfo(act->toolTip()).fileName();
+        return out;
+    };
+    CHECK(entries().isEmpty() && !recent->isEnabled());
+    CHECK(f.win.document()->save(a, nullptr));                      // the new script, under two names
+    CHECK(f.win.document()->save(b, nullptr));
+    CHECK(f.win.openFile(a));
+    CHECK(f.win.openFile(b));
+    CHECK_EQ(entries(), QStringList({"b.flow", "a.flow"}));
+    CHECK(f.win.openFile(a));                                       // opened again: back on top, not twice
+    CHECK_EQ(entries(), QStringList({"a.flow", "b.flow"}));
+    // choosing an entry opens it
+    for (QAction* act : recent->actions())
+        if (act->toolTip().endsWith("b.flow")) act->trigger();
+    QCoreApplication::processEvents();
+    CHECK(QFileInfo(f.win.document()->path()).fileName() == "b.flow");
+    // a file that is gone: a message (closed at once here) and the entry is dropped
+    QFile::remove(a);
+    QTimer::singleShot(0, [] {
+        for (QWidget* w : QApplication::topLevelWidgets())
+            if (auto* box = qobject_cast<QMessageBox*>(w)) box->accept();
+    });
+    for (QAction* act : recent->actions())
+        if (act->toolTip().endsWith("a.flow")) act->trigger();
+    QCoreApplication::processEvents();
+    CHECK_EQ(entries(), QStringList({"b.flow"}));
+    QDir(dir).removeRecursively();
+}
 
 TEST(studio_window_node_move_sticks) {
     StudioFixture f;
@@ -1487,7 +1717,7 @@ TEST(standalone_editor_keeps_its_files_and_run_commands) {
     auto* win = static_cast<ScriptEditorWindow*>(editor.window());
     CHECK(!win->embedded());
     QMenu* file = menuTitled(win, "File");
-    CHECK(file && menuTexts(file) == QStringList({"New", "Open...", "Save", "Save As...", "Exit"}));
+    CHECK(file && menuTexts(file) == QStringList({"New", "Open...", "Open Recent", "Save", "Save As...", "Exit"}));
     CHECK(menuTitled(win, "Run") != nullptr && menuTitled(win, "Debug") == nullptr);
     CHECK(actionNamed(win, "Attach") == nullptr);
 }
@@ -1500,7 +1730,7 @@ TEST(embedded_editor_edits_the_script_of_the_application_and_save_gives_it_back)
     CHECK(win->embedded());
     // no New / Exit, no Run: Open (of scripts that fit), Save, Save As and the debugger's Attach / Detach instead
     QMenu* file = menuTitled(win, "File");
-    CHECK(file && menuTexts(file) == QStringList({"Open...", "Save", "Save As..."}));
+    CHECK(file && menuTexts(file) == QStringList({"Open...", "Open Recent", "Save", "Save As..."}));
     CHECK(menuTitled(win, "Run") == nullptr);
     QMenu* debug = menuTitled(win, "Debug");
     CHECK(debug && menuTexts(debug).contains("Attach") && menuTexts(debug).contains("Detach"));

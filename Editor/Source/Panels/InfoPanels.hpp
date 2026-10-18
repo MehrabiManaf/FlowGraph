@@ -31,6 +31,28 @@ private:
     QTreeWidget* tree_;
 };
 
+// "Find Results": the nodes that use a variable, call a function or are of a kind (Find References), or the nodes whose title,
+// comment or values contain the text of the search field (Find in Script). The results follow every edit of the script.
+class FindPanel : public QWidget {
+    Q_OBJECT
+public:
+    explicit FindPanel(Document* doc, QWidget* parent = nullptr);
+    void findReferences(const fg::RefTarget& target);
+    void search(const QString& text);
+    void focusSearch();                      // puts the cursor into the search field, its text selected
+    int resultCount() const;
+signals:
+    void activated(const QString& graph, int node);
+private:
+    void refresh();
+    Document* doc_;
+    QLineEdit* edit_;
+    QLabel* summary_;
+    QTreeWidget* tree_;
+    bool references_ = false;                // the results are references of target_ (otherwise: the search text)
+    fg::RefTarget target_;
+};
+
 // Output of Print String nodes, run messages and editor notifications.
 class LogPanel : public QPlainTextEdit {
     Q_OBJECT

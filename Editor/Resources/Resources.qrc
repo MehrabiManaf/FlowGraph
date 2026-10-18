@@ -33,6 +33,8 @@
         <file alias="local-variable.svg">Icons/local-variable.svg</file>
         <file alias="rename.svg">Icons/rename.svg</file>
         <file alias="goto.svg">Icons/goto.svg</file>
+        <file alias="find.svg">Icons/find.svg</file>
+        <file alias="find-references.svg">Icons/find-references.svg</file>
         <file alias="load-more.svg">Icons/load-more.svg</file>
         <file alias="watch-add.svg">Icons/watch-add.svg</file>
         <file alias="watch-range.svg">Icons/watch-range.svg</file>

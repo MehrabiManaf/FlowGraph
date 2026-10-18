@@ -28,6 +28,12 @@ signals:
     // Kind::Variable -> owner empty; Kind::Local -> owner is the function; Kind::Function -> name is the graph
     void selectionChanged(int kind, const QString& owner, const QString& name);
     void graphRenamed(const QString& from, const QString& to);
+    // "Find References" of a function / variable / local variable (same kind / owner / name as selectionChanged)
+    void referencesRequested(int kind, const QString& owner, const QString& name);
+
+public:
+    // The function / variable / local variable selected in the panel (Kind::None when there is none).
+    Kind selected(QString* owner, QString* name) const;
 
 private:
     // Events belong to the application; the list shows the ones this script handles.

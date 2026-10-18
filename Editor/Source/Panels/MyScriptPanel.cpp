@@ -350,6 +350,20 @@ void MyScriptPanel::onSelection(FitTree* tree) {
     else emit selectionChanged(int(Kind::None), "", "");
 }
 
+MyScriptPanel::Kind MyScriptPanel::selected(QString* owner, QString* name) const {
+    auto pick = [&](FitTree* tree, Kind kind, const QString& o) {
+        QTreeWidgetItem* it = tree ? tree->currentItem() : nullptr;
+        if (!it || !it->isSelected()) return false;
+        if (owner) *owner = o;
+        if (name) *name = it->data(0, kName).toString();
+        return true;
+    };
+    if (pick(functions_, Kind::Function, QString())) return Kind::Function;
+    if (pick(vars_, Kind::Variable, QString())) return Kind::Variable;
+    if (pick(locals_, Kind::Local, localsGraph_)) return Kind::Local;
+    return Kind::None;
+}
+
 void MyScriptPanel::beginRename(FitTree* tree, const QString& name) {
     QTimer::singleShot(0, this, [tree, name] {
         for (QTreeWidgetItemIterator it(tree); *it; ++it)
@@ -408,7 +422,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     QString graph = item->data(0, kMime).toString();
     int node = item->data(0, kNode).toInt();
     QMenu m;
-    QAction *open = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr;
+    QAction *open = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr, *refs = nullptr;
     if (isEvent) {
         open = m.addAction(QIcon(":/Icons/goto.svg"), "Go to handler");        // events belong to the application: they cannot be removed
     } else {
@@ -416,9 +430,17 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
         rename = m.addAction(QIcon(":/Icons/rename.svg"), "Rename");
         if (tree == functions_) dup = m.addAction(QIcon(":/Icons/duplicate.svg"), "Duplicate");
         del = m.addAction(QIcon(":/Icons/delete.svg"), "Delete");
+        m.addSeparator();
+        refs = m.addAction(QIcon(":/Icons/find-references.svg"), "Find References");
+        refs->setShortcut(QKeySequence("Shift+F12"));
     }
     QAction* a = m.exec(tree->viewport()->mapToGlobal(pos));
     if (!a) return;
+    if (a == refs) {
+        const Kind kind = tree == functions_ ? Kind::Function : tree == vars_ ? Kind::Variable : Kind::Local;
+        emit referencesRequested(int(kind), kind == Kind::Local ? localsGraph_ : QString(), name);
+        return;
+    }
     if (a == open) {
         if (isEvent) emit eventActivated(graph, node);
         else emit openGraph(name);

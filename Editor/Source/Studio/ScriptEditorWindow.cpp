@@ -13,8 +13,11 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
+#include <QInputDialog>
 #include <QPainter>
 #include <QFileDialog>
 #include <QTextStream>
@@ -160,6 +163,7 @@ void ScriptEditorWindow::createDocks() {
     diagnostics_ = new DiagnosticsPanel(&doc_);
     log_ = new LogPanel();
     debug_ = new DebugPanel(&doc_, &run_);
+    find_ = new FindPanel(&doc_);
 
     dMy_ = makeDock("My Script", myScript_, true);
     dDetails_ = makeDock("Details", details_, true);
@@ -167,11 +171,14 @@ void ScriptEditorWindow::createDocks() {
     auto* dLog = makeDock("Output Log", log_, false);
     logDock_ = dLog;
     debugDock_ = makeDock("Debugger", debug_, false);
+    findDock_ = makeDock("Find Results", find_, false);
 
     addDockWidget(dMy_, KDDockWidgets::Location_OnLeft, nullptr, KDDockWidgets::InitialOption(QSize(280, 400)));
     addDockWidget(dDetails_, KDDockWidgets::Location_OnRight, nullptr, KDDockWidgets::InitialOption(QSize(340, 400)));
     addDockWidget(dLog, KDDockWidgets::Location_OnBottom, nullptr, KDDockWidgets::InitialOption(QSize(600, 180)));
     dLog->addDockWidgetAsTab(diagDock_);
+    dLog->addDockWidgetAsTab(findDock_);
+    diagDock_->setAsCurrentTab();          // as before the Find Results dock existed
     dDetails_->addDockWidgetAsTab(debugDock_);       // the debugger shares the right-hand column with the details
     dDetails_->setAsCurrentTab();
 
@@ -196,6 +203,17 @@ void ScriptEditorWindow::createDocks() {
         statusLabel_->setStyleSheet(e ? "color:#ff7b7b" : w ? "color:#e6be3c" : "color:#7bd88f");
     });
     connect(debug_, &DebugPanel::locationActivated, this, [this](const QString& g, int n) { focusNode(g, n); });
+    connect(find_, &FindPanel::activated, this, [this](const QString& g, int n) {
+        if (n) focusNode(g, n);
+        else openGraph(g);                // a comment box: show its graph
+    });
+    connect(myScript_, &MyScriptPanel::referencesRequested, this, [this](int kind, const QString& owner, const QString& name) {
+        fg::RefTarget t;
+        t.kind = MyScriptPanel::Kind(kind) == MyScriptPanel::Kind::Function ? fg::RefTarget::Kind::Function : fg::RefTarget::Kind::Variable;
+        t.name = ss(name);
+        t.graph = ss(owner);
+        showReferences(t);
+    });
 }
 
 void ScriptEditorWindow::createActions() {
@@ -265,6 +283,21 @@ void ScriptEditorWindow::createActions() {
         actRun_->setText("Continue");
     }
     actAbout_ = act("&About " + host_.applicationName());
+    actFind_ = act("&Find in Script...", QKeySequence::Find);
+    actFind_->setIcon(QIcon(":/Icons/find.svg"));
+    actFind_->setToolTip("Find nodes by their title, comment or values in every graph of the script");
+    actFindRefs_ = act("Find &References", QKeySequence("Shift+F12"));
+    actFindRefs_->setIcon(QIcon(":/Icons/find-references.svg"));
+    actFindRefs_->setToolTip("The nodes that use the selected variable or function, or the nodes of the same kind as the selected node");
+    connect(actFind_, &QAction::triggered, this, [this] {
+        if (findDock_) { findDock_->open(); findDock_->raise(); }
+        find_->focusSearch();
+    });
+    connect(actFindRefs_, &QAction::triggered, this, [this] { findReferencesOfSelection(); });
+    actCollapse_ = act("Collapse to &Function...");
+    actCollapse_->setIcon(QIcon(":/Icons/function.svg"));
+    actCollapse_->setToolTip("Moves the selected nodes into a new function and calls it in their place");
+    connect(actCollapse_, &QAction::triggered, this, [this] { collapseSelection(QString()); });
 
     connect(actNew_, &QAction::triggered, this, [this] { fileNew(); });
     connect(actOpen_, &QAction::triggered, this, [this] { fileOpen(); });
@@ -317,15 +350,22 @@ void ScriptEditorWindow::createActions() {
 
 void ScriptEditorWindow::createMenus() {
     QMenu* file = menuBar()->addMenu("&File");
+    recentMenu_ = new QMenu("Open &Recent", this);
+    recentMenu_->setObjectName("recentFiles");
     if (embedded_) {
         // the application owns the script: no New / Exit; Open takes only scripts that fit the application; Save gives the script back,
         // Save As writes a copy to a file
-        file->addActions({actOpen_, actSave_, actSaveAs_});
+        file->addAction(actOpen_);
+        file->addMenu(recentMenu_);
+        file->addActions({actSave_, actSaveAs_});
     } else {
-        file->addActions({actNew_, actOpen_, actSave_, actSaveAs_});
+        file->addActions({actNew_, actOpen_});
+        file->addMenu(recentMenu_);
+        file->addActions({actSave_, actSaveAs_});
         file->addSeparator();
         file->addAction(actExit_);
     }
+    rebuildRecentMenu();
 
     QMenu* edit = menuBar()->addMenu("&Edit");
     edit->addActions({actUndo_, actRedo_});
@@ -333,6 +373,10 @@ void ScriptEditorWindow::createMenus() {
     edit->addActions({actCut_, actCopy_, actPaste_, actDuplicate_, actDelete_});
     edit->addSeparator();
     edit->addActions({actSelectAll_, actComment_});
+    edit->addSeparator();
+    edit->addActions({actFind_, actFindRefs_});
+    edit->addSeparator();
+    edit->addAction(actCollapse_);
 
     QMenu* view = menuBar()->addMenu("&View");
     view->addAction(actFrame_);
@@ -462,6 +506,11 @@ GraphView* ScriptEditorWindow::openGraph(const QString& name) {
     };
     connect(scene, &GraphScene::selectionNodesChanged, this, [this, scene](const QList<int>& ids) { onSelectionNodes(scene, ids); });
     connect(scene, &GraphScene::message, this, [this](const QString& m) { statusBar()->showMessage(m, 4000); });
+    connect(scene, &GraphScene::collapseRequested, this, [this] { collapseSelection(QString()); });
+    connect(scene, &GraphScene::referencesRequested, this, [this, scene](int id) {
+        const fg::Graph* g = doc_.graph(scene->graphName());
+        if (const fg::Node* n = g ? g->findNode(id) : nullptr) showReferences(fg::referenceTargetOf(doc_.script(), ss(scene->graphName()), *n));
+    });
     connect(scene, &GraphScene::nodeDoubleClicked, this, [this, scene](int id) {
         const fg::Graph* g = doc_.graph(scene->graphName());
         const fg::Node* n = g ? g->findNode(id) : nullptr;
@@ -527,6 +576,71 @@ void ScriptEditorWindow::focusNode(const QString& graph, int node) {
     v->setFocus();
 }
 
+void ScriptEditorWindow::showReferences(const fg::RefTarget& target) {
+    find_->findReferences(target);
+    if (findDock_) { findDock_->open(); findDock_->raise(); }
+    statusBar()->showMessage(QString("%1 reference(s) of %2").arg(find_->resultCount()).arg(qs(target.describe())), 4000);
+}
+
+void ScriptEditorWindow::findReferencesOfSelection() {
+    // the panel the user works in decides: an item of My Script, otherwise the node selected in the current graph
+    QWidget* focus = QApplication::focusWidget();
+    QString owner, name;
+    const MyScriptPanel::Kind kind = myScript_->selected(&owner, &name);
+    if (kind != MyScriptPanel::Kind::None && focus && myScript_->isAncestorOf(focus)) {
+        fg::RefTarget t;
+        t.kind = kind == MyScriptPanel::Kind::Function ? fg::RefTarget::Kind::Function : fg::RefTarget::Kind::Variable;
+        t.name = ss(name);
+        t.graph = ss(owner);
+        showReferences(t);
+        return;
+    }
+    GraphScene* s = currentScene();
+    const QList<fg::NodeId> ids = s ? s->selectedNodeIds() : QList<fg::NodeId>();
+    const fg::Graph* g = s ? doc_.graph(s->graphName()) : nullptr;
+    const fg::Node* n = g && ids.size() == 1 ? g->findNode(ids.front()) : nullptr;
+    if (!n) {
+        statusBar()->showMessage("Select a node, or a variable or function in My Script, to find its references", 4000);
+        return;
+    }
+    showReferences(fg::referenceTargetOf(doc_.script(), ss(s->graphName()), *n));
+}
+
+bool ScriptEditorWindow::collapseSelection(const QString& givenName) {
+    GraphScene* s = currentScene();
+    const QList<fg::NodeId> sel = s ? s->selectedNodeIds() : QList<fg::NodeId>();
+    if (!s || sel.isEmpty()) {
+        statusBar()->showMessage("Select the nodes to collapse into a function", 4000);
+        return false;
+    }
+    const std::string graph = ss(s->graphName());
+    std::vector<fg::NodeId> ids(sel.begin(), sel.end());
+    // tried on a copy first: a selection that cannot be collapsed leaves no undo step behind
+    fg::Script trial = doc_.script();
+    fg::CollapseResult probe = fg::collapseToFunction(trial, rt_.registry(), graph, ids);
+    if (!probe.ok) {
+        QMessageBox::information(this, "Collapse to Function", "These nodes cannot be collapsed into a function:\n" + qs(probe.error));
+        return false;
+    }
+    QString name = givenName;
+    if (name.isEmpty()) {
+        bool ok = false;
+        name = QInputDialog::getText(this, "Collapse to Function", "Name of the new function:", QLineEdit::Normal,
+                                     qs(doc_.script().uniqueGraphName("NewFunction")), &ok).trimmed();
+        if (!ok || name.isEmpty()) return false;
+    }
+    fg::CollapseResult result;
+    doc_.edit("Collapse to function", [&](fg::Script& script) { result = fg::collapseToFunction(script, rt_.registry(), graph, ids, ss(name)); });
+    if (!result.ok) {                                    // cannot happen after the trial, but never keep a half change
+        doc_.undo();
+        return false;
+    }
+    for (auto& w : result.warnings) log(int(fg::LogLevel::Warning), "Collapse to Function: " + qs(w));
+    statusBar()->showMessage("Collapsed " + QString::number(ids.size()) + " node(s) into " + qs(result.function), 4000);
+    if (GraphView* v = openGraph(s->graphName())) v->graphScene()->selectOnly(result.callNode);
+    return true;
+}
+
 void ScriptEditorWindow::onSelectionNodes(GraphScene* scene, const QList<int>& ids) {
     if (scene != currentScene()) return;
     details_->showNodes(scene->graphName(), ids);
@@ -570,10 +684,14 @@ void ScriptEditorWindow::newScript() {
 }
 
 void ScriptEditorWindow::fileOpen() {
+    if (!embedded_ && !maybeSave()) return;      // embedded: a script that does not fit is refused before anything is asked
+    QString path = QFileDialog::getOpenFileName(this, "Open script", QString(), kFilter, nullptr, QFileDialog::DontUseNativeDialog);
+    if (!path.isEmpty()) openPath(path, !embedded_);
+}
+
+void ScriptEditorWindow::openPath(const QString& path, bool alreadyAsked) {
     if (embedded_) {
         // a script that does not fit is refused before anything is asked or changed
-        QString path = QFileDialog::getOpenFileName(this, "Open script", QString(), kFilter, nullptr, QFileDialog::DontUseNativeDialog);
-        if (path.isEmpty()) return;
         fg::Script script;
         QString reason;
         try {
@@ -586,13 +704,67 @@ void ScriptEditorWindow::fileOpen() {
             showRejected(path, reason);
             return;
         }
-        if (!maybeSave()) return;
+        if (!alreadyAsked && !maybeSave()) return;
         openFile(path);
         return;
     }
-    if (!maybeSave()) return;
-    QString path = QFileDialog::getOpenFileName(this, "Open script", QString(), kFilter, nullptr, QFileDialog::DontUseNativeDialog);
-    if (!path.isEmpty()) openFile(path);
+    if (!alreadyAsked && !maybeSave()) return;
+    openFile(path);
+}
+
+// ------------------------------------------------------------------ recent files
+QString ScriptEditorWindow::recentKey() const { return "editor/recentFiles/" + host_.applicationName(); }
+
+QStringList ScriptEditorWindow::recentFiles() const { return editorSettings().value(recentKey()).toStringList(); }
+
+void ScriptEditorWindow::addRecentFile(const QString& path) {
+    if (path.isEmpty()) return;
+    const QString abs = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+    QStringList list = recentFiles();
+    list.removeIf([&](const QString& p) { return QFileInfo(p) == QFileInfo(abs); });     // the same file (case, separators...)
+    list.prepend(abs);
+    while (list.size() > kMaxRecentFiles) list.removeLast();
+    editorSettings().setValue(recentKey(), list);
+    rebuildRecentMenu();
+}
+
+void ScriptEditorWindow::rebuildRecentMenu() {
+    if (!recentMenu_) return;
+    // not clear(): the menu is rebuilt while one of its actions is being triggered (opening a recent file adds it again)
+    for (QAction* old : recentMenu_->actions()) {
+        recentMenu_->removeAction(old);
+        old->deleteLater();
+    }
+    const QStringList list = recentFiles();
+    for (int i = 0; i < list.size(); ++i) {
+        const QString path = list[i];
+        QFileInfo fi(path);
+        QAction* a = recentMenu_->addAction(QString("&%1  %2   %3").arg(i + 1 < 10 ? QString::number(i + 1) : QString("1&0"))
+                                                 .arg(fi.fileName(), QDir::toNativeSeparators(fi.absolutePath())));
+        a->setToolTip(QDir::toNativeSeparators(path));
+        a->setStatusTip(QDir::toNativeSeparators(path));
+        connect(a, &QAction::triggered, this, [this, path] { openRecent(path); });
+    }
+    if (!list.isEmpty()) {
+        recentMenu_->addSeparator();
+        recentMenu_->addAction(QIcon(":/Icons/clear.svg"), "&Clear Recent Files", this, [this] {
+            editorSettings().remove(recentKey());
+            rebuildRecentMenu();
+        });
+    }
+    recentMenu_->setEnabled(!list.isEmpty());
+}
+
+void ScriptEditorWindow::openRecent(const QString& path) {
+    if (!QFileInfo::exists(path)) {
+        QMessageBox::warning(this, "Open Recent", "'" + QDir::toNativeSeparators(path) + "' does not exist any more. It is removed from the list.");
+        QStringList list = recentFiles();
+        list.removeAll(path);
+        editorSettings().setValue(recentKey(), list);
+        rebuildRecentMenu();
+        return;
+    }
+    openPath(path, false);
 }
 
 bool ScriptEditorWindow::openFile(const QString& path) {
@@ -622,6 +794,7 @@ bool ScriptEditorWindow::openFile(const QString& path) {
         return false;
     }
     log(int(fg::LogLevel::Info), "Opened " + path);
+    addRecentFile(path);
     host_.scriptChanged(facade_, ScriptChange::Opened);   // a host may load plugins / launch files for this script
     auto report = fg::checkCompatibility(doc_.script(), rt_.registry());
     if (!report.ok()) {
@@ -723,6 +896,7 @@ bool ScriptEditorWindow::fileSave() {
         return false;
     }
     statusBar()->showMessage("Saved " + doc_.path(), 3000);
+    addRecentFile(doc_.path());
     host_.scriptChanged(facade_, ScriptChange::Saved);
     emit facade_.scriptChanged();
     return true;
@@ -753,6 +927,7 @@ bool ScriptEditorWindow::fileSaveAs() {
         return false;
     }
     statusBar()->showMessage("Saved " + path, 3000);
+    addRecentFile(path);
     host_.scriptChanged(facade_, ScriptChange::Saved);
     emit facade_.scriptChanged();
     return true;
@@ -787,6 +962,9 @@ void ScriptEditorWindow::closeEvent(QCloseEvent* e) {
     if (persistLayout_) {
         // Before the window closes: afterwards the floating windows and the docks are gone.
         editorSettings().setValue("editor/layout", KDDockWidgets::LayoutSaver().serializeLayout());
+        QStringList names;                 // the docks this layout knows (see restoreSavedLayout)
+        for (auto* dock : docks_) names << dock->uniqueName();
+        editorSettings().setValue("editor/layoutDocks", names);
     }
     KDDockWidgets::QtWidgets::MainWindow::closeEvent(e);
 }
@@ -801,6 +979,14 @@ void ScriptEditorWindow::restoreSavedLayout() {
     if (!KDDockWidgets::LayoutSaver().restoreLayout(saved)) {
         sizesApplied_ = false;
         return;
+    }
+    // A dock that is newer than the saved layout would stay closed: put it where it goes by default. (A layout saved before this list
+    // was kept knows the docks the editor had then.) Docks the layout knows keep whatever the user did with them, closed or not.
+    QStringList known = editorSettings().value("editor/layoutDocks").toStringList();
+    if (known.isEmpty()) known = {"My Script", "Details", "Compile Results", "Output Log", "Debugger"};
+    if (findDock_ && !known.contains(findDock_->uniqueName()) && logDock_) {
+        logDock_->addDockWidgetAsTab(findDock_);
+        logDock_->setAsCurrentTab();
     }
     // which single tabs the user had collapsed
     for (auto* dock : docks_) dock->LoadTabBarState();
