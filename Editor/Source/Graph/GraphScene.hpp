@@ -61,6 +61,9 @@ public:
     void nodeActivated(fg::NodeId id) { emit nodeDoubleClicked(id); }
     void findReferences(fg::NodeId id) { emit referencesRequested(id); }
     void collapseSelection() { emit collapseRequested(); }
+    // Collapse to Function is offered for a selection of at least this many nodes (one node is better left where it is)
+    static constexpr int kMinCollapseNodes = 2;
+    bool canCollapseSelection() const { return selectedNodeIds().size() >= kMinCollapseNodes; }
     void requestAnimation() { animating_ = true; }
     void editCommentText(int id);
 

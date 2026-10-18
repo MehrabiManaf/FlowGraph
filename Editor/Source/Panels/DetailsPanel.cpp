@@ -4,6 +4,7 @@
 
 #include <FlowGraph/Compatibility.hpp>
 #include "../Common/CollapsiblePanel/CollapsiblePanel.hpp"
+#include "../Common/SearchField.hpp"
 #include "TypeEdit.hpp"
 #include "TypeSpec.hpp"
 
@@ -133,8 +134,7 @@ DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), do
     outer->setContentsMargins(6, 6, 6, 6);
     outer->setAlignment(Qt::AlignTop);
     search_ = new QLineEdit(this);
-    search_->setPlaceholderText("Search");
-    search_->setClearButtonEnabled(true);
+    makeSearchField(search_, "Search");
     search_->setToolTip("Shows only the properties whose name or value contains this text");
     outer->addWidget(search_);
     connect(search_, &QLineEdit::textChanged, this, [this] { applyFilter(); });

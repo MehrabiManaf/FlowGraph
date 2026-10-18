@@ -123,6 +123,7 @@ ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, Q
     openGraph(qs(doc_.script().graphs.front().name));
     updateTitle();
     updateEditActions();
+    updateCollapseAction();
     updateRunActions();
     refreshEntries();
 }
@@ -606,11 +607,17 @@ void ScriptEditorWindow::findReferencesOfSelection() {
     showReferences(fg::referenceTargetOf(doc_.script(), ss(s->graphName()), *n));
 }
 
+void ScriptEditorWindow::updateCollapseAction() {
+    if (!actCollapse_) return;
+    GraphScene* s = currentScene();
+    actCollapse_->setEnabled(s && s->canCollapseSelection());
+}
+
 bool ScriptEditorWindow::collapseSelection(const QString& givenName) {
     GraphScene* s = currentScene();
     const QList<fg::NodeId> sel = s ? s->selectedNodeIds() : QList<fg::NodeId>();
-    if (!s || sel.isEmpty()) {
-        statusBar()->showMessage("Select the nodes to collapse into a function", 4000);
+    if (!s || sel.size() < GraphScene::kMinCollapseNodes) {
+        statusBar()->showMessage("Select at least two nodes to collapse them into a function", 4000);
         return false;
     }
     const std::string graph = ss(s->graphName());
@@ -644,6 +651,7 @@ bool ScriptEditorWindow::collapseSelection(const QString& givenName) {
 void ScriptEditorWindow::onSelectionNodes(GraphScene* scene, const QList<int>& ids) {
     if (scene != currentScene()) return;
     details_->showNodes(scene->graphName(), ids);
+    updateCollapseAction();
 }
 
 void ScriptEditorWindow::onCurrentTabChanged() {
@@ -653,6 +661,7 @@ void ScriptEditorWindow::onCurrentTabChanged() {
     QList<int> ids;
     for (auto id : s->selectedNodeIds()) ids.push_back(id);
     if (!ids.isEmpty()) details_->showNodes(s->graphName(), ids);
+    updateCollapseAction();
 }
 
 void ScriptEditorWindow::clearDebugMarks() {

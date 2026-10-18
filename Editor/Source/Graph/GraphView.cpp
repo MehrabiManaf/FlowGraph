@@ -209,6 +209,7 @@ void GraphView::contextMenuEvent(QContextMenuEvent* e) {
         QAction* refs = m.addAction(QIcon(":/Icons/find-references.svg"), "Find References");
         refs->setShortcut(QKeySequence("Shift+F12"));
         QAction* collapse = m.addAction(QIcon(":/Icons/function.svg"), "Collapse to Function...");
+        collapse->setEnabled(sc->canCollapseSelection());
         QAction* a = m.exec(e->globalPos());
         if (!a) return;
         if (a == cut) { sc->copySelected(); sc->deleteSelected(); }

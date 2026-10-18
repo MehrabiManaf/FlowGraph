@@ -1166,10 +1166,25 @@ TEST(studio_collapse_to_function) {
     QCoreApplication::processEvents();
     const std::string before = doc->script().toText();
 
+    QAction* collapseAct = nullptr;
+    for (QAction* act : f.win.findChildren<QAction*>())
+        if (act->text() == "Collapse to &Function...") collapseAct = act;
+    CHECK(collapseAct != nullptr);
+    // one node is not collapsed: the command is disabled and does nothing
+    f.scene()->selectOnly(a);
+    QCoreApplication::processEvents();
+    CHECK(collapseAct && !collapseAct->isEnabled());
+    CHECK(!f.win.collapseSelection("One"));
+    CHECK(doc->script().toText() == before);
+
     // an event cannot be moved: nothing happens, no undo step
     fg::NodeId mainId = 0;
     for (auto& n : doc->graph(graph)->nodes) if (n.def.rfind("event:", 0) == 0) mainId = n.id;
-    f.scene()->selectOnly(mainId);
+    f.scene()->clearSelection();
+    f.scene()->nodeItem(mainId)->setSelected(true);
+    f.scene()->nodeItem(a)->setSelected(true);
+    QCoreApplication::processEvents();
+    CHECK(collapseAct && collapseAct->isEnabled());
     QTimer::singleShot(0, [] {
         for (QWidget* w : QApplication::topLevelWidgets())
             if (auto* box = qobject_cast<QMessageBox*>(w)) box->accept();
@@ -1185,13 +1200,34 @@ TEST(studio_collapse_to_function) {
     CHECK(f.win.collapseSelection("PrintBoth"));
     QCoreApplication::processEvents();
     CHECK(doc->script().findGraph("PrintBoth") != nullptr);
-    CHECK(doc->program()->ok());
+    CHECK(doc->program()->ok() && doc->program()->diagnostics.empty());       // no exec output with two links (entry -> Return)
     const QList<fg::NodeId> sel = f.scene()->selectedNodeIds();
     CHECK(sel.size() == 1 && doc->graph(graph)->findNode(sel.front())->def == "func.call");
     CHECK_EQ(doc->undoLabel(), QString("Collapse to function"));
     doc->undo();
     QCoreApplication::processEvents();
     CHECK(doc->script().toText() == before);
+}
+
+// The search boxes of My Script, Details and Find Results look the same: a magnifier, a clear button, a placeholder.
+TEST(search_fields_look_the_same) {
+    StudioFixture f;
+    QList<QLineEdit*> fields;
+    for (QWidget* panel : {static_cast<QWidget*>(f.win.findChild<MyScriptPanel*>()), static_cast<QWidget*>(f.win.findChild<DetailsPanel*>()),
+                           static_cast<QWidget*>(f.win.findChild<FindPanel*>())}) {
+        CHECK(panel != nullptr);
+        if (!panel) return;
+        QLineEdit* e = panel->findChild<QLineEdit*>();
+        CHECK(e != nullptr);
+        if (e) fields << e;
+    }
+    for (QLineEdit* e : fields) {
+        CHECK(e->isClearButtonEnabled());
+        CHECK(!e->placeholderText().isEmpty());
+        int leading = 0;
+        for (QAction* act : e->actions()) leading += !act->icon().isNull();
+        CHECK(leading >= 1);                                          // the magnifier (the clear button is not one of these actions)
+    }
 }
 
 // File > Open Recent lists what was opened and saved, newest first, and opens it again; a file that is gone is dropped.

@@ -13,6 +13,7 @@
 #include <QLineEdit>
 #include <QLocale>
 #include <QMenu>
+#include "../Common/SearchField.hpp"
 #include "../Common/Settings.hpp"
 #include <QSettings>
 #include <QSplitter>
@@ -71,9 +72,7 @@ FindPanel::FindPanel(Document* doc, QWidget* parent) : QWidget(parent), doc_(doc
     auto* lay = new QVBoxLayout(this);
     lay->setContentsMargins(4, 4, 4, 4);
     edit_ = new QLineEdit(this);
-    edit_->setPlaceholderText("Find in script (node titles, comments, values)");
-    edit_->setClearButtonEnabled(true);
-    edit_->addAction(QIcon(":/Icons/find.svg"), QLineEdit::LeadingPosition);
+    makeSearchField(edit_, "Find in script (node titles, comments, values)");
     summary_ = new QLabel(this);
     tree_ = new QTreeWidget(this);
     tree_->setColumnCount(3);

@@ -1,5 +1,6 @@
 #include "MyScriptPanel.hpp"
 #include "../Common/CollapsiblePanel/CollapsiblePanel.hpp"
+#include "../Common/SearchField.hpp"
 #include "../Graph/GraphView.hpp"
 #include "../Graph/Style.hpp"
 #include "FitTree.hpp"
@@ -114,8 +115,7 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     top->setContentsMargins(4, 4, 4, 2);
     top->setSpacing(4);
     search_ = new QLineEdit(this);
-    search_->setPlaceholderText("Search");
-    search_->setClearButtonEnabled(true);
+    makeSearchField(search_, "Search");
     search_->setToolTip("Shows only the events, functions and variables whose name contains this text");
     addButton_ = new QToolButton(this);
     QSize iconSize;
@@ -426,7 +426,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     if (isEvent) {
         open = m.addAction(QIcon(":/Icons/goto.svg"), "Go to handler");        // events belong to the application: they cannot be removed
     } else {
-        open = m.addAction(QIcon(":/Icons/open-function.svg"), "Open");
+        if (tree == functions_) open = m.addAction(QIcon(":/Icons/open-function.svg"), "Open");     // only a function has a graph to open
         rename = m.addAction(QIcon(":/Icons/rename.svg"), "Rename");
         if (tree == functions_) dup = m.addAction(QIcon(":/Icons/duplicate.svg"), "Duplicate");
         del = m.addAction(QIcon(":/Icons/delete.svg"), "Delete");

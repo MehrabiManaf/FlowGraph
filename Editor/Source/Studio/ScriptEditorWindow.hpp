@@ -108,6 +108,7 @@ private:
     QMenu* recentMenu_ = nullptr;
     void updateTitle();
     void updateEditActions();
+    void updateCollapseAction();        // Collapse to Function needs a selection of GraphScene::kMinCollapseNodes nodes
     void updateRunActions();
     void runOrContinue();
 
