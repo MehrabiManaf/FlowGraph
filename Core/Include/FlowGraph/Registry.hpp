@@ -4,6 +4,7 @@
 //
 // Thread safety: register everything before running scripts. Looking things up and running
 // scripts from several threads is fine afterwards (container type creation is internally locked).
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/NodeDef.hpp>
 #include <FlowGraph/TypeExpr.hpp>
 #include <FlowGraph/Types.hpp>
@@ -25,7 +26,7 @@ struct EventDesc {
     std::vector<ParamDesc> params;
 };
 
-class Registry {
+class FG_CORE_EXPORT Registry {
 public:
     Registry();
     ~Registry();
@@ -132,7 +133,7 @@ private:
 // The instance that is currently executing script code (set by the interpreter), so host functions
 // can reach their context. Null when called outside of a script run.
 class Instance;
-Instance* currentInstance();
+FG_CORE_EXPORT Instance* currentInstance();
 
 } // namespace fg
 

@@ -1,6 +1,7 @@
 #pragma once
 // The script data model: what the editor edits and what is saved to disk. It is plain data;
 // the Compiler turns it into an executable Program.
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/Json.hpp>
 #include <FlowGraph/NodeDef.hpp>
 
@@ -72,7 +73,7 @@ struct CommentBox {
 
 enum class GraphKind : uint8_t { Event, Function };
 
-class Graph {
+class FG_CORE_EXPORT Graph {
 public:
     std::string name;
     GraphKind kind = GraphKind::Event;
@@ -95,7 +96,7 @@ public:
     CommentBox* findComment(int id);
 };
 
-class Script {
+class FG_CORE_EXPORT Script {
 public:
     std::string name = "Script";
     std::string doc;
@@ -122,15 +123,18 @@ public:
     void renameLocal(const std::string& graph, const std::string& from, const std::string& to);
 
     // ---- serialization (JSON, extension .flow)
+    // Version of the file format this build writes. Older files are read (and migrated); a file written by a newer
+    // FlowGraph is refused, because reading it would silently drop what this build does not understand.
+    static constexpr int kFileVersion = 1;
     Json toJson() const;
-    static Script fromJson(const Json& j);              // throws JsonError on malformed documents
+    static Script fromJson(const Json& j);              // throws JsonError on malformed documents and newer file versions
     std::string toText(int indent = 2) const { return toJson().dump(indent); }
     static Script parse(const std::string& text) { return fromJson(Json::parse(text)); }
     static Script load(const std::string& path);        // throws std::runtime_error / JsonError
     void save(const std::string& path) const;
 };
 
-Json valueToJson(const Value& v);
-Value jsonToValue(const Json& j);
+FG_CORE_EXPORT Json valueToJson(const Value& v);
+FG_CORE_EXPORT Value jsonToValue(const Json& j);
 
 } // namespace fg

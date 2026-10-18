@@ -2,6 +2,7 @@
 // The "standard application": the contract shared by `flow` (runs a script) and `flowstudio` (edits and debugs it).
 // A standard application raises exactly one event, Main(Args: array<string>), and scripts can end it early with the
 // Exit node. Any script that only uses Main runs in both programs.
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/Json.hpp>
 #include <FlowGraph/Registry.hpp>
 #include <FlowGraph/Script.hpp>
@@ -16,13 +17,13 @@ namespace fg::standard {
 inline constexpr const char* kMainEvent = "Main";
 
 // A new script of a standard application: one event graph that handles Main and prints a greeting.
-void createMainTemplate(Script& script, const Registry& reg);
+FG_CORE_EXPORT void createMainTemplate(Script& script, const Registry& reg);
 
 // Declares the event Main(Args: array<string>) and the "Exit" node (category Application).
-void registerStandardApp(Registry& reg);
+FG_CORE_EXPORT void registerStandardApp(Registry& reg);
 
 // array<string> value of the command line arguments of a script.
-Value argsValue(const Registry& reg, const std::vector<std::string>& args);
+FG_CORE_EXPORT Value argsValue(const Registry& reg, const std::vector<std::string>& args);
 
 struct RunOutcome {
     bool ok = false;             // the script finished (or exited) without an error
@@ -32,7 +33,7 @@ struct RunOutcome {
 };
 // Runs Main(args) to completion on the calling thread. This is the fast path used by `flow`: no scheduler, no
 // extra threads; Delay nodes really sleep. Log lines go to the instance's log handler.
-RunOutcome runMain(Instance& instance, const std::vector<std::string>& args);
+FG_CORE_EXPORT RunOutcome runMain(Instance& instance, const std::vector<std::string>& args);
 
 // How a script is launched by flowstudio (and optionally `flow --launch NAME`). Stored next to the script as
 // <script>.flowlaunch (JSON), see LaunchFile.
@@ -45,7 +46,7 @@ struct LaunchConfig {
     int stepDelayMs = 0;                           // slow motion while debugging
 };
 
-struct LaunchFile {
+struct FG_CORE_EXPORT LaunchFile {
     std::string selected;                          // name of the active configuration
     std::vector<LaunchConfig> configs;
 

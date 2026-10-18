@@ -3,7 +3,9 @@
 // functions into script visible types and nodes. Included at the end of Registry.hpp.
 #include <FlowGraph/Registry.hpp>
 
+#include <chrono>
 #include <functional>
+#include <future>
 #include <initializer_list>
 #include <map>
 #include <memory>
@@ -25,13 +27,18 @@ template <class T> struct IsMap : std::false_type {};
 template <class K, class V, class C, class A> struct IsMap<std::map<K, V, C, A>> : std::true_type {};
 template <class T> struct IsShared : std::false_type {};
 template <class T> struct IsShared<std::shared_ptr<T>> : std::true_type { using Elem = T; };
+// The result of an asynchronous host function (see FunctionDesc::latent).
+template <class T> struct IsFuture : std::false_type {};
+template <class T> struct IsFuture<std::future<T>> : std::true_type { using Result = T; };
+template <class T> struct IsFuture<std::shared_future<T>> : std::true_type { using Result = T; };
 template <class T> struct IsUnique : std::false_type {};
 template <class T, class D> struct IsUnique<std::unique_ptr<T, D>> : std::true_type { using Elem = T; };
 
 // A registered (reflected) class used by value, reference or pointer.
 template <class T>
 inline constexpr bool IsClassType = std::is_class_v<T> && !std::is_same_v<T, std::string> && !std::is_same_v<T, Value> &&
-                                    !IsVector<T>::value && !IsMap<T>::value && !IsShared<T>::value && !IsUnique<T>::value;
+                                    !IsVector<T>::value && !IsMap<T>::value && !IsShared<T>::value && !IsUnique<T>::value &&
+                                    !IsFuture<T>::value;
 
 // ---------------------------------------------------------------- function traits
 template <class F, class = void> struct FnTraits : FnTraits<decltype(&F::operator())> {};
@@ -288,6 +295,27 @@ Value invokeTuple(const Registry& reg, G& fn, Value* args, std::index_sequence<I
     }
 }
 
+// Calls `fn` and returns what it returned (a future of an asynchronous function).
+template <class G, class R, class Tuple, size_t... I>
+R callTuple(const Registry& reg, G& fn, Value* args, std::index_sequence<I...>) {
+    std::tuple<typename Arg<std::tuple_element_t<I, Tuple>>::Store...> store{
+        Arg<std::tuple_element_t<I, Tuple>>::load(reg, args[I])...};
+    (void)store;
+    (void)args;
+    return fn(Arg<std::tuple_element_t<I, Tuple>>::pass(std::get<I>(store))...);
+}
+
+// The value of a ready future (get() rethrows what the asynchronous work threw).
+template <class Fut> Value futureResult(const Registry& reg, Fut& f) {
+    using T = typename IsFuture<Fut>::Result;
+    if constexpr (std::is_void_v<T>) {
+        f.get();
+        return Value();
+    } else {
+        return Ret<T>::to(reg, f.get());
+    }
+}
+
 template <class Tuple, size_t... I>
 void describeParams(const Registry& r, std::vector<ParamDesc>& out, const std::vector<std::string>& names, size_t first,
                     std::index_sequence<I...>) {
@@ -318,7 +346,8 @@ void bindCallable(Registry& reg, FunctionDesc& fd, F fn, const std::vector<std::
     using Args = typename Tr::Args;
     using R = typename Tr::Ret;
     constexpr size_t N = std::tuple_size_v<Args>;
-    fd.ret = Ret<R>::type(reg);
+    if constexpr (IsFuture<Bare<R>>::value) fd.ret = Ret<typename IsFuture<Bare<R>>::Result>::type(reg);
+    else fd.ret = Ret<R>::type(reg);
     // parameters (skip the target object of methods)
     std::vector<ParamDesc> all;
     describeParams<Args>(reg, all, {}, 0, std::make_index_sequence<N>{});
@@ -330,9 +359,30 @@ void bindCallable(Registry& reg, FunctionDesc& fd, F fn, const std::vector<std::
         fd.params.push_back(std::move(p));
     }
     const Registry* rp = &reg;
-    fd.invoke = [rp, fn = std::move(fn)](Value* args) mutable -> Value {
-        return invokeTuple<F, R, Args>(*rp, fn, args, std::make_index_sequence<N>{});
-    };
+    if constexpr (IsFuture<Bare<R>>::value) {
+        // Asynchronous: the node starts the call and the script waits for the future without blocking the thread. Whatever the
+        // asynchronous work needs must be copied: the arguments only live until the function has returned.
+        using Fut = Bare<R>;
+        fd.latent = true;
+        auto shared = std::make_shared<F>(std::move(fn));
+        fd.start = [rp, shared](Value* args) -> PendingCall {
+            auto fut = std::make_shared<Fut>(callTuple<F, R, Args>(*rp, *shared, args, std::make_index_sequence<N>{}));
+            if (!fut->valid()) throw ScriptError("the asynchronous function returned no future");
+            PendingCall call;
+            call.ready = [fut] { return fut->wait_for(std::chrono::seconds(0)) == std::future_status::ready; };
+            call.result = [rp, fut] { return futureResult(*rp, *fut); };
+            return call;
+        };
+        fd.invoke = [rp, shared](Value* args) -> Value {        // called directly: waits for the result
+            Fut fut = callTuple<F, R, Args>(*rp, *shared, args, std::make_index_sequence<N>{});
+            if (!fut.valid()) throw ScriptError("the asynchronous function returned no future");
+            return futureResult(*rp, fut);
+        };
+    } else {
+        fd.invoke = [rp, fn = std::move(fn)](Value* args) mutable -> Value {
+            return invokeTuple<F, R, Args>(*rp, fn, args, std::make_index_sequence<N>{});
+        };
+    }
 }
 
 } // namespace detail
@@ -500,8 +550,8 @@ public:
         fd.owner = type_;
         fd.isConst = isConstCallable<F>();
         detail::bindCallable(*reg_, fd, std::move(callable), paramNames, true);
-        // const member returning a value => pure node (no exec pins)
-        if (fd.isConst && fd.ret != reg_->tVoid()) fd.pure = true;
+        // const member returning a value => pure node (no exec pins); an asynchronous one waits, which only an exec node can do
+        if (fd.isConst && fd.ret != reg_->tVoid() && !fd.latent) fd.pure = true;
         last_ = &fd;
         (void)sizeof(Tr);
         reg_->markDirty();

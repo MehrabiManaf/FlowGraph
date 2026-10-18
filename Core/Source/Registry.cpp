@@ -430,10 +430,13 @@ void Registry::rebuildGenerated() const {
         nd.doc = fd->doc;
         nd.keywords = fd->keywords;
         nd.source = fd->source;
-        nd.pure = fd->pure;
-        nd.style = fd->pure ? NodeStyle::Pure : NodeStyle::Function;
+        const bool latent = fd->latent && fd->start;
+        const bool pure = fd->pure && !latent;           // a pure node cannot wait (makePure() of an asynchronous function is ignored)
+        nd.pure = pure;
+        nd.style = pure ? NodeStyle::Pure : NodeStyle::Function;
         nd.mutatesFirstInput = fd->isMethod() && !fd->isConst;
-        if (!fd->pure) {
+        if (latent) nd.keywords += (nd.keywords.empty() ? "" : " ") + std::string("async wait latent");
+        if (!pure) {
             nd.pins.push_back(execIn());
             nd.pins.push_back(execOut());
         }
@@ -449,10 +452,29 @@ void Registry::rebuildGenerated() const {
         }
         bool hasRet = fd->ret && fd->ret->kind != TypeKind::Void;
         if (hasRet) nd.pins.push_back(dataOut(fd->retName, fd->ret->name));
-        nd.run = [fd, hasRet](NodeCtx& c) {
-            Value r = fd->invoke(c.inputs());
-            if (hasRet) c.out(0, std::move(r));
-        };
+        if (latent) {
+            // Starts the call, waits (the task, not the thread) until it is done, then runs again to hand out the result.
+            nd.run = [fd, hasRet](NodeCtx& c) {
+                std::shared_ptr<PendingCall> call;
+                if (c.resumed()) call = std::static_pointer_cast<PendingCall>(c.native());
+                else {
+                    call = std::make_shared<PendingCall>(fd->start(c.inputs()));
+                    if (!call->ready()) {
+                        c.native() = call;
+                        c.waitThenResume([call](double) { return call->ready(); });
+                        return;
+                    }
+                }
+                if (!call) c.error("lost the pending call of '" + fd->name + "'");
+                Value r = call->result();
+                if (hasRet) c.out(0, std::move(r));
+            };
+        } else {
+            nd.run = [fd, hasRet](NodeCtx& c) {
+                Value r = fd->invoke(c.inputs());
+                if (hasRet) c.out(0, std::move(r));
+            };
+        }
         put(std::move(nd));
     }
 

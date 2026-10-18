@@ -10,6 +10,7 @@
 //                  stepped or stopped from outside. Use it when a blocked script or a slow native function must
 //                  never freeze the host (editors, servers). Programs that only want to run a script to the end
 //                  can keep using Instance::callEvent directly.
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/Vm.hpp>
 
 #include <atomic>
@@ -24,7 +25,7 @@
 
 namespace fg {
 
-class Executor {
+class FG_CORE_EXPORT Executor {
 public:
     using Handle = uint64_t;
     struct Completion {
@@ -66,6 +67,10 @@ public:
     // Advances waits by `dt` seconds, then lets every ready task execute up to `nodesPerTask` nodes.
     PumpStats pump(double dt, uint64_t nodesPerTask = 2000);
 
+    // Hot reload (see Instance::reload): the instance goes on with `program` and keeps its variables. Queued, waiting and paused tasks
+    // are aborted and reported to the completion handler before this returns; events posted afterwards run the new program.
+    ReloadReport reload(std::shared_ptr<const Program> program);
+
     // Debugging: a paused task stays paused until it is resumed (after Debugger::command chose how).
     void resume(Handle h);
     void abort(Handle h);
@@ -95,7 +100,7 @@ private:
     bool serial_ = false;
 };
 
-class AsyncExecutor {
+class FG_CORE_EXPORT AsyncExecutor {
 public:
     using Handle = Executor::Handle;
     // All callbacks run on the worker thread: marshal them to your own thread (e.g. QMetaObject::invokeMethod).
@@ -128,6 +133,8 @@ public:
     void abort(Handle h);
     void abortAll();
     void setSerial(bool on);                         // see Executor::setSerial
+    // Hot reload on the worker, between two slices (see Executor::reload). Thread safe; do not call it from a callback.
+    ReloadReport reload(std::shared_ptr<const Program> program);
     void setStepDelay(int milliseconds);             // slow motion: one node per task every `milliseconds`
 
     // Runs `fn` on the worker thread between two slices and waits for it. This is the safe way to look at

@@ -1,0 +1,22 @@
+# FlowGraph package configuration.
+#
+#   find_package(FlowGraph REQUIRED)                          # FlowGraph::Core       the runtime (no Qt)
+#   find_package(FlowGraph REQUIRED COMPONENTS ScriptEditor)  # FlowGraph::ScriptEditor  the editor library (Qt 6)
+#
+# Plugins must be built with the same FlowGraph (major.minor) and compiler; the loader refuses others.
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+
+include("${CMAKE_CURRENT_LIST_DIR}/FlowGraphTargets.cmake")
+
+set(FlowGraph_Core_FOUND TRUE)
+set(FlowGraph_ScriptEditor_FOUND FALSE)
+if(TARGET FlowGraph::ScriptEditor)
+    # its public headers include Qt Widgets
+    find_dependency(Qt6 COMPONENTS Widgets Svg SvgWidgets)
+    set(FlowGraph_ScriptEditor_FOUND TRUE)
+endif()
+
+check_required_components(FlowGraph)

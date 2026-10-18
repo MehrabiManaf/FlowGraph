@@ -379,7 +379,7 @@ Graph graphFromJson(const Json& j) {
 Json Script::toJson() const {
     Json j = Json::object();
     j.set("format", "flowgraph");
-    j.set("version", 1);
+    j.set("version", kFileVersion);
     j.set("name", name);
     if (!doc.empty()) j.set("doc", doc);
     Json vars = Json::array();
@@ -394,6 +394,12 @@ Json Script::toJson() const {
 Script Script::fromJson(const Json& j) {
     if (!j.isObject()) throw JsonError("a script document must be a JSON object");
     if (j["format"].asString() != "flowgraph") throw JsonError("not a FlowGraph script (missing \"format\": \"flowgraph\")");
+    const int64_t version = j["version"].asInt(1);
+    if (version < 1) throw JsonError("invalid script file version " + std::to_string(version));
+    if (version > kFileVersion)
+        throw JsonError("the script was written by a newer FlowGraph (file version " + std::to_string(version) + "; this one reads up to version " +
+                        std::to_string(kFileVersion) + ")");
+    // Migrations from older versions go here, one step at a time (version 1 -> 2 -> ...), before the document is read.
     Script s;
     s.name = j["name"].asString("Script");
     s.doc = j["doc"].asString();

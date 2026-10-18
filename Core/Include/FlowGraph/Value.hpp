@@ -3,6 +3,7 @@
 //
 // Layout: kind tag + 8 byte payload (bool / int / float) + one shared_ptr for the reference kinds
 // (string, object, array, map). Copying a number never touches a reference count.
+#include <FlowGraph/Export.hpp>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -39,17 +40,17 @@ struct MapData;
 using ArrayRef = std::shared_ptr<ArrayData>;
 using MapRef = std::shared_ptr<MapData>;
 
-class ScriptError : public std::runtime_error {
+class FG_CORE_EXPORT ScriptError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
 // Thrown internally when a task is aborted.
-class AbortError : public ScriptError {
+class FG_CORE_EXPORT AbortError : public ScriptError {
 public:
     AbortError() : ScriptError("Execution aborted") {}
 };
 
-class Value {
+class FG_CORE_EXPORT Value {
 public:
     enum class Kind : uint8_t { Null, Bool, Int, Float, String, Object, Array, Map };
 
@@ -150,13 +151,20 @@ private:
 };
 
 // Total order used for map keys (null < bool < numbers < strings < objects).
-struct ValueLess {
+struct FG_CORE_EXPORT ValueLess {
     bool operator()(const Value& a, const Value& b) const {
         if (a.isInt() && b.isInt()) return a.rawInt() < b.rawInt();
         return slow(a, b);
     }
     static bool slow(const Value& a, const Value& b);
 };
+
+// Script integers wrap around on overflow (two's complement). Signed overflow is undefined behaviour in C++ - the optimizer may assume
+// it never happens - so the arithmetic is done on unsigned numbers, where wrapping is defined, and converted back.
+FG_FORCEINLINE int64_t addInt(int64_t x, int64_t y) { return static_cast<int64_t>(static_cast<uint64_t>(x) + static_cast<uint64_t>(y)); }
+FG_FORCEINLINE int64_t subInt(int64_t x, int64_t y) { return static_cast<int64_t>(static_cast<uint64_t>(x) - static_cast<uint64_t>(y)); }
+FG_FORCEINLINE int64_t mulInt(int64_t x, int64_t y) { return static_cast<int64_t>(static_cast<uint64_t>(x) * static_cast<uint64_t>(y)); }
+FG_FORCEINLINE int64_t negInt(int64_t x) { return static_cast<int64_t>(0 - static_cast<uint64_t>(x)); }   // -INT64_MIN == INT64_MIN
 
 // Integer division that cannot trap (the caller rejects y == 0). INT64_MIN / -1 wraps around, like + - * do, and INT64_MIN % -1 is 0:
 // the hardware raises an exception for both, which would end the whole process.

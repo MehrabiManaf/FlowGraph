@@ -1,6 +1,7 @@
 #pragma once
 // Minimal, dependency free JSON document model used for script files.
 // Object members keep their insertion order so files diff nicely.
+#include <FlowGraph/Export.hpp>
 #include <cstdint>
 #include <initializer_list>
 #include <stdexcept>
@@ -10,12 +11,12 @@
 
 namespace fg {
 
-class JsonError : public std::runtime_error {
+class FG_CORE_EXPORT JsonError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
 
-class Json {
+class FG_CORE_EXPORT Json {
 public:
     enum class Type : uint8_t { Null, Bool, Int, Float, String, Array, Object };
     using Array = std::vector<Json>;
@@ -78,7 +79,7 @@ public:
     std::string dump(int indent = 2) const;
     static Json parse(const std::string& text);         // throws JsonError
 
-    friend bool operator==(const Json& a, const Json& b);
+    friend FG_CORE_EXPORT bool operator==(const Json& a, const Json& b);
     friend bool operator!=(const Json& a, const Json& b) { return !(a == b); }
 
     static const Json& null();

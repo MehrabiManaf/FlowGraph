@@ -1,6 +1,7 @@
 #pragma once
 // Runtime: the facade hosts use. Owns the registry (with all built-ins), loads plugins, compiles
 // scripts and creates instances.
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/Builtins.hpp>
 #include <FlowGraph/Compatibility.hpp>
 #include <FlowGraph/Compiler.hpp>
@@ -9,6 +10,9 @@
 #include <FlowGraph/Inspect.hpp>
 #include <FlowGraph/Intellisense.hpp>
 #include <FlowGraph/Plugin.hpp>
+#include <FlowGraph/Refactor.hpp>
+#include <FlowGraph/Reference.hpp>
+#include <FlowGraph/Search.hpp>
 #include <FlowGraph/Vm.hpp>
 
 #include <memory>
@@ -17,7 +21,7 @@
 
 namespace fg {
 
-class Runtime {
+class FG_CORE_EXPORT Runtime {
 public:
     Runtime();
     ~Runtime();
@@ -27,12 +31,12 @@ public:
     Registry& registry() { return *reg_; }
     const Registry& registry() const { return *reg_; }
 
-    std::shared_ptr<Program> compile(const Script& s) const { return fg::compile(s, *reg_); }
+    std::shared_ptr<Program> compile(const Script& s, const CompileOptions& options = {}) const { return fg::compile(s, *reg_, options); }
 
     // Reads a script file and checks it against this runtime. `error` is set when the file cannot be read or parsed;
     // `report` lists everything the script needs that this application does not provide (events, plugins, types).
     // Applications that only run scripts refuse a script when !ok(); editors may open it anyway.
-    struct LoadedScript {
+    struct FG_CORE_EXPORT LoadedScript {
         Script script;
         CompatibilityReport report;
         std::string error;

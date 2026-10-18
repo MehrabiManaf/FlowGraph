@@ -122,6 +122,7 @@ struct GraphCompiler {
     const Script& script;
     const Registry& reg;
     Program& prog;
+    const CompileOptions& options;
 
     void diag(Severity s, const std::string& graph, NodeId node, const std::string& msg) {
         Diagnostic d;
@@ -208,6 +209,8 @@ struct GraphCompiler {
                     diag(Severity::Error, g.name, n.id, "'" + w.def->title + "' can only be used in an event graph");
                 if (w.def->functionGraphOnly && g.kind != GraphKind::Function)
                     diag(Severity::Error, g.name, n.id, "'" + w.def->title + "' can only be used in a function graph");
+                if (options.allowNode && !options.allowNode(*w.def))
+                    diag(Severity::Error, g.name, n.id, "'" + w.def->title + "' is not allowed in this application");
             }
             resolvePins(reg, w);
             cg.nodeIndex[n.id] = static_cast<int>(i);
@@ -445,6 +448,18 @@ struct GraphCompiler {
             }
         }
         if (g.kind == GraphKind::Function && !haveEntry) diag(Severity::Error, g.name, 0, "Function graph has no entry node");
+        // An exec node whose results are used but that is never executed: its outputs keep their default values.
+        for (auto& cn : cg.nodes) {
+            if (!cn.def || cn.pure || cn.execIn.empty()) continue;
+            bool execConnected = false, outputUsed = false;
+            for (auto& p : cn.pins) {
+                if (!p.connected) continue;
+                if (p.kind == PinKind::Exec && p.dir == PinDir::In) execConnected = true;
+                if (p.kind == PinKind::Data && p.dir == PinDir::Out) outputUsed = true;
+            }
+            if (outputUsed && !execConnected)
+                diag(Severity::Warning, g.name, cn.id, "'" + cn.title + "' is not connected to the execution flow: its outputs keep their default values");
+        }
     }
 
     // The node a data input is ultimately fed by, looking through reroutes and aliasing nodes.
@@ -568,9 +583,9 @@ std::vector<CompiledPin> buildNodePins(const Node& node, const Registry& reg, co
     return std::move(w.pins);
 }
 
-std::shared_ptr<Program> compile(const Script& script, const Registry& reg) {
+std::shared_ptr<Program> compile(const Script& script, const Registry& reg, const CompileOptions& options) {
     auto prog = std::make_shared<Program>();
-    GraphCompiler gc{script, reg, *prog};
+    GraphCompiler gc{script, reg, *prog, options};
     gc.declare();
     for (size_t i = 0; i < script.graphs.size(); ++i) gc.compileGraph(i);
     return prog;

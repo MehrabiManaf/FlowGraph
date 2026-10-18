@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <mutex>
@@ -474,6 +475,29 @@ TEST(script_json_roundtrip) {
     CHECK(t.graphs[0].inputs[0].byRef);
 }
 
+TEST(files_of_a_newer_version_are_refused) {
+    auto refused = [](const std::string& text, const char* what) {
+        try { Script::parse(text); } catch (const JsonError& e) { return std::string(e.what()).find(what) != std::string::npos; }
+        return false;
+    };
+    Script s;
+    s.addEventGraph();
+    Json j = s.toJson();
+    CHECK_EQ(j["version"].asInt(), int64_t(Script::kFileVersion));
+    j.set("version", Script::kFileVersion + 1);
+    CHECK(refused(j.dump(), "newer FlowGraph"));
+    j.set("version", 0);
+    CHECK(refused(j.dump(), "invalid script file version"));
+    j.set("version", Script::kFileVersion);
+    CHECK_EQ(Script::parse(j.dump()).graphs.size(), size_t(1));
+
+    Json lj = standard::LaunchFile().toJson();
+    lj.set("version", 2);
+    bool launchRefused = false;
+    try { standard::LaunchFile::fromJson(lj); } catch (const JsonError&) { launchRefused = true; }
+    CHECK(launchRefused);
+}
+
 TEST(runtime_error_is_reported_with_node) {
     TestRuntime rt;
     Script s;
@@ -518,6 +542,47 @@ TEST(int64_min_divided_by_minus_one_does_not_trap) {
     CHECK_EQ(divideInt(7, -1), int64_t(-7));
     CHECK_EQ(moduloInt(std::numeric_limits<int64_t>::min(), -1), int64_t(0));
     CHECK_EQ(moduloInt(-7, 3), int64_t(-1));
+}
+
+TEST(integer_overflow_wraps_around) {
+    const int64_t mn = std::numeric_limits<int64_t>::min(), mx = std::numeric_limits<int64_t>::max();
+    struct Case { const char* op; int64_t a, b, expected; };
+    const Case cases[] = {{"math.add", mx, 1, mn}, {"math.sub", mn, 1, mx}, {"math.mul", mx, 2, -2}, {"math.mul", mn, -1, mn},
+                          {"math.neg", mn, 0, mn}, {"math.abs", mn, 0, mn}};
+    // Every case runs twice: inline (the interpreter's intrinsic) and through the node's `run` (a copy of the node without the intrinsic).
+    for (bool viaRun : {false, true}) {
+        for (const Case& c : cases) {
+            TestRuntime rt;
+            std::string op = c.op;
+            if (viaRun) {
+                NodeDef copy = *rt.registry().findNode(c.op);
+                copy.id = std::string("test.") + c.op;
+                copy.intrinsic = Intrinsic::None;
+                rt.registry().addNode(std::move(copy));
+                op = std::string("test.") + c.op;
+            }
+            Script s;
+            s.variables.push_back({"R", "int", Value(7), "", ""});
+            Graph& g = s.addEventGraph();
+            NodeId ev = g.addNode("event:Go").id;
+            Node& n = g.addNode(op);
+            const bool unary = std::string(c.op) == "math.neg" || std::string(c.op) == "math.abs";
+            if (unary) n.defaults["Value"] = Value(c.a);
+            else { n.defaults["A"] = Value(c.a); n.defaults["B"] = Value(c.b); }
+            NodeId nid = n.id;
+            NodeId set = g.addNode("var.set").id;
+            g.findNode(set)->props = {{"name", "R"}, {"scope", "global"}};
+            link(g, ev, "Then", set, "In");
+            link(g, nid, "Result", set, "Value");
+            auto prog = build(rt, s);
+            Instance inst(prog);
+            CHECK(inst.callEvent("Go").ok);
+            CHECK_EQ(inst.getVariable("R").toInt(), c.expected);
+        }
+    }
+    CHECK_EQ(addInt(mx, 1), mn);
+    CHECK_EQ(subInt(mn, 1), mx);
+    CHECK_EQ(negInt(mn), mn);
 }
 
 TEST(deeply_nested_containers_are_a_script_error) {
@@ -643,6 +708,14 @@ TEST(type_mismatch_is_a_compile_error) {
 }
 
 static std::string g_exeDir;
+// File name extension of shared libraries (plugins) on this platform.
+#if defined(_WIN32)
+static const std::string kLibExt = ".dll";
+#elif defined(__APPLE__)
+static const std::string kLibExt = ".dylib";
+#else
+static const std::string kLibExt = ".so";
+#endif
 
 TEST(palette_search_and_pin_filter) {
     TestRuntime rt;
@@ -720,7 +793,7 @@ TEST(inspect_values_and_frames) {
 }
 
 TEST(plugin_loading) {
-    std::string path = g_exeDir + "/plugins/ExamplePlugin.dll";
+    std::string path = g_exeDir + "/plugins/ExamplePlugin" + kLibExt;
     if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
     TestRuntime rt;
     std::string err;
@@ -1186,6 +1259,34 @@ TEST(plugin_path_lists_load_each_plugin_once) {
     CHECK(errors.empty());
     CHECK(rt.registry().findType("Counter") != nullptr);
     CHECK_EQ(rt.loadedPlugins().size(), size_t(1));
+}
+
+TEST(plugins_built_for_another_abi_are_refused) {
+    const std::string legacy = g_exeDir + "/testplugins/AbiPlugin_legacy" + kLibExt, mismatch = g_exeDir + "/testplugins/AbiPlugin_mismatch" + kLibExt;
+    if (!std::filesystem::exists(legacy) || !std::filesystem::exists(mismatch)) { std::printf("  (skipped: test plugins not built)\n"); return; }
+    CHECK(pluginAbiMismatch(currentPluginAbi(), currentPluginAbi()).empty());
+
+    TestRuntime rt;
+    std::string err;
+    CHECK(!rt.loadPlugin(legacy, &err));
+    CHECK(err.find("older FlowGraph") != std::string::npos);
+    CHECK(!rt.loadPlugin(mismatch, &err));
+    CHECK(err.find("plugin ABI version") != std::string::npos);
+    // Their registration functions never ran.
+    CHECK(rt.registry().findEvent("LegacyPluginRegistered") == nullptr);
+    CHECK(rt.registry().findEvent("MismatchPluginRegistered") == nullptr);
+    CHECK(rt.loadedPlugins().empty());
+    // A failed library is not remembered as loaded: trying again reports the reason again.
+    err.clear();
+    CHECK(!rt.loadPlugin(legacy, &err));
+    CHECK(!err.empty());
+
+    PluginAbi other = currentPluginAbi();
+    other.flavour ^= 1u;
+    CHECK(pluginAbiMismatch(other, currentPluginAbi()).find("Debug and Release") != std::string::npos);
+    other = currentPluginAbi();
+    other.layout ^= 1u;
+    CHECK(pluginAbiMismatch(other, currentPluginAbi()).find("other FlowGraph headers") != std::string::npos);
 }
 
 // ---- interpreter fast paths ---------------------------------------------------------------------------
@@ -2269,6 +2370,873 @@ TEST(nodes_can_have_custom_pins_next_to_the_fixed_ones) {
     CHECK(checkCompatibility(s, rt.registry()).ok());
     g.findNode(sum)->inputs[0].type = "Nope";
     CHECK(!checkCompatibility(s, rt.registry()).ok());
+}
+
+// ---- flow, string and array nodes ----------------------------------------------------------------------
+// An event graph for "Go" built node by node; Print String nodes ("say") show which way the execution went.
+struct GoGraph {
+    Script s;
+    Graph* g = nullptr;
+    NodeId ev = 0;
+    GoGraph() { g = &s.addEventGraph(); ev = g->addNode("event:Go").id; }
+    NodeId node(const std::string& def, std::map<std::string, Value> defaults = {}, std::map<std::string, std::string> props = {}) {
+        Node& n = g->addNode(def);
+        n.defaults = std::move(defaults);
+        n.props = std::move(props);
+        return n.id;
+    }
+    NodeId say(const char* text) { return node("util.print", {{"String", Value(text)}}); }
+    NodeId var(const char* kind, const char* name) { return node(kind, {}, {{"name", name}, {"scope", "global"}}); }
+    void link(NodeId a, const std::string& ap, NodeId b, const std::string& bp) { g->connections.push_back({a, ap, b, bp}); }
+};
+struct GoRun {
+    std::shared_ptr<Program> prog;
+    std::unique_ptr<Instance> inst;
+    std::vector<std::string> log;
+    GoRun(Runtime& rt, const Script& s) : prog(build(rt, s)) {
+        inst = std::make_unique<Instance>(prog);
+        inst->setLogHandler([this](LogLevel, const std::string& m) { log.push_back(m); });
+    }
+    std::string go() {                    // runs Go once, returns what it printed ("a,b,")
+        log.clear();
+        RunResult r = inst->callEvent("Go");
+        if (!r.ok) return "error: " + r.error;
+        std::string out;
+        for (auto& l : log) out += l + ",";
+        return out;
+    }
+};
+
+TEST(switch_nodes_choose_the_output_of_the_selection) {
+    TestRuntime rt;
+    registerSample(rt);
+    GoGraph t;
+    t.s.variables.push_back({"I", "int", Value(0), "", ""});
+    t.s.variables.push_back({"S", "string", Value(""), "", ""});
+    t.s.variables.push_back({"M", "Mood", Value(0), "", ""});
+    NodeId si = t.node("flow.switch.int", {}, {{"count", "3"}});
+    NodeId ss = t.node("flow.switch.string", {}, {{"cases", "Red\nGreen\n\nRed\nDefault"}});   // empty, repeated and "Default" lines are dropped
+    NodeId se = t.node("flow.switch.enum", {}, {{"enum", "Mood"}});
+    t.link(t.var("var.get", "I"), "Value", si, "Selection");
+    t.link(t.var("var.get", "S"), "Value", ss, "Selection");
+    t.link(t.var("var.get", "M"), "Value", se, "Selection");
+    NodeId seq = t.node("flow.sequence", {}, {{"count", "3"}});
+    t.link(t.ev, "Then", seq, "In");
+    t.link(seq, "Then 0", si, "In");
+    t.link(seq, "Then 1", ss, "In");
+    t.link(seq, "Then 2", se, "In");
+    for (const char* p : {"0", "1", "2", "Default"}) t.link(si, p, t.say((std::string("i") + p).c_str()), "In");
+    for (const char* p : {"Red", "Green", "Default"}) t.link(ss, p, t.say((std::string("s") + p).c_str()), "In");
+    for (const char* p : {"Happy", "Sad"}) t.link(se, p, t.say((std::string("m") + p).c_str()), "In");
+
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    const CompiledNode* cs = r.prog->graphs[0].findNode(ss);
+    CHECK(cs && cs->execOut.size() == 3);                          // Red, Green, Default
+    CHECK_EQ(r.go(), std::string("i0,sDefault,mHappy,"));
+    r.inst->setVariable("I", Value(2));
+    r.inst->setVariable("S", Value("Green"));
+    r.inst->setVariable("M", Value(1));
+    CHECK_EQ(r.go(), std::string("i2,sGreen,mSad,"));
+    r.inst->setVariable("I", Value(3));
+    r.inst->setVariable("S", Value("red"));                        // case sensitive
+    CHECK_EQ(r.go(), std::string("iDefault,sDefault,mSad,"));
+    r.inst->setVariable("I", Value(-1));
+    r.inst->setVariable("S", Value("Default"));
+    r.inst->setVariable("M", Value(7));                            // not a Mood
+    std::string out = r.go();
+    CHECK(out.find("7 is not a value of Mood") != std::string::npos);
+
+    // the palette offers one Switch per enum of the application
+    NodeBuildCtx ctx{rt.registry(), &t.s, t.g};
+    bool offered = false;
+    for (auto& tp : buildPalette(ctx)) offered |= tp.defId == "flow.switch.enum" && tp.title == "Switch on Mood" && tp.props.at("enum") == "Mood";
+    CHECK(offered);
+    // the settings are described for editors
+    CHECK_EQ(rt.registry().findNode("flow.switch.string")->settings.at(0).kind, NodeSetting::Kind::Lines);
+    CHECK_EQ(rt.registry().findNode("flow.sequence")->settings.at(0).max, 32);
+}
+
+TEST(do_once_gate_and_flip_flop_remember_their_state) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.variables.push_back({"Step", "int", Value(0), "", ""});
+    NodeId sw = t.node("flow.switch.int", {}, {{"count", "6"}});
+    t.link(t.var("var.get", "Step"), "Value", sw, "Selection");
+    NodeId seq = t.node("flow.sequence", {}, {{"count", "3"}});
+    t.link(t.ev, "Then", seq, "In");
+    t.link(seq, "Then 0", sw, "In");
+    // Step 0: Do Once, 1: Reset Do Once, 2: Gate Enter, 3: Gate Close, 4: Gate Open, 5: Gate Toggle
+    NodeId once = t.node("flow.doonce");
+    t.link(sw, "0", once, "In");
+    t.link(sw, "1", once, "Reset");
+    t.link(once, "Completed", t.say("once"), "In");
+    NodeId gate = t.node("flow.gate");
+    t.link(sw, "2", gate, "Enter");
+    t.link(sw, "3", gate, "Close");
+    t.link(sw, "4", gate, "Open");
+    t.link(sw, "5", gate, "Toggle");
+    t.link(gate, "Exit", t.say("gate"), "In");
+    // every event also goes through the Flip Flop
+    NodeId ff = t.node("flow.flipflop");
+    t.link(seq, "Then 1", ff, "In");
+    t.link(ff, "A", t.say("A"), "In");
+    t.link(ff, "B", t.say("B"), "In");
+
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    auto step = [&](int s) { r.inst->setVariable("Step", Value(s)); return r.go(); };
+    CHECK_EQ(step(0), std::string("once,A,"));
+    CHECK_EQ(step(0), std::string("B,"));                         // already done; the Flip Flop alternates
+    CHECK_EQ(step(1), std::string("A,"));                         // Reset lets it through again
+    CHECK_EQ(step(0), std::string("once,B,"));
+    CHECK_EQ(step(2), std::string("gate,A,"));                    // open at first
+    CHECK_EQ(step(3), std::string("B,"));
+    CHECK_EQ(step(2), std::string("A,"));                         // closed
+    CHECK_EQ(step(5), std::string("B,"));
+    CHECK_EQ(step(2), std::string("gate,A,"));                    // toggled open
+    CHECK_EQ(step(5), std::string("B,"));
+    CHECK_EQ(step(4), std::string("A,"));
+    CHECK_EQ(step(2), std::string("gate,B,"));
+    // resetVariables forgets the state of the nodes too
+    r.inst->resetVariables();
+    CHECK_EQ(step(0), std::string("once,A,"));
+
+    // Start Closed: the Do Once waits for a Reset, the Gate for an Open
+    GoGraph c;
+    NodeId once2 = c.node("flow.doonce", {{"Start Closed", Value(true)}});
+    NodeId gate2 = c.node("flow.gate", {{"Start Closed", Value(true)}});
+    NodeId seq2 = c.node("flow.sequence");
+    c.link(c.ev, "Then", seq2, "In");
+    c.link(seq2, "Then 0", once2, "In");
+    c.link(seq2, "Then 1", gate2, "Enter");
+    c.link(once2, "Completed", c.say("once"), "In");
+    c.link(gate2, "Exit", c.say("gate"), "In");
+    GoRun rc(rt, c.s);
+    CHECK_EQ(rc.go(), std::string(""));
+}
+
+TEST(for_each_entry_walks_a_map_in_key_order) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.variables.push_back({"M", "map<string,int>", Value(), "", ""});
+    t.s.variables.push_back({"Keys", "string", Value(""), "", ""});
+    t.s.variables.push_back({"Sum", "int", Value(0), "", ""});
+    NodeId fe = t.node("flow.foreachmap");
+    t.link(t.var("var.get", "M"), "Value", fe, "Map");
+    t.link(t.ev, "Then", fe, "In");
+    // Keys = Keys + Key; Sum = Sum + Value; break at key "c"
+    NodeId concat = t.node("fn:String.Concat");
+    t.link(t.var("var.get", "Keys"), "Value", concat, "A");
+    t.link(fe, "Key", concat, "B");
+    NodeId setKeys = t.var("var.set", "Keys");
+    t.link(concat, "Result", setKeys, "Value");
+    t.link(fe, "Loop Body", setKeys, "In");
+    NodeId add = t.node("math.add");
+    t.link(t.var("var.get", "Sum"), "Value", add, "A");
+    t.link(fe, "Value", add, "B");
+    NodeId setSum = t.var("var.set", "Sum");
+    t.link(add, "Result", setSum, "Value");
+    t.link(setKeys, "Then", setSum, "In");
+    NodeId eq = t.node("cmp.eq", {{"B", Value("c")}});
+    t.link(fe, "Key", eq, "A");
+    NodeId br = t.node("flow.branch");
+    t.link(eq, "Result", br, "Condition");
+    t.link(setSum, "Then", br, "In");
+    t.link(br, "True", t.node("flow.break"), "In");
+    t.link(fe, "Completed", t.say("done"), "In");
+
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    Value m = rt.registry().makeMap(rt.registry().tString(), rt.registry().tInt());
+    for (auto [k, v] : std::vector<std::pair<const char*, int>>{{"d", 1000}, {"b", 10}, {"a", 1}, {"c", 100}}) m.mapPtr()->items[Value(k)] = Value(v);
+    r.inst->setVariable("M", m);
+    CHECK_EQ(r.go(), std::string("done,"));                       // Break goes on with Completed
+    CHECK_EQ(r.inst->getVariable("Keys").toString(), std::string("abc"));
+    CHECK_EQ(r.inst->getVariable("Sum").toInt(), int64_t(111));
+}
+
+TEST(format_string_and_array_nodes) {
+    TestRuntime rt;
+    registerSample(rt);
+    // Format: {Name} from custom inputs, {{ }} escapes, unknown placeholders stay, enums print by name
+    {
+        GoGraph t;
+        t.s.variables.push_back({"R", "string", Value(""), "", ""});
+        Node& f = t.g->addNode("string.format");
+        f.inputs = {{"Name", "string", false, false, Value("Ann")}, {"Age", "int", false, false, Value(41)}, {"Mood", "Mood", false, false, Value(1)}};
+        f.defaults["Format"] = Value("{Name} is {Age} and {Mood} {{literal}} {Nope}");
+        NodeId fid = f.id;
+        NodeId set = t.var("var.set", "R");
+        t.link(t.ev, "Then", set, "In");
+        t.link(fid, "Result", set, "Value");
+        GoRun r(rt, t.s);
+        CHECK(r.prog->ok());
+        CHECK_EQ(r.go(), std::string(""));
+        CHECK_EQ(r.inst->getVariable("R").toString(), std::string("Ann is 41 and Sad {literal} {Nope}"));
+    }
+    // strings: pure functions are easiest to check one by one through a variable
+    auto stringResult = [&](const char* fn, std::map<std::string, Value> defaults, const char* type) {
+        GoGraph t;
+        t.s.variables.push_back({"R", type, Value(), "", ""});
+        NodeId n = t.node(fn, std::move(defaults));
+        NodeId set = t.var("var.set", "R");
+        t.link(t.ev, "Then", set, "In");
+        t.link(n, rt.registry().findFunction(std::string(fn).substr(3))->retName, set, "Value");
+        GoRun r(rt, t.s);
+        r.go();
+        return r.inst->getVariable("R");
+    };
+    CHECK_EQ(stringResult("fn:String.Trim", {{"String", Value("  a b \t\n")}}, "string").toString(), std::string("a b"));
+    CHECK(stringResult("fn:String.Starts With", {{"String", Value("hello")}, {"Prefix", Value("he")}}, "bool").toBool());
+    CHECK(!stringResult("fn:String.Starts With", {{"String", Value("h")}, {"Prefix", Value("he")}}, "bool").toBool());
+    CHECK(stringResult("fn:String.Ends With", {{"String", Value("hello")}, {"Suffix", Value("llo")}}, "bool").toBool());
+    CHECK_EQ(stringResult("fn:String.Find", {{"String", Value("abcabc")}, {"Substring", Value("c")}, {"Start", Value(3)}}, "int").toInt(), int64_t(5));
+    CHECK_EQ(stringResult("fn:String.Find", {{"String", Value("abc")}, {"Substring", Value("x")}}, "int").toInt(), int64_t(-1));
+    CHECK(stringResult("fn:String.Is Empty", {{"String", Value("")}}, "bool").toBool());
+    CHECK(std::fabs(stringResult("fn:Math.Pi", {}, "float").toFloat() - 3.14159265358979) < 1e-12);
+    CHECK(std::fabs(stringResult("fn:Math.Atan2", {{"Y", Value(1.0)}, {"X", Value(1.0)}}, "float").toFloat() - 0.785398163397448) < 1e-12);
+
+    // arrays: A = [3, 1, 2, 1]; Remove Item 1; Sort; Reverse; S = Slice(A, 1, 5); E = Is Empty(S)
+    {
+        GoGraph t;
+        t.s.variables.push_back({"A", "array<int>", Value(), "", ""});
+        t.s.variables.push_back({"S", "array<int>", Value(), "", ""});
+        t.s.variables.push_back({"E", "bool", Value(true), "", ""});
+        t.s.variables.push_back({"Removed", "bool", Value(false), "", ""});
+        NodeId rm = t.node("array.removeitem", {{"Item", Value(1)}});
+        NodeId sort = t.node("array.sort"), rev = t.node("array.reverse");
+        NodeId slice = t.node("array.slice", {{"Start", Value(1)}, {"Length", Value(5)}});
+        NodeId empty = t.node("array.isempty");
+        for (NodeId n : {rm, sort, rev}) t.link(t.var("var.get", "A"), "Value", n, "Array");
+        t.link(t.var("var.get", "A"), "Value", slice, "Array");
+        t.link(slice, "Result", empty, "Array");
+        NodeId setRemoved = t.var("var.set", "Removed"), setS = t.var("var.set", "S"), setE = t.var("var.set", "E");
+        t.link(rm, "Removed", setRemoved, "Value");
+        t.link(slice, "Result", setS, "Value");
+        t.link(empty, "Empty", setE, "Value");
+        t.link(t.ev, "Then", rm, "In");
+        t.link(rm, "Then", setRemoved, "In");
+        t.link(setRemoved, "Then", sort, "In");
+        t.link(sort, "Then", rev, "In");
+        t.link(rev, "Then", setS, "In");
+        t.link(setS, "Then", setE, "In");
+        GoRun r(rt, t.s);
+        CHECK(r.prog->ok());
+        Value a = rt.registry().makeArray(rt.registry().tInt());
+        for (int v : {3, 1, 2, 1}) a.arrayPtr()->items.push_back(Value(v));
+        r.inst->setVariable("A", a);
+        CHECK_EQ(r.go(), std::string(""));
+        auto ints = [](const Value& v) {
+            std::string s;
+            for (auto& x : v.arrayPtr()->items) s += std::to_string(x.toInt()) + " ";
+            return s;
+        };
+        CHECK(r.inst->getVariable("Removed").toBool());
+        CHECK_EQ(ints(r.inst->getVariable("A")), std::string("3 2 1 "));   // first 1 removed, sorted, reversed
+        CHECK_EQ(ints(r.inst->getVariable("S")), std::string("2 1 "));     // clamped to the end
+        CHECK(!r.inst->getVariable("E").toBool());
+    }
+}
+
+TEST(find_references_and_search_the_script) {
+    TestRuntime rt;
+    Script s;
+    s.variables.push_back({"Score", "int", Value(0), "", ""});
+    Graph& f = s.addFunction("Bump", {{"Amount", "int", false, false, Value(1)}});
+    f.locals.push_back({"Score", "int", Value(0), "", ""});                       // hides the variable of the script in Bump
+    NodeId localGet = f.addNode("var.get").id;
+    f.findNode(localGet)->props = {{"name", "Score"}};                            // no scope: resolves to the local
+    NodeId explicitGlobal = f.addNode("var.set").id;
+    f.findNode(explicitGlobal)->props = {{"name", "Score"}, {"scope", "global"}};
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Go").id;
+    NodeId set = g.addNode("var.set").id;
+    g.findNode(set)->props = {{"name", "Score"}, {"scope", "global"}};
+    NodeId get = g.addNode("var.get").id;
+    g.findNode(get)->props = {{"name", "Score"}};
+    NodeId call1 = g.addNode("func.call").id, call2 = g.addNode("func.call").id;
+    g.findNode(call1)->props["function"] = "Bump";
+    g.findNode(call2)->props["function"] = "Bump";
+    NodeId sin = g.addNode("fn:Math.Sin").id;
+    g.findNode(sin)->comment = "the wave";
+    NodeId pr = g.addNode("util.print").id;
+    g.findNode(pr)->defaults["String"] = Value("Game Over");
+    g.addComment(0, 0).text = "Scoring rules";
+    auto prog = rt.compile(s);
+
+    auto ids = [](const std::vector<ScriptRef>& refs) {
+        std::string out;
+        for (auto& r : refs) out += r.graph + "#" + std::to_string(r.node) + (r.detail.empty() ? "" : ":" + r.detail) + " ";
+        return out;
+    };
+    RefTarget global{RefTarget::Kind::Variable, "Score", ""};
+    CHECK_EQ(ids(findReferences(s, prog.get(), global)),
+             "Bump#" + std::to_string(explicitGlobal) + ":Set EventGraph#" + std::to_string(set) + ":Set EventGraph#" + std::to_string(get) + ":Get ");
+    RefTarget local{RefTarget::Kind::Variable, "Score", "Bump"};
+    CHECK_EQ(ids(findReferences(s, prog.get(), local)), "Bump#" + std::to_string(localGet) + ":Get ");
+    CHECK_EQ(findReferences(s, prog.get(), {RefTarget::Kind::Function, "Bump", ""}).size(), size_t(2));
+    CHECK_EQ(findReferences(s, prog.get(), {RefTarget::Kind::Definition, "fn:Math.Sin", ""}).size(), size_t(1));
+
+    // the target of a node: its variable (in the right scope), its function, or its definition
+    RefTarget t = referenceTargetOf(s, "Bump", *f.findNode(localGet));
+    CHECK(t.kind == RefTarget::Kind::Variable && t.name == "Score" && t.graph == "Bump");
+    t = referenceTargetOf(s, "Bump", *f.findNode(explicitGlobal));
+    CHECK(t.kind == RefTarget::Kind::Variable && t.graph.empty());
+    t = referenceTargetOf(s, "EventGraph", *g.findNode(call1));
+    CHECK(t.kind == RefTarget::Kind::Function && t.name == "Bump");
+    t = referenceTargetOf(s, "EventGraph", *g.findNode(ev));
+    CHECK(t.kind == RefTarget::Kind::Definition && t.name == "event:Go");
+    CHECK_EQ(t.describe(), std::string("event:Go nodes"));
+    CHECK_EQ((RefTarget{RefTarget::Kind::Definition, "fn:Math.Sin", ""}.describe()), std::string("Math.Sin nodes"));
+
+    // search: titles, comments, literals and comment boxes, case insensitive
+    auto found = searchScript(s, prog.get(), "game over");
+    CHECK(found.size() == 1 && found[0].node == pr && found[0].detail == "String = Game Over");
+    found = searchScript(s, prog.get(), "WAVE");
+    CHECK(found.size() == 1 && found[0].node == sin && found[0].detail.rfind("comment", 0) == 0);
+    found = searchScript(s, prog.get(), "scoring");
+    CHECK(found.size() == 1 && found[0].node == 0 && found[0].title == "Scoring rules");
+    found = searchScript(s, prog.get(), "sin");
+    CHECK(found.size() == 1 && found[0].node == sin);
+    CHECK(searchScript(s, prog.get(), "").empty());
+}
+
+// ---- asynchronous host functions ------------------------------------------------------------------------
+// Test.Later(X) returns a future the test fulfils by hand; Test.Thread(X) computes X * 10 on a thread of its own.
+struct Promises {
+    std::mutex mu;
+    std::vector<std::promise<int64_t>> list;
+    std::future<int64_t> add() {
+        std::lock_guard<std::mutex> lock(mu);
+        list.emplace_back();
+        return list.back().get_future();
+    }
+};
+
+// Go: R = R + Test.<fn>(X); Print "done"
+static Script asyncScript(const char* fn, int loops = 0) {
+    GoGraph t;
+    t.s.variables.push_back({"R", "int", Value(0), "", ""});
+    NodeId call = t.node(fn, {{"X", Value(4)}});
+    NodeId add = t.node("math.add");
+    t.link(t.var("var.get", "R"), "Value", add, "A");
+    t.link(call, "Result", add, "B");
+    NodeId set = t.var("var.set", "R");
+    t.link(add, "Result", set, "Value");
+    t.link(call, "Then", set, "In");
+    NodeId done = t.say("done");
+    if (loops > 0) {
+        NodeId loop = t.node("flow.for", {{"First", Value(0)}, {"Last", Value(loops)}});
+        t.link(t.ev, "Then", loop, "In");
+        t.link(loop, "Loop Body", call, "In");
+        t.link(loop, "Completed", done, "In");
+        t.link(loop, "Index", call, "X");
+    } else {
+        t.link(t.ev, "Then", call, "In");
+        t.link(set, "Then", done, "In");
+    }
+    return t.s;
+}
+
+TEST(asynchronous_host_functions_wait_without_blocking) {
+    TestRuntime rt;
+    auto promises = std::make_shared<Promises>();
+    rt.registry().addFunction("Test.Later", [promises](int64_t) { return promises->add(); }, {"X"}).makePure();   // makePure is ignored
+    rt.registry().addFunction("Test.Ready", [](int64_t x) {
+        std::promise<int64_t> p;
+        p.set_value(x + 1);
+        return p.get_future();
+    }, {"X"});
+    rt.registry().addFunction("Test.Fails", [](int64_t) {
+        return std::async(std::launch::async, []() -> int64_t { throw std::runtime_error("the server said no"); });
+    }, {"X"});
+    rt.registry().addFunction("Test.Thread", [](int64_t x) {
+        return std::async(std::launch::async, [x] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            return x * 10;
+        }).share();
+    }, {"X"});
+
+    const FunctionDesc* later = rt.registry().findFunction("Test.Later");
+    CHECK(later && later->latent && later->ret == rt.registry().tInt());
+    const NodeDef* nd = rt.registry().findNode("fn:Test.Later");
+    CHECK(nd && !nd->pure && nd->keywords.find("async") != std::string::npos);
+
+    // the task waits until the future is ready; the thread that runs it is never blocked
+    {
+        GoRun r(rt, asyncScript("fn:Test.Later"));
+        CHECK(r.prog->ok());
+        RunResult res = r.inst->callEvent("Go");
+        CHECK(res.waiting());
+        r.inst->tick(0.1);
+        CHECK(res.task->isWaiting());
+        CHECK_EQ(promises->list.size(), size_t(1));
+        promises->list[0].set_value(38);
+        r.inst->tick(0.01);
+        CHECK(res.task->state() == TaskState::Finished);
+        CHECK_EQ(r.inst->getVariable("R").toInt(), int64_t(38));
+        CHECK_EQ(r.log.size(), size_t(1));
+    }
+    // a future that is ready at once: no wait at all
+    {
+        GoRun r(rt, asyncScript("fn:Test.Ready"));
+        CHECK(r.inst->callEvent("Go").finished());
+        CHECK_EQ(r.inst->getVariable("R").toInt(), int64_t(5));
+    }
+    // what the asynchronous work throws is a script error at the node
+    {
+        Script s = asyncScript("fn:Test.Fails");
+        GoRun r(rt, s);
+        RunResult res = r.inst->callEvent("Go");
+        for (int i = 0; i < 500 && res.task && !res.task->done(); ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            r.inst->tick(0.002);
+        }
+        RunResult fin = res.task->result();
+        CHECK(fin.state == TaskState::Failed);
+        CHECK(fin.error.find("the server said no") != std::string::npos);
+        CHECK_EQ(fin.errorNode, s.graphs[0].nodes[1].id);        // the Test.Fails node
+    }
+    // in a loop, on real threads, through standard::runMain's kind of loop (sleep until the next wake, tick)
+    {
+        GoRun r(rt, asyncScript("fn:Test.Thread", 4));
+        RunResult res = r.inst->callEvent("Go");
+        for (int i = 0; i < 1000 && res.task && !res.task->done(); ++i) {
+            double wake = r.inst->nextWakeIn();
+            CHECK(wake >= 0 && wake <= 0.011);                      // a waiting call is polled every 10 ms
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            r.inst->tick(0.002);
+        }
+        CHECK(res.task->state() == TaskState::Finished);
+        CHECK_EQ(r.inst->getVariable("R").toInt(), int64_t(60));     // (0 + 1 + 2 + 3) * 10
+        CHECK_EQ(r.log.size(), size_t(1));
+    }
+    // AsyncExecutor: the worker polls the call like a Delay
+    {
+        auto prog = build(rt, asyncScript("fn:Test.Thread", 3));
+        std::atomic<int> ok{0};
+        AsyncExecutor::Callbacks cb;
+        cb.completed = [&](const Executor::Completion& c) { if (c.result.state == TaskState::Finished) ++ok; };
+        AsyncExecutor ex(prog, cb);
+        ex.postEvent("Go");
+        CHECK(ex.waitIdle(5000));
+        CHECK_EQ(ok.load(), 1);
+        Value r;
+        ex.inspect([&](Executor& e) { r = e.instance().getVariable("R"); });
+        CHECK_EQ(r.toInt(), int64_t(30));
+    }
+    // called directly (not from a script), the function waits for its result
+    {
+        Value args[1] = {Value(6)};
+        CHECK_EQ(rt.registry().findFunction("Test.Thread")->invoke(args).toInt(), int64_t(60));
+    }
+    // aborting a waiting task drops the call
+    {
+        GoRun r(rt, asyncScript("fn:Test.Later"));
+        RunResult res = r.inst->callEvent("Go");
+        CHECK(res.waiting());
+        r.inst->abortAll();
+        CHECK(res.task->state() == TaskState::Aborted);
+        promises->list.back().set_value(1);                         // nobody waits for it any more
+        r.inst->tick(0.01);
+        CHECK_EQ(r.inst->getVariable("R").toInt(), int64_t(0));
+    }
+}
+
+// ---- collapse to function -------------------------------------------------------------------------------
+TEST(collapse_to_function_keeps_what_the_script_does) {
+    TestRuntime rt;
+    // Go -> Set Total = Total + Step -> Print(To String(Total + Step)) -> Set Double = (Total + Step) * 2 -> Print "end"
+    GoGraph t;
+    t.s.variables.push_back({"Total", "int", Value(10), "", ""});
+    t.s.variables.push_back({"Step", "int", Value(3), "", ""});
+    t.s.variables.push_back({"Double", "int", Value(0), "", ""});
+    NodeId getTotal = t.var("var.get", "Total");
+    NodeId getStep = t.var("var.get", "Step");
+    NodeId add = t.node("math.add");
+    t.link(getTotal, "Value", add, "A");
+    t.link(getStep, "Value", add, "B");
+    NodeId setTotal = t.var("var.set", "Total");
+    t.link(add, "Result", setTotal, "Value");
+    NodeId str = t.node("fn:String.To String");
+    t.link(add, "Result", str, "Value");
+    NodeId pr = t.node("util.print");
+    t.link(str, "Result", pr, "String");
+    NodeId mul = t.node("math.mul", {{"B", Value(2)}});
+    t.link(add, "Result", mul, "A");
+    NodeId setDouble = t.var("var.set", "Double");
+    t.link(mul, "Result", setDouble, "Value");
+    NodeId end = t.say("end");
+    t.link(t.ev, "Then", setTotal, "In");
+    t.link(setTotal, "Then", pr, "In");
+    t.link(pr, "Then", setDouble, "In");
+    t.link(setDouble, "Then", end, "In");
+
+    auto runIt = [&](const Script& s) {
+        GoRun r(rt, s);
+        std::string out = r.prog->ok() ? r.go() : "does not compile: " + dumpDiagnostics(*r.prog);
+        return out + " Total=" + std::to_string(r.inst->getVariable("Total").toInt()) + " Double=" + std::to_string(r.inst->getVariable("Double").toInt());
+    };
+    // Add is pure: every node that reads it computes it again, so Print sees the new Total (13 + 3) and so does Set Double
+    const std::string expected = runIt(t.s);
+    CHECK_EQ(expected, std::string("16,end, Total=13 Double=32"));
+
+    // move Step, Add, Set Total, To String and Print into "AddStep": Add's result goes out, the flow enters at Set Total and leaves
+    // towards Set Double. Get Total feeds the selection: it is copied in (an input would be a copy of Total taken at the call).
+    Script s = t.s;
+    CollapseResult cr = collapseToFunction(s, rt.registry(), "EventGraph", {getStep, add, setTotal, str, pr}, "AddStep");
+    CHECK(cr.ok);
+    if (!cr.ok) std::printf("  %s\n", cr.error.c_str());
+    CHECK(cr.warnings.empty());
+    CHECK_EQ(cr.function, std::string("AddStep"));
+    const Graph* fnGraph = s.findGraph("AddStep");
+    CHECK(fnGraph && fnGraph->kind == GraphKind::Function);
+    if (fnGraph) {
+        CHECK(fnGraph->inputs.empty());
+        CHECK(fnGraph->outputs.size() == 1 && fnGraph->outputs[0].name == "Result" && fnGraph->outputs[0].type == "int");
+        CHECK_EQ(fnGraph->nodes.size(), size_t(8));                       // entry, return, the five nodes and the copy of Get Total
+    }
+    const Graph& eg = *s.findGraph("EventGraph");
+    CHECK(eg.findNode(add) == nullptr && eg.findNode(cr.callNode) != nullptr);
+    CHECK(eg.findNode(getTotal) == nullptr);                              // it fed nothing else
+    CHECK_EQ(eg.nodes.size(), size_t(5));                                 // event, call, Mul, Set Double, Print end
+    CHECK_EQ(runIt(s), expected);
+
+    // a value computed outside that reads what the selection changes becomes an input: the function sees the value of the call
+    {
+        GoGraph w;
+        w.s.variables.push_back({"N", "int", Value(1), "", ""});
+        NodeId plus = w.node("math.add", {{"B", Value(100)}});
+        w.link(w.var("var.get", "N"), "Value", plus, "A");
+        NodeId setN = w.var("var.set", "N");
+        w.link(plus, "Result", setN, "Value");
+        NodeId toStr = w.node("fn:String.To String");
+        w.link(plus, "Result", toStr, "Value");
+        NodeId p = w.node("util.print");
+        w.link(toStr, "Result", p, "String");
+        w.link(w.ev, "Then", setN, "In");
+        w.link(setN, "Then", p, "In");
+        CollapseResult r = collapseToFunction(w.s, rt.registry(), "EventGraph", {setN, toStr, p});
+        CHECK(r.ok && r.warnings.size() == 1 && r.warnings[0].find("reads 'N'") != std::string::npos);
+    }
+    CHECK_EQ(Script::parse(s.toText()).toText(), s.toText());
+
+    // what cannot be collapsed: the script stays as it is
+    auto refused = [&](std::vector<NodeId> ids, const char* why) {
+        Script copy = t.s;
+        CollapseResult r = collapseToFunction(copy, rt.registry(), "EventGraph", ids);
+        bool ok = !r.ok && r.error.find(why) != std::string::npos && copy.toText() == t.s.toText();
+        if (!ok) std::printf("  got: %s\n", r.error.c_str());
+        return ok;
+    };
+    CHECK(refused({t.ev, setTotal}, "the event 'Go' cannot be moved"));
+    CHECK(refused({add, str}, "no node with execution pins"));
+    CHECK(refused({setTotal, setDouble}, "enters the selection at more than one place"));
+    CHECK(refused({}, "select the nodes"));
+
+    // leaving towards two places
+    {
+        GoGraph b;
+        NodeId br = b.node("flow.branch");
+        NodeId yes = b.say("yes"), no = b.say("no");
+        b.link(b.ev, "Then", br, "In");
+        b.link(br, "True", yes, "In");
+        b.link(br, "False", no, "In");
+        Script copy = b.s;
+        CollapseResult r = collapseToFunction(copy, rt.registry(), "EventGraph", {br});
+        CHECK(!r.ok && r.error.find("more than one place") != std::string::npos);
+        // with one way out and one that ends inside it is done, with a warning
+        copy.graphs[0].connections.pop_back();
+        r = collapseToFunction(copy, rt.registry(), "EventGraph", {br});
+        CHECK(r.ok && r.warnings.size() == 1);
+    }
+    // local variables of a function stay where they are
+    {
+        Script f;
+        Graph& fg = f.addFunction("F");
+        fg.locals.push_back({"L", "int", Value(0), "", ""});
+        Node& set = fg.addNode("var.set");
+        set.props = {{"name", "L"}, {"scope", "local"}};
+        CollapseResult r = collapseToFunction(f, rt.registry(), "F", {set.id});
+        CHECK(!r.ok && r.error.find("local variable or parameter") != std::string::npos);
+    }
+}
+
+// ---- node reference ------------------------------------------------------------------------------------
+TEST(node_reference_describes_what_the_registry_offers) {
+    TestRuntime rt;
+    registerSample(rt);
+    const std::string md = nodeReferenceMarkdown(rt.registry());
+    auto has = [&](const std::string& s) {
+        bool ok = md.find(s) != std::string::npos;
+        if (!ok) std::printf("  missing: %s\n", s.c_str());
+        return ok;
+    };
+    CHECK(has("# FlowGraph node reference"));
+    CHECK(has("## Flow\n"));
+    CHECK(has("### Branch\n\n`flow.branch` · exec\n"));
+    CHECK(has("| in | Condition | `bool` | false |"));
+    CHECK(has("### Switch on String"));
+    CHECK(has("Settings (Details panel): **Cases** (one per line) - One case per line"));
+    CHECK(has("Type parameters: `T` one of `int`, `float` (from what is connected)"));    // Add
+    CHECK(has("| in | Array | `array<T>` (changed in place) |"));                      // Array Add
+    CHECK(has("### Tick\n"));                                                           // an event, with its argument
+    CHECK(has("| DeltaTime | `float` |"));
+    CHECK(has("### Dog\n\nDerives from Animal."));
+    CHECK(has("| Value | Number |\n|-|-|\n| Happy | 0 |\n| Sad | 1 |"));
+    CHECK(has("[Containers / Array](#containers--array)"));
+    CHECK(md.find("Function Entry") == std::string::npos);                              // not in the palette
+    ReferenceOptions noGen;
+    noGen.includeGenerated = false;
+    CHECK(nodeReferenceMarkdown(rt.registry(), noGen).find("m:Animal.Speak") == std::string::npos);
+    CHECK(md.find("m:Animal.Speak") != std::string::npos);
+}
+
+// ---- random numbers ------------------------------------------------------------------------------------
+TEST(random_nodes_draw_one_number_per_run_and_can_be_seeded) {
+    TestRuntime rt;
+    CHECK(!rt.registry().findNode("fn:Math.Random Int")->pure);
+    // Go -> Set Random Seed(Seed) -> Random Int -> Print(To String(R)) -> Set X = R: Print and Set read the SAME number
+    GoGraph t;
+    t.s.variables.push_back({"X", "int", Value(0), "", ""});
+    t.s.variables.push_back({"Seed", "int", Value(7), "", ""});
+    NodeId seed = t.node("fn:Math.Set Random Seed");
+    t.link(t.var("var.get", "Seed"), "Value", seed, "Seed");
+    NodeId rnd = t.node("fn:Math.Random Int", {{"Min", Value(1)}, {"Max", Value(1000000000)}});
+    NodeId str = t.node("fn:String.To String");
+    t.link(rnd, "Result", str, "Value");
+    NodeId pr = t.node("util.print");
+    t.link(str, "Result", pr, "String");
+    NodeId set = t.var("var.set", "X");
+    t.link(rnd, "Result", set, "Value");
+    t.link(t.ev, "Then", seed, "In");
+    t.link(seed, "Then", rnd, "In");
+    t.link(rnd, "Then", pr, "In");
+    t.link(pr, "Then", set, "In");
+    GoRun a(rt, t.s), b(rt, t.s);
+    CHECK(a.prog->ok() && a.prog->diagnostics.empty());
+    const std::string printed = a.go();
+    CHECK_EQ(printed, std::to_string(a.inst->getVariable("X").toInt()) + ",");
+    CHECK_EQ(b.go(), printed);                                       // the same seed gives the same numbers
+    a.inst->setVariable("Seed", Value(8));
+    CHECK(a.go() != printed);
+
+    // an exec node that is used like a pure one is never run: the compiler says so
+    GoGraph w;
+    w.s.variables.push_back({"X", "int", Value(0), "", ""});
+    NodeId lonely = w.node("fn:Math.Random Int");
+    NodeId set2 = w.var("var.set", "X");
+    w.link(w.ev, "Then", set2, "In");
+    w.link(lonely, "Result", set2, "Value");
+    auto prog = rt.compile(w.s);
+    CHECK(prog->ok());
+    bool warned = false;
+    for (auto& d : prog->diagnostics)
+        warned |= d.severity == Diagnostic::Severity::Warning && d.node == lonely && d.message.find("not connected to the execution flow") != std::string::npos;
+    CHECK(warned);
+}
+
+// ---- limits for scripts the application does not trust -------------------------------------------------
+TEST(limits_stop_scripts_that_grow_too_big_or_run_too_long) {
+    TestRuntime rt;
+    {   // a copy of Array Add without the intrinsic: the run function must enforce the limit exactly like the interpreter
+        NodeDef copy = *rt.registry().findNode("array.add");
+        copy.id = "test.arrayadd";
+        copy.intrinsic = Intrinsic::None;
+        rt.registry().addNode(std::move(copy));
+        NodeDef mcopy = *rt.registry().findNode("map.set");
+        mcopy.id = "test.mapset";
+        mcopy.intrinsic = Intrinsic::None;
+        rt.registry().addNode(std::move(mcopy));
+    }
+    // For 0..100: Add(A, Index) / Set Entry(M, Index, Index)
+    auto growing = [&](const char* def, const char* type) {
+        GoGraph t;
+        t.s.variables.push_back({"C", type, Value(), "", ""});
+        NodeId loop = t.node("flow.for", {{"First", Value(0)}, {"Last", Value(100)}});
+        NodeId add = t.node(def);
+        t.link(t.var("var.get", "C"), "Value", add, std::string(def).find("map") != std::string::npos ? "Map" : "Array");
+        t.link(loop, "Index", add, std::string(def).find("map") != std::string::npos ? "Key" : "Item");
+        if (std::string(def).find("map") != std::string::npos) t.link(loop, "Index", add, "Value");
+        t.link(t.ev, "Then", loop, "In");
+        t.link(loop, "Loop Body", add, "In");
+        return std::make_pair(t.s, add);
+    };
+    for (const char* def : {"array.add", "test.arrayadd", "map.set", "test.mapset"}) {
+        const bool isMap = std::string(def).find("map") != std::string::npos;
+        auto [s, add] = growing(def, isMap ? "map<int,int>" : "array<int>");
+        GoRun r(rt, s);
+        CHECK(r.prog->ok());
+        CHECK_EQ(r.go(), std::string(""));                            // no limit: 100 elements
+        Instance::Limits lim;
+        lim.maxContainerSize = 50;
+        r.inst->setLimits(lim);
+        r.inst->resetVariables();
+        RunResult res = r.inst->callEvent("Go");
+        CHECK(res.state == TaskState::Failed);
+        CHECK(res.error.find("would have 51 elements; this application allows 50") != std::string::npos);
+        CHECK_EQ(res.errorNode, add);
+        const Value c = r.inst->getVariable("C");
+        CHECK_EQ(isMap ? c.mapPtr()->items.size() : c.arrayPtr()->items.size(), size_t(50));
+    }
+    // strings: S = Concat(S, S) doubles until it is too long; results of nodes are checked
+    {
+        GoGraph t;
+        t.s.variables.push_back({"S", "string", Value("ab"), "", ""});
+        NodeId loop = t.node("flow.for", {{"First", Value(0)}, {"Last", Value(30)}});
+        NodeId cat = t.node("fn:String.Concat");
+        t.link(t.var("var.get", "S"), "Value", cat, "A");
+        t.link(t.var("var.get", "S"), "Value", cat, "B");
+        NodeId set = t.var("var.set", "S");
+        t.link(cat, "Result", set, "Value");
+        t.link(t.ev, "Then", loop, "In");
+        t.link(loop, "Loop Body", set, "In");
+        GoRun r(rt, t.s);
+        Instance::Limits lim;
+        lim.maxStringLength = 1000;
+        r.inst->setLimits(lim);
+        RunResult res = r.inst->callEvent("Go");
+        CHECK(res.state == TaskState::Failed && res.error.find("a string of 1024 bytes; this application allows 1000") != std::string::npos);
+        CHECK_EQ(res.errorNode, cat);
+        CHECK_EQ(r.inst->getVariable("S").str().size(), size_t(512));
+    }
+    // time: an endless While loop without a step limit ends when its time is up
+    {
+        GoGraph t;
+        NodeId wl = t.node("flow.while", {{"Condition", Value(true)}});
+        t.link(t.ev, "Then", wl, "In");
+        GoRun r(rt, t.s);
+        r.inst->setStepLimit(0);
+        Instance::Limits lim;
+        lim.maxTaskSeconds = 0.05;
+        r.inst->setLimits(lim);
+        const auto t0 = std::chrono::steady_clock::now();
+        RunResult res = r.inst->callEvent("Go");
+        const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        CHECK(res.state == TaskState::Failed && res.error.find("Time limit") != std::string::npos);
+        CHECK(took >= 0.05 && took < 2.0);
+        // the time of the slices adds up, even when each slice is shorter than the interval of the clock checks
+        auto task = r.inst->startEvent("Go", {});
+        int slices = 0;
+        while (task && !task->done() && slices < 100000) { task->run(500); ++slices; }
+        CHECK(task && task->state() == TaskState::Failed && slices > 1);
+    }
+    // nodes the application does not allow are compile errors
+    {
+        GoGraph t;
+        t.link(t.ev, "Then", t.say("hi"), "In");
+        CompileOptions opts;
+        opts.allowNode = [](const NodeDef& d) { return d.id != "util.print"; };
+        auto prog = rt.compile(t.s, opts);
+        CHECK(!prog->ok());
+        CHECK(!prog->diagnostics.empty() && prog->diagnostics[0].message == "'Print String' is not allowed in this application");
+        CHECK(rt.compile(t.s)->ok());
+    }
+}
+
+// ---- hot reload ----------------------------------------------------------------------------------------
+TEST(hot_reload_keeps_the_state_of_the_script) {
+    TestRuntime rt;
+    // version 1: Go -> Count = Count + 1 -> Do Once -> Print "first"
+    GoGraph t;
+    t.s.variables.push_back({"Count", "int", Value(0), "", ""});
+    t.s.variables.push_back({"Name", "string", Value("a"), "", ""});
+    t.s.variables.push_back({"Old", "int", Value(0), "", ""});
+    t.s.variables.push_back({"Mood", "string", Value("x"), "", ""});
+    NodeId add = t.node("math.add", {{"B", Value(1)}});
+    t.link(t.var("var.get", "Count"), "Value", add, "A");
+    NodeId set = t.var("var.set", "Count");
+    t.link(add, "Result", set, "Value");
+    t.link(t.ev, "Then", set, "In");
+    NodeId once = t.node("flow.doonce");
+    t.link(set, "Then", once, "In");
+    t.link(once, "Completed", t.say("first"), "In");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    CHECK_EQ(r.go(), std::string("first,"));
+    r.go();
+    r.go();
+    r.inst->setVariable("Name", Value("kept"));
+    CHECK_EQ(r.inst->getVariable("Count").toInt(), int64_t(3));
+
+    // version 2: Count is a float now and goes up by 10, Old is gone, New is new, Mood changed to a type its value cannot become
+    Script v2 = t.s;
+    v2.variables[0].type = "float";
+    v2.variables[0].def = Value(0.0);
+    v2.variables.erase(v2.variables.begin() + 2);
+    v2.variables[2].type = "array<int>";
+    v2.variables[2].def = Value();
+    v2.variables.push_back({"New", "int", Value(42), "", ""});
+    v2.graphs[0].findNode(add)->defaults["B"] = Value(10.0);
+    auto p2 = build(rt, v2);
+    CHECK(p2->ok());
+    ReloadReport rep = r.inst->reload(p2);
+    CHECK(rep.ok());
+    CHECK(rep.kept == std::vector<std::string>{"Name"});
+    CHECK(rep.converted == std::vector<std::string>{"Count"});
+    CHECK(rep.reset == std::vector<std::string>{"Mood"});
+    CHECK(rep.added == std::vector<std::string>{"New"});
+    CHECK(rep.removed == std::vector<std::string>{"Old"});
+    CHECK(rep.toText().find("converted: Count") != std::string::npos);
+    CHECK(&r.inst->program() == p2.get());
+    CHECK_EQ(r.inst->getVariable("Name").toString(), std::string("kept"));
+    CHECK_EQ(r.inst->getVariable("New").toInt(), int64_t(42));
+    CHECK_EQ(r.go(), std::string(""));                             // the Do Once still remembers that it fired
+    CHECK(r.inst->getVariable("Count").isFloat());
+    CHECK_EQ(r.inst->getVariable("Count").toFloat(), 13.0);
+
+    // a program with errors is refused and nothing changes
+    Script broken = v2;
+    broken.graphs[0].findNode(set)->props["name"] = "Nope";
+    ReloadReport bad = r.inst->reload(rt.compile(broken));
+    CHECK(!bad.ok() && bad.toText().find("compile errors") != std::string::npos);
+    CHECK(&r.inst->program() == p2.get());
+
+    // tasks of the old program that wait are aborted, and can still be inspected
+    GoGraph d;
+    d.s.variables.push_back({"Count", "float", Value(0.0), "", ""});
+    NodeId delay = d.node("flow.delay", {{"Duration", Value(5.0)}});
+    d.link(d.ev, "Then", delay, "In");
+    d.link(delay, "Then", d.say("late"), "In");
+    auto pd = build(rt, d.s);
+    ReloadReport toDelay = r.inst->reload(pd);
+    CHECK(toDelay.ok() && toDelay.abortedTasks == 0);
+    CHECK_EQ(r.inst->getVariable("Count").toFloat(), 13.0);
+    RunResult waiting = r.inst->callEvent("Go");
+    CHECK(waiting.waiting());
+    ReloadReport back = r.inst->reload(p2);
+    CHECK(back.ok() && back.abortedTasks == 1);
+    CHECK(waiting.task->state() == TaskState::Aborted);
+    CHECK_EQ(waiting.task->callStack().size(), size_t(1));          // its frames still point into the old program, which it keeps
+    r.inst->tick(10);
+    CHECK_EQ(r.log.size(), size_t(0));
+
+    // Executor and AsyncExecutor: the aborted tasks are reported, the events posted afterwards run the new program
+    {
+        Executor ex(pd);
+        std::vector<TaskState> done;
+        ex.setCompletionHandler([&](const Executor::Completion& c) { done.push_back(c.result.state); });
+        ex.postEvent("Go");
+        ex.pump(0);
+        CHECK(ex.reload(p2).abortedTasks == 1);
+        CHECK(done.size() == 1 && done[0] == TaskState::Aborted);
+        ex.postEvent("Go");
+        ex.pump(0);
+        CHECK(done.size() == 2 && done[1] == TaskState::Finished);
+        CHECK_EQ(ex.instance().getVariable("Count").toFloat(), 10.0);
+    }
+    {
+        AsyncExecutor ax(pd);
+        ax.postEvent("Go");
+        ReloadReport ar = ax.reload(p2);
+        CHECK(ar.ok());
+        ax.postEvent("Go");
+        CHECK(ax.waitIdle(5000));
+        Value c;
+        ax.inspect([&](Executor& e) { c = e.instance().getVariable("Count"); });
+        CHECK_EQ(c.toFloat(), 10.0);
+    }
 }
 
 int main(int argc, char** argv) {

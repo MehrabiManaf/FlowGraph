@@ -1,12 +1,13 @@
 #pragma once
 // Type expressions: "int", "Actor", "array<T>", "map<string,array<float>>".
+#include <FlowGraph/Export.hpp>
 #include <map>
 #include <string>
 #include <vector>
 
 namespace fg {
 
-struct TypeExpr {
+struct FG_CORE_EXPORT TypeExpr {
     std::string name;                 // "int", "array", "map", "Actor", "T", ...
     std::vector<TypeExpr> args;       // container arguments
     bool valid = true;

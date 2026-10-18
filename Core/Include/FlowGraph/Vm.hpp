@@ -2,14 +2,17 @@
 // The interpreter. A Task is a resumable execution context with an explicit stack, so it can be
 // paused by a debugger at any node, suspended by latent nodes (Delay) and time sliced by the host -
 // no threads required. An Instance owns the variables of one running script.
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/Program.hpp>
 
 #include <atomic>
 #include <mutex>
 #include <functional>
 #include <memory>
+#include <random>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace fg {
@@ -31,7 +34,7 @@ enum class TaskState : uint8_t {
     Failed,     // a script error occurred
     Aborted,    // stopped by the host / debugger
 };
-const char* toString(TaskState s);
+FG_CORE_EXPORT const char* toString(TaskState s);
 
 // Shared storage of a variable. Function parameters passed by reference alias the cell of the
 // caller's variable.
@@ -41,6 +44,7 @@ struct Continuation {
     int node = -1;          // node to re-enter when the exec chain it started has ended
     int64_t state = 0;
     Value aux;
+    std::shared_ptr<void> native;   // data of a native node that is kept while it loops or waits (NodeCtx::native)
     bool loop = false;      // can be unwound by a Break node
 };
 
@@ -56,6 +60,7 @@ struct Frame {
     std::vector<Continuation> conts;
     std::vector<Value> results;         // function outputs written by Return
     int pc = -1;                        // node that executes next, -1 = the exec chain has ended
+    int entryPin = -1;                  // pin index of the exec input `pc` was reached through (-1 = not by a link: its first exec input)
     int callerNode = -1;                // call node of the calling frame
     bool isEvent = false;
     bool returned = false;
@@ -64,7 +69,7 @@ struct Frame {
 };
 
 // Passed to the implementation of a node (NodeDef::run).
-class NodeCtx {
+class FG_CORE_EXPORT NodeCtx {
 public:
     // ---- data inputs (by ordinal among the data input pins) -----------------------------------
     size_t inputCount() const { return inCount_; }
@@ -84,11 +89,21 @@ public:
     void breakLoop();                      // unwind to the innermost loop node and continue after it
     void wait(double seconds);             // suspend the task, then continue as chosen by next()
     void waitFor(std::function<bool(double dt)> poll);   // suspend until poll(dt) returns true
+    // Suspend until poll(dt) returns true, then run this node again (resumed() == true, state(), aux() and native() kept): for nodes that
+    // must do something when the wait is over, like handing out the result of an asynchronous call. `poll` must not throw.
+    void waitThenResume(std::function<bool(double dt)> poll);
     void exit(int code);                   // end the whole task now (all frames), reporting an exit code
+    // Ordinal of the exec input the node was entered through (nodes with several exec inputs, like Gate: Enter / Open / Close).
+    // 0 when the node is re-entered through call() or was not reached by a link.
+    size_t entryPin() const;
     // Per activation storage of looping nodes: valid while the node is re-entered through call().
     bool resumed() const { return resumed_; }
     int64_t& state() { return state_; }
     Value& aux() { return aux_; }
+    std::shared_ptr<void>& native() { return native_; }    // any C++ object, kept like aux()
+    // Storage of this node that lives as long as the instance (Null at first): every event, task and call of its graph sees the
+    // same value. Do Once, Gate and Flip Flop remember whether they are open here. Instance::resetVariables clears it.
+    Value& nodeState() const;
     // ---- environment -----------------------------------------------------------------------------
     const CompiledNode& node() const { return *node_; }
     const std::string& prop(const std::string& key) const;
@@ -110,8 +125,12 @@ private:
     bool resumed_ = false;
     int64_t state_ = 0;
     Value aux_;
+    std::shared_ptr<void> native_;
     Action action_ = Action::Default;
     bool waiting_ = false;
+    bool resumeAfterWait_ = false;
+    bool checkLimits_ = false;          // Instance::Limits on strings / containers apply to the results
+    void checkLimit(const Value& v) const;
     bool exit_ = false;
     int exitCode_ = 0;
     size_t pin_ = 0;
@@ -122,6 +141,7 @@ private:
 
 inline void NodeCtx::out(size_t i, Value v) {
     if (i >= node_->dataOut.size()) outOfRange(i);
+    if (checkLimits_) checkLimit(v);
     frame_->slotValues[static_cast<size_t>(node_->outBase) + i] = std::move(v);
 }
 
@@ -149,9 +169,11 @@ struct StackEntry {
     bool isEvent = false;
 };
 
-class Task {
+class FG_CORE_EXPORT Task {
 public:
     ~Task();
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
     TaskState state() const { return state_; }
     const std::string& error() const { return error_; }
     bool done() const { return state_ == TaskState::Finished || state_ == TaskState::Failed || state_ == TaskState::Aborted; }
@@ -213,6 +235,7 @@ private:
     bool advanceWait(double dt);
 
     Instance* inst_;
+    std::shared_ptr<const Program> program_;   // the program the frames point into (it stays alive when the instance reloads)
     int id_;
     std::string name_;
     TaskState state_ = TaskState::Ready;
@@ -223,6 +246,7 @@ private:
     std::vector<Value> results_;
     std::vector<Value> refResults_;
     double waitRemaining_ = 0;
+    double runSeconds_ = 0;        // time spent executing nodes so far (Instance::Limits::maxTaskSeconds)
     std::function<bool(double)> waitPoll_;
     bool skipHook_ = false;        // do not consult the debugger before the next node (resuming after a pause)
     int pendingNextPin_ = -1;      // exec output to follow when a wait ends
@@ -236,7 +260,7 @@ private:
 };
 
 // Debugger integration -----------------------------------------------------------------------
-class DebugHooks {
+class FG_CORE_EXPORT DebugHooks {
 public:
     virtual ~DebugHooks() = default;
     // Called before an impure node executes; returning true pauses the task before that node.
@@ -247,7 +271,20 @@ public:
     virtual void onTaskStateChanged(Task& task) {}
 };
 
-class Instance {
+// What Instance::reload did with the state of the script.
+struct FG_CORE_EXPORT ReloadReport {
+    std::string error;                       // not reloaded (the instance is unchanged): why
+    std::vector<std::string> kept;           // variables that kept their value
+    std::vector<std::string> converted;      // variables whose type changed; the value was converted
+    std::vector<std::string> reset;          // variables whose type changed and the value could not be converted: default value
+    std::vector<std::string> added;          // new variables (default value)
+    std::vector<std::string> removed;        // variables the new program does not have any more
+    size_t abortedTasks = 0;                 // tasks that were waiting or paused (they belong to the old program)
+    bool ok() const { return error.empty(); }
+    std::string toText() const;              // a summary for a log
+};
+
+class FG_CORE_EXPORT Instance {
 public:
     Instance(std::shared_ptr<const Program> program);
     ~Instance();
@@ -259,13 +296,22 @@ public:
     const Registry& registry() const { return *program_->registry; }
 
     // ---- variables -------------------------------------------------------------------------------
-    // Not synchronized: access them while no task is running or from a debug hook callback.
+    // Not synchronized: access them while no task is running or from a debug hook callback. resetVariables also forgets the state of
+    // nodes like Do Once and Gate (NodeCtx::nodeState).
     bool hasVariable(const std::string& name) const { return program_->variableIndex(name) >= 0; }
     Value getVariable(const std::string& name) const;
     void setVariable(const std::string& name, const Value& v);   // converts to the declared type
     const Cell& variableCell(size_t index) const { return globals_[index]; }
     size_t variableCount() const { return globals_.size(); }
     void resetVariables();
+
+    // ---- hot reload --------------------------------------------------------------------------------
+    // Replaces the program (the script was changed and compiled again) and keeps the state: every variable of the new program that
+    // the old one had keeps its value (converted when its type changed), new ones get their default, and Do Once / Gate / Flip Flop
+    // nodes that still exist keep theirs. Tasks of the old program that wait or are paused are aborted (their nodes may not exist
+    // any more); call it between events, not from a running script. `program` must have no errors and use this instance's registry;
+    // otherwise nothing changes and the report says why.
+    ReloadReport reload(std::shared_ptr<const Program> program);
 
     // ---- running ---------------------------------------------------------------------------------
     // Raise a host event / call a function of the script and run it until it finishes or blocks.
@@ -291,11 +337,30 @@ public:
     DebugHooks* debugHooks() const { return hooks_; }
     void setStepLimit(uint64_t n) { stepLimit_ = n; }          // nodes per task run, 0 = unlimited
     void setMaxCallDepth(size_t n) { maxDepth_ = n; }
+    // Limits for scripts the application does not trust (all off by default). A script that exceeds one fails with a script error at
+    // the node that did it; the host process is not affected. Together with the step limit, the call depth and
+    // CompileOptions::allowNode (which nodes a script may use at all) they keep a script from taking the host down.
+    struct Limits {
+        size_t maxContainerSize = 0;    // elements of one array or map (checked where containers grow and on node results)
+        size_t maxStringLength = 0;     // bytes of one string a node produces
+        double maxTaskSeconds = 0;      // time one task may spend executing nodes, over all its slices (waits do not count); a
+                                        // native function that blocks is not interrupted, the task fails soon after it
+    };
+    void setLimits(const Limits& l) { limits_ = l; valueLimits_ = l.maxContainerSize || l.maxStringLength; }
+    const Limits& limits() const { return limits_; }
+    // Throws ScriptError when `v` is a string or container bigger than the limits allow.
+    void checkLimits(const Value& v) const;
+    void checkContainerSize(size_t size) const {
+        if (limits_.maxContainerSize && size > limits_.maxContainerSize) containerTooBig(size);
+    }
     void requestAbort() { abort_ = true; }                      // callable from another thread
     void clearAbort() { abort_ = false; }
     bool abortRequested() const { return abort_; }
     void setUserData(void* p) { userData_ = p; }
     void* userData() const { return userData_; }
+    // The random numbers of this instance's Random nodes. Seeded at random; Set Random Seed (or seed()) makes a run repeatable,
+    // whatever thread runs it.
+    std::mt19937_64& random() { return rng_; }
     void log(LogLevel level, const std::string& msg) const;
 
 private:
@@ -308,18 +373,23 @@ private:
     std::vector<Cell> globals_;
     std::vector<std::shared_ptr<Task>> tasks_;     // waiting or paused tasks started through callEvent/callFunction
     std::vector<std::unique_ptr<Frame>> spareFrames_;   // frames of finished calls, reused by the next ones (see Task::pushFrame)
+    std::unordered_map<uint64_t, Value> nodeState_;      // NodeCtx::nodeState: (graph index << 32 | node index) -> value
     LogHandler log_;
     DebugHooks* hooks_ = nullptr;
+    [[noreturn]] void containerTooBig(size_t size) const;
     uint64_t stepLimit_ = 50'000'000;
     size_t maxDepth_ = 256;
+    Limits limits_;
+    bool valueLimits_ = false;          // a container or string limit is set (NodeCtx::out checks results)
     std::atomic<bool> abort_{false};
     void* userData_ = nullptr;
     int nextTaskId_ = 1;
+    std::mt19937_64 rng_{std::random_device{}()};
 };
 
 // ---- Debugger -------------------------------------------------------------------------------------
 // Breakpoints and stepping on top of DebugHooks.
-class Debugger : public DebugHooks {
+class FG_CORE_EXPORT Debugger : public DebugHooks {
 public:
     enum class Command { Continue, StepInto, StepOver, StepOut, Pause };
 

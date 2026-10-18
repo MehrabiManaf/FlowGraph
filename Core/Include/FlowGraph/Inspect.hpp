@@ -4,6 +4,7 @@
 // A tree only holds the first few children of every container (InspectOptions::maxItems), so a million element array is cheap to
 // show. Every view that can be addressed carries a `path`, an expression that evaluateExpression() understands; asking for a range of
 // that path ("Items[64..319]") returns the next window of children, which is how a debugger pages through big containers.
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/Vm.hpp>
 
 namespace fg {
@@ -26,18 +27,18 @@ struct InspectOptions {
     std::string rootPath;       // path of the inspected value; the paths of the children are built from it (empty = no paths)
 };
 
-ValueView inspect(const Registry& reg, const Value& v, const TypeDesc* declared = nullptr, const InspectOptions& opt = {});
+FG_CORE_EXPORT ValueView inspect(const Registry& reg, const Value& v, const TypeDesc* declared = nullptr, const InspectOptions& opt = {});
 // Multi line, indented rendering of a view.
-std::string toText(const ValueView& v, int indent = 0);
+FG_CORE_EXPORT std::string toText(const ValueView& v, int indent = 0);
 
 struct VariableView {
     enum class Scope : uint8_t { Global, Local, Param } scope = Scope::Global;
     ValueView value;        // value.name is the variable name
 };
 
-std::vector<VariableView> inspectGlobals(const Instance& inst, const InspectOptions& opt = {});
+FG_CORE_EXPORT std::vector<VariableView> inspectGlobals(const Instance& inst, const InspectOptions& opt = {});
 // Parameters and local variables of one frame of a task (frameIndex 0 = outermost frame).
-std::vector<VariableView> inspectFrame(const Task& task, size_t frameIndex, const InspectOptions& opt = {});
+FG_CORE_EXPORT std::vector<VariableView> inspectFrame(const Task& task, size_t frameIndex, const InspectOptions& opt = {});
 
 struct EvalResult {
     bool ok = false;
@@ -52,6 +53,6 @@ struct EvalResult {
 //   Name[100..199]        elements 100 to 199 (inclusive, clamped) of an array; entries (by position) of a map; properties of an object
 //   Name[100..]  Name[..9]  open ranges
 // and any chain of those: Orders[12].Items["apple"].Count. A range can only be the last step. Nothing is modified.
-EvalResult evaluateExpression(const Instance& inst, const Task* task, size_t frameIndex, const std::string& expr, const InspectOptions& opt = {});
+FG_CORE_EXPORT EvalResult evaluateExpression(const Instance& inst, const Task* task, size_t frameIndex, const std::string& expr, const InspectOptions& opt = {});
 
 } // namespace fg

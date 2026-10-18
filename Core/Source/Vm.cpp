@@ -2,6 +2,7 @@
 #include <FlowGraph/Vm.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <new>
 #include <cstdio>
@@ -79,9 +80,39 @@ void NodeCtx::next(size_t execOut) { action_ = Action::Next; pin_ = execOut; }
 void NodeCtx::end() { action_ = Action::End; }
 void NodeCtx::call(size_t execOut) { action_ = Action::Call; pin_ = execOut; }
 void NodeCtx::breakLoop() { action_ = Action::Break; }
-void NodeCtx::wait(double seconds) { waiting_ = true; waitSeconds_ = seconds; poll_.reset(); }
+void NodeCtx::wait(double seconds) { waiting_ = true; resumeAfterWait_ = false; waitSeconds_ = seconds; poll_.reset(); }
 void NodeCtx::exit(int code) { exit_ = true; exitCode_ = code; }
-void NodeCtx::waitFor(std::function<bool(double)> poll) { waiting_ = true; waitSeconds_ = 0; poll_ = std::make_unique<std::function<bool(double)>>(std::move(poll)); }
+size_t NodeCtx::entryPin() const {
+    if (resumed_) return 0;
+    const int pin = frame_->entryPin;
+    if (pin < 0 || static_cast<size_t>(pin) >= node_->pins.size()) return 0;
+    const CompiledPin& p = node_->pins[static_cast<size_t>(pin)];
+    return p.kind == PinKind::Exec && p.dir == PinDir::In ? static_cast<size_t>(p.ordinal) : 0;
+}
+void NodeCtx::checkLimit(const Value& v) const { inst_->checkLimits(v); }
+
+void Instance::containerTooBig(size_t size) const {
+    throw ScriptError("a container would have " + std::to_string(size) + " elements; this application allows " +
+                      std::to_string(limits_.maxContainerSize));
+}
+
+void Instance::checkLimits(const Value& v) const {
+    if (limits_.maxStringLength && v.isString() && v.str().size() > limits_.maxStringLength)
+        throw ScriptError("a string of " + std::to_string(v.str().size()) + " bytes; this application allows " + std::to_string(limits_.maxStringLength));
+    if (limits_.maxContainerSize) {
+        if (auto* a = v.arrayPtr()) checkContainerSize(a->items.size());
+        else if (auto* m = v.mapPtr()) checkContainerSize(m->items.size());
+    }
+}
+
+Value& NodeCtx::nodeState() const {
+    return inst_->nodeState_[(static_cast<uint64_t>(static_cast<uint32_t>(frame_->graphIndex)) << 32) | static_cast<uint32_t>(node_->index)];
+}
+void NodeCtx::waitFor(std::function<bool(double)> poll) { waiting_ = true; resumeAfterWait_ = false; waitSeconds_ = 0; poll_ = std::make_unique<std::function<bool(double)>>(std::move(poll)); }
+void NodeCtx::waitThenResume(std::function<bool(double)> poll) {
+    waitFor(std::move(poll));
+    resumeAfterWait_ = true;
+}
 const std::string& NodeCtx::prop(const std::string& key) const {
     auto it = node_->props.find(key);
     return it == node_->props.end() ? emptyString() : it->second;
@@ -100,6 +131,82 @@ Instance::~Instance() {
 void Instance::resetVariables() {
     globals_.clear();
     for (auto& v : program_->variables) globals_.push_back(std::make_shared<Value>(v.def.deepCopy()));
+    nodeState_.clear();
+}
+
+std::string ReloadReport::toText() const {
+    if (!ok()) return "not reloaded: " + error;
+    auto list = [](const char* what, const std::vector<std::string>& names) {
+        if (names.empty()) return std::string();
+        std::string s = std::string(what) + ": ";
+        for (size_t i = 0; i < names.size(); ++i) s += (i ? ", " : "") + names[i];
+        return s + "\n";
+    };
+    std::string s = "reloaded\n" + list("kept", kept) + list("converted", converted) + list("reset (type changed)", reset) +
+                    list("added", added) + list("removed", removed);
+    if (abortedTasks) s += std::to_string(abortedTasks) + " waiting / paused task(s) aborted\n";
+    return s;
+}
+
+ReloadReport Instance::reload(std::shared_ptr<const Program> program) {
+    ReloadReport rep;
+    if (!program) { rep.error = "no program"; return rep; }
+    if (program->hasErrors) { rep.error = "the program has compile errors"; return rep; }
+    if (program->registry != program_->registry) { rep.error = "the program was compiled against another registry"; return rep; }
+    if (currentInstance() == this) { rep.error = "a script of this instance is running"; return rep; }
+
+    // Tasks of the old program: their frames refer to its graphs. They are aborted; each keeps the old program alive for inspection.
+    rep.abortedTasks = tasks_.size();
+    abortAll();
+    spareFrames_.clear();
+
+    const Program& from = *program_;
+    const Registry& reg = *program->registry;
+    std::vector<Cell> globals;
+    globals.reserve(program->variables.size());
+    for (auto& nv : program->variables) {
+        const std::string& name = nv.decl.name;
+        const int old = from.variableIndex(name);
+        if (old < 0) {
+            globals.push_back(std::make_shared<Value>(nv.def.deepCopy()));
+            rep.added.push_back(name);
+            continue;
+        }
+        const CompiledVariable& ov = from.variables[static_cast<size_t>(old)];
+        const Value& value = *globals_[static_cast<size_t>(old)];
+        if (ov.type == nv.type) {
+            globals.push_back(globals_[static_cast<size_t>(old)]);      // the same cell: hosts that hold it see the same value
+            rep.kept.push_back(name);
+            continue;
+        }
+        try {
+            globals.push_back(std::make_shared<Value>(reg.convertFrom(value, ov.type, nv.type)));
+            rep.converted.push_back(name);
+        } catch (const ScriptError&) {
+            globals.push_back(std::make_shared<Value>(nv.def.deepCopy()));
+            rep.reset.push_back(name);
+        }
+    }
+    for (auto& ov : from.variables)
+        if (program->variableIndex(ov.decl.name) < 0) rep.removed.push_back(ov.decl.name);
+
+    // Node state (Do Once, Gate...): found again by graph name and node id, when the node is still of the same kind.
+    std::unordered_map<uint64_t, Value> state;
+    for (auto& [key, v] : nodeState_) {
+        const size_t gi = static_cast<size_t>(key >> 32), ni = static_cast<size_t>(key & 0xffffffffu);
+        if (gi >= from.graphs.size() || ni >= from.graphs[gi].nodes.size()) continue;
+        const CompiledNode& on = from.graphs[gi].nodes[ni];
+        const int ngi = program->graphIndex(from.graphs[gi].name);
+        if (ngi < 0) continue;
+        const CompiledNode* nn = program->graphs[static_cast<size_t>(ngi)].findNode(on.id);
+        if (!nn || nn->defId != on.defId) continue;
+        state[(static_cast<uint64_t>(static_cast<uint32_t>(ngi)) << 32) | static_cast<uint32_t>(nn->index)] = v;
+    }
+
+    program_ = std::move(program);
+    globals_ = std::move(globals);
+    nodeState_ = std::move(state);
+    return rep;
 }
 
 Value Instance::getVariable(const std::string& name) const {
@@ -126,6 +233,7 @@ std::shared_ptr<Task> Instance::makeTask(std::string name) {
     };
     std::shared_ptr<Task> t = std::make_shared<Make>(*this, nextTaskId_++, std::move(name));
     t->self_ = t;
+    t->program_ = program_;
     tasks_.push_back(t);
     return t;
 }
@@ -279,6 +387,7 @@ Frame* Task::pushFrame(int graphIndex) {
     if (!f.conts.empty()) f.conts.clear();
     if (!f.results.empty()) f.results.clear();
     f.pc = -1;
+    f.entryPin = -1;
     f.callerNode = -1;
     f.isEvent = false;
     f.returned = false;
@@ -357,8 +466,18 @@ RunResult Task::run(uint64_t maxNodes) {
     const bool explicitLimit = maxNodes != 0;
     const uint64_t limit = explicitLimit ? maxNodes : (inst_->stepLimit_ ? inst_->stepLimit_ : UINT64_MAX);
     uint64_t count = 0;
+    // Limits::maxTaskSeconds: the clock is read when the run starts and every 1024 nodes
+    using Clock = std::chrono::steady_clock;
+    const double timeLimit = inst_->limits_.maxTaskSeconds;
+    const Clock::time_point started = timeLimit > 0 ? Clock::now() : Clock::time_point();
+    auto ranFor = [&] { return runSeconds_ + std::chrono::duration<double>(Clock::now() - started).count(); };
+    const bool expired = timeLimit > 0 && runSeconds_ > timeLimit && !frames_.empty();     // used up in earlier slices
+    if (expired) {
+        Frame& f = *frames_.back();
+        fail("Time limit of " + std::to_string(timeLimit) + " s exceeded", f.pc >= 0 ? &f.graph->nodes[static_cast<size_t>(f.pc)] : nullptr);
+    }
     try {
-        while (true) {
+        while (!expired) {
             if (inst_->abort_) {
                 state_ = TaskState::Aborted;
                 error_ = "Execution aborted";
@@ -372,6 +491,7 @@ RunResult Task::run(uint64_t maxNodes) {
             if (f.pc < 0) {
                 if (!f.conts.empty()) {
                     f.pc = f.conts.back().node;      // the continuation stays on the stack until that node takes it over
+                    f.entryPin = -1;
                     f.resuming = true;
                     continue;
                 }
@@ -382,6 +502,10 @@ RunResult Task::run(uint64_t maxNodes) {
             if (count >= limit) {
                 if (explicitLimit) state_ = TaskState::Ready;
                 else fail("Step limit exceeded (infinite loop?)", &n);
+                break;
+            }
+            if (timeLimit > 0 && (count & 1023) == 1023 && ranFor() > timeLimit) {
+                fail("Time limit of " + std::to_string(timeLimit) + " s exceeded", &n);
                 break;
             }
             if (hooks && !f.resuming) {
@@ -406,6 +530,7 @@ RunResult Task::run(uint64_t maxNodes) {
     } catch (...) {                        // a native function may throw anything; it must not end the host process
         fail("internal error: a native function threw an unknown exception", active_);
     }
+    if (timeLimit > 0) runSeconds_ = ranFor();
     if (done()) inst_->forget(this);
     if (hooks && state_ != TaskState::Ready) hooks->onTaskStateChanged(*this);
     return makeResult();
@@ -417,8 +542,13 @@ const Value kNullValue;
 } // namespace
 
 FG_FORCEINLINE void Task::follow(Frame& f, const CompiledNode& n, size_t execOut) {
-    int target = execOut < n.execTarget.size() ? n.execTarget[execOut] : -1;
+    int target = -1, pin = -1;
+    if (execOut < n.execTarget.size()) {
+        target = n.execTarget[execOut];
+        pin = n.execTargetPin[execOut];
+    }
     f.pc = target;
+    f.entryPin = pin;
     if (target >= 0 && hooks_) hooks_->onExecLink(*this, *f.graph, n.index, static_cast<int>(execOut), target);
 }
 
@@ -531,10 +661,12 @@ void Task::initCtx(NodeCtx& ctx, Frame& f, const CompiledNode& n, Value* in, con
     ctx.node_ = &n;
     ctx.inputs_ = in;
     ctx.inCount_ = n.dataIn.size();
+    ctx.checkLimits_ = inst_->valueLimits_;
     if (rc) {
         ctx.resumed_ = true;
         ctx.state_ = rc->state;
         ctx.aux_ = rc->aux;
+        ctx.native_ = rc->native;
     }
 }
 
@@ -593,9 +725,9 @@ void Task::evalNode(Frame& f, const CompiledNode& n) {
         if (a->isInt() && b->isInt()) {
             const int64_t x = a->rawInt(), y = b->rawInt();
             switch (n.fast) {
-            case Intrinsic::Add: out.setInt(x + y); break;
-            case Intrinsic::Sub: out.setInt(x - y); break;
-            case Intrinsic::Mul: out.setInt(x * y); break;
+            case Intrinsic::Add: out.setInt(addInt(x, y)); break;
+            case Intrinsic::Sub: out.setInt(subInt(x, y)); break;
+            case Intrinsic::Mul: out.setInt(mulInt(x, y)); break;
             case Intrinsic::Div:
                 if (y == 0) throwDivisionByZero();
                 out.setInt(divideInt(x, y));
@@ -809,6 +941,7 @@ bool Task::execFast(Frame& f, const CompiledNode& n, bool resumed) {
         if (!av || !item) return false;
         ArrayData* a = av->arrayPtr();
         if (!a) throwArrayNull();
+        inst_->checkContainerSize(a->items.size() + 1);
         a->items.push_back(item->deepCopy());
         follow(f, n, 0);
         return true;
@@ -833,6 +966,8 @@ bool Task::execFast(Frame& f, const CompiledNode& n, bool resumed) {
         if (!mv || !kv || !vv) return false;
         MapData* m = mv->mapPtr();
         if (!m) throwMapNull();
+        if (inst_->limits_.maxContainerSize && m->items.size() >= inst_->limits_.maxContainerSize && !m->items.count(*kv))
+            inst_->containerTooBig(m->items.size() + 1);
         m->items[*kv] = vv->deepCopy();
         follow(f, n, 0);
         return true;
@@ -862,6 +997,20 @@ void Task::execGeneric(Frame& f, const CompiledNode& n, bool resumed) {
     }
 
     using A = NodeCtx::Action;
+    if (ctx.waiting_ && ctx.resumeAfterWait_) {
+        // waitThenResume: when the wait is over the run loop finds this continuation and runs the node again
+        Continuation c;
+        c.node = n.index;
+        c.state = ctx.state_;
+        c.aux = std::move(ctx.aux_);
+        c.native = std::move(ctx.native_);
+        f.conts.push_back(std::move(c));
+        f.pc = -1;
+        state_ = TaskState::Waiting;
+        waitRemaining_ = 0;
+        waitPoll_ = ctx.poll_ ? std::move(*ctx.poll_) : nullptr;
+        return;
+    }
     switch (ctx.action_) {
     case A::Default:
     case A::Wait:
@@ -874,6 +1023,7 @@ void Task::execGeneric(Frame& f, const CompiledNode& n, bool resumed) {
         c.node = n.index;
         c.state = ctx.state_;
         c.aux = std::move(ctx.aux_);
+        c.native = std::move(ctx.native_);
         c.loop = n.def->breakPin >= 0;
         f.conts.push_back(std::move(c));
         follow(f, n, ctx.pin_);

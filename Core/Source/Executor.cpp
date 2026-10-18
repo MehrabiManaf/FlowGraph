@@ -106,6 +106,20 @@ Executor::PumpStats Executor::pump(double dt, uint64_t nodesPerTask) {
     return st;
 }
 
+ReloadReport Executor::reload(std::shared_ptr<const Program> program) {
+    std::vector<Handle> old;
+    for (auto& e : entries_) old.push_back(e.handle);
+    ReloadReport r = inst_->reload(program);
+    if (!r.ok()) return r;
+    program_ = std::move(program);
+    // the tasks of the old program were aborted: report them now (a completion handler may already post events to the new one)
+    for (Handle h : old) {
+        auto it = std::find_if(entries_.begin(), entries_.end(), [&](const Entry& e) { return e.handle == h; });
+        if (it != entries_.end()) finish(static_cast<size_t>(it - entries_.begin()));
+    }
+    return r;
+}
+
 void Executor::resume(Handle h) {
     for (auto& e : entries_)
         if (e.handle == h) e.resume = true;
@@ -264,6 +278,12 @@ bool AsyncExecutor::inspect(const std::function<void(Executor&)>& fn) {
         return false;
     }
     return true;
+}
+
+ReloadReport AsyncExecutor::reload(std::shared_ptr<const Program> program) {
+    ReloadReport r;
+    if (!inspect([&](Executor& e) { r = e.reload(program); })) r.error = "the executor has stopped";
+    return r;
 }
 
 bool AsyncExecutor::waitIdle(int timeoutMs) {

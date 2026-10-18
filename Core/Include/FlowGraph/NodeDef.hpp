@@ -108,6 +108,19 @@ enum class Intrinsic : uint8_t {
     MapGet, MapSet, MapContains, MapLength,
 };
 
+// A setting of a node that the user changes in an editor (the Details panel). It is kept in Node::props under `key`; dynamicPins usually
+// reads it to decide the pins (the number of outputs of a Sequence, the cases of a Switch on String).
+struct NodeSetting {
+    enum class Kind : uint8_t {
+        Count,      // a whole number from `min` to `max`
+        Lines,      // a list of texts, one per line ('\n' separated in the prop)
+    };
+    std::string key, label, doc;
+    Kind kind = Kind::Count;
+    std::string def;                  // value when the node has no such prop
+    int min = 0, max = 64;            // Count
+};
+
 struct NodeDef {
     std::string id;                   // unique, e.g. "flow.branch", "fn:Math.Sin", "m:Actor.Move"
     std::string title, category, doc, keywords, source;
@@ -133,6 +146,7 @@ struct NodeDef {
     int breakPin = -1;
 
     std::vector<TypeParam> typeParams;
+    std::vector<NodeSetting> settings;   // shown by editors, stored in Node::props
     std::vector<PinDef> pins;         // static pins
     // Append pins that depend on node properties or on the script (variables, signatures...).
     std::function<void(const Node&, const NodeBuildCtx&, std::vector<PinDef>&)> dynamicPins;

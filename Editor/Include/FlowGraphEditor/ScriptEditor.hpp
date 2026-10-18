@@ -18,6 +18,7 @@
 //
 // flowstudio, the editor of the standard applications, is such a host (see Apps/Studio).
 #include <FlowGraph/Runtime.hpp>
+#include <FlowGraphEditor/Export.hpp>
 
 #include <QApplication>
 #include <QObject>
@@ -66,7 +67,7 @@ enum class EditorMode {
 };
 
 // Implemented by the application that embeds the editor. Everything but runtime() has a sensible default.
-class EditorHost {
+class FG_EDITOR_EXPORT EditorHost {
 public:
     virtual ~EditorHost() = default;
 
@@ -115,7 +116,7 @@ public:
 
 // There is ONE script editor in a program: creating a second one while the first exists throws std::logic_error. An application with
 // several things to edit (several tables, objects...) lets the same editor edit them one after the other: edit().
-class ScriptEditor : public QObject {
+class FG_EDITOR_EXPORT ScriptEditor : public QObject {
     Q_OBJECT
 public:
     explicit ScriptEditor(EditorHost& host);
@@ -176,8 +177,8 @@ private:
 };
 
 // Applies the dark palette / Fusion style used by FlowGraph Studio.
-void applyDarkTheme(QApplication& app);
+FG_EDITOR_EXPORT void applyDarkTheme(QApplication& app);
 // Initialises KDDockWidgets with the editor's view factory. Call once after creating the QApplication.
-void initEditor();
+FG_EDITOR_EXPORT void initEditor();
 
 } // namespace fged

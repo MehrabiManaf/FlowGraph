@@ -16,11 +16,12 @@ option(FG_SHARED         "Build FlowGraphCore and FlowGraphEditor as shared libr
 
 if(FG_SHARED)
     set(FG_LIB_TYPE SHARED)
-    # MSVC: export every symbol of the libraries (there is no per-class export macro).
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 else()
     set(FG_LIB_TYPE STATIC)
 endif()
+# The libraries export their public API only: FG_CORE_EXPORT / FG_EDITOR_EXPORT (generated FlowGraph/Export.hpp,
+# FlowGraphEditor/Export.hpp) mark it, everything else stays inside (hidden visibility on GCC / Clang as well).
+include(GenerateExportHeader)
 
 if(MSVC)
     add_compile_options(/W4 /permissive- /Zc:__cplusplus /utf-8 /wd4100 /wd4127 /wd4251 /wd4275)
@@ -59,10 +60,57 @@ if(FG_BUILD_EDITOR AND EXISTS ${CMAKE_SOURCE_DIR}/Editor/CMakeLists.txt)
     set(KDDockWidgets_DOCS OFF CACHE BOOL "" FORCE)
     set(KDDockWidgets_PYTHON_BINDINGS OFF CACHE BOOL "" FORCE)
     set(KDDockWidgets_STATIC ON CACHE BOOL "" FORCE)
+    # its own install rules (headers...) go to a component of their own: `cmake --install <build> --component FlowGraph` leaves them out
+    set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME KDDockWidgets)
     add_subdirectory(ThirdParty/KDDockWidgets EXCLUDE_FROM_ALL)
+    unset(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME)
     add_subdirectory(Editor)
     add_subdirectory(Apps/Studio)
     if(FG_BUILD_EXAMPLES AND EXISTS ${CMAKE_SOURCE_DIR}/Examples/Embedded/CMakeLists.txt)
         add_subdirectory(Examples/Embedded)
     endif()
+endif()
+
+# ---- install: cmake --install <build> --prefix <dir> --component FlowGraph ----
+# Headers, libraries, the applications and a package configuration, so that a host project finds FlowGraph with
+#   find_package(FlowGraph REQUIRED [COMPONENTS ScriptEditor])   ->   FlowGraph::Core, FlowGraph::ScriptEditor
+option(FG_INSTALL "Generate the install rules" ON)
+if(FG_INSTALL)
+    include(GNUInstallDirs)
+    include(CMakePackageConfigHelpers)
+    set(FG_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/FlowGraph)
+    set(FG_INSTALL_EDITOR OFF)
+    if(TARGET FlowGraphEditor)
+        if(FG_SHARED)
+            set(FG_INSTALL_EDITOR ON)
+        else()
+            # a static FlowGraphEditor needs the static KDDockWidgets next to it, which is not installed
+            message(STATUS "FlowGraph: the static ScriptEditor is not installed (build with FG_SHARED=ON to install it)")
+        endif()
+    endif()
+
+    install(TARGETS FlowGraphCore EXPORT FlowGraphTargets COMPONENT FlowGraph
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    install(DIRECTORY Core/Include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT FlowGraph)
+    install(FILES ${CMAKE_BINARY_DIR}/Core/Include/FlowGraph/Export.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/FlowGraph COMPONENT FlowGraph)
+    install(TARGETS flow RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT FlowGraph)
+    if(FG_INSTALL_EDITOR)
+        install(TARGETS FlowGraphEditor EXPORT FlowGraphTargets COMPONENT FlowGraph
+                RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+                LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        install(DIRECTORY Editor/Include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT FlowGraph)
+        install(FILES ${CMAKE_BINARY_DIR}/Editor/Include/FlowGraphEditor/Export.hpp
+                DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/FlowGraphEditor COMPONENT FlowGraph)
+        install(TARGETS flowstudio RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT FlowGraph)
+    endif()
+
+    install(EXPORT FlowGraphTargets NAMESPACE FlowGraph:: DESTINATION ${FG_CMAKE_DIR} COMPONENT FlowGraph)
+    configure_package_config_file(cmake/FlowGraphConfig.cmake.in ${CMAKE_BINARY_DIR}/FlowGraphConfig.cmake INSTALL_DESTINATION ${FG_CMAKE_DIR})
+    # plugins must be built with the same FlowGraph: only the same major.minor version is compatible
+    write_basic_package_version_file(${CMAKE_BINARY_DIR}/FlowGraphConfigVersion.cmake COMPATIBILITY SameMinorVersion)
+    install(FILES ${CMAKE_BINARY_DIR}/FlowGraphConfig.cmake ${CMAKE_BINARY_DIR}/FlowGraphConfigVersion.cmake
+            DESTINATION ${FG_CMAKE_DIR} COMPONENT FlowGraph)
 endif()

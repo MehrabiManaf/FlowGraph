@@ -1,5 +1,6 @@
 #pragma once
 // Runtime type descriptions: primitives, enums, containers and reflected C++ classes.
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/Value.hpp>
 
 #include <deque>
@@ -20,6 +21,13 @@ struct ParamDesc {
     std::string doc;
 };
 
+// A call of an asynchronous (latent) host function that has not finished yet. The script waits - the thread does not - and polls
+// ready(); when it returns true, result() gives the value, or throws: that is a script error at the node, like any other.
+struct PendingCall {
+    std::function<bool()> ready;
+    std::function<Value()> result;
+};
+
 // A callable exposed to scripts. Free functions and class methods share this description:
 // for methods `owner` is the class and `args[0]` of `invoke` is the target object.
 struct FunctionDesc {
@@ -31,8 +39,12 @@ struct FunctionDesc {
     std::string retName = "Result";
     bool pure = false;               // no exec pins in the editor
     bool isConst = false;            // methods: does not modify the object
-    bool latent = false;             // reserved for host defined latent functions
+    // Asynchronous: the callable returns a std::future / std::shared_future (see Registry::addFunction). The node starts the call
+    // (`start`), the task waits without blocking the thread, and the script goes on with the result. Never pure. `invoke` still works:
+    // it waits for the result.
+    bool latent = false;
     std::function<Value(Value* args)> invoke;
+    std::function<PendingCall(Value* args)> start;     // latent functions only
 
     bool isMethod() const { return owner != nullptr; }
     FunctionDesc& makePure(bool p = true) { pure = p; return *this; }
@@ -66,7 +78,7 @@ struct EnumValueDesc {
     std::string doc;
 };
 
-struct TypeDesc {
+struct FG_CORE_EXPORT TypeDesc {
     std::string name, category, doc, source;
     uint32_t color = 0;                     // 0xRRGGBB pin color used by editors
     bool hasColor = false;
@@ -109,6 +121,6 @@ struct TypeDesc {
 
 // Converts the object held by `h` to a pointer of registered type `target` (walking the registered
 // base chain and applying pointer adjustments). Returns nullptr when `h` is not a `target`.
-void* castPtr(const ObjectHandle& h, const TypeDesc* target);
+FG_CORE_EXPORT void* castPtr(const ObjectHandle& h, const TypeDesc* target);
 
 } // namespace fg

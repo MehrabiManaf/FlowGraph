@@ -3,6 +3,7 @@
 // that application raises (Main, Tick, OnHit...), to its classes and functions and to the plugins it needs.
 // An application that does not provide them must refuse the script ("I cannot load it") instead of running
 // half of it. checkCompatibility() answers that question without compiling anything.
+#include <FlowGraph/Export.hpp>
 #include <FlowGraph/Registry.hpp>
 #include <FlowGraph/Script.hpp>
 
@@ -25,7 +26,7 @@ struct CompatibilityIssue {
     std::string message;
 };
 
-struct CompatibilityReport {
+struct FG_CORE_EXPORT CompatibilityReport {
     std::vector<CompatibilityIssue> issues;
     bool ok() const { return issues.empty(); }
     // One line per distinct problem ("the application has no event 'Tick' (used 2 times)").
@@ -33,18 +34,18 @@ struct CompatibilityReport {
     std::vector<std::string> missingEvents() const;
 };
 
-CompatibilityReport checkCompatibility(const Script& script, const Registry& reg);
+FG_CORE_EXPORT CompatibilityReport checkCompatibility(const Script& script, const Registry& reg);
 
 // "(Count: int, Names: array<string>)"
-std::string describeParams(const std::vector<ParamDecl>& params);
-std::string describeParams(const EventDesc& ev);
+FG_CORE_EXPORT std::string describeParams(const std::vector<ParamDecl>& params);
+FG_CORE_EXPORT std::string describeParams(const EventDesc& ev);
 
 // True when the signature recorded in a host event node (props["sig"]) still matches the event. Nodes without
 // a recorded signature (old scripts) always match.
-bool hostEventSignatureMatches(const Node& node, const EventDesc& event, const Registry& reg, std::string* why = nullptr);
+FG_CORE_EXPORT bool hostEventSignatureMatches(const Node& node, const EventDesc& event, const Registry& reg, std::string* why = nullptr);
 
 // Records the signature of every host event node that has none yet, so that a later change of the event is
 // detected. Editors call this on every edit; scripts that were saved without signatures keep working.
-void stampHostEvents(Script& script, const Registry& reg);
+FG_CORE_EXPORT void stampHostEvents(Script& script, const Registry& reg);
 
 } // namespace fg

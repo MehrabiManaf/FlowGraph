@@ -123,6 +123,10 @@ Json LaunchFile::toJson() const {
 
 LaunchFile LaunchFile::fromJson(const Json& j) {
     if (!j.isObject() || j["format"].asString() != "flowlaunch") throw JsonError("not a FlowGraph launch file (missing \"format\": \"flowlaunch\")");
+    const int64_t version = j["version"].asInt(1);
+    if (version < 1) throw JsonError("invalid launch file version " + std::to_string(version));
+    if (version > 1)
+        throw JsonError("the launch file was written by a newer FlowGraph (file version " + std::to_string(version) + "; this one reads version 1)");
     LaunchFile f;
     f.selected = j["selected"].asString();
     for (auto& cj : j["configurations"].items()) {

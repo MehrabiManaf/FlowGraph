@@ -1,0 +1,41 @@
+#pragma once
+// Finding things in a script: the nodes that use a variable, call a function or are of a definition ("Find References"),
+// and the nodes whose title, comment or values contain a text ("Find in Script").
+#include <FlowGraph/Export.hpp>
+#include <FlowGraph/Program.hpp>
+
+#include <string>
+#include <vector>
+
+namespace fg {
+
+// A place in a script. `node` is 0 for a comment box (`title` is its text) - only the graph can be shown then.
+struct ScriptRef {
+    std::string graph;
+    NodeId node = 0;
+    std::string title;      // the node's title as editors show it
+    std::string detail;     // what matched / how the node uses the target ("Get", "Set", "Call", "comment: ...")
+};
+
+// What to find the references of.
+struct FG_CORE_EXPORT RefTarget {
+    enum class Kind : uint8_t {
+        Variable,     // `name`; `graph` empty = a variable of the script, otherwise a local variable or parameter of that function
+        Function,     // `name` = a function graph: the nodes that call it
+        Definition,   // `name` = a node definition id ("fn:Math.Sin", "flow.gate", "event:Tick"): every node of it
+    };
+    Kind kind = Kind::Definition;
+    std::string name;
+    std::string graph;
+    std::string describe() const;          // "variable Score", "function Add", "Math.Sin nodes"
+};
+
+// The target a node refers to: the variable of a Get / Set node, the function of a call node, otherwise the node's definition.
+FG_CORE_EXPORT RefTarget referenceTargetOf(const Script& script, const std::string& graph, const Node& node);
+
+// `program` (may be null) gives the titles; without it the definition ids are used. Results are in script order.
+FG_CORE_EXPORT std::vector<ScriptRef> findReferences(const Script& script, const Program* program, const RefTarget& target);
+// Case insensitive search of node titles, definition ids, comments, settings and literal values, and of comment boxes.
+FG_CORE_EXPORT std::vector<ScriptRef> searchScript(const Script& script, const Program* program, const std::string& text);
+
+} // namespace fg

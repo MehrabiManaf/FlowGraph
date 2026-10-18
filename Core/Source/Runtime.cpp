@@ -38,23 +38,32 @@ bool Runtime::loadPlugin(const std::string& path, std::string* error) {
     };
     std::filesystem::path p(path);
     std::string name = p.stem().string();
-    {   // the same library may be reachable through several directories of the plugin path
-        std::error_code ec;
-        std::string canon = std::filesystem::weakly_canonical(p, ec).string();
-        if (!ec && std::find(pluginPaths_.begin(), pluginPaths_.end(), canon) != pluginPaths_.end()) return true;
-        if (!ec) pluginPaths_.push_back(canon);
-    }
+    // The same library may be reachable through several directories of the plugin path. It is remembered once it has
+    // been loaded: a library that failed is tried again (and fails with its reason again) instead of being skipped.
+    std::error_code canonError;
+    std::string canon = std::filesystem::weakly_canonical(p, canonError).string();
+    if (!canonError && std::find(pluginPaths_.begin(), pluginPaths_.end(), canon) != pluginPaths_.end()) return true;
 #if defined(_WIN32)
     HMODULE h = LoadLibraryW(p.wstring().c_str());
     if (!h) return fail("cannot load '" + path + "' (error " + std::to_string(GetLastError()) + ")");
-    auto fn = reinterpret_cast<PluginRegisterFn>(GetProcAddress(h, "fgRegisterPlugin"));
-    if (!fn) { FreeLibrary(h); return fail("'" + path + "' does not export fgRegisterPlugin"); }
+    auto unload = [h] { FreeLibrary(h); };
+    auto symbol = [h](const char* s) { return reinterpret_cast<void*>(GetProcAddress(h, s)); };
 #else
     void* h = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!h) return fail(std::string("cannot load '") + path + "': " + dlerror());
-    auto fn = reinterpret_cast<PluginRegisterFn>(dlsym(h, "fgRegisterPlugin"));
-    if (!fn) { dlclose(h); return fail("'" + path + "' does not export fgRegisterPlugin"); }
+    auto unload = [h] { dlclose(h); };
+    auto symbol = [h](const char* s) { return dlsym(h, s); };
 #endif
+    auto fn = reinterpret_cast<PluginRegisterFn>(symbol("fgRegisterPlugin"));
+    if (!fn) { unload(); return fail("'" + path + "' does not export fgRegisterPlugin"); }
+    // Check how the plugin was built before any of its code touches the registry.
+    auto abiFn = reinterpret_cast<PluginAbiFn>(symbol("fgPluginAbi"));
+    if (!abiFn) {
+        unload();
+        return fail("plugin '" + name + "' was built for an older FlowGraph (it has no ABI information): rebuild it with this version");
+    }
+    std::string mismatch = pluginAbiMismatch(*abiFn(), currentPluginAbi());
+    if (!mismatch.empty()) { unload(); return fail("plugin '" + name + "' cannot be loaded: " + mismatch); }
     libs_->handles.push_back(h);
     reg_->beginSource(name);
     try {
@@ -65,7 +74,20 @@ bool Runtime::loadPlugin(const std::string& path, std::string* error) {
     }
     reg_->endSource();
     pluginNames_.push_back(name);
+    if (!canonError) pluginPaths_.push_back(canon);
     return true;
+}
+
+std::string pluginAbiMismatch(const PluginAbi& plugin, const PluginAbi& host) {
+    // `size` first: the other fields of a smaller (older) description may not exist.
+    if (plugin.size != host.size || plugin.version != host.version)
+        return "it was built for plugin ABI version " + std::to_string(plugin.size == host.size ? plugin.version : 0) + ", this application uses version " +
+               std::to_string(host.version) + " (rebuild the plugin with this FlowGraph)";
+    if (plugin.compiler != host.compiler) return "it was built with a compiler of a different ABI family than this application";
+    if (plugin.flavour != host.flavour)
+        return "it was built with another standard library variant than this application (Debug and Release builds cannot be mixed)";
+    if (plugin.layout != host.layout) return "it was built against other FlowGraph headers than this application (rebuild the plugin with this FlowGraph)";
+    return {};
 }
 
 int Runtime::loadPluginsFrom(const std::string& dir, std::vector<std::string>* errors) {

@@ -3,6 +3,7 @@
 #include <FlowGraph/Vm.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <random>
 
@@ -56,7 +57,43 @@ int64_t checkIndex(NodeCtx& c, int64_t idx, size_t size, bool allowEnd = false) 
     return idx;
 }
 
+// Value of a Count setting of a node (NodeDef::settings), clamped to its range.
+int countSetting(const Node& n, const NodeSetting& s) {
+    int v = 0;
+    try { v = std::stoi(n.prop(s.key, s.def)); } catch (...) { try { v = std::stoi(s.def); } catch (...) {} }
+    return std::clamp(v, s.min, s.max);
+}
+NodeSetting countOption(std::string key, std::string label, int def, int min, int max, std::string doc = {}) {
+    NodeSetting s;
+    s.key = std::move(key);
+    s.label = std::move(label);
+    s.doc = std::move(doc);
+    s.kind = NodeSetting::Kind::Count;
+    s.def = std::to_string(def);
+    s.min = min;
+    s.max = max;
+    return s;
+}
+// The lines of a Lines setting: empty lines and repeated ones are dropped (they would make pins with the same name).
+std::vector<std::string> linesSetting(const Node& n, const NodeSetting& s, const std::vector<std::string>& reserved = {}) {
+    std::vector<std::string> out;
+    const std::string text = n.prop(s.key, s.def);
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t end = text.find('\n', start);
+        if (end == std::string::npos) end = text.size();
+        std::string line = text.substr(start, end - start);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (!line.empty() && std::find(out.begin(), out.end(), line) == out.end() && std::find(reserved.begin(), reserved.end(), line) == reserved.end())
+            out.push_back(std::move(line));
+        start = end + 1;
+    }
+    return out;
+}
+
+// The generator of the instance that runs the script (Instance::random); outside of a run (a host calling the function) one per thread.
 std::mt19937_64& rng() {
+    if (Instance* inst = currentInstance()) return inst->random();
     static thread_local std::mt19937_64 g{std::random_device{}()};
     return g;
 }
@@ -228,9 +265,9 @@ void registerFlow(Registry& r) {
         NodeDef d = flowNode("flow.sequence", "Sequence", "Flow");
         d.keywords = "then order";
         d.pins = {execIn()};
-        d.dynamicPins = [](const Node& n, const NodeBuildCtx&, std::vector<PinDef>& pins) {
-            int count = 2;
-            try { count = std::clamp(std::stoi(n.prop("count", "2")), 1, 32); } catch (...) {}
+        d.settings = {countOption("count", "Output pins", 2, 1, 32)};
+        d.dynamicPins = [s = d.settings[0]](const Node& n, const NodeBuildCtx&, std::vector<PinDef>& pins) {
+            const int count = countSetting(n, s);
             for (int i = 0; i < count; ++i) pins.push_back(execOut("Then " + std::to_string(i)));
         };
         d.run = [](NodeCtx& c) {
@@ -317,6 +354,158 @@ void registerFlow(Registry& r) {
         r.addNode(std::move(d));
     }
     {
+        NodeDef d = flowNode("flow.foreachmap", "For Each Entry", "Flow");
+        d.keywords = "loop map dictionary iterate key value";
+        d.doc = "Runs the loop body for every entry of the map, in key order.";
+        d.breakPin = 0;
+        d.typeParams.push_back({"K", {}, "string"});
+        d.typeParams.push_back({"V", {}, "int"});
+        d.pins = {execIn(), reads(dataIn("Map", "map<K,V>")), execOut("Completed"), execOut("Loop Body"), dataOut("Key", "K"), aliases(dataOut("Value", "V"))};
+        // The key of the current entry is kept in aux(): the next one is found from it (a changed map is still walked in key order).
+        d.run = [](NodeCtx& c) {
+            auto* m = c.in(0).mapPtr();
+            if (!m) { c.next(0); return; }
+            auto it = c.resumed() ? m->items.upper_bound(c.aux()) : m->items.begin();
+            if (it == m->items.end()) { c.next(0); return; }
+            c.aux() = it->first;
+            c.out(0, it->first);
+            c.out(1, it->second);
+            c.call(1);
+        };
+        r.addNode(std::move(d));
+    }
+    {
+        NodeDef d = flowNode("flow.switch.int", "Switch on Int", "Flow|Switch");
+        d.keywords = "switch case select int";
+        d.doc = "Continues with the output named by Selection; Default when there is none.";
+        d.settings = {countOption("count", "Cases", 2, 1, 64, "Outputs 0 .. Cases - 1")};
+        d.pins = {execIn(), dataIn("Selection", "int", Value(0))};
+        d.dynamicPins = [s = d.settings[0]](const Node& n, const NodeBuildCtx&, std::vector<PinDef>& pins) {
+            const int count = countSetting(n, s);
+            for (int i = 0; i < count; ++i) pins.push_back(execOut(std::to_string(i)));
+            pins.push_back(execOut("Default"));
+        };
+        d.run = [](NodeCtx& c) {
+            const int64_t v = c.inInt(0);
+            const size_t cases = c.node().execOut.size() - 1;
+            c.next(v >= 0 && static_cast<uint64_t>(v) < cases ? static_cast<size_t>(v) : cases);
+        };
+        r.addNode(std::move(d));
+    }
+    {
+        NodeDef d = flowNode("flow.switch.string", "Switch on String", "Flow|Switch");
+        d.keywords = "switch case select string";
+        d.doc = "Continues with the output whose name is Selection (case sensitive); Default when there is none.";
+        NodeSetting cases;
+        cases.key = "cases";
+        cases.label = "Cases";
+        cases.kind = NodeSetting::Kind::Lines;
+        cases.def = "A\nB";
+        cases.doc = "One case per line";
+        d.settings = {cases};
+        d.pins = {execIn(), dataIn("Selection", "string", Value(""))};
+        d.dynamicPins = [cases](const Node& n, const NodeBuildCtx&, std::vector<PinDef>& pins) {
+            for (auto& line : linesSetting(n, cases, {"Default"})) pins.push_back(execOut(line));   // a case "Default" is the Default output
+            pins.push_back(execOut("Default"));
+        };
+        d.run = [](NodeCtx& c) {
+            const std::string v = c.inString(0);
+            const CompiledNode& n = c.node();
+            const size_t cases = n.execOut.size() - 1;
+            for (size_t i = 0; i < cases; ++i)
+                if (n.pins[static_cast<size_t>(n.execOut[i])].name == v) { c.next(i); return; }
+            c.next(cases);
+        };
+        r.addNode(std::move(d));
+    }
+    {
+        // One palette entry per enum of the application ("Switch on Mood"); the node keeps the enum's name in props["enum"].
+        NodeDef d = flowNode("flow.switch.enum", "Switch on Enum", "Flow|Switch");
+        d.keywords = "switch case select enum";
+        d.doc = "Continues with the output of the value of Selection.";
+        d.pins = {execIn()};
+        d.dynamicPins = [](const Node& n, const NodeBuildCtx& c, std::vector<PinDef>& pins) {
+            const std::string name = n.prop("enum");
+            const TypeDesc* t = c.reg.findType(name);
+            if (!t || !t->isEnum()) return;
+            pins.push_back(dataIn("Selection", name, Value(t->enumValues.empty() ? int64_t(0) : t->enumValues.front().value)));
+            for (auto& v : t->enumValues) pins.push_back(execOut(v.name));
+        };
+        d.expand = [](const NodeBuildCtx& c, std::vector<NodeTemplate>& out) {
+            for (const TypeDesc* t : c.reg.types()) {
+                if (!t->isEnum()) continue;
+                NodeTemplate tp;
+                tp.defId = "flow.switch.enum";
+                tp.props["enum"] = t->name;
+                tp.title = "Switch on " + t->name;
+                tp.keywords = "switch case select enum " + t->name;
+                tp.pins = {execIn(), dataIn("Selection", t->name)};
+                for (auto& v : t->enumValues) tp.pins.push_back(execOut(v.name));
+                out.push_back(std::move(tp));
+            }
+        };
+        d.run = [](NodeCtx& c) {
+            const CompiledNode& n = c.node();
+            if (n.dataIn.empty()) c.error("unknown enum '" + n.prop("enum") + "'");
+            const TypeDesc* t = n.pins[static_cast<size_t>(n.dataIn[0])].type;
+            const int64_t v = c.inInt(0);
+            for (size_t i = 0; t && i < t->enumValues.size() && i < n.execOut.size(); ++i)
+                if (t->enumValues[i].value == v) { c.next(i); return; }
+            c.error(std::to_string(v) + " is not a value of " + (t ? t->name : std::string("the enum")));
+        };
+        r.addNode(std::move(d));
+    }
+    {
+        NodeDef d = flowNode("flow.doonce", "Do Once", "Flow");
+        d.keywords = "once single first";
+        d.doc = "Lets the execution through the first time only, until Reset. Remembered for the life of the script instance.";
+        d.pins = {execIn(), execIn("Reset"), dataIn("Start Closed", "bool", Value(false)), execOut("Completed")};
+        d.run = [](NodeCtx& c) {
+            Value& done = c.nodeState();
+            if (done.isNull()) done = Value(c.inBool(0));
+            if (c.entryPin() == 1) { done = Value(false); c.end(); return; }
+            if (done.toBool()) { c.end(); return; }
+            done = Value(true);
+            c.next(0);
+        };
+        r.addNode(std::move(d));
+    }
+    {
+        NodeDef d = flowNode("flow.gate", "Gate", "Flow");
+        d.keywords = "gate open close toggle";
+        d.doc = "Enter goes on to Exit while the gate is open. Open, Close and Toggle change it. Remembered for the life of the script instance.";
+        d.pins = {execIn("Enter"), execIn("Open"), execIn("Close"), execIn("Toggle"), dataIn("Start Closed", "bool", Value(false)), execOut("Exit")};
+        d.run = [](NodeCtx& c) {
+            Value& open = c.nodeState();
+            if (open.isNull()) open = Value(!c.inBool(0));
+            switch (c.entryPin()) {
+            case 0:
+                if (open.toBool()) c.next(0);
+                else c.end();
+                return;
+            case 1: open = Value(true); break;
+            case 2: open = Value(false); break;
+            default: open = Value(!open.toBool()); break;
+            }
+            c.end();
+        };
+        r.addNode(std::move(d));
+    }
+    {
+        NodeDef d = flowNode("flow.flipflop", "Flip Flop", "Flow");
+        d.keywords = "flip flop toggle alternate";
+        d.doc = "Goes on with A, then B, then A again... Remembered for the life of the script instance.";
+        d.pins = {execIn(), execOut("A"), execOut("B"), dataOut("Is A", "bool")};
+        d.run = [](NodeCtx& c) {
+            Value& wasA = c.nodeState();
+            const bool isA = wasA.isNull() || !wasA.toBool();
+            wasA = Value(isA);
+            c.out(0, Value(isA));
+            c.next(isA ? 0 : 1);
+        };
+        r.addNode(std::move(d));
+    }
+    {
         NodeDef d = execNode("util.print", "Print String", "Utilities");
         d.keywords = "log debug output";
         d.pins.push_back(dataIn("String", "string", Value("Hello")));
@@ -353,9 +542,9 @@ void registerMath(Registry& r) {
         };
         r.addNode(std::move(d));
     };
-    binary("math.add", Intrinsic::Add, "Add", "+ plus sum", [](NodeCtx&, int64_t a, int64_t b) { return a + b; }, [](double a, double b) { return a + b; });
-    binary("math.sub", Intrinsic::Sub, "Subtract", "- minus", [](NodeCtx&, int64_t a, int64_t b) { return a - b; }, [](double a, double b) { return a - b; });
-    binary("math.mul", Intrinsic::Mul, "Multiply", "* times", [](NodeCtx&, int64_t a, int64_t b) { return a * b; }, [](double a, double b) { return a * b; });
+    binary("math.add", Intrinsic::Add, "Add", "+ plus sum", [](NodeCtx&, int64_t a, int64_t b) { return addInt(a, b); }, [](double a, double b) { return a + b; });
+    binary("math.sub", Intrinsic::Sub, "Subtract", "- minus", [](NodeCtx&, int64_t a, int64_t b) { return subInt(a, b); }, [](double a, double b) { return a - b; });
+    binary("math.mul", Intrinsic::Mul, "Multiply", "* times", [](NodeCtx&, int64_t a, int64_t b) { return mulInt(a, b); }, [](double a, double b) { return a * b; });
     binary("math.div", Intrinsic::Div, "Divide", "/ over",
            [](NodeCtx& c, int64_t a, int64_t b) -> int64_t { if (b == 0) c.error("division by zero"); return divideInt(a, b); },
            [](double a, double b) { return a / b; });
@@ -370,7 +559,7 @@ void registerMath(Registry& r) {
         d.pins = {dataIn("Value", "T", Value(0)), dataOut("Result", "T")};
         d.run = [](NodeCtx& c) {
             const Value& a = c.in(0);
-            c.out(0, a.isInt() ? Value(a.toInt() < 0 ? -a.toInt() : a.toInt()) : Value(std::fabs(a.toFloat())));
+            c.out(0, a.isInt() ? Value(a.toInt() < 0 ? negInt(a.toInt()) : a.toInt()) : Value(std::fabs(a.toFloat())));
         };
         r.addNode(std::move(d));
     }
@@ -380,7 +569,7 @@ void registerMath(Registry& r) {
         d.pins = {dataIn("Value", "T", Value(0)), dataOut("Result", "T")};
         d.run = [](NodeCtx& c) {
             const Value& a = c.in(0);
-            c.out(0, a.isInt() ? Value(-a.toInt()) : Value(-a.toFloat()));
+            c.out(0, a.isInt() ? Value(negInt(a.toInt())) : Value(-a.toFloat()));
         };
         r.addNode(std::move(d));
     }
@@ -445,12 +634,24 @@ void registerMath(Registry& r) {
     r.addFunction("Math.Ceil", [](double x) { return std::ceil(x); }, {"X"}).makePure();
     r.addFunction("Math.Round", [](double x) { return std::round(x); }, {"X"}).makePure();
     r.addFunction("Math.Pow", [](double b, double e) { return std::pow(b, e); }, {"Base", "Exponent"}).makePure();
+    r.addFunction("Math.Asin", [](double x) { return std::asin(x); }, {"X"}).makePure();
+    r.addFunction("Math.Acos", [](double x) { return std::acos(x); }, {"X"}).makePure();
+    r.addFunction("Math.Atan", [](double x) { return std::atan(x); }, {"X"}).makePure();
+    r.addFunction("Math.Atan2", [](double y, double x) { return std::atan2(y, x); }, {"Y", "X"}).makePure().withKeywords("angle");
+    r.addFunction("Math.Exp", [](double x) { return std::exp(x); }, {"X"}).makePure();
+    r.addFunction("Math.Log", [](double x) { return std::log(x); }, {"X"}).makePure().withKeywords("ln logarithm");
+    r.addFunction("Math.Pi", []() { return 3.14159265358979323846; }).makePure().withKeywords("constant").withResultName("Pi");
     r.addFunction("Math.Lerp", [](double a, double b, double t) { return a + (b - a) * t; }, {"A", "B", "Alpha"}).makePure().withDefault(1, Value(1.0));
-    r.addFunction("Math.Random Float", []() { return std::uniform_real_distribution<double>(0.0, 1.0)(rng()); }).makePure().withKeywords("rand");
+    // Random nodes are exec nodes: each time one runs it draws ONE number, and every pin connected to it reads that number. (A pure
+    // node would draw again for every node that reads it: Print and Set of the same Random node would see different numbers.)
+    r.addFunction("Math.Random Float", []() { return std::uniform_real_distribution<double>(0.0, 1.0)(rng()); })
+        .withKeywords("rand").withDoc("A number from 0 (included) to 1 (excluded), drawn each time the node runs.");
     r.addFunction("Math.Random Int", [](int64_t lo, int64_t hi) {
         if (hi < lo) std::swap(lo, hi);
         return std::uniform_int_distribution<int64_t>(lo, hi)(rng());
-    }, {"Min", "Max"}).makePure().withDefault(1, Value(100)).withKeywords("rand");
+    }, {"Min", "Max"}).withDefault(1, Value(100)).withKeywords("rand").withDoc("A whole number from Min to Max (both included), drawn each time the node runs.");
+    r.addFunction("Math.Set Random Seed", [](int64_t seed) { rng().seed(static_cast<uint64_t>(seed)); }, {"Seed"})
+        .withKeywords("rand seed repeatable deterministic").withDoc("The Random nodes of this script give the same numbers after the same seed.");
     r.addFunction("Math.Float To Int", [](double x) { return static_cast<int64_t>(x); }, {"Value"}).makePure().withKeywords("truncate");
 }
 
@@ -488,6 +689,60 @@ void registerStrings(Registry& r) {
     r.addFunction("String.To String", [](const Value& v) { return v.toString(); }, {"Value"}).makePure().withKeywords("convert format");
     r.addFunction("String.Parse Int", [](const std::string& s) { try { return static_cast<int64_t>(std::stoll(s)); } catch (...) { return int64_t(0); } }, {"String"}).makePure();
     r.addFunction("String.Parse Float", [](const std::string& s) { try { return std::stod(s); } catch (...) { return 0.0; } }, {"String"}).makePure();
+    r.addFunction("String.Trim", [](const std::string& s) {
+        auto space = [](char ch) { return std::isspace(static_cast<unsigned char>(ch)) != 0; };
+        size_t b = 0, e = s.size();
+        while (b < e && space(s[b])) ++b;
+        while (e > b && space(s[e - 1])) --e;
+        return s.substr(b, e - b);
+    }, {"String"}).makePure().withKeywords("strip whitespace");
+    r.addFunction("String.Starts With", [](const std::string& s, const std::string& p) { return s.size() >= p.size() && s.compare(0, p.size(), p) == 0; },
+                  {"String", "Prefix"}).makePure().withKeywords("begins prefix");
+    r.addFunction("String.Ends With", [](const std::string& s, const std::string& p) { return s.size() >= p.size() && s.compare(s.size() - p.size(), p.size(), p) == 0; },
+                  {"String", "Suffix"}).makePure().withKeywords("suffix");
+    r.addFunction("String.Find", [](const std::string& s, const std::string& sub, int64_t start) {
+        if (start < 0) start = 0;
+        if (static_cast<size_t>(start) > s.size()) return int64_t(-1);
+        size_t p = s.find(sub, static_cast<size_t>(start));
+        return p == std::string::npos ? int64_t(-1) : static_cast<int64_t>(p);
+    }, {"String", "Substring", "Start"}).makePure().withKeywords("index of search position").withResultName("Index")
+        .withDoc("Position of the first Substring at or after Start, -1 when there is none.");
+    r.addFunction("String.Is Empty", [](const std::string& s) { return s.empty(); }, {"String"}).makePure();
+    {
+        // Format: "Hello {Name}, you are {Age}" - the user adds an input per placeholder (Details > Inputs); {{ and }} are literal braces.
+        NodeDef d = pureNode("string.format", "Format", "String");
+        d.keywords = "format template interpolate placeholder string";
+        d.doc = "Replaces every {Name} of Format with the value of the input Name (add the inputs in Details). {{ and }} stand for { and }.";
+        d.customInputs = true;
+        d.pins = {dataIn("Format", "string", Value("Hello {Name}")), dataOut("Result", "string")};
+        d.run = [](NodeCtx& c) {
+            const CompiledNode& n = c.node();
+            const std::string fmt = c.inString(0);
+            std::string out;
+            out.reserve(fmt.size());
+            for (size_t i = 0; i < fmt.size(); ++i) {
+                const char ch = fmt[i];
+                if ((ch == '{' || ch == '}') && i + 1 < fmt.size() && fmt[i + 1] == ch) { out += ch; ++i; continue; }
+                if (ch == '{') {
+                    const size_t close = fmt.find('}', i + 1);
+                    if (close != std::string::npos) {
+                        const std::string name = fmt.substr(i + 1, close - i - 1);
+                        bool found = false;
+                        for (size_t k = 1; k < n.dataIn.size() && !found; ++k) {
+                            const CompiledPin& p = n.pins[static_cast<size_t>(n.dataIn[k])];
+                            if (p.name != name) continue;
+                            out += c.registry().toString(c.in(k), p.type);
+                            found = true;
+                        }
+                        if (found) { i = close; continue; }
+                    }
+                }
+                out += ch;                  // unknown placeholders stay as they are
+            }
+            c.out(0, Value(std::move(out)));
+        };
+        r.addNode(std::move(d));
+    }
 }
 
 // ------------------------------------------------------------------ containers
@@ -514,10 +769,15 @@ void registerContainers(Registry& r) {
         r.addNode(std::move(d));
     };
     arrayNode("array.add", Intrinsic::ArrayAdd, "Add", false, true, {dataIn("Array", "array<T>"), dataIn("Item", "T")},
-              [](NodeCtx& c) { arrayArg(c, 0).items.push_back(c.in(1).deepCopy()); });
+              [](NodeCtx& c) {
+        auto& a = arrayArg(c, 0);
+        c.instance().checkContainerSize(a.items.size() + 1);
+        a.items.push_back(c.in(1).deepCopy());
+    });
     arrayNode("array.insert", Intrinsic::None, "Insert", false, true, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataIn("Item", "T")}, [](NodeCtx& c) {
         auto& a = arrayArg(c, 0);
         int64_t i = checkIndex(c, c.inInt(1), a.items.size(), true);
+        c.instance().checkContainerSize(a.items.size() + 1);
         a.items.insert(a.items.begin() + i, c.in(2).deepCopy());
     });
     arrayNode("array.set", Intrinsic::ArraySet, "Set Item", false, true, {dataIn("Array", "array<T>"), dataIn("Index", "int", Value(0)), dataIn("Item", "T")}, [](NodeCtx& c) {
@@ -544,13 +804,40 @@ void registerContainers(Registry& r) {
         auto it = std::find(a.items.begin(), a.items.end(), c.in(1));
         c.out(0, Value(it == a.items.end() ? int64_t(-1) : static_cast<int64_t>(it - a.items.begin())));
     });
+    arrayNode("array.removeitem", Intrinsic::None, "Remove Item", false, true, {dataIn("Array", "array<T>"), reads(dataIn("Item", "T")), dataOut("Removed", "bool")},
+              [](NodeCtx& c) {
+        auto& a = arrayArg(c, 0);
+        auto it = std::find(a.items.begin(), a.items.end(), c.in(1));
+        const bool found = it != a.items.end();
+        if (found) a.items.erase(it);
+        c.out(0, Value(found));
+    });
+    arrayNode("array.sort", Intrinsic::None, "Sort", false, true, {dataIn("Array", "array<T>")},
+              [](NodeCtx& c) { auto& a = arrayArg(c, 0); std::stable_sort(a.items.begin(), a.items.end(), ValueLess()); });
+    arrayNode("array.reverse", Intrinsic::None, "Reverse", false, true, {dataIn("Array", "array<T>")},
+              [](NodeCtx& c) { auto& a = arrayArg(c, 0); std::reverse(a.items.begin(), a.items.end()); });
+    arrayNode("array.slice", Intrinsic::None, "Slice", true, false,
+              {dataIn("Array", "array<T>"), dataIn("Start", "int", Value(0)), dataIn("Length", "int", Value(-1)), dataOut("Result", "array<T>")}, [](NodeCtx& c) {
+        auto& a = arrayArg(c, 0);
+        const size_t size = a.items.size();
+        const size_t start = static_cast<size_t>(std::clamp<int64_t>(c.inInt(1), 0, static_cast<int64_t>(size)));
+        const int64_t len = c.inInt(2);                 // < 0: up to the end
+        const size_t end = len < 0 ? size : start + static_cast<size_t>(std::min<int64_t>(len, static_cast<int64_t>(size - start)));
+        auto out = std::make_shared<ArrayData>();
+        out->elem = a.elem;
+        out->items.reserve(end - start);
+        for (size_t i = start; i < end; ++i) out->items.push_back(a.items[i].deepCopy());
+        c.out(0, Value(std::move(out)));
+    });
+    arrayNode("array.isempty", Intrinsic::None, "Is Empty", true, false, {dataIn("Array", "array<T>"), dataOut("Empty", "bool")},
+              [](NodeCtx& c) { c.out(0, Value(arrayArg(c, 0).items.empty())); });
     {
         NodeDef d = pureNode("array.make", "Make Array", "Containers|Array");
         d.keywords = "array literal";
         d.typeParams.push_back({"T", {}, "int"});
-        d.dynamicPins = [](const Node& n, const NodeBuildCtx&, std::vector<PinDef>& pins) {
-            int count = 2;
-            try { count = std::clamp(std::stoi(n.prop("count", "2")), 0, 64); } catch (...) {}
+        d.settings = {countOption("count", "Elements", 2, 0, 64)};
+        d.dynamicPins = [s = d.settings[0]](const Node& n, const NodeBuildCtx&, std::vector<PinDef>& pins) {
+            const int count = countSetting(n, s);
             for (int i = 0; i < count; ++i) pins.push_back(dataIn("[" + std::to_string(i) + "]", "T"));
             pins.push_back(dataOut("Array", "array<T>"));
         };
@@ -577,7 +864,12 @@ void registerContainers(Registry& r) {
         r.addNode(std::move(d));
     };
     mapNode("map.set", Intrinsic::MapSet, "Set Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataIn("Value", "V")},
-            [](NodeCtx& c) { mapArg(c, 0).items[c.in(1)] = c.in(2).deepCopy(); });
+            [](NodeCtx& c) {
+        auto& m = mapArg(c, 0);
+        const size_t limit = c.instance().limits().maxContainerSize;
+        if (limit && m.items.size() >= limit && !m.items.count(c.in(1))) c.instance().checkContainerSize(m.items.size() + 1);
+        m.items[c.in(1)] = c.in(2).deepCopy();
+    });
     mapNode("map.remove", Intrinsic::None, "Remove Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K")}, [](NodeCtx& c) { mapArg(c, 0).items.erase(c.in(1)); });
     mapNode("map.clear", Intrinsic::None, "Clear", false, true, {dataIn("Map", "map<K,V>")}, [](NodeCtx& c) { mapArg(c, 0).items.clear(); });
     mapNode("map.get", Intrinsic::MapGet, "Get Entry", true, false, {dataIn("Map", "map<K,V>"), reads(dataIn("Key", "K")), aliases(dataOut("Value", "V")), dataOut("Found", "bool")}, [](NodeCtx& c) {
