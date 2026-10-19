@@ -434,11 +434,21 @@ RunResult Task::makeResult() {
     return r;
 }
 
+// The native data of a task that will not go on (aborted, failed) is dropped at once, not when the Task object goes: a program that
+// a For Each Output Line node runs ends then, even while a debugger or a RunResult still holds the task for inspection.
+void Task::releaseNatives() {
+    for (auto& f : frames_) {
+        for (auto& c : f->conts) c.native.reset();
+        f->resumeCont.native.reset();
+    }
+}
+
 void Task::abort() {
     if (done()) return;
     state_ = TaskState::Aborted;
     error_ = "Execution aborted";
     waitPoll_ = nullptr;
+    releaseNatives();
     if (auto* h = inst_->debugHooks()) h->onTaskStateChanged(*this);
 }
 
@@ -536,7 +546,10 @@ RunResult Task::run(uint64_t maxNodes) {
         fail("internal error: a native function threw an unknown exception", active_);
     }
     if (timeLimit > 0) runSeconds_ = ranFor();
-    if (done()) inst_->forget(this);
+    if (done()) {
+        releaseNatives();
+        inst_->forget(this);
+    }
     if (hooks && state_ != TaskState::Ready) hooks->onTaskStateChanged(*this);
     return makeResult();
 }
@@ -659,7 +672,7 @@ void Task::gatherInputs(Frame& f, const CompiledNode& n, Value* buf) {
     for (size_t i = 0; i < n.dataIn.size(); ++i) buf[i] = evalInput(f, n, i);
 }
 
-void Task::initCtx(NodeCtx& ctx, Frame& f, const CompiledNode& n, Value* in, const Continuation* rc) {
+void Task::initCtx(NodeCtx& ctx, Frame& f, const CompiledNode& n, Value* in, Continuation* rc) {
     ctx.inst_ = inst_;
     ctx.task_ = this;
     ctx.frame_ = &f;
@@ -667,11 +680,11 @@ void Task::initCtx(NodeCtx& ctx, Frame& f, const CompiledNode& n, Value* in, con
     ctx.inputs_ = in;
     ctx.inCount_ = n.dataIn.size();
     ctx.checkLimits_ = inst_->valueLimits_;
-    if (rc) {
+    if (rc) {                               // taken over: what the node does not keep (call, waitThenResume) ends with the node
         ctx.resumed_ = true;
         ctx.state_ = rc->state;
-        ctx.aux_ = rc->aux;
-        ctx.native_ = rc->native;
+        ctx.aux_ = std::move(rc->aux);
+        ctx.native_ = std::move(rc->native);
     }
 }
 

@@ -227,13 +227,14 @@ private:
     void setVariableSlow(Frame& f, const CompiledNode& n);
     void returnSlow(Frame& f, const CompiledNode& n);
     void gatherInputs(Frame& f, const CompiledNode& n, Value* buf);
-    void initCtx(NodeCtx& ctx, Frame& f, const CompiledNode& n, Value* in, const Continuation* rc);
+    void initCtx(NodeCtx& ctx, Frame& f, const CompiledNode& n, Value* in, Continuation* rc);
     Cell cellFor(Frame& f, const CompiledNode& var);
     const CompiledNode* originNode(const Frame& f, const CompiledNode& n, size_t ordinal) const;
     void callGraph(Frame& caller, const CompiledNode& n);
     void fail(const std::string& msg, const CompiledNode* at);
     RunResult makeResult();
     bool advanceWait(double dt);
+    void releaseNatives();                   // drops the native data of waiting / looping nodes (a task that will not go on)
 
     Instance* inst_;
     std::shared_ptr<const Program> program_;   // the program the frames point into (it stays alive when the instance reloads)
