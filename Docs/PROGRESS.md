@@ -215,3 +215,11 @@ Rules to keep it correct:
   follows its exec link when the wait ends (Task::waitingNext_ / pendingNextPin_, Task::run), so the debugger's link animation and
   currentNode() are right. Loops: isPlainExecNode / closesEndlessExecLoop / closesPureDataCycle (Compiler.hpp), NodeDef::waits; the
   editor refuses both kinds of links, the compiler warns about endless exec loops (one walk per plain node, O(n)).
+- Themes (2026-10-19): fged::Theme Dark / Light / System (ScriptEditor.hpp: applyTheme, applySavedTheme, savedTheme, themedIcon;
+  EditorHost::offersThemeChoice, default Standalone). Editor/Source/Common/Theme.*: both palettes (Dark = the old values exactly),
+  ThemeColors (error / warning / success, canvas, grid, node body, padlock), ThemeNotifier::changed. Icons go through a QIconEngine
+  that renders the SVG for the theme in use (light: the neutral greys #e3e9f2 / #dfe8f7 / #f2f5fa / #9fb0c9 become darker, colours and
+  white on coloured shapes stay); its pixmaps are cached per theme generation. On a switch: scenes sync (pin / link colours are taken
+  at sync), Details / Compile Results rebuild, the log recolours its warning / error blocks (QTextBlock::userState = level), My Script
+  rebuilds its add icon. Saved in QSettings apps/<application>/theme; the window applies it before its widgets exist. System follows
+  QStyleHints::colorSchemeChanged.

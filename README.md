@@ -273,7 +273,7 @@ class MyHost : public fged::EditorHost {
     void attached(fged::ScriptEditor& e) override { e.menu("&Game")->addAction(...); }    // optional: own menus
     ...
 };
-fged::applyDarkTheme(app); fged::initEditor();       // after QApplication
+fged::applySavedTheme(app, "My Game Editor"); fged::initEditor();   // after QApplication (the theme chosen in View > Theme)
 MyHost host; fged::ScriptEditor editor(host);
 editor.open("level.flow"); editor.show();
 ```
@@ -313,6 +313,7 @@ The editor has two modes, chosen by `EditorHost::mode()`:
 | Navigate | wheel zooms, middle / right drag pans, Home frames everything |
 | Refactor | *Edit > Collapse to Function* (or right-click a node) moves the selected nodes (two or more) into a new function and calls it in their place: links that come in become inputs (a *Get* of a variable is copied in, so it keeps reading the live value), links that go out become outputs; the execution must enter at one pin and leave towards one place. One undo step |
 | Files | *File > Open Recent* lists the last 10 scripts opened or saved. Recent files and the dock layout are kept per application (an application that embeds the editor does not share them with flowstudio) |
+| Theme | *View > Theme*: Dark, Light or System (like the operating system, also when it switches). Applied at once, kept per application and applied again at the next start. An embedding application offers it with `EditorHost::offersThemeChoice` (on in Standalone mode) and calls `fged::applySavedTheme(app, name)` before its first window; `fged::themedIcon(":/Icons/...")` gives the editor's icons in the colours of the theme |
 | Find | Ctrl+F finds nodes by title, comment or value in every graph; Shift+F12 (or right-click > *Find References*) lists the nodes that use the selected variable or function, or the nodes of the selected kind; double-click a result to go there |
 | Run | F5 (or F6) runs the entry chosen in the toolbar; the same button pauses the running script and continues a paused one; Shift+F5 stop |
 | Debug | F9 toggles a breakpoint, F10 / F11 / Shift+F11 step over / into / out; hover pins while paused to see values; *Run > Execution speed* slows execution so the animated links are visible |

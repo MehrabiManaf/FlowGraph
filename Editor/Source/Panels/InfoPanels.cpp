@@ -1,4 +1,5 @@
 #include "InfoPanels.hpp"
+#include "../Common/Theme.hpp"
 #include "../Graph/Style.hpp"
 
 #include <QAction>
@@ -17,6 +18,8 @@
 #include "../Common/Settings.hpp"
 #include <QSettings>
 #include <QSplitter>
+#include <QTextBlock>
+#include <QTextCursor>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -41,6 +44,7 @@ DiagnosticsPanel::DiagnosticsPanel(Document* doc, QWidget* parent) : QWidget(par
         emit activated(it->data(0, Qt::UserRole).toString(), it->data(0, Qt::UserRole + 1).toInt());
     });
     connect(doc_, &Document::compiled, this, [this] { refresh(); });
+    connect(&ThemeNotifier::instance(), &ThemeNotifier::changed, this, [this] { refresh(); });     // colours of messages and summary
     refresh();
 }
 
@@ -58,11 +62,11 @@ void DiagnosticsPanel::refresh() {
             const fg::CompiledNode* cn = cg ? cg->findNode(d.node) : nullptr;
             it->setText(1, cn ? qs(cn->title) : QString());
             it->setText(2, qs(d.message));
-            it->setForeground(2, err ? QColor(255, 120, 120) : QColor(230, 190, 60));
+            it->setForeground(2, err ? themeColors().error : themeColors().warning);
             it->setData(0, Qt::UserRole, qs(d.graph));
             it->setData(0, Qt::UserRole + 1, d.node);
         }
-    if (errors == 0 && warnings == 0) summary_->setText("<span style='color:#7bd88f'>Compiled successfully.</span>");
+    if (errors == 0 && warnings == 0) summary_->setText("<span style='color:" + themeColors().css(themeColors().success) + "'>Compiled successfully.</span>");
     else summary_->setText(QString("%1 error(s), %2 warning(s)").arg(errors).arg(warnings));
     emit summaryChanged(errors, warnings);
 }
@@ -148,19 +152,43 @@ LogPanel::LogPanel(QWidget* parent) : QPlainTextEdit(parent) {
     QFont f("Consolas");
     f.setStyleHint(QFont::Monospace);
     setFont(f);
+    connect(&ThemeNotifier::instance(), &ThemeNotifier::changed, this, [this] { recolor(); });
 }
 
+namespace {
+QColor logColor(int level) {
+    if (level == int(fg::LogLevel::Error)) return themeColors().error;
+    if (level == int(fg::LogLevel::Warning)) return themeColors().warning;
+    return QColor();                            // info: the text colour of the palette
+}
+} // namespace
+
 void LogPanel::append(int level, const QString& text) {
-    QString color = level == int(fg::LogLevel::Error) ? "#ff7b7b" : level == int(fg::LogLevel::Warning) ? "#e6be3c" : QString();
+    const QColor color = logColor(level);
     QString html = text.toHtmlEscaped().replace(' ', "&nbsp;");
-    if (!color.isEmpty()) html = "<span style='color:" + color + "'>" + html + "</span>";
+    if (color.isValid()) html = "<span style='color:" + themeColors().css(color) + "'>" + html + "</span>";
     appendHtml(html);
+    document()->lastBlock().setUserState(level);       // the level of the line, for recolor()
+}
+
+// Warnings and errors in the colours of the theme in use: the lines that are already there take the new shade too.
+void LogPanel::recolor() {
+    for (QTextBlock b = document()->begin(); b.isValid(); b = b.next()) {
+        const QColor color = logColor(b.userState());
+        if (!color.isValid()) continue;
+        QTextCursor c(b);
+        c.movePosition(QTextCursor::StartOfBlock);
+        c.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+        QTextCharFormat fmt;
+        fmt.setForeground(color);
+        c.mergeCharFormat(fmt);
+    }
 }
 
 QMenu* LogPanel::buildContextMenu() {
     QMenu* menu = createStandardContextMenu();
     menu->addSeparator();
-    QAction* clearAction = menu->addAction(QIcon(":/Icons/clear.svg"), "Clear");
+    QAction* clearAction = menu->addAction(themedIcon(":/Icons/clear.svg"), "Clear");
     clearAction->setEnabled(!document()->isEmpty());
     connect(clearAction, &QAction::triggered, this, &QPlainTextEdit::clear);
     return menu;
@@ -392,7 +420,7 @@ void DebugPanel::refreshWatches() {
             it->setForeground(1, qApp->palette().color(QPalette::PlaceholderText));
         } else if (!results[size_t(i)].ok) {
             it->setText(1, "<" + qs(results[size_t(i)].error) + ">");
-            it->setForeground(1, QColor("#ff7b7b"));
+            it->setForeground(1, themeColors().error);
         } else {
             fg::ValueView view = std::move(results[size_t(i)].view);
             view.name = ss(watchList_[i]);
@@ -466,29 +494,29 @@ void DebugPanel::showContextMenu(QTreeWidget* tree, const QPoint& pos) {
     QMenu menu(this);
     if (!path.isEmpty() && total > end) {
         for (qulonglong n : {qulonglong(kPage), qulonglong(1000), qulonglong(10000)})
-            menu.addAction(QIcon(":/Icons/load-more.svg"), "Load next " + thousands(n), [this, container, n] { loadMore(container, n); });
+            menu.addAction(themedIcon(":/Icons/load-more.svg"), "Load next " + thousands(n), [this, container, n] { loadMore(container, n); });
         qulonglong rest = total - end;
-        menu.addAction(QIcon(":/Icons/load-more.svg"),
+        menu.addAction(themedIcon(":/Icons/load-more.svg"),
                        rest > kMaxLoad ? "Load next " + thousands(kMaxLoad) + " (of " + thousands(rest) + " left)" : "Load all (" + thousands(rest) + " left)",
                        [this, container] { loadMore(container, kMaxLoad); });
         menu.addSeparator();
     }
     if (!path.isEmpty()) {
         if (total > 0)
-            menu.addAction(QIcon(":/Icons/watch-range.svg"), "Watch a range...", [this, path, total] {
+            menu.addAction(themedIcon(":/Icons/watch-range.svg"), "Watch a range...", [this, path, total] {
                 bool ok = false;
                 QString e = QInputDialog::getText(this, "Watch a range", "Expression (a range is inclusive):", QLineEdit::Normal,
                                                   QString("%1[0..%2]").arg(path).arg(std::min<qulonglong>(total, 100) - 1), &ok);
                 if (ok) addWatch(e);
             });
-        menu.addAction(QIcon(":/Icons/watch-add.svg"), "Add to watch", [this, path] { addWatch(path); });
+        menu.addAction(themedIcon(":/Icons/watch-add.svg"), "Add to watch", [this, path] { addWatch(path); });
     }
     if (!isMoreRow(item) && !item->text(1).isEmpty())
-        menu.addAction(QIcon(":/Icons/copy.svg"), "Copy value",[item] { QGuiApplication::clipboard()->setText(item->text(1)); });
+        menu.addAction(themedIcon(":/Icons/copy.svg"), "Copy value",[item] { QGuiApplication::clipboard()->setText(item->text(1)); });
     if (tree == watches_ && item->data(0, kWatchRole).toBool()) {
         menu.addSeparator();
         QString expr = item->text(0);
-        menu.addAction(QIcon(":/Icons/watch-edit.svg"), "Edit watch...", [this, expr] {
+        menu.addAction(themedIcon(":/Icons/watch-edit.svg"), "Edit watch...", [this, expr] {
             bool ok = false;
             QString e = QInputDialog::getText(this, "Edit watch", "Expression:", QLineEdit::Normal, expr, &ok).trimmed();
             if (!ok || e.isEmpty() || e == expr) return;
@@ -499,8 +527,8 @@ void DebugPanel::showContextMenu(QTreeWidget* tree, const QPoint& pos) {
             saveWatches();
             refreshWatches();
         });
-        menu.addAction(QIcon(":/Icons/watch-remove.svg"), "Remove watch", [this, expr] { removeWatch(expr); });
-        menu.addAction(QIcon(":/Icons/watch-clear.svg"), "Remove all watches", [this] {
+        menu.addAction(themedIcon(":/Icons/watch-remove.svg"), "Remove watch", [this, expr] { removeWatch(expr); });
+        menu.addAction(themedIcon(":/Icons/watch-clear.svg"), "Remove all watches", [this] {
             watchList_.clear();
             saveWatches();
             refreshWatches();

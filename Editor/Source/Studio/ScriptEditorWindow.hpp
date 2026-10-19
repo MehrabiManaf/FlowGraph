@@ -56,6 +56,8 @@ public:
     void runEntry(const QString& entry);
     // Edit > Collapse to Function: the selected nodes of the current graph become a function (`name` empty: the user is asked for one)
     bool collapseSelection(const QString& name);
+    // View > Theme: shows the theme and keeps it as the choice of this application (EditorHost::offersThemeChoice)
+    void chooseTheme(Theme theme);
     // Developer aid: "node:<graph>:<id>", "var:<name>" or "graph:<name>" selects that item and shows its details.
     void devSelect(const QString& spec);
     // Developer aid for real-input smoke tests: writes global screen coordinates / script state to a text file.
@@ -155,6 +157,7 @@ private:
     QAction* actSnap_ = nullptr;
     QActionGroup* speedGroup_ = nullptr;
     QActionGroup* snapSizeGroup_ = nullptr;
+    QActionGroup* themeGroup_ = nullptr;       // View > Theme (only when the host offers the choice)
     bool snapToGrid_ = true;            // View > Snap to Grid, remembered between sessions
     double snapStep_ = 20.0;
     void applySnap();

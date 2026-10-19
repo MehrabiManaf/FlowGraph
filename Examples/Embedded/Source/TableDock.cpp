@@ -2,6 +2,7 @@
 #include "ScriptEditorHub.hpp"
 
 #include <QAction>
+#include <QApplication>
 #include <QCloseEvent>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -16,6 +17,11 @@
 
 namespace msgapp {
 
+namespace {
+// Red for errors, readable on the background of the theme the application shows (light or dark palette).
+QString errorColor() { return qApp->palette().color(QPalette::Window).lightness() < 128 ? QStringLiteral("#ff7b7b") : QStringLiteral("#c62828"); }
+} // namespace
+
 TableDock::TableDock(int number, fg::Runtime& rt, MessageStore& store, ScriptEditorHub& hub, QWidget* parent)
     : QDockWidget(parent), number_(number), rt_(rt), store_(store), hub_(&hub), script_(makeDefaultScript()) {
     setAttribute(Qt::WA_DeleteOnClose);
@@ -29,9 +35,9 @@ TableDock::TableDock(int number, fg::Runtime& rt, MessageStore& store, ScriptEdi
     auto* bar = new QToolBar(body);
     bar->setIconSize(QSize(18, 18));
     bar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    QAction* load = bar->addAction(QIcon(":/Icons/open.svg"), "Load Script", this, [this] { loadScript(); });
-    QAction* edit = bar->addAction(QIcon(":/Icons/configure.svg"), "Edit Script", this, [this] { editScript(); });
-    QAction* save = bar->addAction(QIcon(":/Icons/save.svg"), "Save Script", this, [this] { saveScript(); });
+    QAction* load = bar->addAction(fged::themedIcon(":/Icons/open.svg"), "Load Script", this, [this] { loadScript(); });
+    QAction* edit = bar->addAction(fged::themedIcon(":/Icons/configure.svg"), "Edit Script", this, [this] { editScript(); });
+    QAction* save = bar->addAction(fged::themedIcon(":/Icons/save.svg"), "Save Script", this, [this] { saveScript(); });
     load->setToolTip("Load a .flow script into this table");
     edit->setToolTip("Open the script of this table in the script editor. Save in the editor makes the table run the edited script.");
     save->setToolTip("Write the script of this table to a .flow file");
@@ -160,7 +166,7 @@ void TableDock::stopRun() {
 void TableDock::showFailure(const QString& text) {
     table_->setRowCount(0);
     table_->setColumnCount(0);
-    status_->setText("<span style='color:#ff7b7b'>" + text.toHtmlEscaped() + "</span>");
+    status_->setText("<span style='color:" + errorColor() + "'>" + text.toHtmlEscaped() + "</span>");
     status_->setToolTip(text);
     log_.clear();
     emit updated();
@@ -253,7 +259,7 @@ void TableDock::poll() {
 
 void TableDock::showStatus() {
     QString text = QString("%1 rows (%2 shown), %3 messages handled").arg(rows_).arg(table_->rowCount()).arg(processed_);
-    if (failed_) text = "<span style='color:#ff7b7b'>" + text + QString(" - %1 failed (%2)</span>").arg(failed_).arg(firstError_.toHtmlEscaped());
+    if (failed_) text = "<span style='color:" + errorColor() + "'>" + text + QString(" - %1 failed (%2)</span>").arg(failed_).arg(firstError_.toHtmlEscaped());
     status_->setText(text);
     status_->setToolTip(log_.isEmpty() ? QString() : "Print String output:\n" + log_.join('\n'));
 }

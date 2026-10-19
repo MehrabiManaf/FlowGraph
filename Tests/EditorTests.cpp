@@ -1,6 +1,7 @@
 // Tests of the editor logic that do not need a visible window (run with QT_QPA_PLATFORM=offscreen).
 #include "Document.hpp"
 #include "Common/Settings.hpp"
+#include "Common/Theme.hpp"
 #include "Graph/GraphScene.hpp"
 #include "Graph/Style.hpp"
 #include "Graph/LinkItem.hpp"
@@ -18,6 +19,10 @@
 #include "Graph/GraphView.hpp"
 
 #include <QApplication>
+#include <QGuiApplication>
+#include <QStyleHints>
+#include <QTextBlock>
+#include <QTextCursor>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QPlainTextEdit>
@@ -1396,6 +1401,78 @@ TEST(layout_and_recent_files_are_per_application) {
         CHECK(recentOf(*static_cast<ScriptEditorWindow*>(editor.window())).isEmpty());
     }
     QDir(QDir::temp().filePath("FlowGraphEditorTests-apps")).removeRecursively();
+}
+
+// View > Theme: Dark / Light / System, applied at once (palette, graphs, log, compile results, icons), kept per application and
+// applied again by the next editor of that application. An embedded editor offers it only when its host says so.
+TEST(theme_is_chosen_kept_and_applied_again) {
+    auto paleCount = [](const QIcon& icon) {           // drawn pixels that are near white (the "paper" greys of the dark theme)
+        const QImage img = icon.pixmap(QSize(32, 32)).toImage().convertToFormat(QImage::Format_ARGB32);
+        int n = 0;
+        for (int y = 0; y < img.height(); ++y)
+            for (int x = 0; x < img.width(); ++x) {
+                const QColor c = img.pixelColor(x, y);
+                if (c.alpha() >= 128 && c.lightness() > 215) ++n;
+            }
+        return n;
+    };
+    const int darkIcon = paleCount(themedIcon(":/Icons/save.svg"));
+    CHECK(darkIcon > 30);
+    {
+        StudioFixture f;
+        auto* menu = f.win.findChild<QMenu*>("themeMenu");
+        CHECK(menu != nullptr);
+        if (!menu) return;
+        QStringList titles;
+        for (QAction* a : menu->actions()) titles << a->text();
+        CHECK_EQ(titles, QStringList({"Dark", "Light", "System"}));
+        CHECK(menu->actions().at(0)->isChecked() && darkThemeShown());
+
+        f.win.log(int(fg::LogLevel::Error), "something failed");
+        f.win.chooseTheme(Theme::Light);
+        QCoreApplication::processEvents();
+        CHECK(!darkThemeShown() && currentThemeChoice() == Theme::Light);
+        CHECK(qApp->palette().color(QPalette::Window).lightness() > 200);
+        CHECK(menu->actions().at(1)->isChecked());
+        CHECK_EQ(editorSettings().value("apps/Script Editor/theme").toString(), QString("light"));
+        // the error that was logged before takes the light theme's red
+        auto* log = f.win.findChild<LogPanel*>();
+        CHECK(log != nullptr);
+        if (log) {
+            QTextBlock last = log->document()->lastBlock();
+            QTextCursor c(last);
+            c.movePosition(QTextCursor::EndOfBlock);
+            CHECK(c.charFormat().foreground().color() == themeColors().error);
+            CHECK(themeColors().error.lightness() < 128);
+        }
+        // the graph view and the icons: light canvas, darker icon greys
+        CHECK(themeColors().canvas.lightness() > 200 && themeColors().nodeBody == QColor(255, 255, 255));
+        CHECK(paleCount(themedIcon(":/Icons/save.svg")) < darkIcon / 4);
+        // System is light or dark like the operating system
+        f.win.chooseTheme(Theme::System);
+        CHECK(currentThemeChoice() == Theme::System);
+        CHECK_EQ(darkThemeShown(), QGuiApplication::styleHints()->colorScheme() != Qt::ColorScheme::Light);
+        f.win.chooseTheme(Theme::Light);
+    }
+    {   // the next editor of the same application comes up in the saved theme
+        applyTheme(*qApp, Theme::Dark);
+        StudioFixture f;
+        CHECK(!darkThemeShown());
+        auto* menu = f.win.findChild<QMenu*>("themeMenu");
+        CHECK(menu && menu->actions().at(1)->isChecked());
+        f.win.chooseTheme(Theme::Dark);
+        CHECK(darkThemeShown());
+        CHECK_EQ(editorSettings().value("apps/Script Editor/theme").toString(), QString("dark"));
+    }
+    {   // an embedded editor offers no theme unless its host does
+        StandardRuntime rt;
+        NamedHost host(rt, "Embedded T", fged::EditorMode::Embedded);
+        fged::ScriptEditor editor(host);
+        CHECK(editor.window()->findChild<QMenu*>("themeMenu") == nullptr);
+    }
+    editorSettings().remove("apps/Script Editor/theme");
+    applyTheme(*qApp, Theme::Dark);
+    CHECK_EQ(paleCount(themedIcon(":/Icons/save.svg")), darkIcon);
 }
 
 // File > Open Recent lists what was opened and saved, newest first, and opens it again; a file that is gone is dropped.

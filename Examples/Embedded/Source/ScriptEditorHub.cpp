@@ -17,6 +17,9 @@ public:
 
     // The application owns the scripts and runs them: the editor has no files and no Run button.
     fged::EditorMode mode() const override { return fged::EditorMode::Embedded; }
+    // The theme of the editor is the theme of the whole application (its tables too): the user may choose it in the editor.
+    // main() applies the saved choice before the first window is shown.
+    bool offersThemeChoice() const override { return true; }
 
     // A script is only taken (edit(), File > Open) when it handles the event of this application. The editor has already checked that the
     // application provides everything the script uses: a script made for another application (Main, Tick...) never gets here.

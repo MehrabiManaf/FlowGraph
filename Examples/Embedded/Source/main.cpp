@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
         if (QString(argv[i]) == "--selftest") qputenv("QT_QPA_PLATFORM", "offscreen");     // nothing is shown
     QApplication app(argc, argv);
     app.setApplicationName("FlowGraph embedded example");
-    fged::applyDarkTheme(app);              // optional: the dark look of FlowGraph Studio
+    fged::applySavedTheme(app, "Message Tables");       // optional: the theme chosen in the editor (View > Theme), Dark at first
     fged::initEditor();                     // once, after the QApplication exists: prepares the script editor
 
     // The runtime knows the types, events and nodes of this application; every table shares it.

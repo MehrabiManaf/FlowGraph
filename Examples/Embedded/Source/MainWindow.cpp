@@ -26,18 +26,18 @@ MainWindow::MainWindow(fg::Runtime& rt, MessageStore& store, QWidget* parent) : 
     QToolBar* bar = addToolBar("Main");
     bar->setMovable(false);
     bar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    QAction* table = bar->addAction(QIcon(":/Icons/add.svg"), "New Table", this, [this] { newTable(); });
+    QAction* table = bar->addAction(fged::themedIcon(":/Icons/add.svg"), "New Table", this, [this] { newTable(); });
     table->setShortcut(QKeySequence::New);
     table->setToolTip("Adds a table. Its script decides which columns it has and what goes into its rows.");
     // the source of the messages can be stopped, e.g. to look at a table, or while a script is stopped at a breakpoint
-    QAction* source = bar->addAction(QIcon(":/Icons/interrupt.svg"), "Pause Messages");
+    QAction* source = bar->addAction(fged::themedIcon(":/Icons/interrupt.svg"), "Pause Messages");
     source->setCheckable(true);
     source->setToolTip("Stops the source of the messages (a random message, two per second); the scripts get no new messages until you go on");
     connect(source, &QAction::toggled, this, [this, source](bool paused) {
         if (paused) store_.stopGenerating();
         else store_.startGenerating();
         source->setText(paused ? "Resume Messages" : "Pause Messages");
-        source->setIcon(QIcon(paused ? ":/Icons/continue.svg" : ":/Icons/interrupt.svg"));
+        source->setIcon(fged::themedIcon(paused ? ":/Icons/continue.svg" : ":/Icons/interrupt.svg"));
         showCount();
     });
 

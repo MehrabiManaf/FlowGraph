@@ -1,4 +1,5 @@
 #include "ScriptEditorWindow.hpp"
+#include "../Common/Theme.hpp"
 #include "../Common/CustomViewFactory/DockWidget.hpp"
 #include "../Common/CustomViewFactory/TabBar.hpp"
 #include "../Graph/GraphScene.hpp"
@@ -74,6 +75,18 @@ ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, Q
     setPersistentCentralWidget(tabs_);
 
     migrateAppSettings();
+    // the theme this application's user chose (View > Theme), before any widget of the editor exists
+    if (host_.offersThemeChoice()) applyTheme(*qApp, savedTheme(host_.applicationName()));
+    // a new theme: the graphs take the colours again (pins and links keep theirs), and everything is repainted
+    connect(&ThemeNotifier::instance(), &ThemeNotifier::changed, this, [this] {
+        for (auto& [view, scene] : views_) {
+            scene->sync();
+            scene->update();
+            view->viewport()->update();
+        }
+        if (themeGroup_)
+            for (QAction* a : themeGroup_->actions()) a->setChecked(Theme(a->data().toInt()) == currentThemeChoice());
+    });
     createDocks();
     createActions();
     createMenus();
@@ -202,7 +215,8 @@ void ScriptEditorWindow::createDocks() {
     connect(diagnostics_, &DiagnosticsPanel::activated, this, [this](const QString& g, int n) { focusNode(g, n); });
     connect(diagnostics_, &DiagnosticsPanel::summaryChanged, this, [this](int e, int w) {
         statusLabel_->setText(e || w ? QString("%1 error(s), %2 warning(s)").arg(e).arg(w) : QString("OK"));
-        statusLabel_->setStyleSheet(e ? "color:#ff7b7b" : w ? "color:#e6be3c" : "color:#7bd88f");
+        const ThemeColors& tc = themeColors();
+        statusLabel_->setStyleSheet("color:" + tc.css(e ? tc.error : w ? tc.warning : tc.success));
     });
     connect(debug_, &DebugPanel::locationActivated, this, [this](const QString& g, int n) { focusNode(g, n); });
     connect(find_, &FindPanel::activated, this, [this](const QString& g, int n) {
@@ -228,9 +242,9 @@ void ScriptEditorWindow::createActions() {
     actNew_ = act("&New", QKeySequence::New);
     actOpen_ = act("&Open...", QKeySequence::Open);
     actSave_ = act("&Save", QKeySequence::Save);
-    actNew_->setIcon(QIcon(":/Icons/new.svg"));
-    actOpen_->setIcon(QIcon(":/Icons/open.svg"));
-    actSave_->setIcon(QIcon(":/Icons/save.svg"));
+    actNew_->setIcon(themedIcon(":/Icons/new.svg"));
+    actOpen_->setIcon(themedIcon(":/Icons/open.svg"));
+    actSave_->setIcon(themedIcon(":/Icons/save.svg"));
     actSaveAs_ = act("Save &As...", QKeySequence("Ctrl+Shift+S"));
     actExit_ = act("E&xit");
     actUndo_ = act("&Undo", QKeySequence::Undo);
@@ -242,17 +256,17 @@ void ScriptEditorWindow::createActions() {
     actDelete_ = act("De&lete\tDel");
     actSelectAll_ = act("Select &All\tCtrl+A");
     actComment_ = act("Add Co&mment\tC");
-    actSaveAs_->setIcon(QIcon(":/Icons/save-as.svg"));
-    actExit_->setIcon(QIcon(":/Icons/exit.svg"));
-    actUndo_->setIcon(QIcon(":/Icons/undo.svg"));
-    actRedo_->setIcon(QIcon(":/Icons/redo.svg"));
-    actCut_->setIcon(QIcon(":/Icons/cut.svg"));
-    actCopy_->setIcon(QIcon(":/Icons/copy.svg"));
-    actPaste_->setIcon(QIcon(":/Icons/paste.svg"));
-    actDuplicate_->setIcon(QIcon(":/Icons/duplicate.svg"));
-    actDelete_->setIcon(QIcon(":/Icons/delete.svg"));
-    actSelectAll_->setIcon(QIcon(":/Icons/select-all.svg"));
-    actComment_->setIcon(QIcon(":/Icons/comment.svg"));
+    actSaveAs_->setIcon(themedIcon(":/Icons/save-as.svg"));
+    actExit_->setIcon(themedIcon(":/Icons/exit.svg"));
+    actUndo_->setIcon(themedIcon(":/Icons/undo.svg"));
+    actRedo_->setIcon(themedIcon(":/Icons/redo.svg"));
+    actCut_->setIcon(themedIcon(":/Icons/cut.svg"));
+    actCopy_->setIcon(themedIcon(":/Icons/copy.svg"));
+    actPaste_->setIcon(themedIcon(":/Icons/paste.svg"));
+    actDuplicate_->setIcon(themedIcon(":/Icons/duplicate.svg"));
+    actDelete_->setIcon(themedIcon(":/Icons/delete.svg"));
+    actSelectAll_->setIcon(themedIcon(":/Icons/select-all.svg"));
+    actComment_->setIcon(themedIcon(":/Icons/comment.svg"));
     actFrame_ = act("&Frame All\tHome");
     {
         QSettings settings = editorSettings();
@@ -265,31 +279,31 @@ void ScriptEditorWindow::createActions() {
     actSnap_->setChecked(snapToGrid_);
     actSnap_->setToolTip("Nodes you move or place land on the grid. Hold Alt while dragging to move freely.");
     // One button: Run when nothing runs, Pause while the script runs, Continue while it is paused (see updateRunActions)
-    actRun_ = new QAction(QIcon(":/Icons/continue.svg"), "Run", this);
+    actRun_ = new QAction(themedIcon(":/Icons/continue.svg"), "Run", this);
     actRun_->setShortcuts({QKeySequence(Qt::Key_F5), QKeySequence(Qt::Key_F6)});
-    actStop_ = new QAction(QIcon(":/Icons/stop.svg"), "Stop", this);
+    actStop_ = new QAction(themedIcon(":/Icons/stop.svg"), "Stop", this);
     actStop_->setShortcut(QKeySequence("Shift+F5"));
-    actStepOver_ = new QAction(QIcon(":/Icons/step-over.svg"), "Step Over", this);
+    actStepOver_ = new QAction(themedIcon(":/Icons/step-over.svg"), "Step Over", this);
     actStepOver_->setShortcut(QKeySequence(Qt::Key_F10));
-    actStepInto_ = new QAction(QIcon(":/Icons/step-into.svg"), "Step Into", this);
+    actStepInto_ = new QAction(themedIcon(":/Icons/step-into.svg"), "Step Into", this);
     actStepInto_->setShortcut(QKeySequence(Qt::Key_F11));
-    actStepOut_ = new QAction(QIcon(":/Icons/step-out.svg"), "Step Out", this);
+    actStepOut_ = new QAction(themedIcon(":/Icons/step-out.svg"), "Step Out", this);
     actStepOut_->setShortcut(QKeySequence("Shift+F11"));
     actBreakpoint_ = act("Toggle &Breakpoint", QKeySequence(Qt::Key_F9));
     if (embedded_) {
         // no Run: the application runs the script, the debugger attaches to it
-        actAttach_ = new QAction(QIcon(":/Icons/attach.svg"), "&Attach", this);
+        actAttach_ = new QAction(themedIcon(":/Icons/attach.svg"), "&Attach", this);
         actAttach_->setToolTip("Debug the script that the application is running now: breakpoints stop it, and you can step through it");
-        actDetach_ = new QAction(QIcon(":/Icons/detach.svg"), "&Detach", this);
+        actDetach_ = new QAction(themedIcon(":/Icons/detach.svg"), "&Detach", this);
         actDetach_->setToolTip("Stop debugging: whatever is stopped continues");
         actRun_->setText("Continue");
     }
     actAbout_ = act("&About " + host_.applicationName());
     actFind_ = act("&Find in Script...", QKeySequence::Find);
-    actFind_->setIcon(QIcon(":/Icons/find.svg"));
+    actFind_->setIcon(themedIcon(":/Icons/find.svg"));
     actFind_->setToolTip("Find nodes by their title, comment or values in every graph of the script");
     actFindRefs_ = act("Find &References", QKeySequence("Shift+F12"));
-    actFindRefs_->setIcon(QIcon(":/Icons/find-references.svg"));
+    actFindRefs_->setIcon(themedIcon(":/Icons/find-references.svg"));
     actFindRefs_->setToolTip("The nodes that use the selected variable or function, or the nodes of the same kind as the selected node");
     connect(actFind_, &QAction::triggered, this, [this] {
         if (findDock_) { findDock_->open(); findDock_->raise(); }
@@ -297,7 +311,7 @@ void ScriptEditorWindow::createActions() {
     });
     connect(actFindRefs_, &QAction::triggered, this, [this] { findReferencesOfSelection(); });
     actCollapse_ = act("Collapse to &Function...");
-    actCollapse_->setIcon(QIcon(":/Icons/function.svg"));
+    actCollapse_->setIcon(themedIcon(":/Icons/function.svg"));
     actCollapse_->setToolTip("Moves the selected nodes into a new function and calls it in their place");
     connect(actCollapse_, &QAction::triggered, this, [this] { collapseSelection(QString()); });
 
@@ -397,6 +411,21 @@ void ScriptEditorWindow::createMenus() {
             editorSettings().setValue("editor/snapStep", step);
             applySnap();
         });
+    }
+    if (host_.offersThemeChoice()) {
+        view->addSeparator();
+        QMenu* themeMenu = view->addMenu("&Theme");
+        themeMenu->setObjectName("themeMenu");
+        themeGroup_ = new QActionGroup(this);
+        for (Theme t : {Theme::Dark, Theme::Light, Theme::System}) {
+            QAction* a = themeMenu->addAction(themeTitle(t));
+            a->setCheckable(true);
+            a->setChecked(currentThemeChoice() == t);
+            a->setData(int(t));
+            if (t == Theme::System) a->setToolTip("Light or dark like the operating system, and it follows when the system switches");
+            themeGroup_->addAction(a);
+            connect(a, &QAction::triggered, this, [this, t] { chooseTheme(t); });
+        }
     }
     view->addSeparator();
     for (auto* dw : docks_) view->addAction(dw->toggleAction());
@@ -608,6 +637,12 @@ void ScriptEditorWindow::findReferencesOfSelection() {
     showReferences(fg::referenceTargetOf(doc_.script(), ss(s->graphName()), *n));
 }
 
+void ScriptEditorWindow::chooseTheme(Theme theme) {
+    applyTheme(*qApp, theme);                    // ThemeNotifier::changed: the graphs, panels and icons follow
+    saveTheme(host_.applicationName(), theme);
+    statusBar()->showMessage(themeTitle(theme) + " theme", 3000);
+}
+
 void ScriptEditorWindow::updateCollapseAction() {
     if (!actCollapse_) return;
     GraphScene* s = currentScene();
@@ -726,11 +761,7 @@ void ScriptEditorWindow::openPath(const QString& path, bool alreadyAsked) {
 // ------------------------------------------------------------------ settings of this application
 // Several applications embed the editor and share its settings store; what belongs to one of them (its dock layout, its recent
 // files) is kept in a group of its own, apps/<application name>/.
-QString ScriptEditorWindow::appKey(const QString& name) const {
-    QString app = host_.applicationName();
-    app.replace('/', '_').replace('\\', '_');       // a separator would make groups of the name
-    return "apps/" + app + "/" + name;
-}
+QString ScriptEditorWindow::appKey(const QString& name) const { return appSettingsKey(host_.applicationName(), name); }
 
 // Earlier versions kept the dock layout in editor/layout for every application, and the recent files in editor/recentFiles/<app>.
 // They move to the application's group once: the recent files to their own application, the layout to the standalone editor
@@ -786,7 +817,7 @@ void ScriptEditorWindow::rebuildRecentMenu() {
     }
     if (!list.isEmpty()) {
         recentMenu_->addSeparator();
-        recentMenu_->addAction(QIcon(":/Icons/clear.svg"), "&Clear Recent Files", this, [this] {
+        recentMenu_->addAction(themedIcon(":/Icons/clear.svg"), "&Clear Recent Files", this, [this] {
             editorSettings().remove(recentKey());
             rebuildRecentMenu();
         });
@@ -1054,7 +1085,7 @@ void ScriptEditorWindow::updateRunActions() {
         actDetach_->setEnabled(attached);
         actRun_->setEnabled(attached);
         actRun_->setText(s == S::Paused ? "Continue" : "Pause");
-        actRun_->setIcon(QIcon(s == S::Paused ? ":/Icons/continue.svg" : ":/Icons/interrupt.svg"));
+        actRun_->setIcon(themedIcon(s == S::Paused ? ":/Icons/continue.svg" : ":/Icons/interrupt.svg"));
         actStop_->setEnabled(false);
         actStepOver_->setEnabled(s == S::Paused);
         actStepInto_->setEnabled(s == S::Paused);
@@ -1062,7 +1093,7 @@ void ScriptEditorWindow::updateRunActions() {
         return;
     }
     actRun_->setText(busy ? "Pause" : s == S::Paused ? "Continue" : "Run");
-    actRun_->setIcon(QIcon(busy ? ":/Icons/interrupt.svg" : ":/Icons/continue.svg"));
+    actRun_->setIcon(themedIcon(busy ? ":/Icons/interrupt.svg" : ":/Icons/continue.svg"));
     actStop_->setEnabled(s != S::Idle);
     actStepOver_->setEnabled(s == S::Paused);
     actStepInto_->setEnabled(s == S::Paused);
@@ -1155,7 +1186,7 @@ void ScriptEditorWindow::devSceneShot(const QString& file) {
     if (!sc) return;
     QRectF r = sc->contentRect().adjusted(-40, -40, 40, 40);
     QImage img(int(r.width() * 2), int(r.height() * 2), QImage::Format_ARGB32);
-    img.fill(QColor(35, 35, 35));
+    img.fill(themeColors().canvas);
     QPainter p(&img);
     p.setRenderHint(QPainter::Antialiasing);
     sc->render(&p, QRectF(0, 0, img.width(), img.height()), r);

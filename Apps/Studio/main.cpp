@@ -15,7 +15,7 @@
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     app.setApplicationName("FlowGraph Studio");
-    fged::applyDarkTheme(app);
+    fged::applySavedTheme(app, "FlowGraph Studio");     // the theme chosen in View > Theme (Dark the first time)
     fged::initEditor();
 
     fg::Runtime rt;

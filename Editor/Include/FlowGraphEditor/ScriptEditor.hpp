@@ -9,7 +9,7 @@
 //       std::vector<fged::LaunchEntry> launchEntries(const fg::Program&) override { ... }   // optional
 //       ...
 //   };
-//   fged::applyDarkTheme(app);   // optional
+//   fged::applySavedTheme(app, "My Game Editor");   // optional: the theme chosen in the editor (View > Theme)
 //   fged::initEditor();          // once, after QApplication exists
 //   MyHost host;
 //   fged::ScriptEditor editor(host);
@@ -21,6 +21,7 @@
 #include <FlowGraphEditor/Export.hpp>
 
 #include <QApplication>
+#include <QIcon>
 #include <QObject>
 #include <QString>
 #include <QWidget>
@@ -112,6 +113,11 @@ public:
     virtual QString launchToolTip() const { return QStringLiteral("Event or function to run"); }
     // The user picked another entry in the toolbar.
     virtual void launchEntrySelected(const QString& /*id*/) {}
+
+    // Does the editor offer View > Theme (Dark / Light / System)? A theme changes the palette of the whole application, so an
+    // application that looks after its own appearance says no. When it offers it, the editor applies the choice saved for this
+    // application (applicationName()) when it is created and saves every new choice. Default: in Standalone mode.
+    virtual bool offersThemeChoice() const { return mode() == EditorMode::Standalone; }
 };
 
 // There is ONE script editor in a program: creating a second one while the first exists throws std::logic_error. An application with
@@ -176,8 +182,23 @@ private:
     class ScriptEditorWindow* window_ = nullptr;
 };
 
-// Applies the dark palette / Fusion style used by FlowGraph Studio.
+// The look of the editor - and of the whole application: a theme is a palette for every window of it (Fusion style).
+//   Dark    the look FlowGraph Studio always had
+//   Light   dark text on light backgrounds; the editor's icons and coloured texts adapt
+//   System  Light or Dark like the operating system, and it follows when the system switches
+enum class Theme { Dark, Light, System };
+FG_EDITOR_EXPORT void applyTheme(QApplication& app, Theme theme);
+// = applyTheme(app, Theme::Dark).
 FG_EDITOR_EXPORT void applyDarkTheme(QApplication& app);
+// The theme the user chose in the editor of the application `applicationName` (View > Theme; it is kept per application), Dark when
+// none was chosen. An application whose editor offers the choice (EditorHost::offersThemeChoice) calls applySavedTheme at its start,
+// before it shows a window, so that its own windows come up in that theme too.
+FG_EDITOR_EXPORT Theme savedTheme(const QString& applicationName);
+FG_EDITOR_EXPORT void applySavedTheme(QApplication& app, const QString& applicationName);
+// An icon of the editor's resources (":/Icons/save.svg"...) drawn in the colours of the theme in use: on a light background its
+// neutral greys get darker, its colours stay. It follows theme changes by itself. Applications that use the editor's icons for
+// their own buttons take them from here.
+FG_EDITOR_EXPORT QIcon themedIcon(const QString& resourcePath);
 // Initialises KDDockWidgets with the editor's view factory. Call once after creating the QApplication.
 FG_EDITOR_EXPORT void initEditor();
 

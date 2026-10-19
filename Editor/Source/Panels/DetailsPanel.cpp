@@ -1,4 +1,5 @@
 #include "DetailsPanel.hpp"
+#include "../Common/Theme.hpp"
 #include "../Graph/Style.hpp"
 #include "../Studio/RunController.hpp"
 
@@ -148,6 +149,7 @@ DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), do
     outer->addWidget(noMatch_);
     outer->addStretch(1);
     connect(doc_, &Document::scriptReplaced, this, [this] { rebuild(); });
+    connect(&ThemeNotifier::instance(), &ThemeNotifier::changed, this, [this] { rebuild(); });     // the colours of its messages
     connect(doc_, &Document::compiled, this, [this] {
         if (selfEdit_ || rebuildQueued_ || mode_ != Mode::Nodes) return;
         rebuildQueued_ = true;
@@ -836,7 +838,7 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
                 if (row < 0) return;
                 table->selectRow(row);
                 QMenu menu;
-                QAction* remove = menu.addAction(QIcon(":/Icons/delete.svg"), "Remove");
+                QAction* remove = menu.addAction(themedIcon(":/Icons/delete.svg"), "Remove");
                 QAction* up = menu.addAction("Move Up");
                 QAction* down = menu.addAction("Move Down");
                 up->setEnabled(row > 0);
@@ -886,7 +888,7 @@ void DetailsPanel::buildNodes() {
     for (auto& d : doc_->diagnosticsFor(owner_, node->id)) {
         auto* l = new QLabel(qs(d.message));
         l->setWordWrap(true);
-        l->setStyleSheet(d.severity == fg::Diagnostic::Severity::Error ? "color:#ff6b6b" : "color:#e6be3c");
+        l->setStyleSheet("color:" + themeColors().css(d.severity == fg::Diagnostic::Severity::Error ? themeColors().error : themeColors().warning));
         form_->addRow(l);
     }
 

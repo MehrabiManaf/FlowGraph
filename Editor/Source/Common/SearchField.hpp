@@ -2,6 +2,8 @@
 #include <QIcon>
 #include <QLineEdit>
 
+#include "Theme.hpp"
+
 namespace fged {
 
 // The look of every search box of the editor (My Script, Details, Find Results): a magnifier on the left, a clear button on the
@@ -9,7 +11,7 @@ namespace fged {
 inline void makeSearchField(QLineEdit* edit, const QString& placeholder) {
     edit->setPlaceholderText(placeholder);
     edit->setClearButtonEnabled(true);
-    edit->addAction(QIcon(":/Icons/find.svg"), QLineEdit::LeadingPosition);
+    edit->addAction(themedIcon(":/Icons/find.svg"), QLineEdit::LeadingPosition);
 }
 
 } // namespace fged

@@ -61,6 +61,7 @@ public:
     void append(int level, const QString& text);   // level: fg::LogLevel
     // The right click menu: the standard entries of a read-only text (Copy, Select All) and "Clear". The caller owns the menu.
     QMenu* buildContextMenu();
+    void recolor();                                 // warnings and errors in the colours of the theme in use
 protected:
     void contextMenuEvent(QContextMenuEvent* e) override;
 };

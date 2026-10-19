@@ -1,4 +1,5 @@
 #include "MyScriptPanel.hpp"
+#include "../Common/Theme.hpp"
 #include "../Common/CollapsiblePanel/CollapsiblePanel.hpp"
 #include "../Common/SearchField.hpp"
 #include "../Graph/GraphView.hpp"
@@ -95,7 +96,7 @@ QIcon addMenuIcon(const QWidget* ref, int height, QSize* logicalSize) {
     QImage img(qRound(logicalWidth * dpr), heightPx, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
     QPainter p(&img);
-    p.drawPixmap(QRect(0, (heightPx - plusPx) / 2, plusPx, plusPx), QIcon(":/Icons/add.svg").pixmap(QSize(plusPx, plusPx)));
+    p.drawPixmap(QRect(0, (heightPx - plusPx) / 2, plusPx, plusPx), themedIcon(":/Icons/add.svg").pixmap(QSize(plusPx, plusPx)));
     p.drawImage(QPoint(plusPx + gapPx, (heightPx - arrow.height()) / 2), arrow);
     p.end();
     img.setDevicePixelRatio(dpr);
@@ -121,6 +122,13 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     QSize iconSize;
     addButton_->setIcon(addMenuIcon(search_, search_->sizeHint().height(), &iconSize));       // a plus and a drop-down arrow: the button opens a menu
     addButton_->setIconSize(iconSize);
+    // the arrow of that icon is cut from a combo box in the colours of the theme, and the lists colour missing events: both follow it
+    connect(&ThemeNotifier::instance(), &ThemeNotifier::changed, this, [this] {
+        QSize size;
+        addButton_->setIcon(addMenuIcon(search_, search_->sizeHint().height(), &size));
+        addButton_->setIconSize(size);
+        scheduleRefresh();
+    });
     addButton_->setText("+");                         // not shown (icon only), but names the button
     addButton_->setToolTip("Add a function or a variable");
     addButton_->setPopupMode(QToolButton::InstantPopup);
@@ -278,7 +286,7 @@ void MyScriptPanel::refresh() {
         it->setData(0, kMime, e.graph);
         it->setData(0, kNode, e.node);
         it->setToolTip(0, e.doc);
-        it->setForeground(0, e.missing ? QColor(255, 120, 120) : qApp->palette().color(QPalette::Link));
+        it->setForeground(0, e.missing ? themeColors().error : qApp->palette().color(QPalette::Link));
     }
     graphs_->expandAll();
     for (auto& v : s.variables) {
@@ -324,9 +332,9 @@ void MyScriptPanel::applyFilter() {
 void MyScriptPanel::showAddMenu() {
     QMenu* menu = addButton_->menu();
     menu->clear();
-    menu->addAction(QIcon(":/Icons/function.svg"), "Function", this, [this] { addFunction(); });
-    menu->addAction(QIcon(":/Icons/variable.svg"), "Variable", this, [this] { addVariable(); });
-    if (!localsGraph_.isEmpty()) menu->addAction(QIcon(":/Icons/local-variable.svg"), "Local Variable (" + localsGraph_ + ")", this, [this] { addLocal(); });
+    menu->addAction(themedIcon(":/Icons/function.svg"), "Function", this, [this] { addFunction(); });
+    menu->addAction(themedIcon(":/Icons/variable.svg"), "Variable", this, [this] { addVariable(); });
+    if (!localsGraph_.isEmpty()) menu->addAction(themedIcon(":/Icons/local-variable.svg"), "Local Variable (" + localsGraph_ + ")", this, [this] { addLocal(); });
 }
 
 void MyScriptPanel::onSelection(FitTree* tree) {
@@ -424,14 +432,14 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     QMenu m;
     QAction *open = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr, *refs = nullptr;
     if (isEvent) {
-        open = m.addAction(QIcon(":/Icons/goto.svg"), "Go to handler");        // events belong to the application: they cannot be removed
+        open = m.addAction(themedIcon(":/Icons/goto.svg"), "Go to handler");        // events belong to the application: they cannot be removed
     } else {
-        if (tree == functions_) open = m.addAction(QIcon(":/Icons/open-function.svg"), "Open");     // only a function has a graph to open
-        rename = m.addAction(QIcon(":/Icons/rename.svg"), "Rename");
-        if (tree == functions_) dup = m.addAction(QIcon(":/Icons/duplicate.svg"), "Duplicate");
-        del = m.addAction(QIcon(":/Icons/delete.svg"), "Delete");
+        if (tree == functions_) open = m.addAction(themedIcon(":/Icons/open-function.svg"), "Open");     // only a function has a graph to open
+        rename = m.addAction(themedIcon(":/Icons/rename.svg"), "Rename");
+        if (tree == functions_) dup = m.addAction(themedIcon(":/Icons/duplicate.svg"), "Duplicate");
+        del = m.addAction(themedIcon(":/Icons/delete.svg"), "Delete");
         m.addSeparator();
-        refs = m.addAction(QIcon(":/Icons/find-references.svg"), "Find References");
+        refs = m.addAction(themedIcon(":/Icons/find-references.svg"), "Find References");
         refs->setShortcut(QKeySequence("Shift+F12"));
     }
     QAction* a = m.exec(tree->viewport()->mapToGlobal(pos));

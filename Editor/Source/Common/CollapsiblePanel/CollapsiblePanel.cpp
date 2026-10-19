@@ -1,4 +1,5 @@
 #include "CollapsiblePanel.hpp"
+#include "../Theme.hpp"
 #include <QVBoxLayout>
 #include <QResizeEvent>
 #include <QTimer>
@@ -36,7 +37,7 @@ CCollapsiblePanel::CCollapsiblePanel(const QString& Title, QWidget* parent, bool
             mp_PlusButton = new QToolButton(mp_PanelButton);
             mp_PlusButton->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
             mp_PlusButton->setFixedSize(16, 16);
-            mp_PlusButton->setIcon(QIcon(":/Icons/add.svg"));
+            mp_PlusButton->setIcon(fged::themedIcon(":/Icons/add.svg"));
             mp_PlusButton->setIconSize(QSize(12, 12));
             mp_PlusButton->setText("+");                      // not shown (icon only), but names the button
             connect(mp_PlusButton, SIGNAL(clicked(bool)), this, SLOT(OnPlusButtonClicked(bool)));

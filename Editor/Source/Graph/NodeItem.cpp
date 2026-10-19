@@ -1,4 +1,5 @@
 #include "NodeItem.hpp"
+#include "../Common/Theme.hpp"
 #include "GraphScene.hpp"
 
 #include <QCheckBox>
@@ -359,7 +360,7 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
     if (reroute_) {
         QColor c = outData_.empty() ? QColor(150, 150, 150) : outData_[0].color;
         p->setPen(QPen(border, bw));
-        p->setBrush(pal.window().color());
+        p->setBrush(themeColors().nodeBody);
         p->drawRoundedRect(QRectF(0, 0, kRerouteWidth, kRerouteHeight), kRerouteHeight / 2, kRerouteHeight / 2);
         for (auto* list : {&inData_, &outData_})
             for (auto& v : *list) {
@@ -377,7 +378,7 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
     QPainterPath bodyPath;
     bodyPath.addRoundedRect(body, 5, 5);
     p->setPen(Qt::NoPen);
-    p->setBrush(pal.window().color());
+    p->setBrush(themeColors().nodeBody);
     p->drawPath(bodyPath);
     p->save();
     p->setClipPath(bodyPath);
@@ -420,7 +421,7 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
             glyph.connected = v.connected;
             glyph.color = c0(v, pal);
             glyph.keyColor = v.hovered ? pal.highlight().color() : v.keyColor;
-            glyph.hollow = pal.window().color();
+            glyph.hollow = themeColors().nodeBody;
             drawPinGlyph(p, v.connector.center(), glyph);
         }
         p->setPen(v.hovered ? pal.highlight().color() : pal.windowText().color());       // the label lights up with the connector
@@ -429,10 +430,10 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
             // padlock: shackle + body
             QRectF l = v.lockRect;
             p->save();
-            p->setPen(QPen(QColor(235, 200, 90), 1.4));
+            p->setPen(QPen(themeColors().constLock, 1.4));
             p->setBrush(Qt::NoBrush);
             p->drawArc(QRectF(l.left() + 1.5, l.top() + 0.5, l.width() - 3, 7), 0, 180 * 16);
-            p->setBrush(QColor(235, 200, 90));
+            p->setBrush(themeColors().constLock);
             p->drawRoundedRect(QRectF(l.left(), l.top() + 4.5, l.width(), 6), 1.5, 1.5);
             p->restore();
         }
