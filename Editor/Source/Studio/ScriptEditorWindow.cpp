@@ -216,7 +216,7 @@ void ScriptEditorWindow::createDocks() {
     connect(diagnostics_, &DiagnosticsPanel::summaryChanged, this, [this](int e, int w) {
         statusLabel_->setText(e || w ? QString("%1 error(s), %2 warning(s)").arg(e).arg(w) : QString("OK"));
         const ThemeColors& tc = themeColors();
-        statusLabel_->setStyleSheet("color:" + tc.css(e ? tc.error : w ? tc.warning : tc.success));
+        setTextColor(statusLabel_, e ? tc.error : w ? tc.warning : tc.success);
     });
     connect(debug_, &DebugPanel::locationActivated, this, [this](const QString& g, int n) { focusNode(g, n); });
     connect(find_, &FindPanel::activated, this, [this](const QString& g, int n) {

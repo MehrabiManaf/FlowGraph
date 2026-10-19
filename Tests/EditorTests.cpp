@@ -22,6 +22,7 @@
 #include <QGuiApplication>
 #include <QHash>
 #include <QStyleHints>
+#include <QStatusBar>
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QKeyEvent>
@@ -1460,6 +1461,19 @@ TEST(theme_is_chosen_kept_and_applied_again) {
             CHECK(add != nullptr);
             if (add) CHECK(add->palette().color(QPalette::Button) == qApp->palette().color(QPalette::Button));
             CHECK(styled.palette().color(QPalette::Window) == qApp->palette().color(QPalette::Window));
+            // the editor colours its texts through palettes, never with style sheets
+            int sheets = 0;
+            for (QWidget* w : f.win.findChildren<QWidget*>()) sheets += !w->styleSheet().isEmpty();
+            CHECK_EQ(sheets, 0);
+            // the compile summary of the status bar ("OK") in the light theme's green, the rest of its palette light
+            QLabel* status = nullptr;
+            for (QLabel* l : f.win.statusBar()->findChildren<QLabel*>())
+                if (l->text() == "OK") status = l;
+            CHECK(status != nullptr);
+            if (status) {
+                CHECK(status->palette().color(QPalette::WindowText) == themeColors().success);
+                CHECK(status->palette().color(QPalette::Window) == qApp->palette().color(QPalette::Window));
+            }
         }
         // the graph view and the icons: light canvas, darker icon greys
         CHECK(themeColors().canvas.lightness() > 200 && themeColors().nodeBody == QColor(255, 255, 255));

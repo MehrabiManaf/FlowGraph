@@ -888,7 +888,7 @@ void DetailsPanel::buildNodes() {
     for (auto& d : doc_->diagnosticsFor(owner_, node->id)) {
         auto* l = new QLabel(qs(d.message));
         l->setWordWrap(true);
-        l->setStyleSheet("color:" + themeColors().css(d.severity == fg::Diagnostic::Severity::Error ? themeColors().error : themeColors().warning));
+        setTextColor(l, d.severity == fg::Diagnostic::Severity::Error ? themeColors().error : themeColors().warning);
         form_->addRow(l);
     }
 

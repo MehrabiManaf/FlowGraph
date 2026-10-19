@@ -7,7 +7,9 @@
 #include <QColor>
 #include <QIcon>
 #include <QObject>
+#include <QPalette>
 #include <QString>
+#include <QWidget>
 
 namespace fged {
 
@@ -25,6 +27,15 @@ const ThemeColors& themeColors();
 // What the user chose (System stays System) and what is shown.
 Theme currentThemeChoice();
 bool darkThemeShown();
+
+// Gives a label (any widget that draws text) its own text colour through its palette - not with a style sheet, which would freeze
+// the rest of the widget's palette at the theme of the moment. The other roles keep following the application's palette.
+inline void setTextColor(QWidget* w, const QColor& c) {
+    QPalette p = w->palette();
+    p.setColor(QPalette::WindowText, c);
+    p.setColor(QPalette::Text, c);
+    w->setPalette(p);
+}
 
 // The choice of an application (QSettings apps/<application>/theme); savedTheme / applySavedTheme read it (ScriptEditor.hpp).
 void saveTheme(const QString& applicationName, Theme theme);
