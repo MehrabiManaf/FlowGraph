@@ -164,6 +164,14 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
   local time or UTC; out of range values carry over (month 13 is January). *Format Date Time* writes `%Y-%m-%d %H:%M:%S`
   style text (`%f` milliseconds, `%A` weekday, `%B` month, `%z` offset...; unknown codes are kept as they are), *Parse Date
   Time* reads ISO 8601 (`2026-10-18T14:30:05.250+02:00`; no zone = local time) and says whether the text was valid.
+* **System nodes (opt-in).** *Run Command* runs a program to its end (Exit Code, Output, Error Output, an optional Timeout);
+  *For Each Output Line* runs one and its loop body for each line as it comes, so `tail -f`, a log or a build can be followed
+  (Break ends the program); *Operating System* says Windows / Linux / macOS / Other, for a Switch on Enum. Arguments reach the
+  program as they are (no quoting); *Use Shell* runs a command line with cmd.exe or /bin/sh (`dir`, pipes, redirections). The
+  script waits, the thread does not. A program never outlives what started it: Stop, a Break, a hot reload or the end of the
+  instance kill it and everything it started (a job object on Windows, a process group elsewhere). A script with these nodes can
+  do anything its user can, so they are not built in: `fg::registerSystemNodes(registry)` (`FlowGraph/System.hpp`) adds them,
+  and the standard applications (`flow`, `flowstudio`) do.
 * Random Int / Random Float are exec nodes: each run draws one number that every connected pin reads. The numbers come from the
   instance (`Instance::random()`); *Set Random Seed* makes a run repeatable on any thread. The compiler warns about an exec node
   whose results are used but that is not connected to the execution flow (its outputs would keep their defaults).
@@ -206,7 +214,9 @@ instance.setLimits(lim);
 instance.setStepLimit(10'000'000);                             // nodes per run (default 50 million)
 instance.setMaxCallDepth(64);                                  // nested function calls (default 256)
 ```
-A script that goes beyond a limit fails with a script error at the node that did it; the host goes on.
+A script that goes beyond a limit fails with a script error at the node that did it; the host goes on. A runtime has no node
+that reaches the operating system unless the application registers the System nodes (`fg::registerSystemNodes`, also done by
+`registerStandardApp`); `allowNode` can refuse them per script (`d.source != "system"`).
 
 ### Hot reload
 
@@ -224,7 +234,7 @@ that wait or are paused are aborted (`report.abortedTasks`); the executors repor
 ### The standard application
 
 ```cpp
-fg::standard::registerStandardApp(rt.registry());    // event Main(Args: array<string>) and the Exit node
+fg::standard::registerStandardApp(rt.registry());    // event Main(Args: array<string>), the Exit node and the System nodes
 auto outcome = fg::standard::runMain(instance, {"a", "b"});   // outcome.exitCode, outcome.error
 ```
 

@@ -3578,6 +3578,322 @@ TEST(hot_reload_keeps_the_state_of_the_script) {
     }
 }
 
+// ---- System nodes (opt-in): Run Command, For Each Output Line, Operating System -------------------------------
+bool processAlive(long pid);         // ProcessProbe.cpp
+
+namespace {
+struct SystemRuntime : TestRuntime {
+    SystemRuntime() { registerSystemNodes(registry()); }
+};
+std::string helperPath() {           // Tests/ProcessHelper.cpp
+#if defined(_WIN32)
+    const char* ext = ".exe";
+#else
+    const char* ext = "";
+#endif
+    return std::filesystem::absolute(g_exeDir + "/FlowGraphProcessHelper" + ext).string();
+}
+std::string quotedHelper() {         // for a shell command line
+#if defined(_WIN32)
+    return "\"" + helperPath() + "\"";
+#else
+    return "'" + helperPath() + "'";
+#endif
+}
+// Runs Go to its end, ticking with the real time (at most `seconds`); `each` is called after every tick.
+RunResult goToEnd(GoRun& r, double seconds = 20, const std::function<void()>& each = {}) {
+    RunResult res = r.inst->callEvent("Go");
+    const auto start = std::chrono::steady_clock::now();
+    while (res.task && !res.task->done() && std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < seconds) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        r.inst->tick(0.002);
+        if (each) each();
+    }
+    return res.task ? res.task->result() : res;
+}
+bool diesSoon(long pid) {
+    for (int i = 0; i < 200; ++i) {
+        if (!processAlive(pid)) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return false;
+}
+long readPid(const std::filesystem::path& file) {
+    FILE* f = std::fopen(file.string().c_str(), "r");
+    if (!f) return 0;
+    long pid = 0;
+    if (std::fscanf(f, "%ld", &pid) != 1) pid = 0;
+    std::fclose(f);
+    return pid;
+}
+
+// Go -> Run Command(defaults, Arguments = Args) -> V0..V3 = Exit Code, Output, Error Output, Timed Out. `error`: the script error.
+struct RunCommand {
+    Value code, out, err, timedOut;
+    std::string error;
+    bool waitedAtFirst = false;
+    double seconds = 0;
+    std::vector<std::string> log;
+};
+RunCommand runCommand(Runtime& rt, std::map<std::string, Value> defaults, const std::vector<std::string>& args) {
+    GoGraph t;
+    t.s.variables.push_back({"Args", "array<string>", Value(), "", ""});
+    const char* outs[] = {"Exit Code", "Output", "Error Output", "Timed Out"};
+    NodeId run = t.node("system.run", std::move(defaults));
+    t.link(t.ev, "Then", run, "In");
+    t.link(t.var("var.get", "Args"), "Value", run, "Arguments");
+    NodeId prev = run;
+    for (int i = 0; i < 4; ++i) {
+        const std::string v = "V" + std::to_string(i);
+        t.s.variables.push_back({v, "any", Value(), "", ""});
+        NodeId set = t.var("var.set", v.c_str());
+        t.link(run, outs[i], set, "Value");
+        t.link(prev, "Then", set, "In");
+        prev = set;
+    }
+    GoRun r(rt, t.s);
+    RunCommand rc;
+    if (!r.prog->ok()) { rc.error = dumpDiagnostics(*r.prog); return rc; }
+    r.inst->setVariable("Args", standard::argsValue(rt.registry(), args));
+    const auto start = std::chrono::steady_clock::now();
+    RunResult first = r.inst->callEvent("Go");
+    rc.waitedAtFirst = first.waiting();
+    RunResult res = first;
+    while (res.task && !res.task->done() && std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < 20) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        r.inst->tick(0.002);
+        res = res.task->result();
+    }
+    rc.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    rc.log = r.log;
+    if (!res.ok) { rc.error = res.error; return rc; }
+    rc.code = r.inst->getVariable("V0");
+    rc.out = r.inst->getVariable("V1");
+    rc.err = r.inst->getVariable("V2");
+    rc.timedOut = r.inst->getVariable("V3");
+    return rc;
+}
+} // namespace
+
+TEST(system_nodes_are_opt_in) {
+    TestRuntime bare;
+    CHECK(!bare.registry().findNode("system.run"));
+    CHECK(!bare.registry().findNode("system.lines"));
+    CHECK(!bare.registry().findNode("fn:System.Operating System"));
+    CHECK(!bare.registry().findType("OperatingSystem"));
+    TestRuntime standardApp;                   // flow and flowstudio register them with the standard application
+    standard::registerStandardApp(standardApp.registry());
+    for (const char* id : {"system.run", "system.lines", "fn:System.Operating System"}) {
+        const NodeDef* d = standardApp.registry().findNode(id);
+        CHECK(d && d->source == "system" && d->category == "System" && d->waits == (std::string(id) != "fn:System.Operating System"));
+    }
+    CHECK_EQ(standardApp.registry().source(), std::string("core"));      // what is registered next is not tagged "system"
+    CHECK_EQ(standardApp.registry().findNode("system.lines")->breakPin, 0);
+    // and an application that registers them can still keep a script from using them
+    Script s;
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Go").id;
+    NodeId run = g.addNode("system.run").id;
+    link(g, ev, "Then", run, "In");
+    CompileOptions opts;
+    opts.allowNode = [](const NodeDef& d) { return d.source != "system"; };
+    auto p = compile(s, standardApp.registry(), opts);
+    CHECK(!p->ok());
+}
+
+TEST(operating_system_names_the_platform) {
+    SystemRuntime rt;
+    auto v = nodeOutputs(rt, "fn:System.Operating System", {}, {"System"});
+    CHECK_EQ(v.size(), size_t(1));
+#if defined(_WIN32)
+    const int64_t expected = 0;
+#elif defined(__APPLE__)
+    const int64_t expected = 2;
+#elif defined(__linux__)
+    const int64_t expected = 1;
+#else
+    const int64_t expected = 3;
+#endif
+    if (!v.empty()) CHECK_EQ(v[0].toInt(), expected);
+    CHECK(rt.registry().findNode("fn:System.Operating System")->pure);
+}
+
+TEST(run_command_hands_out_output_error_output_and_exit_code) {
+    SystemRuntime rt;
+    const Value helper(helperPath());
+    // arguments go to the program as they are: spaces, quotes, empty ones, trailing backslashes
+    auto a = runCommand(rt, {{"Program", helper}}, {"args", "a b", "say \"hi\"", "", "back\\slash\\", "h\xC3\xA9"});
+    CHECK_EQ(a.error, std::string());
+    CHECK_EQ(a.code.toInt(), int64_t(0));
+    CHECK_EQ(a.out.str(), std::string("[a b]\n[say \"hi\"]\n[]\n[back\\slash\\]\n[h\xC3\xA9]\n"));      // \n line breaks everywhere
+    CHECK_EQ(a.err.str(), std::string());
+    CHECK(!a.timedOut.toBool());
+    CHECK(a.waitedAtFirst);                    // the task waits for the program; the call returned at once
+    auto e = runCommand(rt, {{"Program", helper}}, {"exit", "3"});
+    CHECK_EQ(e.code.toInt(), int64_t(3));
+    auto err = runCommand(rt, {{"Program", helper}}, {"err", "oops"});
+    CHECK_EQ(err.out.str(), std::string("out\n"));
+    CHECK_EQ(err.err.str(), std::string("oops\n"));
+    auto u = runCommand(rt, {{"Program", helper}}, {"utf8"});
+    CHECK_EQ(u.out.str(), std::string("h\xC3\xA9llo \xE2\x9C\x93\n"));
+    // the working directory
+    const std::filesystem::path dir = std::filesystem::temp_directory_path();
+    auto w = runCommand(rt, {{"Program", helper}, {"Working Directory", Value(dir.string())}}, {"cwd"});
+    std::string printed = w.out.isString() ? w.out.str() : std::string();
+    while (!printed.empty() && (printed.back() == '\n' || printed.back() == '\r')) printed.pop_back();
+    std::error_code ec;
+    CHECK(!printed.empty() && std::filesystem::equivalent(printed, dir, ec));
+    // more than 16 MiB: cut, with a warning
+    auto big = runCommand(rt, {{"Program", helper}}, {"big", std::to_string((16 << 20) + 100000)});
+    CHECK_EQ(big.out.isString() ? big.out.str().size() : size_t(0), size_t(16 << 20));
+    CHECK(!big.log.empty() && big.log.back().find("16 MiB") != std::string::npos);
+}
+
+TEST(run_command_times_out_fails_to_start_and_uses_the_shell) {
+    SystemRuntime rt;
+    const Value helper(helperPath());
+    auto t = runCommand(rt, {{"Program", helper}, {"Timeout", Value(0.3)}}, {"sleep", "10"});
+    CHECK(t.timedOut.toBool());
+    CHECK_EQ(t.code.toInt(), int64_t(-1));
+    CHECK(t.seconds < 5);
+    auto fast = runCommand(rt, {{"Program", helper}, {"Timeout", Value(10.0)}}, {"sleep", "0.05"});
+    CHECK(!fast.timedOut.toBool() && fast.out.str() == "slept\n");
+    // a program that cannot be started is a script error
+    auto missing = runCommand(rt, {{"Program", Value("flowgraph-no-such-program")}}, {});
+    CHECK(missing.error.find("cannot run 'flowgraph-no-such-program'") != std::string::npos);
+    auto noDir = runCommand(rt, {{"Program", helper}, {"Working Directory", Value("/flowgraph/no/such/dir")}}, {"cwd"});
+    CHECK(noDir.error.find("does not exist") != std::string::npos);
+    auto empty = runCommand(rt, {}, {});
+    CHECK(empty.error.find("no program given") != std::string::npos);
+    // the shell: its redirections work, the arguments are appended quoted
+    auto sh = runCommand(rt, {{"Program", Value(quotedHelper() + " err boom 2>&1")}, {"Use Shell", Value(true)}}, {});
+    CHECK_EQ(sh.error, std::string());
+    CHECK(sh.out.isString() && sh.out.str().find("boom") != std::string::npos && sh.out.str().find("out") != std::string::npos);
+    CHECK_EQ(sh.err.isString() ? sh.err.str() : std::string("?"), std::string());
+    auto shArgs = runCommand(rt, {{"Program", Value(quotedHelper())}, {"Use Shell", Value(true)}}, {"args", "x y"});
+    CHECK_EQ(shArgs.out.isString() ? shArgs.out.str() : std::string(), std::string("[x y]\n"));
+    auto shExit = runCommand(rt, {{"Program", Value("exit 4")}, {"Use Shell", Value(true)}}, {});
+    CHECK_EQ(shExit.code.toInt(), int64_t(4));
+}
+
+TEST(for_each_output_line_streams_the_lines_as_they_come) {
+    SystemRuntime rt;
+    // Go -> For Each Output Line { Print(Line) or ErrLine = Line } Completed -> Code = Exit Code
+    GoGraph t;
+    t.s.variables.push_back({"Args", "array<string>", Value(), "", ""});
+    t.s.variables.push_back({"Code", "int", Value(99), "", ""});
+    t.s.variables.push_back({"ErrLine", "string", Value(""), "", ""});
+    NodeId fe = t.node("system.lines", {{"Program", Value(helperPath())}});
+    t.link(t.ev, "Then", fe, "In");
+    t.link(t.var("var.get", "Args"), "Value", fe, "Arguments");
+    NodeId br = t.node("flow.branch");
+    t.link(fe, "Loop Body", br, "In");
+    t.link(fe, "From Error Output", br, "Condition");
+    NodeId pr = t.node("util.print");
+    t.link(br, "False", pr, "In");
+    t.link(fe, "Line", pr, "String");
+    NodeId setErr = t.var("var.set", "ErrLine");
+    t.link(br, "True", setErr, "In");
+    t.link(fe, "Line", setErr, "Value");
+    NodeId setCode = t.var("var.set", "Code");
+    t.link(fe, "Completed", setCode, "In");
+    t.link(fe, "Exit Code", setCode, "Value");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) return;
+    r.inst->setVariable("Args", standard::argsValue(rt.registry(), {"lines", "4", "150"}));
+    bool sawPartial = false;            // a line was handled while the program still ran
+    RunResult res = goToEnd(r, 20, [&] { if (r.log.size() == 1 && r.inst->pendingTaskCount() == 1) sawPartial = true; });
+    CHECK(res.ok);
+    CHECK(sawPartial);
+    CHECK_EQ(r.log.size(), size_t(4));
+    if (r.log.size() == 4) CHECK(r.log[0] == "line 1" && r.log[3] == "line 4");       // without "\r" on Windows
+    CHECK_EQ(r.inst->getVariable("Code").toInt(), int64_t(0));
+    // the error output is marked; the exit code comes when the program has ended
+    r.log.clear();
+    r.inst->setVariable("Args", standard::argsValue(rt.registry(), {"err", "boom"}));
+    res = goToEnd(r);
+    CHECK(res.ok);
+    CHECK_EQ(r.log.size(), size_t(1));
+    if (!r.log.empty()) CHECK_EQ(r.log[0], std::string("out"));
+    CHECK_EQ(r.inst->getVariable("ErrLine").toString(), std::string("boom"));
+    r.log.clear();
+    r.inst->setVariable("Args", standard::argsValue(rt.registry(), {"exit", "7"}));
+    res = goToEnd(r);
+    CHECK(res.ok && r.log.empty());
+    CHECK_EQ(r.inst->getVariable("Code").toInt(), int64_t(7));
+}
+
+TEST(a_break_an_abort_and_a_reload_kill_the_program_of_for_each_output_line) {
+    SystemRuntime rt;
+    const auto pidFile = std::filesystem::temp_directory_path() / ("flowgraph_test_forever_" + std::to_string(std::time(nullptr)) + ".pid");
+    // Go -> For Each Output Line(forever) { N = N + 1; Branch(N >= 3) -> Break } Completed -> Code = Exit Code
+    for (bool shell : {false, true}) {         // with the shell the program is the shell's child: it dies too
+        GoGraph t;
+        t.s.variables.push_back({"N", "int", Value(0), "", ""});
+        t.s.variables.push_back({"Code", "int", Value(99), "", ""});
+        t.s.variables.push_back({"Args", "array<string>", Value(), "", ""});
+        NodeId fe = t.node("system.lines", {{"Program", Value(shell ? quotedHelper() : helperPath())}, {"Use Shell", Value(shell)}});
+        t.link(t.ev, "Then", fe, "In");
+        t.link(t.var("var.get", "Args"), "Value", fe, "Arguments");
+        NodeId getN = t.var("var.get", "N");
+        NodeId inc = t.node("math.add", {{"B", Value(1)}});
+        t.link(getN, "Value", inc, "A");
+        NodeId setN = t.var("var.set", "N");
+        t.link(fe, "Loop Body", setN, "In");
+        t.link(inc, "Result", setN, "Value");
+        NodeId ge = t.node("cmp.ge", {{"B", Value(3)}});
+        t.link(getN, "Value", ge, "A");
+        NodeId br = t.node("flow.branch");
+        t.link(setN, "Then", br, "In");
+        t.link(ge, "Result", br, "Condition");
+        NodeId brk = t.node("flow.break");
+        t.link(br, "True", brk, "In");
+        NodeId setCode = t.var("var.set", "Code");
+        t.link(fe, "Completed", setCode, "In");
+        t.link(fe, "Exit Code", setCode, "Value");
+        GoRun r(rt, t.s);
+        CHECK(r.prog->ok());
+        if (!r.prog->ok()) return;
+        r.inst->setVariable("Args", standard::argsValue(rt.registry(), {"forever", pidFile.string()}));
+
+        std::filesystem::remove(pidFile);
+        RunResult res = goToEnd(r);
+        CHECK(res.ok);
+        CHECK_EQ(r.inst->getVariable("N").toInt(), int64_t(3));
+        CHECK_EQ(r.inst->getVariable("Code").toInt(), int64_t(-1));      // ended by the Break, not by the program
+        long pid = readPid(pidFile);
+        CHECK(pid > 0 && diesSoon(pid));
+
+        // aborted while it waits for a line, with the task still held (a RunResult, a debugger): the program dies now
+        r.inst->setVariable("N", Value(-1000000));
+        std::filesystem::remove(pidFile);
+        RunResult held = r.inst->callEvent("Go");
+        for (int i = 0; i < 500 && readPid(pidFile) == 0; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            r.inst->tick(0.01);
+        }
+        pid = readPid(pidFile);
+        CHECK(pid > 0 && processAlive(pid));
+        CHECK(held.task && !held.task->done());
+        r.inst->abortAll();
+        CHECK(pid > 0 && diesSoon(pid));
+
+        // a hot reload aborts the waiting task: its program dies too
+        std::filesystem::remove(pidFile);
+        held = r.inst->callEvent("Go");
+        for (int i = 0; i < 500 && readPid(pidFile) == 0; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            r.inst->tick(0.01);
+        }
+        pid = readPid(pidFile);
+        CHECK(pid > 0);
+        CHECK(r.inst->reload(r.prog).abortedTasks == 1);
+        CHECK(pid > 0 && diesSoon(pid));
+    }
+    std::filesystem::remove(pidFile);
+}
+
 int main(int argc, char** argv) {
     g_exeDir = std::filesystem::path(argv[0]).parent_path().string();
     std::setvbuf(stdout, nullptr, _IONBF, 0);

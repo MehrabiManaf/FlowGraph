@@ -1,6 +1,7 @@
 #include <FlowGraph/StandardApp.hpp>
 
 #include <FlowGraph/Compatibility.hpp>
+#include <FlowGraph/System.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -25,6 +26,7 @@ void registerStandardApp(Registry& reg) {
     d.run = [](NodeCtx& c) { c.exit(static_cast<int>(c.inInt(0))); };
     reg.addNode(std::move(d));
     reg.endSource();
+    registerSystemNodes(reg);              // a standard application is a program the user runs: it may run others
 }
 
 void createMainTemplate(Script& script, const Registry& reg) {

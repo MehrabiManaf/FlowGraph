@@ -1,4 +1,4 @@
-add_executable(FlowGraphTests Main.cpp)
+add_executable(FlowGraphTests Main.cpp ProcessProbe.cpp)
 target_link_libraries(FlowGraphTests PRIVATE FlowGraphCore)
 add_test(NAME FlowGraphTests COMMAND FlowGraphTests)
 add_executable(FlowGraphBench Bench.cpp)
@@ -16,3 +16,7 @@ foreach(kind LEGACY MISMATCH)
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/testplugins)
     add_dependencies(FlowGraphTests ${target})
 endforeach()
+
+# A program the tests of the System nodes run (bin/, next to the tests).
+add_executable(FlowGraphProcessHelper ProcessHelper.cpp)
+add_dependencies(FlowGraphTests FlowGraphProcessHelper)

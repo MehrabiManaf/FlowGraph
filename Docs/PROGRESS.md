@@ -227,3 +227,17 @@ Rules to keep it correct:
   button hid its menu arrow with a style sheet and stayed dark in Light (light in Dark); it now paints itself without the arrow
   (AddButton). Theme switches also re-apply every widget's style sheet. The offscreen tests do not show the stale colour when
   rendering: they compare the widget's palette with the application's. FG_STUDIO_SELECT=theme:light switches while running.
+- System nodes (2026-10-20), opt-in: fg::registerSystemNodes (FlowGraph/System.hpp, Core/Source/BuiltinsSystem.cpp), called by
+  standard::registerStandardApp, not by registerBuiltins; source "system", category System. Run Command (system.run, waitThenResume on a
+  RunState: exit, both outputs at their end, or the deadline), For Each Output Line (system.lines: a loop, breakPin 0, call(1) per line,
+  waitThenResume between lines; native() holds the ChildProcess), Operating System (enum OperatingSystem). Core/Source/Process.*:
+  ChildProcess. Windows: CreateProcessW suspended, PROC_THREAD_ATTRIBUTE_HANDLE_LIST (only NUL / the two pipe ends are inherited),
+  CREATE_NO_WINDOW, a job object with KILL_ON_JOB_CLOSE, one reading thread per pipe (CancelSynchronousIo if a pipe stays open after the
+  kill), output that is not UTF-8 is read in the OEM code page. POSIX: fork / setpgid / execv (PATH searched before the fork), errno
+  through a CLOEXEC pipe, one poll() thread with a wake pipe, waitid(WNOWAIT) so the group id stays reserved until the destructor kills
+  the group (kill(-pid)) and reaps. Lines mode holds the program back (the reading thread waits) beyond 1 MiB of unread lines; Collect
+  keeps 16 MiB per output, \r\n -> \n. The ChildProcess dies with the node: Task::initCtx now MOVES aux / native out of the
+  continuation (before, Frame::resumeCont kept a copy, so a Break left the program running), and Task::releaseNatives drops the
+  native data of an aborted or failed task at once (a held RunResult / debugger keeps the Task alive). The POSIX half is checked by CI
+  only (no Linux toolchain on the development machine). Tests: Tests/ProcessHelper.cpp (bin/FlowGraphProcessHelper, wmain on Windows
+  so non-ASCII arguments are checked), Tests/ProcessProbe.cpp (is a pid alive).

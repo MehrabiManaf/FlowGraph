@@ -12,6 +12,8 @@ add_library(FlowGraphCore ${FG_LIB_TYPE}
     Source/StandardApp.cpp
     Source/Builtins.cpp
     Source/BuiltinsTime.cpp
+    Source/BuiltinsSystem.cpp
+    Source/Process.cpp
     Source/Inspect.cpp
     Source/Intellisense.cpp
     Source/Search.cpp

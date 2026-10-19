@@ -19,7 +19,8 @@ inline constexpr const char* kMainEvent = "Main";
 // A new script of a standard application: one event graph that handles Main and prints a greeting.
 FG_CORE_EXPORT void createMainTemplate(Script& script, const Registry& reg);
 
-// Declares the event Main(Args: array<string>) and the "Exit" node (category Application).
+// Declares the event Main(Args: array<string>) and the "Exit" node (category Application), and registers the System nodes
+// (registerSystemNodes: Run Command, For Each Output Line, Operating System).
 FG_CORE_EXPORT void registerStandardApp(Registry& reg);
 
 // array<string> value of the command line arguments of a script.
