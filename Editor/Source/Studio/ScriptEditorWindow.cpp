@@ -1148,6 +1148,7 @@ void ScriptEditorWindow::devSelect(const QString& spec) {
     if (p.size() == 3 && p[0] == "node") focusNode(p[1], p[2].toInt());
     else if (p.size() == 2 && p[0] == "var") details_->showVariable("", p[1]);
     else if (p.size() == 2 && p[0] == "graph") { openGraph(p[1]); details_->showGraph(p[1]); }
+    else if (p.size() == 2 && p[0] == "theme") applyTheme(*qApp, themeFromKey(p[1]));     // a switch while running; not saved
 }
 
 void ScriptEditorWindow::devProbe(const QString& file, bool coordinates) {

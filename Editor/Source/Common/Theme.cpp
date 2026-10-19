@@ -143,6 +143,14 @@ void show(QApplication& app, bool dark) {
     ++g_generation;
     QPixmapCache::clear();                      // icons rendered for the other theme
     app.setPalette(dark ? darkPalette() : lightPalette());
+    // A widget with a style sheet keeps the palette it was polished with: setting its sheet again polishes it with the new one
+    // (the editor's own widgets avoid style sheets for colours, but a host's widgets may have them).
+    for (QWidget* w : QApplication::allWidgets()) {
+        const QString sheet = w->styleSheet();
+        if (sheet.isEmpty()) continue;
+        w->setStyleSheet(QString());
+        w->setStyleSheet(sheet);
+    }
     emit ThemeNotifier::instance().changed();
 }
 

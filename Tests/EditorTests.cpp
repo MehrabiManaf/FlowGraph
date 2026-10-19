@@ -20,6 +20,7 @@
 
 #include <QApplication>
 #include <QGuiApplication>
+#include <QHash>
 #include <QStyleHints>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -1429,6 +1430,11 @@ TEST(theme_is_chosen_kept_and_applied_again) {
         CHECK(menu->actions().at(0)->isChecked() && darkThemeShown());
 
         f.win.log(int(fg::LogLevel::Error), "something failed");
+        QLabel styled("a label with a style sheet");
+        styled.setStyleSheet("font-weight: bold");
+        styled.show();
+        QCoreApplication::processEvents();
+        CHECK(styled.palette().color(QPalette::Window) == qApp->palette().color(QPalette::Window));      // dark
         f.win.chooseTheme(Theme::Light);
         QCoreApplication::processEvents();
         CHECK(!darkThemeShown() && currentThemeChoice() == Theme::Light);
@@ -1444,6 +1450,16 @@ TEST(theme_is_chosen_kept_and_applied_again) {
             c.movePosition(QTextCursor::EndOfBlock);
             CHECK(c.charFormat().foreground().color() == themeColors().error);
             CHECK(themeColors().error.lightness() < 128);
+        }
+        // every widget takes the new palette: My Script's add button (it once had a style sheet and kept the old theme's colours),
+        // and a widget that has a style sheet (as a host's widgets may)
+        {
+            QToolButton* add = nullptr;
+            for (auto* b : f.win.findChild<MyScriptPanel*>()->findChildren<QToolButton*>())
+                if (b->toolTip() == "Add a function or a variable") add = b;
+            CHECK(add != nullptr);
+            if (add) CHECK(add->palette().color(QPalette::Button) == qApp->palette().color(QPalette::Button));
+            CHECK(styled.palette().color(QPalette::Window) == qApp->palette().color(QPalette::Window));
         }
         // the graph view and the icons: light canvas, darker icon greys
         CHECK(themeColors().canvas.lightness() > 200 && themeColors().nodeBody == QColor(255, 255, 255));

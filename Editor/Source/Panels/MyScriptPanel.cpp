@@ -23,6 +23,7 @@
 #include <QPixmap>
 #include <QStyle>
 #include <QStyleOption>
+#include <QStylePainter>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -84,6 +85,22 @@ QImage comboArrow(qreal dpr) {
     return out;
 }
 
+// The add button: a tool button that opens its menu, drawn without the style's small menu arrow (the arrow is part of its icon).
+// Not done with a style sheet ("::menu-indicator { image: none }"): a widget with a style sheet keeps the palette it was polished
+// with, so the button stayed in the colours of the old theme when the theme changed.
+class AddButton : public QToolButton {
+public:
+    using QToolButton::QToolButton;
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QStylePainter p(this);
+        QStyleOptionToolButton opt;
+        initStyleOption(&opt);
+        opt.features &= ~QStyleOptionToolButton::HasMenu;
+        p.drawComplexControl(QStyle::CC_ToolButton, opt);
+    }
+};
+
 // The icon of the add button: the green plus and, behind a gap, the drop-down arrow of the combo boxes (the launch
 // box of the toolbar), so the button reads as "opens a list".
 QIcon addMenuIcon(const QWidget* ref, int height, QSize* logicalSize) {
@@ -118,7 +135,7 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     search_ = new QLineEdit(this);
     makeSearchField(search_, "Search");
     search_->setToolTip("Shows only the events, functions and variables whose name contains this text");
-    addButton_ = new QToolButton(this);
+    addButton_ = new AddButton(this);
     QSize iconSize;
     addButton_->setIcon(addMenuIcon(search_, search_->sizeHint().height(), &iconSize));       // a plus and a drop-down arrow: the button opens a menu
     addButton_->setIconSize(iconSize);
@@ -133,7 +150,6 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     addButton_->setToolTip("Add a function or a variable");
     addButton_->setPopupMode(QToolButton::InstantPopup);
     addButton_->setFixedSize(iconSize.width() + 12, search_->sizeHint().height());
-    addButton_->setStyleSheet("QToolButton::menu-indicator { image: none; }");                    // the arrow is part of the icon
     top->addWidget(search_, 1);
     top->addWidget(addButton_);
     lay->addLayout(top);

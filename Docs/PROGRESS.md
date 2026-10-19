@@ -223,3 +223,7 @@ Rules to keep it correct:
   at sync), Details / Compile Results rebuild, the log recolours its warning / error blocks (QTextBlock::userState = level), My Script
   rebuilds its add icon. Saved in QSettings apps/<application>/theme; the window applies it before its widgets exist. System follows
   QStyleHints::colorSchemeChanged.
+- A widget with a style sheet keeps the palette it was polished with: after a theme switch it shows the old theme. My Script's add
+  button hid its menu arrow with a style sheet and stayed dark in Light (light in Dark); it now paints itself without the arrow
+  (AddButton). Theme switches also re-apply every widget's style sheet. The offscreen tests do not show the stale colour when
+  rendering: they compare the widget's palette with the application's. FG_STUDIO_SELECT=theme:light switches while running.
