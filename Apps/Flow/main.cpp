@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
         if (a == "--") { ++i; break; }
         if (a.size() < 2 || a[0] != '-') break;
         if (a == "--help" || a == "-h") { usage(); return 0; }
-        if (a == "--version") { std::puts("flow 0.2"); return 0; }
+        if (a == "--version") { std::puts("flow " FG_VERSION); return 0; }
         if (a == "--check") checkOnly = true;
         else if (a == "--plugins" && i + 1 < argc) extraPlugins.push_back(argv[++i]);
         else if (a == "--no-plugins") defaultPlugins = false;

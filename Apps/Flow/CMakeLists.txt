@@ -1,5 +1,6 @@
 add_executable(flow main.cpp)
 target_link_libraries(flow PRIVATE FlowGraphCore)
+target_compile_definitions(flow PRIVATE FG_VERSION="${PROJECT_VERSION}")     # flow --version
 
 # Docs/NodeReference.md: the reference of everything a script of the standard applications can use (built in, without plugins).
 # Not part of the normal build: `cmake --build <dir> --target node_reference` after nodes were added or changed.

@@ -1,0 +1,203 @@
+name: Release
+
+# A release is made by pushing a tag:   git tag v0.2.0 && git push origin v0.2.0
+# The tag must match project(FlowGraph VERSION ...) in CMakeLists.txt. Windows and Linux are built and tested, packed with what they
+# need to run (Qt included) and attached to a DRAFT release: check its notes on GitHub, then press Publish.
+# Run it by hand (Actions > Release > Run workflow) to build the packages without making a release: they are kept as artifacts of
+# the run, to try before tagging.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: "6.9.0"
+
+jobs:
+  # The version: from CMakeLists.txt, and it must be the one of the tag.
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          version=$(grep -oP 'project\(FlowGraph VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          if [ -z "$version" ]; then echo "::error::no version in CMakeLists.txt"; exit 1; fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$version" ]; then
+            echo "::error::the tag ${GITHUB_REF_NAME} does not match the version $version in CMakeLists.txt (expected v$version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  # flow, flowstudio and the SDK (headers, libraries, CMake package), with Qt and the MSVC runtime next to them.
+  windows:
+    needs: version
+    runs-on: windows-2022
+    env:
+      PACKAGE: FlowGraph-${{ needs.version.outputs.version }}-windows-x64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Configure
+        run: cmake --preset windows-release
+        env:
+          QT_DIR: ${{ env.QT_ROOT_DIR }}
+      - name: Build
+        run: cmake --build --preset windows-release
+      - name: Test
+        run: ctest --preset windows-release
+      - name: Install and deploy Qt
+        shell: bash
+        run: |
+          cmake --install build/windows-release --prefix "dist/$PACKAGE" --component FlowGraph
+          windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw --compiler-runtime \
+            "dist/$PACKAGE/bin/flowstudio.exe" "dist/$PACKAGE/bin/FlowGraphEditor.dll"
+          # the offscreen platform: flowstudio without a display (and the check below)
+          cp "$(cygpath -u "$QT_ROOT_DIR")/plugins/platforms/qoffscreen.dll" "dist/$PACKAGE/bin/platforms/"
+          cp LICENSE README.md "dist/$PACKAGE/"
+      - name: Check that the package runs on its own
+        shell: pwsh
+        run: |
+          $bin = "dist\$env:PACKAGE\bin"
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"      # no Qt, no compiler: only what the package brings
+          Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
+          & "$bin\flow.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "flow does not start" }
+          & "$bin\flow.exe" --no-plugins --reference smoke-reference.md
+          if ($LASTEXITCODE -ne 0) { throw "flow --reference failed" }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:FG_STUDIO_SCREENSHOT = "$PWD\smoke.png"
+          $p = Start-Process "$bin\flowstudio.exe" -PassThru
+          if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "flowstudio did not end" }
+          if ($p.ExitCode -ne 0) { throw "flowstudio ended with $($p.ExitCode)" }
+          if (-not (Test-Path smoke.png)) { throw "flowstudio did not start" }
+      - name: Pack
+        shell: bash
+        run: cd dist && 7z a -tzip "../$PACKAGE.zip" "$PACKAGE" > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: ${{ env.PACKAGE }}.zip
+          if-no-files-found: error
+
+  # The same for Linux: the programs find their libraries next to them (RPATH $ORIGIN/../lib), Qt and its plugins are bundled.
+  linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    env:
+      PACKAGE: FlowGraph-${{ needs.version.outputs.version }}-linux-x64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libvulkan-dev libfontconfig1-dev
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+          cache: true
+      - name: Configure
+        run: cmake --preset linux-release '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
+        env:
+          QT_DIR: ${{ env.QT_ROOT_DIR }}
+      - name: Build
+        run: cmake --build --preset linux-release
+      - name: Test
+        run: ctest --preset linux-release
+      - name: Install and bundle Qt
+        run: |
+          dist="dist/$PACKAGE"
+          cmake --install build/linux-release --prefix "$dist" --component FlowGraph
+          # Qt's plugins: X11 (xcb) and offscreen platforms, SVG images and icons
+          for p in platforms/libqxcb.so platforms/libqoffscreen.so imageformats/libqsvg.so iconengines/libqsvgicon.so; do
+            mkdir -p "$dist/plugins/$(dirname "$p")"
+            cp "$QT_ROOT_DIR/plugins/$p" "$dist/plugins/$p"
+          done
+          cp -r "$QT_ROOT_DIR/plugins/xcbglintegrations" "$dist/plugins/"
+          printf '[Paths]\nPrefix=..\nPlugins=plugins\n' > "$dist/bin/qt.conf"
+          # every Qt library (and ICU) that the programs, libraries and plugins need, until nothing is missing
+          for pass in 1 2 3 4; do
+            find "$dist/bin" "$dist/lib" "$dist/plugins" -type f \( -name '*.so*' -o -perm -u+x \) | while read -r f; do
+              LD_LIBRARY_PATH="$QT_ROOT_DIR/lib" ldd "$f" 2>/dev/null | awk '/=>/ { print $3 }' | grep "^$QT_ROOT_DIR/lib/" || true
+            done | sort -u | while read -r dep; do
+              [ -e "$dist/lib/$(basename "$dep")" ] || cp -L "$dep" "$dist/lib/"
+            done
+          done
+          cp LICENSE README.md "$dist/"
+      - name: Check that the package runs on its own
+        run: |
+          dist="dist/$PACKAGE"
+          unset LD_LIBRARY_PATH QT_PLUGIN_PATH QML2_IMPORT_PATH
+          # nothing may come from the Qt installation; the X11 libraries the xcb plugin loads are the system's (not on this machine)
+          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist"/lib/*.so* "$dist"/plugins/*/*.so; do
+            if ldd "$f" | grep -F "$QT_ROOT_DIR"; then echo "::error::$f takes a library from the Qt installation"; exit 1; fi
+          done
+          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist/plugins/platforms/libqoffscreen.so"; do
+            if ldd "$f" | grep "not found"; then echo "::error::$f needs a library the package does not bring"; exit 1; fi
+          done
+          "$dist/bin/flow" --version
+          "$dist/bin/flow" --no-plugins --reference smoke-reference.md
+          QT_QPA_PLATFORM=offscreen FG_STUDIO_SCREENSHOT="$PWD/smoke.png" timeout 60 "$dist/bin/flowstudio"
+          test -s smoke.png
+      - name: Pack
+        run: tar -C dist -czf "$PACKAGE.tar.gz" "$PACKAGE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: ${{ env.PACKAGE }}.tar.gz
+          if-no-files-found: error
+
+  # Only for a tag: a draft release with both packages and their checksums.
+  release:
+    if: github.ref_type == 'tag'
+    needs: [version, windows, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          cd assets
+          sha256sum * > SHA256SUMS.txt
+          cat > ../notes.md <<EOF
+          ## Downloads
+
+          - **FlowGraph-$VERSION-windows-x64.zip**: \`flow\`, \`flowstudio\` (Qt included) and the SDK: headers, libraries and the CMake
+            package (\`find_package(FlowGraph)\`: \`FlowGraph::Core\`, \`FlowGraph::ScriptEditor\`). Windows 10 or later, x64.
+          - **FlowGraph-$VERSION-linux-x64.tar.gz**: the same for Linux x64, built on Ubuntu 24.04 (glibc 2.39 or newer). \`flowstudio\`
+            brings its Qt; the system needs the usual X11 libraries (for example \`libxcb-cursor0\`, \`libxkbcommon-x11-0\`).
+          - **SHA256SUMS.txt**: checksums of both.
+
+          Plugins are binary: build them against this release (the loader refuses a plugin made for another build, with the reason).
+
+          EOF
+          prerelease=""
+          case "$VERSION" in 0.*|*-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --verify-tag --draft $prerelease \
+            --title "FlowGraph $VERSION" --notes-file ../notes.md --generate-notes

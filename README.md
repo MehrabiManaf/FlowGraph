@@ -71,6 +71,14 @@ build\Release\bin\FlowGraphTests.exe
 build\Release\bin\FlowGraphEditorTests.exe
 ```
 
+### Releases
+
+`git tag v0.2.0 && git push origin v0.2.0` (the tag must match `project(FlowGraph VERSION ...)`) runs
+`.github/workflows/release.yml`: Windows and Linux are built, tested and packed with Qt (`windeployqt`; on Linux the Qt libraries
+and plugins go into the package, the programs find them through `$ORIGIN/../lib`), each package is started once without Qt
+installed, and both are attached to a **draft** release with checksums; publish it on GitHub. *Actions > Release > Run workflow*
+builds the packages without a release (artifacts of the run).
+
 ## flow
 
 ```
