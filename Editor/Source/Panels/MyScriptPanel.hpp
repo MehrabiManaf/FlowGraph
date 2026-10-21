@@ -51,6 +51,7 @@ private:
     void applyFilter();          // hides the items that do not match the search text (and the sections without a match)
     void showAddMenu();
     void refresh();
+    void refreshLocals();        // only the Local Variables section (another function chosen, or its locals changed)
     std::vector<EventEntry> collectEvents() const;
     FitTree* makeSection(const QString& title, bool plus, CCollapsiblePanel*& panel);
     void onItemChanged(FitTree* tree, QTreeWidgetItem* item);
@@ -73,7 +74,8 @@ private:
     bool building_ = false;
     bool detailsShown_ = false;   // the Details panel shows the item selected here (a click on it again does not need to show it)
     bool refreshQueued_ = false;
-    QString lastSignature_;
+    QString lastSignature_;      // what the lists of events, functions and variables show
+    QString lastLocalsSignature_;   // what the Local Variables section shows
 };
 
 } // namespace fged

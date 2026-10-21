@@ -122,6 +122,20 @@ QIcon addMenuIcon(const QWidget* ref, int height, QSize* logicalSize) {
     if (logicalSize) *logicalSize = QSize(logicalWidth, height);
     return QIcon(QPixmap::fromImage(img));
 }
+
+// A row of one of the lists: name, type (greyed) and the data the panel finds it by.
+QTreeWidgetItem* mk(QTreeWidget* tree, QTreeWidgetItem* parent, const QString& name, const QString& type, MyScriptPanel::Kind kind, bool editable,
+                    const QColor* dot = nullptr) {
+    auto* it = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(tree);
+    it->setText(0, name);
+    it->setText(1, type);
+    it->setForeground(1, qApp->palette().color(QPalette::PlaceholderText));
+    it->setData(0, kName, name);
+    it->setData(0, kKind, int(kind));
+    if (editable) it->setFlags(it->flags() | Qt::ItemIsEditable);
+    if (dot) it->setIcon(0, dotIcon(*dot));
+    return it;
+}
 } // namespace
 
 MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), doc_(doc) {
@@ -263,38 +277,30 @@ void MyScriptPanel::refresh() {
         if (!lg || lg->kind != fg::GraphKind::Function) localsGraph_.clear();
     }
     auto events = collectEvents();
-    // signature of everything that is displayed: skip the rebuild when nothing changed (keeps editors open)
-    QString sig = localsGraph_ + "#";
+    // signature of everything the lists of events, functions and variables display: skip their rebuild when nothing changed (keeps
+    // editors open). The Local Variables section has its own: choosing another function (a press on it) must not rebuild the list
+    // of functions, or the pressed item is gone before the mouse moves and the drag of the function does not start.
+    QString sig;
     for (auto& g : s.graphs) {
         sig += qs(g.name) + (g.kind == fg::GraphKind::Event ? "E" : "F") + "|";
         if (g.kind == fg::GraphKind::Function)      // the "(...)" shown next to the function's name follows its inputs
             for (auto& p : g.inputs) sig += qs(p.name) + ":" + qs(p.type) + ",";
     }
     for (auto& v : s.variables) sig += qs(v.name) + ":" + qs(v.type) + "|";
-    if (auto* g = s.findGraph(ss(localsGraph_)))
-        for (auto& v : g->locals) sig += "L" + qs(v.name) + ":" + qs(v.type) + "|";
     for (auto& e : events) sig += "e" + e.graph + "/" + e.name + e.params + QString::number(e.node) + (e.missing ? "m" : "") + "|";
-    if (sig == lastSignature_) return;
+    if (sig == lastSignature_) {
+        refreshLocals();
+        return;
+    }
     lastSignature_ = sig;
 
     building_ = true;
     QString keepName;
     FitTree* keepTree = nullptr;
-    for (auto* t : {graphs_, functions_, vars_, locals_})
+    for (auto* t : {graphs_, functions_, vars_})
         if (t->currentItem()) { keepTree = t; keepName = t->currentItem()->data(0, kName).toString() + "@" + t->currentItem()->data(0, kMime).toString(); }
-    for (auto* t : {graphs_, functions_, vars_, locals_}) t->clear();
+    for (auto* t : {graphs_, functions_, vars_}) t->clear();
 
-    auto mk = [&](FitTree* tree, QTreeWidgetItem* parent, const QString& name, const QString& type, Kind kind, bool editable, const QColor* dot = nullptr) {
-        auto* it = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(tree);
-        it->setText(0, name);
-        it->setText(1, type);
-        it->setForeground(1, qApp->palette().color(QPalette::PlaceholderText));
-        it->setData(0, kName, name);
-        it->setData(0, kKind, int(kind));
-        if (editable) it->setFlags(it->flags() | Qt::ItemIsEditable);
-        if (dot) it->setIcon(0, dotIcon(*dot));
-        return it;
-    };
     for (auto& g : s.graphs) {
         if (g.kind != fg::GraphKind::Function) continue;
         QStringList in;
@@ -316,20 +322,41 @@ void MyScriptPanel::refresh() {
         auto* it = mk(vars_, nullptr, qs(v.name), qs(v.type), Kind::Variable, true, &c);
         it->setData(0, kMime, "global|" + qs(v.name));
     }
-    if (auto* g = s.findGraph(ss(localsGraph_)); g && g->kind == fg::GraphKind::Function) {
-        for (auto& v : g->locals) {
-            QColor c = rgb(reg.typeColor(reg.typeOrAny(v.type)));
-            auto* it = mk(locals_, nullptr, qs(v.name), qs(v.type), Kind::Local, true, &c);
-            it->setData(0, kMime, "local|" + qs(v.name));
-        }
-        localsPanel_->SetTitle("Local Variables (" + localsGraph_ + ")");
-    }
-    localsPanel_->setVisible(!localsGraph_.isEmpty());
-    applyFilter();
     if (keepTree) {
         for (QTreeWidgetItemIterator it(keepTree); *it; ++it)
             if ((*it)->data(0, kName).toString() + "@" + (*it)->data(0, kMime).toString() == keepName) { keepTree->setCurrentItem(*it); break; }
     }
+    building_ = false;
+    applyFilter();
+    refreshLocals();
+}
+
+void MyScriptPanel::refreshLocals() {
+    const fg::Script& s = doc_->script();
+    const fg::Registry& reg = doc_->registry();
+    const fg::Graph* g = s.findGraph(ss(localsGraph_));
+    if (g && g->kind != fg::GraphKind::Function) g = nullptr;
+    QString sig = localsGraph_ + "#";
+    if (g)
+        for (auto& v : g->locals) sig += qs(v.name) + ":" + qs(v.type) + "|";
+    if (sig == lastLocalsSignature_) return;
+    lastLocalsSignature_ = sig;
+
+    building_ = true;
+    QString keepName;
+    if (locals_->currentItem()) keepName = locals_->currentItem()->data(0, kName).toString();
+    locals_->clear();
+    if (g) {
+        for (auto& v : g->locals) {
+            QColor c = rgb(reg.typeColor(reg.typeOrAny(v.type)));
+            auto* it = mk(locals_, nullptr, qs(v.name), qs(v.type), Kind::Local, true, &c);
+            it->setData(0, kMime, "local|" + qs(v.name));
+            if (!keepName.isEmpty() && qs(v.name) == keepName) locals_->setCurrentItem(it);
+        }
+        localsPanel_->SetTitle("Local Variables (" + localsGraph_ + ")");
+    }
+    localsPanel_->setVisible(g != nullptr);
+    applyFilter();
     building_ = false;
 }
 

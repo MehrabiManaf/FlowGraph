@@ -1427,6 +1427,59 @@ TEST(adding_in_my_script_expands_the_section) {
     CHECK(spinUntil([&] { return opened; }));                      // the animation ran to the end
 }
 
+// A press on a function, variable or local variable that is not selected yet keeps the pressed row: the list is not rebuilt under
+// the mouse, so the drag onto a graph can start at once. (A press on another function shows its local variables: only that section
+// may be rebuilt.)
+TEST(my_script_press_keeps_the_row_so_a_drag_can_start) {
+    StudioFixture f;
+    Document* doc = f.win.document();
+    doc->edit("Setup", [](fg::Script& s) {
+        s.addFunction("First").locals.push_back({"A", "int", fg::Value(int64_t(0)), "", ""});
+        s.addFunction("Second").locals.push_back({"B", "int", fg::Value(int64_t(0)), "", ""});
+        s.variables.push_back({"Score", "int", fg::Value(int64_t(0)), "", ""});
+        s.variables.push_back({"Lives", "int", fg::Value(int64_t(3)), "", ""});
+    });
+    QCoreApplication::processEvents();
+    auto* panel = f.win.findChild<MyScriptPanel*>();
+    CHECK(panel != nullptr);
+    if (!panel) return;
+    const auto trees = panel->findChildren<QTreeWidget*>();
+    QTreeWidget* functions = trees.at(1);
+    QTreeWidget* vars = trees.at(2);
+    QTreeWidget* locals = trees.at(3);
+    constexpr int kMarker = Qt::UserRole + 50;
+    // a real press (and release) on the row, like the user's
+    auto press = [&](QTreeWidget* tree, QTreeWidgetItem* item) {
+        const QPoint p = tree->visualItemRect(item).center();
+        item->setData(0, kMarker, true);                             // a rebuilt row would not have it
+        QMouseEvent down(QEvent::MouseButtonPress, QPointF(p), QPointF(tree->viewport()->mapToGlobal(p)), Qt::LeftButton, Qt::LeftButton,
+                         Qt::NoModifier);
+        QApplication::sendEvent(tree->viewport(), &down);
+        for (int i = 0; i < 5; ++i) QCoreApplication::processEvents();     // the refresh a selection schedules runs here
+        QTreeWidgetItem* now = tree->itemAt(p);
+        const bool kept = now && now->data(0, kMarker).toBool() && tree->currentItem() == now;
+        QMouseEvent up(QEvent::MouseButtonRelease, QPointF(p), QPointF(tree->viewport()->mapToGlobal(p)), Qt::LeftButton, Qt::NoButton,
+                       Qt::NoModifier);
+        QApplication::sendEvent(tree->viewport(), &up);
+        QCoreApplication::processEvents();
+        return kept;
+    };
+    auto row = [](QTreeWidget* tree, const QString& name) -> QTreeWidgetItem* {
+        for (int i = 0; i < tree->topLevelItemCount(); ++i) if (tree->topLevelItem(i)->text(0) == name) return tree->topLevelItem(i);
+        return nullptr;
+    };
+    CHECK(row(functions, "First") && row(functions, "Second") && row(vars, "Score") && row(vars, "Lives"));
+    if (!row(functions, "First") || !row(functions, "Second") || !row(vars, "Score") || !row(vars, "Lives")) return;
+
+    CHECK(press(functions, row(functions, "First")));
+    CHECK(row(locals, "A") != nullptr);                              // its local variables are shown
+    CHECK(press(functions, row(functions, "Second")));               // another function: still the pressed row
+    CHECK(row(locals, "B") != nullptr && row(locals, "A") == nullptr);
+    CHECK(press(vars, row(vars, "Score")));
+    CHECK(press(vars, row(vars, "Lives")));
+    CHECK(press(locals, row(locals, "B")));
+}
+
 // My Script never shows an item as selected while the Details panel shows something else: selecting a node (or clicking on the
 // empty canvas) clears the list, so a click on the variable shows its details again. A single event node selects its row instead.
 TEST(my_script_selection_follows_the_details_panel) {
