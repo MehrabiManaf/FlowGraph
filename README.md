@@ -324,6 +324,26 @@ The editor has two modes, chosen by `EditorHost::mode()`:
   them, *Detach* lets everything continue. When the application replaces the executor while the editor is attached it attaches the new
   one before posting the first event.
 
+### Languages
+
+The editor can show its texts in another language: *View > Language* (System, English, فارسی...; it applies at the next start
+and is kept per application). Only texts change - the layout stays left to right in every language - and scripts do not depend on
+the language: they keep the English node names, so a script made in one language opens unchanged in any other.
+
+* **The editor's own texts** (menus, panels, dialogs) are Qt translations: `Editor/Translations/flowgraph_<code>.ts`, edited with
+  Qt Linguist and compiled into the editor. `cmake --build <build> --target flowgraph_lupdate` adds new texts of the sources to
+  every file.
+* **The texts of the nodes** (titles, pins, categories, docs, settings, enum values) are catalogs:
+  `Core/Translations/<code>.json`, one text per line with its English text next to it
+  (`"node:flow.branch": ["Branch", "شاخه"]`). `flow --translations Core/Translations/<code>.json` creates or updates one: new
+  texts are added untranslated, removed ones dropped, and a translation whose English text changed is not used until it is
+  translated again. Node searches find a node by its translated and its English name.
+* **A new language** is one `.ts` file and one `.json` file with those names; nothing else changes.
+* An application or plugin translates its own nodes with a catalog of its own (`flow --translations` with its plugins loaded writes
+  one): `fged::loadNodeTranslations(file)` after `fged::applyLanguage` / `applySavedLanguage`.
+* CI checks that every text of the sources is in the files and that none is without a translation; the editor tests check that
+  every text the editor shows goes through the translation system.
+
 ## FlowGraph Studio keys
 
 | | |

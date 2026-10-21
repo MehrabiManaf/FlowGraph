@@ -71,6 +71,13 @@ jobs:
             echo "::error::texts without a translation (above): translate them in Editor/Translations"
             exit 1
           fi
+          # the same for the texts of the nodes (Core/Translations/<code>.json, written by flow --translations)
+          for catalog in Core/Translations/*.json; do ./build/linux-release/bin/flow --no-plugins --translations "$catalog"; done
+          git diff --exit-code -- Core/Translations
+          if grep -n '", ""\]' Core/Translations/*.json; then
+            echo "::error::node texts without a translation (above): translate them in Core/Translations"
+            exit 1
+          fi
 
   # The runtime alone must build without Qt; tests run under AddressSanitizer and UndefinedBehaviorSanitizer.
   core-sanitizers:

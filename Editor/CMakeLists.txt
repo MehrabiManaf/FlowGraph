@@ -43,6 +43,13 @@ qt_add_lupdate(TS_FILES ${FGED_TS_FILES}
     OPTIONS -no-obsolete -locations none)
 qt_add_lrelease(TS_FILES ${FGED_TS_FILES} QM_FILES_OUTPUT_VARIABLE FGED_QM_FILES LRELEASE_TARGET flowgraph_lrelease NO_GLOBAL_TARGET)
 qt_add_resources(FlowGraphEditor flowgraph_translations PREFIX /i18n BASE ${CMAKE_CURRENT_BINARY_DIR} FILES ${FGED_QM_FILES})
+# The texts of the built-in nodes: Core/Translations/<code>.json (flow --translations writes and updates them), as :/i18n/nodes_<code>.json
+file(GLOB FG_NODE_CATALOGS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/Core/Translations/*.json)
+foreach(catalog ${FG_NODE_CATALOGS})
+    get_filename_component(code ${catalog} NAME_WE)
+    set_source_files_properties(${catalog} PROPERTIES QT_RESOURCE_ALIAS nodes_${code}.json)
+endforeach()
+qt_add_resources(FlowGraphEditor flowgraph_node_translations PREFIX /i18n FILES ${FG_NODE_CATALOGS})
 
 if(FG_BUILD_TESTS)
     qt_add_executable(FlowGraphEditorTests ${CMAKE_SOURCE_DIR}/Tests/EditorTests.cpp ${CMAKE_SOURCE_DIR}/Apps/Studio/StandardEditorHost.cpp)
@@ -52,6 +59,7 @@ if(FG_BUILD_TESTS)
         # themselves instead of using the DLL; for them the editor's API is not imported from it.
         target_sources(FlowGraphEditorTests PRIVATE ${FGED_SOURCES} Resources/Resources.qrc)
         qt_add_resources(FlowGraphEditorTests flowgraph_translations_tests PREFIX /i18n BASE ${CMAKE_CURRENT_BINARY_DIR} FILES ${FGED_QM_FILES})
+        qt_add_resources(FlowGraphEditorTests flowgraph_node_translations_tests PREFIX /i18n FILES ${FG_NODE_CATALOGS})
         target_include_directories(FlowGraphEditorTests PRIVATE Include ${CMAKE_CURRENT_BINARY_DIR}/Include)
         target_compile_definitions(FlowGraphEditorTests PRIVATE FG_EDITOR_STATIC_DEFINE)
         target_link_libraries(FlowGraphEditorTests PRIVATE FlowGraphCore Qt6::Widgets Qt6::Svg Qt6::SvgWidgets KDAB::kddockwidgets)

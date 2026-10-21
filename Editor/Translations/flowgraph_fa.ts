@@ -783,6 +783,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Add local variable</source>
         <translation>افزودن متغیر محلی</translation>
     </message>
+    <message>
+        <source>not provided by this application</source>
+        <translation>این برنامه آن را فراهم نمی‌کند</translation>
+    </message>
 </context>
 <context>
     <name>fged::PalettePopup</name>

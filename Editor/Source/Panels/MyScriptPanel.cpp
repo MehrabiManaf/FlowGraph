@@ -3,6 +3,7 @@
 #include "MyScriptPanel.hpp"
 #include "../Common/Theme.hpp"
 #include "../Common/CollapsiblePanel/CollapsiblePanel.hpp"
+#include "../Common/NodeTexts.hpp"
 #include "../Common/SearchField.hpp"
 #include "../Graph/GraphView.hpp"
 #include "../Graph/Style.hpp"
@@ -263,7 +264,7 @@ std::vector<MyScriptPanel::EventEntry> MyScriptPanel::collectEvents() const {
             e.name = qs(n.def.substr(6));
             if (const fg::EventDesc* ev = reg.findEvent(n.def.substr(6))) {
                 e.params = qs(fg::describeParams(*ev));
-                e.doc = qs(ev->doc);
+                e.doc = QString::fromStdString(nodeTexts().text("node:event:" + ev->name + "#doc", ev->doc));
             } else {
                 e.params = qs(n.prop("sig"));
                 e.missing = true;
@@ -316,7 +317,8 @@ void MyScriptPanel::refresh() {
     }
     // event graphs: only the events the script handles (the graphs themselves are not listed and cannot be created)
     for (auto& e : events) {
-        auto* it = mk(graphs_, nullptr, e.name, e.missing ? e.params + "  - not provided by this application" : e.params, Kind::Event, false);
+        auto* it = mk(graphs_, nullptr, e.name, e.missing ? e.params + "  - " + tr("not provided by this application") : e.params, Kind::Event, false);
+        it->setText(0, QString::fromStdString(nodeTexts().text("node:event:" + ss(e.name), ss(e.name))));      // shown translated; kName stays the event
         it->setData(0, kMime, e.graph);
         it->setData(0, kNode, e.node);
         it->setToolTip(0, e.doc);

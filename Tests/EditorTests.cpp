@@ -4,6 +4,7 @@
 #include "Document.hpp"
 #include "Common/Settings.hpp"
 #include "Common/Theme.hpp"
+#include "Common/NodeTexts.hpp"
 #include "Graph/GraphScene.hpp"
 #include "Graph/Style.hpp"
 #include "Graph/LinkItem.hpp"
@@ -2801,6 +2802,67 @@ TEST(every_editor_text_is_translatable) {
     QCoreApplication::removeTranslator(&pseudo);
     for (const QString& m : missed) std::printf("  not translatable: %s\n", m.toUtf8().constData());
     CHECK(missed.isEmpty());
+}
+
+// In Persian the nodes show their texts in Persian - titles, pins, categories, settings, enum values - while the script keeps the
+// English names; the node search finds a node in both languages.
+TEST(node_texts_follow_the_language) {
+    applyLanguage(*qApp, "fa");
+    {
+        StudioFixture f;
+        Document* doc = f.win.document();
+        const QString graph = f.scene()->graphName();
+        fg::NodeId print = 0, day = 0, seq = 0;
+        doc->edit("Setup", [&](fg::Script& s) {
+            fg::Graph* g = s.findGraph(ss(graph));
+            print = g->addNode("util.print", 300, 300).id;
+            fg::Node& e = g->addNode("enum:Weekday", 300, 500);
+            e.props["value"] = "Friday";
+            day = e.id;
+            seq = g->addNode("flow.sequence", 600, 300).id;
+        });
+        QCoreApplication::processEvents();
+        NodeItem* item = f.scene()->nodeItem(print);
+        CHECK(item != nullptr);
+        if (item) CHECK_EQ(nodeTitle(item->compiled()), QString("چاپ رشته"));
+        CHECK_EQ(pinLabel("util.print", "String"), QString("رشته"));
+        NodeItem* dayItem = f.scene()->nodeItem(day);
+        if (dayItem) CHECK_EQ(nodeTitle(dayItem->compiled()), QString("Weekday.جمعه"));
+        CHECK(doc->script().findGraph(ss(graph))->findNode(day)->props.at("value") == "Friday");     // the script keeps English
+        // the node search, in Persian and in English
+        PalettePopup popup(f.scene(), PinRef());
+        auto* search = popup.findChild<QLineEdit*>();
+        auto* tree = popup.findChild<QTreeWidget*>();
+        CHECK(search && tree);
+        if (search && tree) {
+            auto found = [&](const QString& query, const QString& title) {
+                search->setText(query);
+                for (QTreeWidgetItemIterator it(tree); *it; ++it)
+                    if ((*it)->text(0) == title) return true;
+                return false;
+            };
+            CHECK(found("چاپ", "چاپ رشته"));
+            CHECK(found("Print String", "چاپ رشته"));
+            CHECK(found("Branch", "شاخه"));
+            bool folder = false;
+            search->setText("");
+            for (int i = 0; i < tree->topLevelItemCount(); ++i) folder |= tree->topLevelItem(i)->text(0) == "جریان";
+            CHECK(folder);
+        }
+        // Details: the title and the label of a setting
+        f.scene()->selectOnly(seq);
+        QCoreApplication::processEvents();
+        auto* details = f.win.findChild<DetailsPanel*>();
+        bool heading = false, setting = false;
+        if (details)
+            for (auto* l : details->findChildren<QLabel*>()) {
+                heading |= l->text() == "<b>دنباله</b>";                     // headings are bold
+                setting |= l->text().startsWith("پایه‌های خروجی");
+            }
+        CHECK(heading && setting);
+    }
+    applyLanguage(*qApp, "en");
+    CHECK(nodeTexts().empty());
 }
 
 TEST(launch_box_is_narrow_and_its_list_shows_long_entries) {

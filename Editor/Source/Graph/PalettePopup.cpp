@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "PalettePopup.hpp"
+#include "../Common/NodeTexts.hpp"
 #include "../Common/SearchField.hpp"
 
 #include <QApplication>
@@ -43,6 +44,17 @@ PalettePopup::PalettePopup(GraphScene* scene, const PinRef& from, QWidget* paren
         f.type = from.wildcard ? nullptr : from.type;
         all_ = fg::filterPalette(scene->registry(), all_, f);
     }
+    // Titles, folders and docs in the language of the editor. The English title and folder join the search words, so a search finds
+    // a node in either language ("branch" finds it in Persian too). What is created stays the same: the definition and its props.
+    if (!nodeTexts().empty())
+        for (fg::NodeTemplate& t : all_) {
+            const fg::NodeDef* def = scene->registry().findNode(t.defId);
+            const std::string english = t.title, englishCategory = t.category;
+            t.title = nodeTexts().nodeTitle(def, t.props, t.title);
+            t.category = nodeTexts().category(t.category);
+            if (def && t.doc == def->doc) t.doc = nodeTexts().nodeDoc(*def);
+            t.keywords += " " + english + " " + englishCategory;
+        }
     connect(search_, &QLineEdit::textChanged, this, [this] { rebuild(); });
     connect(tree_, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem* it, int) { accept(it); });
     connect(tree_, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* it, int) { accept(it); });

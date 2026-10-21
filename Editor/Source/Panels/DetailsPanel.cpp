@@ -7,6 +7,7 @@
 
 #include <FlowGraph/Compatibility.hpp>
 #include "../Common/CollapsiblePanel/CollapsiblePanel.hpp"
+#include "../Common/NodeTexts.hpp"
 #include "../Common/SearchField.hpp"
 #include "TypeEdit.hpp"
 #include "TypeSpec.hpp"
@@ -326,7 +327,7 @@ void DetailsPanel::buildVariable() {
             // the names of the values to choose from, never a bare number
             auto* box = new QComboBox;
             for (auto& e : t->enumValues) {
-                box->addItem(qs(e.name), qlonglong(e.value));
+                box->addItem(enumValueText(t->name, e.name), qlonglong(e.value));
                 if (!e.doc.empty()) box->setItemData(box->count() - 1, qs(e.doc), Qt::ToolTipRole);
             }
             box->setCurrentIndex(std::max(0, box->findData(qlonglong(cp.def.toInt()))));
@@ -806,9 +807,9 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
             const QBrush dimmed = table->palette().brush(QPalette::Disabled, QPalette::Text);
             for (int r = 0; r < int(fixed.size()); ++r) {
                 const fg::CompiledPin& p = *fixed[size_t(r)];
-                auto* name = new QTableWidgetItem(qs(p.name));
+                auto* name = new QTableWidgetItem(pinLabel(cn, p.name));          // the label; the pin keeps its name
                 auto* type = new QTableWidgetItem(p.kind == fg::PinKind::Exec ? QString("exec") : p.type ? qs(p.type->name) : QString("any"));
-                name->setToolTip(p.doc.empty() ? tr("Part of the definition of the node: it cannot be changed.") : qs(p.doc));
+                name->setToolTip(p.doc.empty() ? tr("Part of the definition of the node: it cannot be changed.") : pinDoc(cn.defId, p.name, p.doc));
                 for (auto* it : {name, type}) {
                     it->setFlags(Qt::ItemIsEnabled);
                     it->setForeground(dimmed);
@@ -911,8 +912,8 @@ void DetailsPanel::buildNodes() {
         buildGraphFor(isCall ? calledFunction : owner_);     // the function's name and its inputs / outputs
         form_->addRow(new QLabel(QString()));
     }
-    form_->addRow(heading(cn->op == fg::NodeOp::FunctionEntry ? tr("Function entry node") : qs(cn->title)));
-    if (cn->def && !cn->def->doc.empty()) form_->addRow(dim(qs(cn->def->doc)));
+    form_->addRow(heading(cn->op == fg::NodeOp::FunctionEntry ? tr("Function entry node") : nodeTitle(*cn)));
+    if (cn->def && !cn->def->doc.empty()) form_->addRow(dim(nodeDoc(cn->def)));
     form_->addRow(tr("Definition"), new QLabel(qs(cn->defId) + (cn->def && !cn->def->source.empty() ? "  [" + qs(cn->def->source) + "]" : QString())));
 
     for (auto& d : doc_->diagnosticsFor(owner_, node->id)) {
@@ -945,7 +946,7 @@ void DetailsPanel::buildNodes() {
     if (cn->def)
         for (const fg::NodeSetting& setting : cn->def->settings) {
             const std::string key = setting.key;
-            const QString label = qs(setting.label.empty() ? setting.key : setting.label);
+            const QString label = QString::fromStdString(nodeTexts().setting(cn->defId, setting));
             QWidget* editor = nullptr;
             if (setting.kind == fg::NodeSetting::Kind::Count) {
                 auto* sp = new QSpinBox;
@@ -957,12 +958,14 @@ void DetailsPanel::buildNodes() {
                 editor = sp;
             } else if (setting.kind == fg::NodeSetting::Kind::Choice) {
                 auto* combo = new QComboBox;
-                for (auto& c : setting.choices) combo->addItem(qs(c));
+                // the choices are shown translated (an enum literal: its values) and stored as they are
+                const std::string enumType = cn->defId.rfind("enum:", 0) == 0 ? cn->defId.substr(5) : std::string();
+                for (auto& c : setting.choices) combo->addItem(enumType.empty() ? qs(c) : enumValueText(enumType, c), qs(c));
                 const QString current = qs(node->prop(key, setting.def));
-                if (combo->findText(current) < 0) combo->addItem(current);      // a value the definition does not have (any more)
-                combo->setCurrentText(current);
+                if (combo->findData(current) < 0) combo->addItem(current, current);      // a value the definition does not have (any more)
+                combo->setCurrentIndex(combo->findData(current));
                 connect(combo, qOverload<int>(&QComboBox::activated), this, [=](int i) {
-                    const std::string v = ss(combo->itemText(i));
+                    const std::string v = ss(combo->itemData(i).toString());
                     mutateNode([&](fg::Node& n) { n.props[key] = v; }, tr("Change %1").arg(label.toLower()), QString());
                 });
                 editor = combo;
@@ -981,7 +984,7 @@ void DetailsPanel::buildNodes() {
                 };
                 editor = te;
             }
-            if (!setting.doc.empty()) editor->setToolTip(qs(setting.doc));
+            if (!setting.doc.empty()) editor->setToolTip(QString::fromStdString(nodeTexts().settingDoc(cn->defId, setting)));
             form_->addRow(label, editor);
         }
     // type parameters

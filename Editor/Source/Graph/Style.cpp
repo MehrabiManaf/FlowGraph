@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Style.hpp"
+#include "../Common/NodeTexts.hpp"
 
 namespace fged {
 
@@ -61,7 +62,7 @@ QString defaultText(const fg::CompiledPin& p) {
     case fg::TypeKind::Int: return QString::number(p.def.toInt());
     case fg::TypeKind::Float: return QString::number(p.def.toFloat(), 'g', 10);
     case fg::TypeKind::String: return p.def.isString() ? qs(p.def.str()) : QString();
-    case fg::TypeKind::Enum: return qs(p.type->enumName(p.def.toInt()));
+    case fg::TypeKind::Enum: return enumValueText(p.type, p.def.toInt());       // its name in the language of the editor
     default: return {};
     }
 }

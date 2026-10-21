@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "GraphScene.hpp"
+#include "../Common/NodeTexts.hpp"
 #include "CommentItem.hpp"
 #include "LinkItem.hpp"
 
@@ -391,9 +392,9 @@ void GraphScene::chooseEnumValue(NodeItem* item, const std::string& pin, const f
     if (!type) return;
     QMenu menu;
     for (auto& e : type->enumValues) {
-        QAction* a = menu.addAction(qs(e.name));
+        QAction* a = menu.addAction(enumValueText(type->name, e.name));      // shown translated; the value is what is stored
         a->setData(qlonglong(e.value));
-        if (!e.doc.empty()) a->setToolTip(qs(e.doc));
+        if (!e.doc.empty()) a->setToolTip(QString::fromStdString(nodeTexts().enumValueDoc(type->name, e.name, e.doc)));
     }
     if (QAction* a = menu.exec(screenPos)) setPinDefault(item->nodeId(), pin, fg::Value(int64_t(a->data().toLongLong())));
 }

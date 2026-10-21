@@ -17,6 +17,7 @@
 #include <QLineEdit>
 #include <QLocale>
 #include <QMenu>
+#include "../Common/NodeTexts.hpp"
 #include "../Common/SearchField.hpp"
 #include "../Common/Settings.hpp"
 #include <QSettings>
@@ -63,7 +64,7 @@ void DiagnosticsPanel::refresh() {
             it->setText(0, qs(d.graph));
             const fg::CompiledGraph* cg = prog->findGraph(d.graph);
             const fg::CompiledNode* cn = cg ? cg->findNode(d.node) : nullptr;
-            it->setText(1, cn ? qs(cn->title) : QString());
+            it->setText(1, cn ? nodeTitle(*cn) : QString());
             it->setText(2, qs(d.message));
             it->setForeground(2, err ? themeColors().error : themeColors().warning);
             it->setData(0, Qt::UserRole, qs(d.graph));
@@ -137,7 +138,9 @@ void FindPanel::refresh() {
     for (auto& r : refs) {
         auto* it = new QTreeWidgetItem(tree_);
         it->setText(0, qs(r.graph));
-        it->setText(1, qs(r.title));
+        const fg::CompiledGraph* cg = prog ? prog->findGraph(r.graph) : nullptr;
+        const fg::CompiledNode* cn = cg ? cg->findNode(r.node) : nullptr;
+        it->setText(1, cn ? nodeTitle(*cn) : qs(r.title));          // the node's title in the language of the editor
         it->setText(2, qs(r.detail));
         it->setToolTip(2, qs(r.detail));
         it->setData(0, Qt::UserRole, qs(r.graph));
@@ -363,7 +366,7 @@ void DebugPanel::refresh() {
         it->setText(0, e.graph + (e.isEvent ? " " + tr("(event)") : QString()));
         const fg::CompiledGraph* cg = doc_->program() ? doc_->program()->findGraph(ss(e.graph)) : nullptr;
         const fg::CompiledNode* cn = cg ? cg->findNode(e.node) : nullptr;
-        it->setText(1, cn ? qs(cn->title) : QString());
+        it->setText(1, cn ? nodeTitle(*cn) : QString());
         it->setData(0, Qt::UserRole, int(i));
         it->setData(0, Qt::UserRole + 1, e.graph);
         it->setData(0, Qt::UserRole + 2, e.node);

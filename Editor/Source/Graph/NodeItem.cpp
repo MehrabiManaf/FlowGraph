@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "NodeItem.hpp"
+#include "../Common/NodeTexts.hpp"
 #include "../Common/Theme.hpp"
 #include "GraphScene.hpp"
 
@@ -92,7 +93,7 @@ void NodeItem::refresh(const fg::CompiledNode& cn, bool hasError, bool hasWarnin
     warning_ = hasWarning;
     diagText_ = diagText;
     reroute_ = cn.op == fg::NodeOp::Reroute;
-    title_ = qs(cn.title);
+    title_ = nodeTitle(cn);                     // in the language of the editor (NodeTexts.hpp); the pins keep their names
     header_ = headerColor(cn.def ? cn.def->style : fg::NodeStyle::Function);
     if (!cn.def) header_ = QColor(120, 40, 120);
     layout();
@@ -107,7 +108,7 @@ void NodeItem::layout() {
     auto makeView = [&](const fg::CompiledPin& p) {
         PinView v;
         v.name = p.name;
-        v.label = hiddenLabel(p) ? QString() : qs(p.name);
+        v.label = hiddenLabel(p) ? QString() : pinLabel(cn_, p.name);        // v.name stays the pin's (English) name
         v.kind = p.kind;
         v.dir = p.dir;
         v.color = pinColor(reg, p);
@@ -119,7 +120,7 @@ void NodeItem::layout() {
         v.container = p.type && p.type->isContainer();
         v.containerKind = !p.type ? 0 : p.type->kind == fg::TypeKind::Array ? 1 : p.type->kind == fg::TypeKind::Map ? 2 : 0;
         v.type = p.type;
-        v.doc = qs(p.doc);
+        v.doc = pinDoc(cn_.defId, p.name, p.doc);
         return v;
     };
     for (int pi : cn_.execIn) if (!cn_.pins[size_t(pi)].hidden) inExec_.push_back(makeView(cn_.pins[size_t(pi)]));
@@ -541,7 +542,7 @@ void NodeItem::hoverMoveEvent(QGraphicsSceneHoverEvent* e) {
         setToolTip(tip);
     }
     else if (error_ || warning_) setToolTip(diagText_);
-    else setToolTip(cn_.def ? qs(cn_.def->doc) : QString());
+    else setToolTip(nodeDoc(cn_.def));
     QGraphicsObject::hoverMoveEvent(e);
 }
 

@@ -16,6 +16,7 @@
 #include <FlowGraph/Reference.hpp>
 #include <FlowGraph/Search.hpp>
 #include <FlowGraph/System.hpp>
+#include <FlowGraph/Translations.hpp>
 #include <FlowGraph/Vm.hpp>
 
 #include <memory>

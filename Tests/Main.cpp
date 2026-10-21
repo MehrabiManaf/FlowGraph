@@ -3202,6 +3202,66 @@ TEST(enum_literals_show_their_value) {
           def->settings[0].choices[4] == "Friday");
 }
 
+// A catalog translates what editors show of nodes; a translation made for another English text (the node changed since) is not used;
+// titles made from names keep the names; updateCatalog adds new texts, drops removed ones and keeps the translations.
+TEST(node_translations_catalogs) {
+    TestRuntime rt;
+    const Registry& reg = rt.registry();
+    Translations t;
+    std::string error;
+    CHECK(t.loadJson(R"({"language": "fa", "texts": {
+        "node:flow.branch": ["Branch", "شاخه"],
+        "pin:flow.branch/Condition": ["Condition", "شرط"],
+        "node:flow.delay": ["Old Delay", "تأخیر"],
+        "category:Flow": ["Flow", "جریان"],
+        "enum:Weekday.Friday": ["Friday", "جمعه"],
+        "template:get-variable": ["Get {Name}", "خواندن {Name}"],
+        "pin:flow.sequence/Then {N}": ["Then {N}", "سپس {N}"],
+        "node:util.print": ["Print String", ""] }})", &error));
+    CHECK_EQ(t.language(), std::string("fa"));
+    CHECK_EQ(t.nodeTitle(reg.findNode("flow.branch"), {}, "Branch"), std::string("شاخه"));
+    CHECK_EQ(t.pin("flow.branch", "Condition"), std::string("شرط"));
+    CHECK_EQ(t.pin("flow.branch", "True"), std::string("True"));                       // no translation: English
+    CHECK_EQ(t.nodeTitle(reg.findNode("flow.delay"), {}, "Delay"), std::string("Delay"));   // made for "Old Delay": outdated
+    CHECK_EQ(t.nodeTitle(reg.findNode("util.print"), {}, "Print String"), std::string("Print String"));   // empty: none
+    CHECK_EQ(t.category("Flow|Switch"), std::string("جریان|Switch"));
+    CHECK_EQ(t.enumValue("Weekday", "Friday"), std::string("جمعه"));
+    CHECK_EQ(t.nodeTitle(reg.findNode("var.get"), {{"name", "Score"}}, "Get Score"), std::string("خواندن Score"));   // the name stays
+    CHECK_EQ(t.nodeTitle(reg.findNode("enum:Weekday"), {{"value", "Friday"}}, "Weekday.Friday"), std::string("Weekday.جمعه"));
+    // pins a node numbers from a setting share one text; the cases of a Switch on Enum are its enum's values
+    CHECK_EQ(t.pin("flow.sequence", "Then 3"), std::string("سپس 3"));
+    CHECK_EQ(t.pin(reg.findNode("flow.switch.enum"), {{"enum", "Weekday"}}, "Friday"), std::string("جمعه"));
+    CHECK(!t.loadJson("[1, 2]", &error) && !error.empty());
+
+    // a catalog for a registry: every text once, the translations kept, the outdated reported, the removed dropped
+    const auto texts = translatableTexts(reg);
+    CHECK(texts.size() > 300);
+    std::set<std::string> keys;
+    for (auto& [k, en] : texts) CHECK(keys.insert(k).second && !en.empty());
+    CHECK(keys.count("node:flow.branch") && keys.count("pin:flow.for/Loop Body") && keys.count("enum:Weekday.Sunday") && keys.count("category:Math"));
+    CHECK(keys.count("pin:flow.sequence/Then {N}") && keys.count("pin:flow.switch.int/Default") && !keys.count("pin:flow.sequence/Then 0"));
+    CatalogReport report;
+    const std::string first = updateCatalog(reg, "", "fa", &report);
+    CHECK(report.texts == texts.size() && report.added == texts.size() && report.translated == 0);
+    std::string edited = first;
+    const std::string branch = "\"node:flow.branch\": [\"Branch\", \"\"]";
+    CHECK(edited.find(branch) != std::string::npos);
+    edited.replace(edited.find(branch), branch.size(), "\"node:flow.branch\": [\"Branch\", \"شاخه\"], \"node:gone\": [\"Gone\", \"x\"]");
+    const std::string delay = "\"node:flow.delay\": [\"Delay\", \"\"]";           // a translation of what the node was called before
+    CHECK(edited.find(delay) != std::string::npos);
+    edited.replace(edited.find(delay), delay.size(), "\"node:flow.delay\": [\"Old Delay\", \"تأخیر\"]");
+    const std::string second = updateCatalog(reg, edited, "fa", &report);
+    CHECK_EQ(report.translated, size_t(1));
+    CHECK_EQ(report.removed, size_t(1));
+    CHECK_EQ(report.outdated, size_t(1));
+    CHECK(second.find("\"node:flow.branch\": [\"Branch\", \"شاخه\"]") != std::string::npos);
+    CHECK(second.find("node:gone") == std::string::npos);
+    Translations back;
+    CHECK(back.loadJson(second, &error));
+    CHECK_EQ(back.nodeTitle(reg.findNode("flow.branch"), {}, "Branch"), std::string("شاخه"));
+    CHECK_EQ(back.nodeTitle(reg.findNode("flow.delay"), {}, "Delay"), std::string("Delay"));
+}
+
 // The string nodes count characters (Unicode code points), not bytes: a character is a string of length 1 in every language.
 TEST(string_nodes_count_characters) {
     TestRuntime rt;

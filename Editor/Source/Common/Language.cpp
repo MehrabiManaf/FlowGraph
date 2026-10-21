@@ -5,6 +5,7 @@
 // are taken from next to the program, where the release packages put them, or from the Qt installation.
 #include <FlowGraphEditor/ScriptEditor.hpp>
 
+#include "NodeTexts.hpp"
 #include "Settings.hpp"
 
 #include <QCoreApplication>
@@ -22,6 +23,7 @@ namespace {
 QTranslator* g_editor = nullptr;        // the installed translators (null while the language is English)
 QTranslator* g_qt = nullptr;
 QString g_current = QStringLiteral("en");
+fg::Translations g_nodes;               // the texts of the nodes (empty while the language is English)
 
 const QString kPrefix = QStringLiteral(":/i18n/");
 
@@ -73,12 +75,14 @@ void applyLanguage(QApplication& app, const QString& code) {
             *t = nullptr;
         }
     g_current = resolve(code);
+    g_nodes.clear();
     if (g_current != QLatin1String("en")) {
         g_editor = new QTranslator(&app);
         if (g_editor->load(kPrefix + "flowgraph_" + g_current + ".qm")) app.installTranslator(g_editor);
         g_qt = new QTranslator(&app);
         loadQtTranslation(*g_qt, g_current);
         if (!g_qt->isEmpty()) app.installTranslator(g_qt);
+        loadNodeTranslations(kPrefix + "nodes_" + g_current + ".json");        // the built-in nodes (Core/Translations/<code>.json)
     }
     // only the texts change: the panels stay left to right in every language (a mirrored editor looked odd); Qt still writes the
     // letters of a right-to-left text (Persian, Arabic...) in their order inside each label and menu item
@@ -86,6 +90,21 @@ void applyLanguage(QApplication& app, const QString& code) {
 }
 
 QString currentLanguage() { return g_current; }
+
+bool loadNodeTranslations(const QString& catalogFile, QString* error) {
+    QFile f(catalogFile);
+    if (!f.open(QIODevice::ReadOnly)) {
+        if (error) *error = QStringLiteral("cannot read %1").arg(catalogFile);
+        return false;
+    }
+    std::string why;
+    const bool ok = g_nodes.loadJson(f.readAll().toStdString(), &why);
+    if (!ok && error) *error = QString::fromStdString(why);
+    return ok;
+}
+
+const fg::Translations& nodeTexts() { return g_nodes; }
+fg::Translations& editableNodeTexts() { return g_nodes; }
 
 QString savedLanguage(const QString& applicationName) {
     return editorSettings().value(appSettingsKey(applicationName, QStringLiteral("language")), QStringLiteral("system")).toString();

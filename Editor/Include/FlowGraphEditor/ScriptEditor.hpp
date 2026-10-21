@@ -222,6 +222,10 @@ FG_EDITOR_EXPORT void saveLanguage(const QString& applicationName, const QString
 FG_EDITOR_EXPORT void applySavedLanguage(QApplication& app, const QString& applicationName);
 // The language whose translations are installed ("en" when none is).
 FG_EDITOR_EXPORT QString currentLanguage();
+// Adds a catalog that translates the texts of nodes (fg::Translations, Translations.hpp): the built-in nodes' is loaded by
+// applyLanguage; an application or plugin adds the one for its own nodes and classes, after applyLanguage and before the windows are
+// made (a file `flow --translations` wrote, or one in the application's resources). False, and `error`, when it cannot be read.
+FG_EDITOR_EXPORT bool loadNodeTranslations(const QString& catalogFile, QString* error = nullptr);
 // An icon of the editor's resources (":/Icons/save.svg"...) drawn in the colours of the theme in use: on a light background its
 // neutral greys get darker, its colours stay. It follows theme changes by itself. Applications that use the editor's icons for
 // their own buttons take them from here.

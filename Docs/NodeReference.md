@@ -1343,8 +1343,8 @@ The timestamp of a calendar date and time of day, in local time or in UTC. Value
 | in | Minute | `int` | 0 |  |
 | in | Second | `int` | 0 |  |
 | in | Millisecond | `int` | 0 |  |
-| in | Local | `bool` | true |  |
-| out | Timestamp | `float` |  | Local time (on) or UTC (off) |
+| in | Local | `bool` | true | Local time (on) or UTC (off) |
+| out | Timestamp | `float` |  |  |
 
 ### Now
 
