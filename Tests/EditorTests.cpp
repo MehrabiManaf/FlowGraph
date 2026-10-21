@@ -39,6 +39,12 @@
 #include "Common/CustomViewFactory/TabBar.hpp"
 #include "Common/CustomViewFactory/TitleBarButton.hpp"
 #include "Common/CustomViewFactory/CustomViewFactory.hpp"
+#include "Common/CustomViewFactory/DropIndicators.hpp"
+#include <kddockwidgets/core/DropArea.h>
+#include <kddockwidgets/core/Group.h>
+#include <kddockwidgets/core/MainWindow.h>
+#include <kddockwidgets/core/indicators/ClassicDropIndicatorOverlay.h>
+#include <QMenu>
 #include <kddockwidgets/core/TabBar.h>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
@@ -2690,6 +2696,70 @@ TEST(dock_buttons_are_the_editors_and_still_work) {
     back->click();                                                   // deletes the floating window, and this button with it
     CHECK(spinUntil([&] { return !dock->isFloating(); }));
     CHECK(dock->isOpen());
+}
+
+// The drop targets are the editor's: KDDockWidgets' overlay gets them from our factory, they sit where they should (the outer ones
+// near the window's edges, the five inner ones around the middle of the panel under the mouse) and the one under the mouse is the
+// drop location; the preview of where the dock goes is ours too. (A real drag is not needed: this overlay allows every target, as
+// KDDockWidgets does while a dock is dragged over a panel it may join.)
+TEST(drop_targets_are_the_editors) {
+    struct AllTargets : KDDockWidgets::Core::ClassicDropIndicatorOverlay {
+        using ClassicDropIndicatorOverlay::ClassicDropIndicatorOverlay;
+        bool dropIndicatorVisible(KDDockWidgets::DropLocation l) const override { return l != KDDockWidgets::DropLocation_None; }
+    };
+    StudioFixture f;
+    KDDockWidgets::Core::DropArea* area = f.win.mainWindow()->dropArea();
+    CHECK(area && !area->groups().isEmpty());
+    if (!area || area->groups().isEmpty()) return;
+    auto* overlay = new AllTargets(area);
+    auto* targets = dynamic_cast<CDropIndicatorWindow*>(overlay->indicatorWindow());
+    CHECK(targets != nullptr);
+    CHECK(dynamic_cast<CDropPreview*>(overlay->rubberBand()) != nullptr);
+    if (!targets) { delete overlay; return; }
+    KDDockWidgets::Core::Group* group = area->groups().front();
+    overlay->setWindowBeingDragged(true);
+    overlay->setHoveredGroup(group);
+    targets->resize(KDDockWidgets::QtCommon::View_qt::asQWidget(area->view())->size());
+    targets->updatePositions();
+    QCoreApplication::processEvents();
+    using L = KDDockWidgets::DropLocation;
+    const L all[] = {L::DropLocation_Center, L::DropLocation_Left, L::DropLocation_Right, L::DropLocation_Top, L::DropLocation_Bottom,
+                     L::DropLocation_OutterLeft, L::DropLocation_OutterRight, L::DropLocation_OutterTop, L::DropLocation_OutterBottom};
+    for (L l : all) CHECK_EQ(targets->hover(targets->posForIndicator(l)), l);     // each target is found where it is
+    const QPoint center = targets->mapFromGlobal(targets->posForIndicator(L::DropLocation_Center));
+    const QPoint left = targets->mapFromGlobal(targets->posForIndicator(L::DropLocation_Left));
+    const QPoint top = targets->mapFromGlobal(targets->posForIndicator(L::DropLocation_Top));
+    CHECK_EQ(center.x() - left.x(), CDropIndicatorWindow::kTile + CDropIndicatorWindow::kGap);
+    CHECK_EQ(center.y() - top.y(), CDropIndicatorWindow::kTile + CDropIndicatorWindow::kGap);
+    const QPoint outerLeft = targets->mapFromGlobal(targets->posForIndicator(L::DropLocation_OutterLeft));
+    CHECK(std::abs(outerLeft.x() - (CDropIndicatorWindow::kEdgeMargin + CDropIndicatorWindow::kTile / 2)) <= 1);   // QRect::center rounds down
+    CHECK_EQ(targets->hover(targets->mapToGlobal(QPoint(1, 1))), L::DropLocation_None);   // nothing in a corner
+    // the preview shows over the panel for "as a tab"
+    overlay->setCurrentDropLocation(L::DropLocation_Center);
+    QCoreApplication::processEvents();
+    QWidget* preview = KDDockWidgets::QtCommon::View_qt::asQWidget(overlay->rubberBand());
+    CHECK(preview && preview->isVisible() && preview->width() > 0);
+    overlay->setCurrentDropLocation(L::DropLocation_None);
+    overlay->setWindowBeingDragged(false);
+    delete overlay;
+}
+
+// The menu of a single tab: Hide Tab Bar and Close Tab, both with an icon.
+TEST(single_tab_menu_has_icons) {
+    StudioFixture f;
+    CTabBar* tab = singleTabBarOf("My Script");
+    CHECK(tab != nullptr);
+    if (!tab) return;
+    QMenu menu;
+    QAction* hide = nullptr;
+    QAction* close = nullptr;
+    tab->FillContextMenu(menu, &hide, &close);
+    CHECK(hide && close);
+    if (!hide || !close) return;
+    CHECK_EQ(hide->text(), QString("Hide Tab Bar"));
+    CHECK_EQ(close->text(), QString("Close Tab"));
+    CHECK(!hide->icon().isNull() && !close->icon().isNull());
+    CHECK(close->isEnabled());
 }
 
 TEST(dock_layout_is_restored_at_the_next_start) {

@@ -13,5 +13,9 @@ public:
     // The buttons of the docks and their icons: the editor's (CTitleBarButton, Icons/dock-*.svg) instead of KDDockWidgets' bitmaps.
     QIcon iconForButtonType(KDDockWidgets::TitleBarButtonType Type, qreal Dpr) const override;
     QAbstractButton* createTitleBarButton(QWidget* pParent, KDDockWidgets::TitleBarButtonType Type) const override;
+    // The drop targets and the preview of where a dragged dock goes (CDropIndicatorWindow, CDropPreview).
+    KDDockWidgets::Core::ClassicIndicatorWindowViewInterface* createClassicIndicatorWindow(KDDockWidgets::Core::ClassicDropIndicatorOverlay* pOverlay,
+                                                                                          KDDockWidgets::Core::View* pParent) const override;
+    KDDockWidgets::Core::View* createRubberBand(KDDockWidgets::Core::View* pParent) const override;
     // we can customize createDockWidget for persistentcentralwidget and ... but we dont need it for now
 };

@@ -1,6 +1,7 @@
 #include "TabBar.hpp"
 #include "TabWidget.hpp"
 #include "DockWidget.hpp"
+#include <FlowGraphEditor/ScriptEditor.hpp>
 #include <QStyleFactory>
 #include <kddockwidgets/core/DockWidget.h>
 #include <kddockwidgets/core/TabBar.h>
@@ -161,10 +162,9 @@ void CTabBar::contextMenuEvent(QContextMenuEvent* pEvent)
         return;
 
     QMenu Menu(this);
-
-    QAction* pHideTabBarAction = Menu.addAction("Hide TabBar");
-    QAction* pCloseTabAction = Menu.addAction("Close Tab");
-    pCloseTabAction->setEnabled(CanCloseCurrentTab());
+    QAction* pHideTabBarAction = nullptr;
+    QAction* pCloseTabAction = nullptr;
+    FillContextMenu(Menu, &pHideTabBarAction, &pCloseTabAction);
 
     QAction* pSelectedAction = Menu.exec(pEvent->globalPos());
 
@@ -179,6 +179,17 @@ void CTabBar::contextMenuEvent(QContextMenuEvent* pEvent)
         CloseCurrentTab();
     }
 
+}
+
+void CTabBar::FillContextMenu(QMenu& Menu, QAction** ppHide, QAction** ppClose) const
+{
+    QAction* pHide = Menu.addAction(fged::themedIcon(":/Icons/tabbar-hide.svg"), "Hide Tab Bar");
+    QAction* pClose = Menu.addAction(fged::themedIcon(":/Icons/dock-close.svg"), "Close Tab");
+    pClose->setEnabled(CanCloseCurrentTab());
+    if(ppHide)
+        *ppHide = pHide;
+    if(ppClose)
+        *ppClose = pClose;
 }
 
 bool CTabBar::CanCloseCurrentTab() const

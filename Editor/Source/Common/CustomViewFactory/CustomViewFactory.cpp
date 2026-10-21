@@ -3,6 +3,7 @@
 #include "TabBar.hpp"
 #include "TabWidget.hpp"
 #include "TitleBarButton.hpp"
+#include "DropIndicators.hpp"
 #include <FlowGraphEditor/ScriptEditor.hpp>
 
 
@@ -49,4 +50,15 @@ QAbstractButton* CCustomViewFactory::createTitleBarButton(QWidget* pParent, KDDo
     auto* pButton = new CTitleBarButton(pParent, Type);
     pButton->setIcon(iconForButtonType(Type, pParent->devicePixelRatioF()));
     return pButton;
+}
+
+KDDockWidgets::Core::ClassicIndicatorWindowViewInterface* CCustomViewFactory::createClassicIndicatorWindow(
+    KDDockWidgets::Core::ClassicDropIndicatorOverlay* pOverlay, KDDockWidgets::Core::View*) const
+{
+    return new CDropIndicatorWindow(pOverlay);     // a window of its own, over the window being dragged (not parented to the drop area)
+}
+
+KDDockWidgets::Core::View* CCustomViewFactory::createRubberBand(KDDockWidgets::Core::View* pParent) const
+{
+    return new CDropPreview(pParent ? KDDockWidgets::QtCommon::View_qt::asQWidget(pParent) : nullptr);
 }

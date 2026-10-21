@@ -4,6 +4,9 @@
 #include <QProxyStyle>
 #include <QPropertyAnimation>
 
+class QAction;
+class QMenu;
+
 
 class CTabBarProxyStyle: public QProxyStyle
 {
@@ -36,6 +39,8 @@ public:
     // it is over: closing the last dock of a frame deletes the frame, and this tab bar with it.
     void CloseCurrentTab();
     bool CanCloseCurrentTab() const;      // a single tab whose dock may be closed
+    // The menu of a single tab: Hide Tab Bar and Close Tab, with their icons.
+    void FillContextMenu(QMenu& Menu, QAction** ppHide = nullptr, QAction** ppClose = nullptr) const;
 private:
     double AnimationProgress() const { return m_AnimationProgress; }
     void SetAnimationProgress(const double& Progress);

@@ -43,6 +43,7 @@
         <file alias="dock-minimize.svg">Icons/dock-minimize.svg</file>
         <file alias="dock-pin.svg">Icons/dock-pin.svg</file>
         <file alias="dock-unpin.svg">Icons/dock-unpin.svg</file>
+        <file alias="tabbar-hide.svg">Icons/tabbar-hide.svg</file>
         <file alias="find-references.svg">Icons/find-references.svg</file>
         <file alias="load-more.svg">Icons/load-more.svg</file>
         <file alias="watch-add.svg">Icons/watch-add.svg</file>
