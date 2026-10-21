@@ -1316,10 +1316,14 @@ TEST(studio_collapse_to_function) {
     CHECK(doc->script().toText() == before);
 }
 
-// The search boxes of My Script, Details and Find Results look the same: a magnifier, a clear button, a placeholder.
+// The search boxes of My Script, Details, Find Results and the node search popup look the same: a magnifier, a clear button, a
+// placeholder.
 TEST(search_fields_look_the_same) {
     StudioFixture f;
     QList<QLineEdit*> fields;
+    PalettePopup popup(f.scene(), PinRef());
+    if (QLineEdit* e = popup.findChild<QLineEdit*>()) fields << e;
+    else CHECK(false);
     for (QWidget* panel : {static_cast<QWidget*>(f.win.findChild<MyScriptPanel*>()), static_cast<QWidget*>(f.win.findChild<DetailsPanel*>()),
                            static_cast<QWidget*>(f.win.findChild<FindPanel*>())}) {
         CHECK(panel != nullptr);
@@ -1335,6 +1339,118 @@ TEST(search_fields_look_the_same) {
         for (QAction* act : e->actions()) leading += !act->icon().isNull();
         CHECK(leading >= 1);                                          // the magnifier (the clear button is not one of these actions)
     }
+}
+
+// Adding a function or a variable in My Script (a section's "+" or the Add menu) opens the section it goes to, if it is collapsed,
+// and starts renaming the new item there.
+TEST(adding_in_my_script_expands_the_section) {
+    StudioFixture f;
+    auto* panel = f.win.findChild<MyScriptPanel*>();
+    CHECK(panel != nullptr);
+    if (!panel) return;
+    const auto sections = panel->findChildren<CCollapsiblePanel*>();      // Event Graphs, Functions, Variables, Local Variables
+    const auto trees = panel->findChildren<QTreeWidget*>();
+    CHECK(sections.size() == 4 && trees.size() >= 3);
+    if (sections.size() != 4 || trees.size() < 3) return;
+    CCollapsiblePanel* functions = sections[1];
+    CCollapsiblePanel* variables = sections[2];
+    auto editing = [](QTreeWidget* tree, const QString& name) {     // the item is current and its name editor is open
+        QTreeWidgetItem* cur = tree->currentItem();
+        QLineEdit* editor = tree->findChild<QLineEdit*>();
+        return cur && cur->text(0) == name && editor && editor->isVisible();
+    };
+
+    // the "+" of a collapsed Variables section
+    variables->SetContentsExpaned(false);
+    CHECK(spinUntil([&] { return variables->height() < 40; }));
+    QToolButton* plus = nullptr;
+    for (auto* b : variables->findChildren<QToolButton*>()) if (!plus) plus = b;
+    CHECK(plus != nullptr);
+    if (!plus) return;
+    plus->click();
+    CHECK(variables->IsContentsExpanded());
+    CHECK(spinUntil([&] { return editing(trees[2], "NewVar"); }));
+    CHECK(f.win.document()->script().variableIndex("NewVar") >= 0);
+
+    // the Add menu with a collapsed Functions section
+    functions->SetContentsExpaned(false);
+    CHECK(spinUntil([&] { return functions->height() < 40; }));
+    QToolButton* add = nullptr;
+    for (auto* b : panel->findChildren<QToolButton*>()) if (b->menu() && !add) add = b;
+    CHECK(add != nullptr);
+    if (!add) return;
+    emit add->menu()->aboutToShow();                               // fills the menu
+    QAction* function = nullptr;
+    for (QAction* a : add->menu()->actions()) if (a->text() == "Function") function = a;
+    CHECK(function != nullptr);
+    if (!function) return;
+    bool opened = false;
+    QObject::connect(functions, &CCollapsiblePanel::ExpandFinished, panel, [&] { opened = true; });
+    function->trigger();
+    CHECK(functions->IsContentsExpanded());
+    CHECK(spinUntil([&] { return editing(trees[1], "NewFunction"); }));
+    CHECK(spinUntil([&] { return opened; }));                      // the animation ran to the end
+}
+
+// My Script never shows an item as selected while the Details panel shows something else: selecting a node (or clicking on the
+// empty canvas) clears the list, so a click on the variable shows its details again. A single event node selects its row instead.
+TEST(my_script_selection_follows_the_details_panel) {
+    StudioFixture f;
+    Document* doc = f.win.document();
+    const QString graph = f.scene()->graphName();
+    fg::NodeId print = 0;
+    doc->edit("Setup", [&](fg::Script& s) {
+        s.variables.push_back({"Score", "int", fg::Value(int64_t(0)), "", ""});
+        print = s.findGraph(ss(graph))->addNode("util.print", 400, 300).id;
+    });
+    QCoreApplication::processEvents();
+    auto* panel = f.win.findChild<MyScriptPanel*>();
+    auto* details = f.win.findChild<DetailsPanel*>();
+    CHECK(panel && details);
+    if (!panel || !details) return;
+    const auto trees = panel->findChildren<QTreeWidget*>();
+    QTreeWidget* events = trees.at(0);
+    QTreeWidget* vars = trees.at(2);
+    auto showsScore = [&] {
+        for (auto* e : details->findChildren<QLineEdit*>()) if (e->isVisible() && e->text() == "Score") return true;
+        return false;
+    };
+    CHECK_EQ(vars->topLevelItemCount(), 1);
+    if (vars->topLevelItemCount() != 1) return;
+
+    vars->setCurrentItem(vars->topLevelItem(0));                     // the variable ...
+    QCoreApplication::processEvents();
+    CHECK(showsScore());
+    f.scene()->selectOnly(print);                                    // ... then a node ...
+    QCoreApplication::processEvents();
+    CHECK(!showsScore());
+    CHECK(vars->selectedItems().isEmpty() && vars->currentItem() == nullptr);
+    f.scene()->clearSelection();                                     // ... then the empty canvas
+    QCoreApplication::processEvents();
+    CHECK(vars->selectedItems().isEmpty());
+    vars->setCurrentItem(vars->topLevelItem(0));                     // a click on the variable shows it again
+    emit vars->itemClicked(vars->topLevelItem(0), 0);
+    QCoreApplication::processEvents();
+    CHECK(showsScore());
+
+    // an event: its row stays selected while its node is the selection, and selecting the node selects the row
+    QTreeWidgetItem* main = nullptr;
+    for (QTreeWidgetItemIterator it(events); *it; ++it)
+        if ((*it)->text(0) == "Main") main = *it;                    // the event of the new script
+    CHECK(main != nullptr);
+    if (!main) return;
+    events->setCurrentItem(main);
+    QCoreApplication::processEvents();
+    CHECK(main->isSelected());
+    CHECK(vars->selectedItems().isEmpty());
+    CHECK_EQ(f.scene()->selectedNodeIds().size(), qsizetype(1));
+    const fg::NodeId mainNode = f.scene()->selectedNodeIds().front();
+    f.scene()->selectOnly(print);
+    QCoreApplication::processEvents();
+    CHECK(!main->isSelected());
+    f.scene()->selectOnly(mainNode);
+    QCoreApplication::processEvents();
+    CHECK(main->isSelected() && events->currentItem() == main);
 }
 
 // Every application that embeds the editor keeps its own dock layout and recent files (QSettings group apps/<application>/);

@@ -25,6 +25,7 @@ public:
     void SetTitle(const QString& Title) { mp_Label->setText(Title); }
     // Expands the panel at once (no animation): for panels that are created already open.
     void ExpandImmediately();
+    bool IsContentsExpanded() const { return mp_PanelButton->isChecked(); }
 private:
     double AnimationProgress() const { return m_AnimationProgress; }
     void SetAnimationProgress(const double& Progress);
@@ -34,6 +35,7 @@ private:
     QSize sizeHint() const override;
 signals:
     void PlusButtonClicked();
+    void ExpandFinished();          // the expand animation has ended: the contents have their full height
 private slots:
     void OnToggle(const bool& Expanded);
     void OnPlusButtonClicked(const bool&);

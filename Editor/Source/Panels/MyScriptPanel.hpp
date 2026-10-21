@@ -34,6 +34,10 @@ signals:
 public:
     // The function / variable / local variable selected in the panel (Kind::None when there is none).
     Kind selected(QString* owner, QString* name) const;
+    // The nodes selected in `graph` changed (the Details panel shows them now): the list follows, so it never shows an item as
+    // selected while the Details panel shows something else. A single event node selects its row in Event Graphs; anything else
+    // (other nodes, none) clears the selection of the list.
+    void showNodeSelection(const QString& graph, const QList<int>& ids);
 
 private:
     // Events belong to the application; the list shows the ones this script handles.
@@ -56,6 +60,8 @@ private:
     void addVariable();
     void addLocal();
     void beginRename(FitTree* tree, const QString& name);
+    CCollapsiblePanel* panelOf(FitTree* tree) const;
+    void scrollTo(FitTree* tree, QTreeWidgetItem* item);      // in the scroll area of the dock
 
     Document* doc_;
     QString current_;
@@ -65,6 +71,7 @@ private:
     QLineEdit* search_ = nullptr;
     QToolButton* addButton_ = nullptr;
     bool building_ = false;
+    bool detailsShown_ = false;   // the Details panel shows the item selected here (a click on it again does not need to show it)
     bool refreshQueued_ = false;
     QString lastSignature_;
 };

@@ -241,3 +241,8 @@ Rules to keep it correct:
   native data of an aborted or failed task at once (a held RunResult / debugger keeps the Task alive). The POSIX half is checked by CI
   only (no Linux toolchain on the development machine). Tests: Tests/ProcessHelper.cpp (bin/FlowGraphProcessHelper, wmain on Windows
   so non-ASCII arguments are checked), Tests/ProcessProbe.cpp (is a pid alive).
+- Editor polish (2026-10-21, branch editor-polish): adding in My Script (a section's "+" or the Add menu) opens a collapsed section
+  first (CCollapsiblePanel::IsContentsExpanded / ExpandFinished) and scrolls the dock to the new item once it has grown. The node
+  search popup uses makeSearchField like the other search boxes. My Script follows the node selection
+  (MyScriptPanel::showNodeSelection, called by onSelectionNodes / onCurrentTabChanged): other nodes or none clear the list, a single
+  event node selects its row; a click on the selected item shows its details again when Details shows something else.

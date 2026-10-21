@@ -18,9 +18,11 @@
 #include <QTreeWidgetItemIterator>
 #include <cmath>
 #include <map>
+#include <memory>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPixmap>
+#include <QScrollArea>
 #include <QStyle>
 #include <QStyleOption>
 #include <QStylePainter>
@@ -194,6 +196,10 @@ FitTree* MyScriptPanel::makeSection(const QString& title, bool plus, CCollapsibl
     connect(tree, &QTreeWidget::currentItemChanged, this, [this, tree](QTreeWidgetItem* cur, QTreeWidgetItem*) {
         if (cur && !building_) onSelection(tree);
     });
+    // a click on the item that is already selected shows its details again when the Details panel shows something else
+    connect(tree, &QTreeWidget::itemClicked, this, [this, tree](QTreeWidgetItem* it, int) {
+        if (it && !building_ && !detailsShown_ && it == tree->currentItem()) onSelection(tree);
+    });
     connect(tree, &QTreeWidget::itemDoubleClicked, this, [this, tree](QTreeWidgetItem* it, int) {
         if (!it) return;
         QString name = it->data(0, kName).toString();
@@ -360,6 +366,7 @@ void MyScriptPanel::onSelection(FitTree* tree) {
     building_ = false;
     auto* it = tree->currentItem();
     if (!it) return;
+    detailsShown_ = true;
     QString name = it->data(0, kName).toString();
     if (tree == graphs_) {
         if (!localsGraph_.isEmpty()) { localsGraph_.clear(); scheduleRefresh(); }
@@ -388,14 +395,64 @@ MyScriptPanel::Kind MyScriptPanel::selected(QString* owner, QString* name) const
     return Kind::None;
 }
 
-void MyScriptPanel::beginRename(FitTree* tree, const QString& name) {
-    QTimer::singleShot(0, this, [tree, name] {
-        for (QTreeWidgetItemIterator it(tree); *it; ++it)
-            if ((*it)->data(0, kName).toString() == name) {
-                tree->setCurrentItem(*it);
-                tree->editItem(*it, 0);
+void MyScriptPanel::showNodeSelection(const QString& graph, const QList<int>& ids) {
+    QTreeWidgetItem* event = nullptr;
+    if (ids.size() == 1)
+        for (QTreeWidgetItemIterator it(graphs_); *it; ++it)
+            if ((*it)->data(0, kKind).toInt() == int(Kind::Event) && (*it)->data(0, kMime).toString() == graph &&
+                (*it)->data(0, kNode).toInt() == ids.front()) {
+                event = *it;
                 break;
             }
+    building_ = true;
+    for (auto* t : {graphs_, functions_, vars_, locals_})
+        if (!(event && t == graphs_)) { t->clearSelection(); t->setCurrentItem(nullptr); }
+    if (event) graphs_->setCurrentItem(event);
+    building_ = false;
+    detailsShown_ = event != nullptr;
+}
+
+CCollapsiblePanel* MyScriptPanel::panelOf(FitTree* tree) const {
+    if (tree == graphs_) return graphsPanel_;
+    if (tree == functions_) return functionsPanel_;
+    if (tree == vars_) return varsPanel_;
+    if (tree == locals_) return localsPanel_;
+    return nullptr;
+}
+
+void MyScriptPanel::scrollTo(FitTree* tree, QTreeWidgetItem* item) {
+    for (QWidget* w = parentWidget(); w; w = w->parentWidget())
+        if (auto* area = qobject_cast<QScrollArea*>(w)) {
+            if (!area->widget() || !area->widget()->isAncestorOf(tree)) return;
+            const QRect r = tree->visualItemRect(item);
+            const QPoint c = tree->viewport()->mapTo(area->widget(), r.center());
+            area->ensureVisible(c.x(), c.y(), 0, r.height());
+            return;
+        }
+}
+
+void MyScriptPanel::beginRename(FitTree* tree, const QString& name) {
+    // a collapsed section opens first: the new item and its name editor must be seen
+    CCollapsiblePanel* panel = panelOf(tree);
+    const bool opening = panel && !panel->IsContentsExpanded();
+    if (opening) panel->SetContentsExpaned(true);
+    auto find = [tree, name]() -> QTreeWidgetItem* {
+        for (QTreeWidgetItemIterator it(tree); *it; ++it)
+            if ((*it)->data(0, kName).toString() == name) return *it;
+        return nullptr;
+    };
+    QTimer::singleShot(0, this, [this, tree, panel, opening, find] {
+        QTreeWidgetItem* item = find();
+        if (!item) return;
+        tree->setCurrentItem(item);
+        tree->editItem(item, 0);
+        if (!opening) { scrollTo(tree, item); return; }
+        // the section is still growing: scroll when it has its full height (the item is looked up again then)
+        auto once = std::make_shared<QMetaObject::Connection>();
+        *once = connect(panel, &CCollapsiblePanel::ExpandFinished, this, [this, tree, find, once] {
+            disconnect(*once);
+            if (QTreeWidgetItem* again = find()) scrollTo(tree, again);
+        });
     });
 }
 

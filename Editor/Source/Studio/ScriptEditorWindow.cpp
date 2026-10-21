@@ -687,6 +687,7 @@ bool ScriptEditorWindow::collapseSelection(const QString& givenName) {
 void ScriptEditorWindow::onSelectionNodes(GraphScene* scene, const QList<int>& ids) {
     if (scene != currentScene()) return;
     details_->showNodes(scene->graphName(), ids);
+    myScript_->showNodeSelection(scene->graphName(), ids);     // the list does not keep an item selected that Details no longer shows
     updateCollapseAction();
 }
 
@@ -696,7 +697,10 @@ void ScriptEditorWindow::onCurrentTabChanged() {
     myScript_->setCurrentGraph(s->graphName());
     QList<int> ids;
     for (auto id : s->selectedNodeIds()) ids.push_back(id);
-    if (!ids.isEmpty()) details_->showNodes(s->graphName(), ids);
+    if (!ids.isEmpty()) {
+        details_->showNodes(s->graphName(), ids);
+        myScript_->showNodeSelection(s->graphName(), ids);
+    }
     updateCollapseAction();
 }
 

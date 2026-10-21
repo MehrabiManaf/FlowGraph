@@ -1,4 +1,5 @@
 #include "PalettePopup.hpp"
+#include "../Common/SearchField.hpp"
 
 #include <QApplication>
 #include <algorithm>
@@ -18,8 +19,7 @@ PalettePopup::PalettePopup(GraphScene* scene, const PinRef& from, QWidget* paren
     auto* lay = new QVBoxLayout(this);
     lay->setContentsMargins(4, 4, 4, 4);
     search_ = new QLineEdit(this);
-    search_->setPlaceholderText(from.valid() ? "Search nodes that fit the pin..." : "Search nodes...");
-    search_->setClearButtonEnabled(true);
+    makeSearchField(search_, from.valid() ? "Search nodes that fit the pin..." : "Search nodes...");      // like every search box of the editor
     tree_ = new QTreeWidget(this);
     tree_->setHeaderHidden(true);
     tree_->setColumnCount(2);

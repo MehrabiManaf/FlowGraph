@@ -77,6 +77,9 @@ CCollapsiblePanel::CCollapsiblePanel(const QString& Title, QWidget* parent, bool
     mp_ExpandCollapseAnimation->setEndValue(1.0);
     mp_ExpandCollapseAnimation->setEasingCurve(QEasingCurve::InOutQuad);
     mp_ExpandCollapseAnimation->setDuration(333);
+    connect(mp_ExpandCollapseAnimation, &QPropertyAnimation::finished, this, [this] {
+        if (mp_PanelButton->isChecked()) emit ExpandFinished();
+    });
 
     m_AnimationProgress = 0.0;
 }
