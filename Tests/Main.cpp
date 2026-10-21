@@ -3237,14 +3237,21 @@ TEST(retyping_a_variable_clears_the_values_of_its_old_type) {
     s.variables.push_back({"Day", "Weekday", Value(int64_t(7)), "", ""});
     s.variables.push_back({"Other", "Weekday", Value(int64_t(3)), "", ""});
     Graph& events = s.addEventGraph();
-    Node& setDay = events.addNode("var.set");
-    setDay.props = {{"name", "Day"}, {"scope", "global"}};
-    setDay.defaults["Value"] = Value(int64_t(7));
-    Node& setOther = events.addNode("var.set");
-    setOther.props = {{"name", "Other"}, {"scope", "global"}};
-    setOther.defaults["Value"] = Value(int64_t(3));
-    const NodeId dayId = setDay.id, otherId = setOther.id;
-    const std::string eventGraph = events.name;          // addFunction may move the graphs: no references kept past it
+    // addNode / addFunction may move the nodes and graphs: no reference is kept past the next one, only ids and names
+    NodeId dayId = 0, otherId = 0;
+    {
+        Node& setDay = events.addNode("var.set");
+        setDay.props = {{"name", "Day"}, {"scope", "global"}};
+        setDay.defaults["Value"] = Value(int64_t(7));
+        dayId = setDay.id;
+    }
+    {
+        Node& setOther = events.addNode("var.set");
+        setOther.props = {{"name", "Other"}, {"scope", "global"}};
+        setOther.defaults["Value"] = Value(int64_t(3));
+        otherId = setOther.id;
+    }
+    const std::string eventGraph = events.name;
     Graph& fn = s.addFunction("F");
     fn.locals.push_back({"Day", "Weekday", Value(int64_t(5)), "", ""});        // shadows the global one in F
     Node& setLocal = fn.addNode("var.set");
