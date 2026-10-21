@@ -7,6 +7,8 @@
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QMenu>
+#include <QPointer>
+#include <QTimer>
 
 
 
@@ -162,6 +164,7 @@ void CTabBar::contextMenuEvent(QContextMenuEvent* pEvent)
 
     QAction* pHideTabBarAction = Menu.addAction("Hide TabBar");
     QAction* pCloseTabAction = Menu.addAction("Close Tab");
+    pCloseTabAction->setEnabled(CanCloseCurrentTab());
 
     QAction* pSelectedAction = Menu.exec(pEvent->globalPos());
 
@@ -173,7 +176,29 @@ void CTabBar::contextMenuEvent(QContextMenuEvent* pEvent)
     }
     else if(pSelectedAction == pCloseTabAction)
     {
-        // Close Tab
+        CloseCurrentTab();
     }
 
+}
+
+bool CTabBar::CanCloseCurrentTab() const
+{
+    auto pController = static_cast<KDDockWidgets::Core::TabBar*>(controller());
+    KDDockWidgets::Core::DockWidget* pDock = (count() == 1 && pController) ? pController->currentDockWidget() : nullptr;
+    return pDock && !(pDock->options() & KDDockWidgets::DockWidgetOption_NotClosable);
+}
+
+void CTabBar::CloseCurrentTab()
+{
+    if(!CanCloseCurrentTab())
+        return;
+    auto pController = static_cast<KDDockWidgets::Core::TabBar*>(controller());
+    QPointer<QWidget> pView = dynamic_cast<QWidget*>(pController->currentDockWidget()->view());
+    if(!pView)
+        return;
+    QTimer::singleShot(0, pView, [pView]()
+    {
+        if(pView)
+            pView->close();         // the dock's own close: the View menu unticks it, and it can be opened again from there
+    });
 }

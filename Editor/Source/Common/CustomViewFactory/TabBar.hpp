@@ -32,6 +32,10 @@ public:
     void SetTabBarHidden(bool Hidden);
     // Shows or collapses the tab bar the way the state of its dock says, without animation (after a layout was restored).
     void RefreshTabBarVisibility();
+    // Closes the dock of the only tab, like its close button (View lists it to open it again). Done when the event that asked for
+    // it is over: closing the last dock of a frame deletes the frame, and this tab bar with it.
+    void CloseCurrentTab();
+    bool CanCloseCurrentTab() const;      // a single tab whose dock may be closed
 private:
     double AnimationProgress() const { return m_AnimationProgress; }
     void SetAnimationProgress(const double& Progress);
