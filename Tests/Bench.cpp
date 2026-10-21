@@ -347,6 +347,80 @@ std::vector<Bench> makeBenchmarks(double scale) {
         };
         b.push_back(std::move(hb));
     }
+
+    // ---- strings: positions count characters (UTF-8), the Persian ones take 2 bytes each -------------------------------------
+    auto repeat = [](const std::string& unit, int64_t times) {
+        std::string s;
+        for (int64_t i = 0; i < times; ++i) s += unit;
+        return s;
+    };
+    const std::string ascii60 = repeat("hello wor ", 6);               // 60 characters, 60 bytes
+    const std::string persian60 = repeat("سلام دنیا ", 6);             // 60 characters, 110 bytes
+    // acc = acc + F(S), F built by `make` from the node that reads S
+    auto stringLoop = [=](const char* name, const char* what, const std::string& text,
+                          std::function<std::pair<NodeId, const char*>(Graph&, NodeId)> make) {
+        return Bench{name, what, double(N(3e5)), [=](Script& s) {
+            s.variables.push_back({"acc", "int", Value(int64_t(0)), "", ""});
+            s.variables.push_back({"S", "string", Value(text), "", ""});
+            Graph& g = s.addEventGraph();
+            NodeId ev = add(g, "event:Main");
+            Loop l = forLoop(g, ev, N(3e5));
+            auto [node, pin] = make(g, var(g, "var.get", "S"));
+            accumulate(g, "acc", node, pin, l.loop, "Loop Body");
+        }};
+    };
+    b.push_back(stringLoop("str_length", "acc += Length(S), 60 ASCII characters", ascii60, [](Graph& g, NodeId src) {
+        NodeId len = add(g, "fn:String.Length");
+        link(g, src, "Value", len, "String");
+        return std::make_pair(len, "Result");
+    }));
+    b.push_back(stringLoop("str_length_fa", "acc += Length(S), 60 Persian characters", persian60, [](Graph& g, NodeId src) {
+        NodeId len = add(g, "fn:String.Length");
+        link(g, src, "Value", len, "String");
+        return std::make_pair(len, "Result");
+    }));
+    b.push_back(stringLoop("str_substr_fa", "acc += Length(Substring(S, 20, 30)), Persian", persian60, [](Graph& g, NodeId src) {
+        Node& sub = g.addNode("fn:String.Substring");
+        sub.defaults["Start"] = Value(int64_t(20));
+        sub.defaults["Length"] = Value(int64_t(30));
+        const NodeId subId = sub.id;
+        NodeId len = add(g, "fn:String.Length");
+        link(g, src, "Value", subId, "String");
+        link(g, subId, "Result", len, "String");
+        return std::make_pair(len, "Result");
+    }));
+    b.push_back(stringLoop("str_find_fa", "acc += Find(S, \"دنیا\", 40), Persian", persian60, [](Graph& g, NodeId src) {
+        Node& find = g.addNode("fn:String.Find");
+        find.defaults["Substring"] = Value("دنیا");
+        find.defaults["Start"] = Value(int64_t(40));
+        const NodeId findId = find.id;
+        link(g, src, "Value", findId, "String");
+        return std::make_pair(findId, "Index");
+    }));
+    // the new character nodes (not in builds before them): a loop over a long text, through Character At and through For Each Character
+    const int64_t longChars = N(1e4);
+    b.push_back({"str_charat_fa", "For i < n: acc += Length(Character At(L, i)), n Persian", double(longChars), [=](Script& s) {
+        s.variables.push_back({"acc", "int", Value(int64_t(0)), "", ""});
+        s.variables.push_back({"L", "string", Value(repeat("س", longChars)), "", ""});
+        Graph& g = s.addEventGraph();
+        NodeId ev = add(g, "event:Main");
+        Loop l = forLoop(g, ev, longChars);
+        NodeId at = add(g, "fn:String.Character At"), len = add(g, "fn:String.Length");
+        link(g, var(g, "var.get", "L"), "Value", at, "String");
+        link(g, l.loop, "Index", at, "Index");
+        link(g, at, "Character", len, "String");
+        accumulate(g, "acc", len, "Result", l.loop, "Loop Body");
+    }});
+    b.push_back({"str_foreach_fa", "For Each Character(L): acc += Index, 20n Persian", double(longChars) * 20, [=](Script& s) {
+        s.variables.push_back({"acc", "int", Value(int64_t(0)), "", ""});
+        s.variables.push_back({"L", "string", Value(repeat("س", longChars * 20)), "", ""});
+        Graph& g = s.addEventGraph();
+        NodeId ev = add(g, "event:Main");
+        NodeId fe = add(g, "string.foreachchar");
+        link(g, ev, "Then", fe, "In");
+        link(g, var(g, "var.get", "L"), "Value", fe, "String");
+        accumulate(g, "acc", fe, "Index", fe, "Loop Body");
+    }});
     return b;
 }
 

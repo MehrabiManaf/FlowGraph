@@ -4,6 +4,8 @@
 #include <FlowGraph/Script.hpp>
 #include <FlowGraph/Vm.hpp>
 
+#include "Utf8.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -691,15 +693,40 @@ void registerMath(Registry& r) {
 // ------------------------------------------------------------------ strings
 void registerStrings(Registry& r) {
     r.addFunction("String.Concat", [](const std::string& a, const std::string& b) { return a + b; }, {"A", "B"}).makePure().withKeywords("append join +");
-    r.addFunction("String.Length", [](const std::string& s) { return static_cast<int64_t>(s.size()); }, {"String"}).makePure();
+    // Positions and lengths count characters (Unicode code points), not bytes: a character is a string of length 1 in every language.
+    r.addFunction("String.Length", [](const std::string& s) { return static_cast<int64_t>(utf8::length(s)); }, {"String"}).makePure()
+        .withKeywords("size count characters").withDoc("The number of characters (\"سلام\" has 4). Byte Length gives the size in bytes.");
+    r.addFunction("String.Byte Length", [](const std::string& s) { return static_cast<int64_t>(s.size()); }, {"String"}).makePure()
+        .withKeywords("size bytes utf-8 encoding").withDoc("The size of the text in bytes, encoded as UTF-8 (\"سلام\" takes 8).");
+    r.addFunction("String.Character At", [](const std::string& s, int64_t index) {
+        if (index < 0) return std::string();
+        const size_t from = utf8::offset(s, static_cast<size_t>(index));
+        return from < s.size() ? s.substr(from, utf8::next(s, from) - from) : std::string();
+    }, {"String", "Index"}).makePure().withResultName("Character").withKeywords("char letter index get")
+        .withDoc("The character at Index (from 0), as a string of length 1; empty when there is none. To go through every character, "
+                 "For Each Character or To Characters is faster than Character At in a loop (each call counts from the start).");
+    r.addFunction("String.To Characters", [](const std::string& s) {
+        std::vector<std::string> out;
+        for (size_t i = 0; i < s.size();) {
+            const size_t end = utf8::next(s, i);
+            out.push_back(s.substr(i, end - i));
+            i = end;
+        }
+        return out;
+    }, {"String"}).makePure().withResultName("Characters").withKeywords("chars letters split explode array")
+        .withDoc("The characters of the string, each one a string of length 1.");
     r.addFunction("String.To Upper", [](std::string s) { for (auto& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); return s; }, {"String"}).makePure();
     r.addFunction("String.To Lower", [](std::string s) { for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); return s; }, {"String"}).makePure();
     r.addFunction("String.Contains", [](const std::string& s, const std::string& sub) { return s.find(sub) != std::string::npos; }, {"String", "Substring"}).makePure();
     r.addFunction("String.Substring", [](const std::string& s, int64_t start, int64_t len) {
         if (start < 0) start = 0;
-        if (static_cast<size_t>(start) >= s.size()) return std::string();
-        return s.substr(static_cast<size_t>(start), len < 0 ? std::string::npos : static_cast<size_t>(len));
-    }, {"String", "Start", "Length"}).makePure().withDefault(2, Value(-1));
+        const size_t from = utf8::offset(s, static_cast<size_t>(start));
+        if (from >= s.size()) return std::string();
+        if (len < 0) return s.substr(from);
+        const size_t to = from + utf8::offset(std::string_view(s).substr(from), static_cast<size_t>(len));
+        return s.substr(from, to - from);
+    }, {"String", "Start", "Length"}).makePure().withDefault(2, Value(-1))
+        .withDoc("Length characters from character Start (from 0); Length -1: to the end.");
     r.addFunction("String.Replace", [](std::string s, const std::string& from, const std::string& to) {
         if (from.empty()) return s;
         size_t p = 0;
@@ -735,12 +762,47 @@ void registerStrings(Registry& r) {
                   {"String", "Suffix"}).makePure().withKeywords("suffix");
     r.addFunction("String.Find", [](const std::string& s, const std::string& sub, int64_t start) {
         if (start < 0) start = 0;
-        if (static_cast<size_t>(start) > s.size()) return int64_t(-1);
-        size_t p = s.find(sub, static_cast<size_t>(start));
-        return p == std::string::npos ? int64_t(-1) : static_cast<int64_t>(p);
+        // Start and the result are character positions; the search itself runs on the bytes (a UTF-8 match always starts a character)
+        const size_t from = utf8::offset(s, static_cast<size_t>(start));
+        if (from == s.size() && static_cast<size_t>(start) > utf8::length(s)) return int64_t(-1);
+        const size_t p = s.find(sub, from);
+        return p == std::string::npos ? int64_t(-1) : static_cast<int64_t>(static_cast<size_t>(start) + utf8::index(std::string_view(s).substr(from), p - from));
     }, {"String", "Substring", "Start"}).makePure().withKeywords("index of search position").withResultName("Index")
-        .withDoc("Position of the first Substring at or after Start, -1 when there is none.");
+        .withDoc("Position (in characters) of the first Substring at or after character Start, -1 when there is none.");
     r.addFunction("String.Is Empty", [](const std::string& s) { return s.empty(); }, {"String"}).makePure();
+    {
+        NodeDef d = flowNode("string.foreachchar", "For Each Character", "String");
+        d.keywords = "loop characters letters chars iterate text";
+        d.doc = "Runs the loop body for every character of the string, from the first to the last; Index is its position (from 0). The "
+                "string is read when the loop starts. Goes through the text once: faster than Character At in a loop.";
+        d.breakPin = 0;                                    // Break continues with "Completed"
+        d.pins = {execIn(), dataIn("String", "string", Value("")), execOut("Completed"), execOut("Loop Body"),
+                  dataOut("Character", "string"), dataOut("Index", "int")};
+        // native(): the string and where the loop is in it (a byte offset, so each step costs one character, not a count from the start)
+        struct Walk {
+            Value text;
+            size_t offset = 0;
+            int64_t index = 0;
+        };
+        d.run = [](NodeCtx& c) {
+            std::shared_ptr<Walk> w;
+            if (c.resumed()) w = std::static_pointer_cast<Walk>(c.native());
+            else {
+                w = std::make_shared<Walk>();
+                w->text = c.in(0).isString() ? c.in(0) : Value(c.inString(0));
+            }
+            const std::string& s = w->text.str();
+            if (w->offset >= s.size()) { c.next(0); return; }
+            const size_t end = utf8::next(s, w->offset);
+            c.out(0, Value(s.substr(w->offset, end - w->offset)));
+            c.out(1, Value(w->index));
+            w->offset = end;
+            ++w->index;
+            c.native() = w;
+            c.call(1);
+        };
+        r.addNode(std::move(d));
+    }
     {
         // Format: "Hello {Name}, you are {Age}" - the user adds an input per placeholder (Details > Inputs); {{ and }} are literal braces.
         NodeDef d = pureNode("string.format", "Format", "String");

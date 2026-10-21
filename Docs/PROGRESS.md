@@ -246,3 +246,11 @@ Rules to keep it correct:
   search popup uses makeSearchField like the other search boxes. My Script follows the node selection
   (MyScriptPanel::showNodeSelection, called by onSelectionNodes / onCurrentTabChanged): other nodes or none clear the list, a single
   event node selects its row; a click on the selected item shows its details again when Details shows something else.
+- Strings count characters (2026-10-22): Length, Substring, Find work in Unicode code points (Core/Source/Utf8.hpp: a character
+  starts at every byte that is not a continuation byte; every byte belongs to exactly one character, also in broken UTF-8), so "a
+  char is a string of size 1" holds for Persian too. New: Byte Length, Character At, To Characters, For Each Character
+  (string.foreachchar, a loop with breakPin 0, native() keeps the byte offset). Counting goes 8 bytes at a time (continuation bytes
+  marked with w & ~(w << 1) & 0x80.., popcount). FlowGraphBench str_*: Length of 60 characters 141 -> 170 ns per loop step,
+  Substring + Length 436 -> 518, Find 242 -> 286; For Each Character 266 ns per character; Character At by index over 10k characters
+  2.5 us per step (quadratic: the docs point to For Each Character). Done before the first release: a behaviour change for non-ASCII
+  text, no file format change.

@@ -184,6 +184,10 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
   instance (`Instance::random()`); *Set Random Seed* makes a run repeatable on any thread. The compiler warns about an exec node
   whose results are used but that is not connected to the execution flow (its outputs would keep their defaults).
 * Format (`"{Name} is {Age}"`): add an input per placeholder in *Details > Inputs*; `{{` and `}}` are literal braces.
+* Strings are UTF-8 and there is no char type: a character is a string of length 1, in every language. Length, Substring, Find
+  and Character At count characters (Unicode code points), not bytes - `Length("سلام")` is 4; Byte Length gives the size in
+  bytes. For Each Character (or To Characters) goes through a text once: faster than Character At in a loop, which counts from the
+  start at every call.
 * Settings of a node (pin counts, the cases of a Switch on String) are described by `NodeDef::settings` and edited in *Details*;
   a custom node gets the same editors by declaring them. A node with several exec inputs asks `NodeCtx::entryPin()` which one fired.
 * Nodes are generic where it makes sense (`T` in Add / Select / For Each / array and map nodes); the type is inferred from

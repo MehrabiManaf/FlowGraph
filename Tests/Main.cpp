@@ -3202,6 +3202,75 @@ TEST(enum_literals_show_their_value) {
           def->settings[0].choices[4] == "Friday");
 }
 
+// The string nodes count characters (Unicode code points), not bytes: a character is a string of length 1 in every language.
+TEST(string_nodes_count_characters) {
+    TestRuntime rt;
+    const std::string fa = "سلام دنیا";                  // 9 characters, 17 bytes
+    const std::string emoji = "a\xF0\x9F\x98\x80" "b";      // a, 😀 (4 bytes), b: 3 characters
+    auto one = [&](const char* def, std::map<std::string, Value> in, const char* out) {
+        auto v = nodeOutputs(rt, def, std::move(in), {out});
+        return v.empty() ? Value() : v[0];
+    };
+    CHECK_EQ(one("fn:String.Length", {{"String", Value(fa)}}, "Result").toInt(), int64_t(9));
+    CHECK_EQ(one("fn:String.Byte Length", {{"String", Value(fa)}}, "Result").toInt(), int64_t(17));
+    CHECK_EQ(one("fn:String.Length", {{"String", Value(emoji)}}, "Result").toInt(), int64_t(3));
+    CHECK_EQ(one("fn:String.Length", {{"String", Value("hello")}}, "Result").toInt(), int64_t(5));
+    CHECK_EQ(one("fn:String.Substring", {{"String", Value(fa)}, {"Start", Value(int64_t(5))}, {"Length", Value(int64_t(4))}}, "Result").str(),
+             std::string("دنیا"));
+    CHECK_EQ(one("fn:String.Substring", {{"String", Value(fa)}, {"Start", Value(int64_t(2))}, {"Length", Value(int64_t(-1))}}, "Result").str(),
+             std::string("ام دنیا"));
+    CHECK_EQ(one("fn:String.Substring", {{"String", Value(fa)}, {"Start", Value(int64_t(9))}, {"Length", Value(int64_t(2))}}, "Result").str(),
+             std::string());
+    CHECK_EQ(one("fn:String.Substring", {{"String", Value(emoji)}, {"Start", Value(int64_t(1))}, {"Length", Value(int64_t(1))}}, "Result").str(),
+             std::string("\xF0\x9F\x98\x80"));
+    CHECK_EQ(one("fn:String.Find", {{"String", Value(fa)}, {"Substring", Value("دنیا")}, {"Start", Value(int64_t(0))}}, "Index").toInt(), int64_t(5));
+    CHECK_EQ(one("fn:String.Find", {{"String", Value(fa)}, {"Substring", Value("ا")}, {"Start", Value(int64_t(3))}}, "Index").toInt(), int64_t(8));
+    CHECK_EQ(one("fn:String.Find", {{"String", Value(fa)}, {"Substring", Value("x")}, {"Start", Value(int64_t(0))}}, "Index").toInt(), int64_t(-1));
+    CHECK_EQ(one("fn:String.Find", {{"String", Value(fa)}, {"Substring", Value("")}, {"Start", Value(int64_t(9))}}, "Index").toInt(), int64_t(9));
+    CHECK_EQ(one("fn:String.Find", {{"String", Value(fa)}, {"Substring", Value("")}, {"Start", Value(int64_t(10))}}, "Index").toInt(), int64_t(-1));
+    CHECK_EQ(one("fn:String.Character At", {{"String", Value(fa)}, {"Index", Value(int64_t(1))}}, "Character").str(), std::string("ل"));
+    CHECK_EQ(one("fn:String.Character At", {{"String", Value(fa)}, {"Index", Value(int64_t(9))}}, "Character").str(), std::string());
+    CHECK_EQ(one("fn:String.Character At", {{"String", Value(fa)}, {"Index", Value(int64_t(-1))}}, "Character").str(), std::string());
+    Value chars = one("fn:String.To Characters", {{"String", Value(fa)}}, "Characters");
+    CHECK(chars.arrayPtr() && chars.arrayPtr()->items.size() == 9);
+    if (chars.arrayPtr() && chars.arrayPtr()->items.size() == 9) CHECK(chars.arrayPtr()->items[0].str() == "س" && chars.arrayPtr()->items[4].str() == " ");
+    // text that is not valid UTF-8 is cut the same way by every node, and no byte is lost: the characters join to the original
+    const std::string broken = "\x80" "a\xC3" "b\xE2\x82" "\xA9\xA9";
+    Value parts = one("fn:String.To Characters", {{"String", Value(broken)}}, "Characters");
+    std::string joined;
+    if (auto* a = parts.arrayPtr()) for (auto& p : a->items) joined += p.str();
+    CHECK(joined == broken);
+    CHECK_EQ(one("fn:String.Length", {{"String", Value(broken)}}, "Result").toInt(),
+             parts.arrayPtr() ? static_cast<int64_t>(parts.arrayPtr()->items.size()) : int64_t(-1));
+}
+
+// For Each Character goes through every character once, with its index; Break ends it.
+TEST(for_each_character_loops_over_the_characters) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.variables.push_back({"Out", "string", Value(""), "", ""});
+    t.s.variables.push_back({"Last", "int", Value(int64_t(-1)), "", ""});
+    NodeId fe = t.node("string.foreachchar", {{"String", Value("سلام!")}});
+    t.link(t.ev, "Then", fe, "In");
+    // Out = Concat(Character, Out): the characters in reverse order; Last = Index
+    NodeId cat = t.node("fn:String.Concat");
+    t.link(fe, "Character", cat, "A");
+    t.link(t.var("var.get", "Out"), "Value", cat, "B");
+    NodeId setOut = t.var("var.set", "Out");
+    t.link(fe, "Loop Body", setOut, "In");
+    t.link(cat, "Result", setOut, "Value");
+    NodeId setLast = t.var("var.set", "Last");
+    t.link(setOut, "Then", setLast, "In");
+    t.link(fe, "Index", setLast, "Value");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) return;
+    CHECK_EQ(r.go(), std::string());
+    CHECK_EQ(r.inst->getVariable("Out").str(), std::string("!مالس"));
+    CHECK_EQ(r.inst->getVariable("Last").toInt(), int64_t(4));
+    CHECK_EQ(rt.registry().findNode("string.foreachchar")->breakPin, 0);
+}
+
 // An enum's default is its first value (Weekday starts with Monday = 1, so 0 is not one of its values), and a default that is not one
 // of the enum's values - a value of the type a variable had before - becomes that first value instead of a bare number.
 TEST(enum_defaults_are_values_of_the_enum) {
