@@ -37,6 +37,8 @@
 #include "Common/CustomViewFactory/DockWidget.hpp"
 #include "Common/CollapsiblePanel/CollapsiblePanel.hpp"
 #include "Common/CustomViewFactory/TabBar.hpp"
+#include "Common/CustomViewFactory/TitleBarButton.hpp"
+#include "Common/CustomViewFactory/CustomViewFactory.hpp"
 #include <kddockwidgets/core/TabBar.h>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
@@ -2635,6 +2637,59 @@ TEST(launch_box_is_narrow_and_its_list_shows_long_entries) {
     combo->setCurrentIndex(combo->findText(longName, Qt::MatchContains));
     CHECK(combo->toolTip().contains(longName));
     CHECK(combo->toolTip().contains("Event or function to run"));    // the label it had stays its title
+}
+
+// The buttons of the docks are the editor's (CTitleBarButton) with its SVG icons, none of KDDockWidgets' bitmaps; they still close,
+// float and dock back (a button that deletes its own title bar while it is clicked must not crash).
+TEST(dock_buttons_are_the_editors_and_still_work) {
+    using T = KDDockWidgets::TitleBarButtonType;
+    CCustomViewFactory factory;
+    for (T t : {T::Close, T::Float, T::Minimize, T::Maximize, T::Normal, T::AutoHide, T::UnautoHide})
+        CHECK(!factory.iconForButtonType(t, 1.0).isNull());
+    StudioFixture f;
+    auto ours = [](QWidget* root) {
+        int n = 0;
+        for (auto* b : root->findChildren<KDDockWidgets::QtWidgets::Button*>()) {
+            CHECK(dynamic_cast<CTitleBarButton*>(b) != nullptr);
+            CHECK(!b->icon().isNull());
+            ++n;
+        }
+        return n;
+    };
+    CHECK(ours(&f.win) > 0);
+    auto* dock = KDDockWidgets::DockRegistry::self()->dockByName("My Script");
+    CTabBar* tab = singleTabBarOf("My Script");
+    CHECK(dock && tab);
+    if (!dock || !tab) return;
+    auto button = [](QWidget* root, T type) -> CTitleBarButton* {
+        for (auto* b : root->findChildren<CTitleBarButton*>()) if (b->Type() == type && b->isVisible()) return b;
+        return nullptr;
+    };
+    // the close button of the tab bar
+    CTitleBarButton* close = button(tab->parentWidget(), T::Close);
+    CHECK(close != nullptr);
+    if (!close) return;
+    close->click();
+    CHECK(spinUntil([&] { return !dock->isOpen(); }));
+    dock->open();
+    CHECK(spinUntil([&] { return dock->isOpen(); }));
+    // float, then dock back from the floating window's own buttons
+    tab = singleTabBarOf("My Script");
+    CTitleBarButton* floatButton = tab ? button(tab->parentWidget(), T::Float) : nullptr;
+    CHECK(floatButton != nullptr);
+    if (!floatButton) return;
+    floatButton->click();
+    CHECK(spinUntil([&] { return dock->isFloating(); }));
+    QWidget* floating = KDDockWidgets::QtCommon::View_qt::asQWidget(dock->view())->window();
+    CHECK(floating && floating != &f.win);
+    if (!floating || floating == &f.win) return;
+    CHECK(ours(floating) > 0);
+    CTitleBarButton* back = button(floating, T::Float);
+    CHECK(back != nullptr);
+    if (!back) return;
+    back->click();                                                   // deletes the floating window, and this button with it
+    CHECK(spinUntil([&] { return !dock->isFloating(); }));
+    CHECK(dock->isOpen());
 }
 
 TEST(dock_layout_is_restored_at_the_next_start) {

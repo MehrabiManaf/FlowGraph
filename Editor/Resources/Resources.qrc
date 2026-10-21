@@ -34,6 +34,15 @@
         <file alias="rename.svg">Icons/rename.svg</file>
         <file alias="goto.svg">Icons/goto.svg</file>
         <file alias="find.svg">Icons/find.svg</file>
+        <file alias="dock-close.svg">Icons/dock-close.svg</file>
+        <file alias="dock-close-hover.svg">Icons/dock-close-hover.svg</file>
+        <file alias="dock-float.svg">Icons/dock-float.svg</file>
+        <file alias="dock-dock.svg">Icons/dock-dock.svg</file>
+        <file alias="dock-maximize.svg">Icons/dock-maximize.svg</file>
+        <file alias="dock-restore.svg">Icons/dock-restore.svg</file>
+        <file alias="dock-minimize.svg">Icons/dock-minimize.svg</file>
+        <file alias="dock-pin.svg">Icons/dock-pin.svg</file>
+        <file alias="dock-unpin.svg">Icons/dock-unpin.svg</file>
         <file alias="find-references.svg">Icons/find-references.svg</file>
         <file alias="load-more.svg">Icons/load-more.svg</file>
         <file alias="watch-add.svg">Icons/watch-add.svg</file>
