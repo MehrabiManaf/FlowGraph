@@ -2599,6 +2599,44 @@ static CTabBar* singleTabBarOf(const char* dock) {
     return nullptr;
 }
 
+// "Close Tab" of the menu of a single tab closes its dock, like its close button: unticked in View, and it opens again from there.
+TEST(close_tab_closes_the_dock_of_a_single_tab) {
+    StudioFixture f;
+    CTabBar* tab = singleTabBarOf("My Script");
+    auto* dock = KDDockWidgets::DockRegistry::self()->dockByName("My Script");
+    CHECK(tab && dock);
+    if (!tab || !dock) return;
+    CHECK(tab->CanCloseCurrentTab());
+    CHECK(dock->isOpen() && dock->toggleAction()->isChecked());
+    tab->CloseCurrentTab();                                          // what the menu's "Close Tab" does
+    CHECK(spinUntil([&] { return !dock->isOpen(); }));
+    CHECK(!dock->toggleAction()->isChecked());
+    dock->open();                                                    // View > My Script
+    CHECK(spinUntil([&] { return dock->isOpen(); }));
+    CHECK(f.win.findChild<MyScriptPanel*>() != nullptr);
+}
+
+// The launch box stays narrow (about 18 characters) when an entry has a long title; its list shows the whole title, and so does
+// its tooltip.
+TEST(launch_box_is_narrow_and_its_list_shows_long_entries) {
+    StudioFixture f;
+    auto* combo = f.win.mainToolBar()->findChild<QComboBox*>();
+    CHECK(combo != nullptr);
+    if (!combo) return;
+    const int width = combo->width();
+    // about 18 characters and the arrow (the test platform's characters are twice as wide as a desktop font's)
+    CHECK(width > 0 && width <= 18 * combo->fontMetrics().horizontalAdvance(QLatin1Char('x')) + 64);
+    const QString longName = "ComputeTheFinalScoreOfTheLevelWithAllBonusesIncluded";
+    f.win.document()->edit("Add function", [&](fg::Script& s) { s.addFunction(ss(longName)); });
+    CHECK(spinUntil([&] { return combo->findText(longName, Qt::MatchContains) >= 0; }));
+    QCoreApplication::processEvents();
+    CHECK_EQ(combo->width(), width);                                 // not as wide as the long entry
+    CHECK(combo->view()->minimumWidth() >= combo->fontMetrics().horizontalAdvance(longName));
+    combo->setCurrentIndex(combo->findText(longName, Qt::MatchContains));
+    CHECK(combo->toolTip().contains(longName));
+    CHECK(combo->toolTip().contains("Event or function to run"));    // the label it had stays its title
+}
+
 TEST(dock_layout_is_restored_at_the_next_start) {
     int detailsWidth = 0;
     {

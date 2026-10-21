@@ -30,6 +30,10 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QScrollArea>
+#include <QStyleOptionComboBox>
+#include <QStylePainter>
+#include <QAbstractItemView>
+#include <algorithm>
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTimer>
@@ -59,6 +63,25 @@ QString takeWindowName() {
     g_windowIds.insert(id);
     return QString("ScriptEditor%1").arg(id);
 }
+
+// The launch box of the toolbar: about 18 characters wide, whatever the entries are. A longer entry is shortened with "..." in the
+// box (cut in the middle of a letter otherwise); its list and its tooltip show the whole title.
+constexpr int kLaunchBoxCharacters = 18;
+class LaunchBox : public QComboBox {
+public:
+    using QComboBox::QComboBox;
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QStylePainter p(this);
+        QStyleOptionComboBox opt;
+        initStyleOption(&opt);
+        p.drawComplexControl(QStyle::CC_ComboBox, opt);
+        const QRect field = style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxEditField, this);
+        const int icon = opt.currentIcon.isNull() ? 0 : opt.iconSize.width() + 4;
+        opt.currentText = fontMetrics().elidedText(opt.currentText, Qt::ElideRight, field.width() - icon - 2);
+        p.drawControl(QStyle::CE_ComboBoxLabel, opt);
+    }
+};
 }
 
 ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, QWidget* parent)
@@ -481,12 +504,21 @@ void ScriptEditorWindow::createToolBar() {
     }
     tb->addActions({actNew_, actOpen_, actSave_});
     tb->addSeparator();
-    entryCombo_ = new QComboBox(tb);
-    entryCombo_->setMinimumWidth(200);
-    // The label that used to stand in front of the box is the title of its tooltip.
+    entryCombo_ = new LaunchBox(tb);
+    entryCombo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);     // not as wide as the longest entry
+    entryCombo_->setMinimumContentsLength(kLaunchBoxCharacters);
+    // The label that used to stand in front of the box is the title of its tooltip; the entry chosen follows it in full (the box
+    // may show it shortened).
     QString launchTitle = host_.launchLabel().trimmed();
     if (launchTitle.endsWith(':')) launchTitle.chop(1);
-    entryCombo_->setToolTip(launchTitle.isEmpty() ? host_.launchToolTip() : "<b>" + launchTitle.toHtmlEscaped() + "</b><br>" + host_.launchToolTip().toHtmlEscaped());
+    entryCombo_->setProperty("baseToolTip", launchTitle.isEmpty() ? host_.launchToolTip().toHtmlEscaped()
+                                                                  : "<b>" + launchTitle.toHtmlEscaped() + "</b><br>" + host_.launchToolTip().toHtmlEscaped());
+    entryCombo_->setToolTip(entryCombo_->property("baseToolTip").toString());
+    connect(entryCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
+        const QString base = entryCombo_->property("baseToolTip").toString();
+        const QString current = entryCombo_->currentText();
+        entryCombo_->setToolTip(current.isEmpty() ? base : base + "<br><br>" + current.toHtmlEscaped());
+    });
     tb->addWidget(entryCombo_);
     connect(entryCombo_, qOverload<int>(&QComboBox::activated), this, [this](int) { host_.launchEntrySelected(entryCombo_->currentData().toString()); });
     tb->addActions({actRun_, actStop_});
@@ -1112,11 +1144,19 @@ void ScriptEditorWindow::refreshEntries() {
     if (program) entries_ = host_.launchEntries(*program);
     entryCombo_->blockSignals(true);
     entryCombo_->clear();
-    for (auto& e : entries_) entryCombo_->addItem(e.title, e.id);
+    int longest = 0;
+    for (auto& e : entries_) {
+        entryCombo_->addItem(e.title, e.id);
+        longest = std::max(longest, entryCombo_->fontMetrics().horizontalAdvance(e.title));
+    }
+    // the box is narrower than a long entry: its list is as wide as the longest one (plus the room of a scroll bar)
+    entryCombo_->view()->setMinimumWidth(longest + 2 * entryCombo_->style()->pixelMetric(QStyle::PM_ScrollBarExtent));
     int idx = entryCombo_->findData(keep);
     if (idx < 0) idx = entryCombo_->findData(host_.preferredEntry());
     if (idx >= 0) entryCombo_->setCurrentIndex(idx);
     entryCombo_->blockSignals(false);
+    const QString base = entryCombo_->property("baseToolTip").toString();      // signals were blocked: the tooltip follows here
+    if (!base.isEmpty()) entryCombo_->setToolTip(entryCombo_->currentText().isEmpty() ? base : base + "<br><br>" + entryCombo_->currentText().toHtmlEscaped());
 }
 
 void ScriptEditorWindow::runOrContinue() {
