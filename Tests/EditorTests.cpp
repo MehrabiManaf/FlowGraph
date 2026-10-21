@@ -40,6 +40,9 @@
 #include <kddockwidgets/core/TabBar.h>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
+#include <QComboBox>
+#include <QStyle>
+#include <QStyleOptionComboBox>
 #include <QVBoxLayout>
 #include <QMouseEvent>
 #include <QScrollBar>
@@ -47,7 +50,6 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QPainter>
-#include <QComboBox>
 #include <QAbstractItemView>
 #include <QHeaderView>
 #include <QTimer>
@@ -1425,6 +1427,56 @@ TEST(adding_in_my_script_expands_the_section) {
     CHECK(functions->IsContentsExpanded());
     CHECK(spinUntil([&] { return editing(trees[1], "NewFunction"); }));
     CHECK(spinUntil([&] { return opened; }));                      // the animation ran to the end
+}
+
+// My Script's add button: the chevron has the size of the launch box's chevron, a small gap after the plus, and the same margin on
+// both sides of the button.
+TEST(my_script_add_button_chevron_and_margins) {
+    StudioFixture f;
+    auto* panel = f.win.findChild<MyScriptPanel*>();
+    auto* launch = f.win.mainToolBar()->findChild<QComboBox*>();
+    CHECK(panel && launch);
+    if (!panel || !launch) return;
+    QToolButton* add = nullptr;
+    for (auto* b : panel->findChildren<QToolButton*>()) if (b->menu() && !add) add = b;
+    CHECK(add != nullptr);
+    if (!add) return;
+    auto lum = [](QRgb c) { return qRed(c) * 3 + qGreen(c) * 6 + qBlue(c); };
+    // the pixels of `img` in `area` that stand out (more than a third of the strongest) from what `background` says is behind them
+    auto box = [&](const QImage& img, QRect area, const std::function<int(int x, int y)>& strength) {
+        int best = 0;
+        for (int y = area.top(); y <= area.bottom(); ++y)
+            for (int x = area.left(); x <= area.right(); ++x) best = std::max(best, strength(x, y));
+        QRect r;
+        for (int y = area.top(); y <= area.bottom(); ++y)
+            for (int x = area.left(); x <= area.right(); ++x)
+                if (best > 0 && strength(x, y) * 3 > best) r |= QRect(x, y, 1, 1);
+        return r;
+    };
+    // the launch box: its arrow cell, compared with the cell's left edge (the box has a vertical gradient)
+    const QImage comboImg = launch->grab().toImage();
+    QStyleOptionComboBox opt;
+    opt.initFrom(launch);
+    opt.rect = launch->rect();
+    opt.editable = launch->isEditable();
+    const QRect cell = launch->style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, launch).adjusted(0, 3, -2, -3);
+    const QRect launchArrow = box(comboImg, cell, [&](int x, int y) { return std::abs(lum(comboImg.pixel(x, y)) - lum(comboImg.pixel(cell.left(), y))); });
+    // the add button's icon: transparent around the plus and the arrow
+    const QImage icon = add->icon().pixmap(add->iconSize()).toImage().convertToFormat(QImage::Format_ARGB32);
+    auto alpha = [&](int x, int y) { return qAlpha(icon.pixel(x, y)); };
+    const QRect plus = box(icon, QRect(0, 0, 15, icon.height()), alpha);
+    const QRect arrow = box(icon, QRect(15, 0, icon.width() - 15, icon.height()), alpha);
+    CHECK(!launchArrow.isEmpty() && !plus.isEmpty() && !arrow.isEmpty());
+    if (launchArrow.isEmpty() || plus.isEmpty() || arrow.isEmpty()) return;
+    CHECK(std::abs(arrow.width() - launchArrow.width()) <= 1);       // the same chevron as the launch box
+    CHECK(std::abs(arrow.height() - launchArrow.height()) <= 1);
+    const int gap = arrow.left() - plus.right() - 1;
+    CHECK(gap >= 3 && gap <= 6);                                     // apart, but close
+    // the icon is centred in the button: as much room on the left of the plus as on the right of the arrow
+    const int left = (add->width() - icon.width()) / 2 + plus.left();
+    const int right = add->width() - ((add->width() - icon.width()) / 2 + arrow.right() + 1);
+    CHECK(std::abs(left - right) <= 2);
+    CHECK(left >= 4 && left <= 9);
 }
 
 // A press on a function, variable or local variable that is not selected yet keeps the pressed row: the list is not rebuilt under

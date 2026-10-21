@@ -77,14 +77,16 @@ QImage comboArrow(qreal dpr) {
     out.setDevicePixelRatio(dpr);
     out.fill(Qt::transparent);
     if (best == 0) return out;
+    QRect used;                                   // the arrow itself: the cell around it would add empty space to the button
     for (int y = 0; y < px.height(); ++y)
         for (int x = 0; x < px.width(); ++x) {
             const double a = std::clamp((double(diff(px.left() + x, px.top() + y)) / best - 0.04) / 0.96, 0.0, 1.0);
             QColor c(arrowColor);
             c.setAlphaF(a);
             out.setPixelColor(x, y, c);
+            if (a > 0) used |= QRect(x, y, 1, 1);
         }
-    return out;
+    return used.isEmpty() ? out : out.copy(used);
 }
 
 // The add button: a tool button that opens its menu, drawn without the style's small menu arrow (the arrow is part of its icon).
@@ -103,14 +105,15 @@ protected:
     }
 };
 
-// The icon of the add button: the green plus and, behind a gap, the drop-down arrow of the combo boxes (the launch
-// box of the toolbar), so the button reads as "opens a list".
+// The icon of the add button: the green plus and, a small gap after it, the drop-down arrow of the combo boxes at the size it has
+// there (the launch box of the toolbar), so the button reads as "opens a list".
+constexpr int kAddPlus = 14, kAddGap = 4, kAddMargin = 6;      // logical pixels; kAddMargin: from the button's edges, on both sides
 QIcon addMenuIcon(const QWidget* ref, int height, QSize* logicalSize) {
     const qreal dpr = ref->devicePixelRatioF();
     QImage arrow = comboArrow(dpr);
     arrow.setDevicePixelRatio(1.0);
     // everything in device pixels, so that nothing is resampled when the icon is drawn
-    const int plusPx = qRound(14 * dpr), gapPx = qRound(12 * dpr), heightPx = qRound(height * dpr);
+    const int plusPx = qRound(kAddPlus * dpr), gapPx = qRound(kAddGap * dpr), heightPx = qRound(height * dpr);
     const int logicalWidth = int(std::ceil((plusPx + gapPx + arrow.width()) / dpr));
     QImage img(qRound(logicalWidth * dpr), heightPx, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
@@ -160,12 +163,13 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
         QSize size;
         addButton_->setIcon(addMenuIcon(search_, search_->sizeHint().height(), &size));
         addButton_->setIconSize(size);
+        addButton_->setFixedSize(size.width() + 2 * kAddMargin, search_->sizeHint().height());
         scheduleRefresh();
     });
     addButton_->setText("+");                         // not shown (icon only), but names the button
     addButton_->setToolTip("Add a function or a variable");
     addButton_->setPopupMode(QToolButton::InstantPopup);
-    addButton_->setFixedSize(iconSize.width() + 12, search_->sizeHint().height());
+    addButton_->setFixedSize(iconSize.width() + 2 * kAddMargin, search_->sizeHint().height());     // the same margin on both sides
     top->addWidget(search_, 1);
     top->addWidget(addButton_);
     lay->addLayout(top);
