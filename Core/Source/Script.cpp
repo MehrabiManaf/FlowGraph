@@ -158,6 +158,31 @@ void Script::renameLocal(const std::string& graph, const std::string& from, cons
         if ((n.def == "var.get" || n.def == "var.set") && n.prop("name") == from && n.prop("scope") == "local") n.props["name"] = to;
 }
 
+void Script::retypeVariable(const std::string& name, const std::string& type) {
+    VariableDecl* v = findVariable(name);
+    if (!v || v->type == type) return;
+    v->type = type;
+    v->def = Value();
+    for (auto& g : graphs) {
+        const bool shadowed = g.findLocal(name) != nullptr;
+        for (auto& n : g.nodes) {
+            if (n.def != "var.set" || n.prop("name") != name) continue;
+            const std::string scope = n.prop("scope");
+            if (scope == "global" || (scope.empty() && !shadowed)) n.defaults.erase("Value");
+        }
+    }
+}
+
+void Script::retypeLocal(const std::string& graph, const std::string& name, const std::string& type) {
+    Graph* g = findGraph(graph);
+    VariableDecl* v = g ? g->findLocal(name) : nullptr;
+    if (!v || v->type == type) return;
+    v->type = type;
+    v->def = Value();
+    for (auto& n : g->nodes)
+        if (n.def == "var.set" && n.prop("name") == name && n.prop("scope") == "local") n.defaults.erase("Value");
+}
+
 // ------------------------------------------------------------------ JSON
 Json valueToJson(const Value& v) {
     switch (v.kind()) {

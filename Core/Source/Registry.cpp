@@ -242,8 +242,9 @@ Value Registry::defaultValue(const TypeDesc* t) const {
     if (!t) return Value();
     switch (t->kind) {
     case TypeKind::Bool: return Value(false);
-    case TypeKind::Int:
-    case TypeKind::Enum: return Value(int64_t(0));
+    case TypeKind::Int: return Value(int64_t(0));
+    // the first value: 0 is not one of every enum's (Weekday starts with Monday = 1)
+    case TypeKind::Enum: return Value(t->enumValues.empty() ? int64_t(0) : t->enumValues.front().value);
     case TypeKind::Float: return Value(0.0);
     case TypeKind::String: return Value(std::string());
     case TypeKind::Array: return makeArray(t->elem);

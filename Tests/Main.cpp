@@ -3200,6 +3200,73 @@ TEST(enum_literals_show_their_value) {
           def->settings[0].choices[4] == "Friday");
 }
 
+// An enum's default is its first value (Weekday starts with Monday = 1, so 0 is not one of its values), and a default that is not one
+// of the enum's values - a value of the type a variable had before - becomes that first value instead of a bare number.
+TEST(enum_defaults_are_values_of_the_enum) {
+    TestRuntime rt;
+    registerSample(rt);
+    const Registry& reg = rt.registry();
+    const TypeDesc* weekday = reg.findType("Weekday");
+    const TypeDesc* mood = reg.findType("Mood");
+    CHECK(weekday && mood);
+    if (!weekday || !mood) return;
+    CHECK_EQ(reg.defaultValue(weekday).toInt(), int64_t(1));         // Monday
+    CHECK_EQ(reg.defaultValue(mood).toInt(), int64_t(0));            // Happy
+    Script s;
+    s.variables.push_back({"Day", "Weekday", Value(), "", ""});
+    s.variables.push_back({"Feeling", "Mood", Value(int64_t(7)), "", ""});     // a Sunday, from when it was a Weekday
+    Graph& g = s.addEventGraph();
+    Node& set = g.addNode("var.set");
+    set.props = {{"name", "Feeling"}, {"scope", "global"}};
+    set.defaults["Value"] = Value(int64_t(7));
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    CHECK_EQ(inst.getVariable("Day").toInt(), int64_t(1));
+    CHECK_EQ(inst.getVariable("Feeling").toInt(), int64_t(0));
+    bool checked = false;
+    for (auto& p : buildNodePins(set, reg, &s, &g))
+        if (p.name == "Value") { CHECK_EQ(p.def.toInt(), int64_t(0)); checked = true; }      // the editor shows Happy, not 7
+    CHECK(checked);
+}
+
+// Changing a variable's type clears its default and the values typed into its Set nodes (they were values of the old type); a local
+// variable of the same name, and other variables, keep theirs.
+TEST(retyping_a_variable_clears_the_values_of_its_old_type) {
+    Script s;
+    s.variables.push_back({"Day", "Weekday", Value(int64_t(7)), "", ""});
+    s.variables.push_back({"Other", "Weekday", Value(int64_t(3)), "", ""});
+    Graph& events = s.addEventGraph();
+    Node& setDay = events.addNode("var.set");
+    setDay.props = {{"name", "Day"}, {"scope", "global"}};
+    setDay.defaults["Value"] = Value(int64_t(7));
+    Node& setOther = events.addNode("var.set");
+    setOther.props = {{"name", "Other"}, {"scope", "global"}};
+    setOther.defaults["Value"] = Value(int64_t(3));
+    const NodeId dayId = setDay.id, otherId = setOther.id;
+    const std::string eventGraph = events.name;          // addFunction may move the graphs: no references kept past it
+    Graph& fn = s.addFunction("F");
+    fn.locals.push_back({"Day", "Weekday", Value(int64_t(5)), "", ""});        // shadows the global one in F
+    Node& setLocal = fn.addNode("var.set");
+    setLocal.props = {{"name", "Day"}, {"scope", "local"}};
+    setLocal.defaults["Value"] = Value(int64_t(5));
+    const NodeId localId = setLocal.id;
+
+    s.retypeVariable("Day", "Mood");
+    CHECK_EQ(s.findVariable("Day")->type, std::string("Mood"));
+    CHECK(s.findVariable("Day")->def.isNull());
+    CHECK(!s.findGraph(eventGraph)->findNode(dayId)->defaults.count("Value"));
+    CHECK(s.findGraph(eventGraph)->findNode(otherId)->defaults.count("Value"));
+    CHECK_EQ(s.findVariable("Other")->def.toInt(), int64_t(3));
+    CHECK(s.findGraph("F")->findNode(localId)->defaults.count("Value"));     // the local one is another variable
+    CHECK_EQ(s.findGraph("F")->findLocal("Day")->def.toInt(), int64_t(5));
+
+    s.retypeLocal("F", "Day", "int");
+    CHECK_EQ(s.findGraph("F")->findLocal("Day")->type, std::string("int"));
+    CHECK(s.findGraph("F")->findLocal("Day")->def.isNull());
+    CHECK(!s.findGraph("F")->findNode(localId)->defaults.count("Value"));
+}
+
 TEST(make_date_time_carries_over_and_has_a_range) {
     TestRuntime rt;
     auto made = [&](int64_t y, int64_t mo, int64_t d, int64_t h) {

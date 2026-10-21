@@ -2626,6 +2626,57 @@ TEST(close_tab_closes_the_dock_of_a_single_tab) {
 
 // The launch box stays narrow (about 18 characters) when an entry has a long title; its list shows the whole title, and so does
 // its tooltip.
+// The default of an enum variable is chosen by name in Details (never shown as a bare number), and a new one starts at the enum's
+// first value; after a type change the variable's Set node shows a value of the new type.
+TEST(enum_variable_default_is_chosen_by_name) {
+    StudioFixture f;
+    Document* doc = f.win.document();
+    const QString graph = f.scene()->graphName();
+    fg::NodeId set = 0;
+    doc->edit("Setup", [&](fg::Script& s) {
+        s.variables.push_back({"Day", "Weekday", fg::Value(), "", ""});
+        fg::Node& n = s.findGraph(ss(graph))->addNode("var.set", 300, 300);
+        n.props = {{"name", "Day"}, {"scope", "global"}};
+        set = n.id;
+    });
+    QCoreApplication::processEvents();
+    auto* details = f.win.findChild<DetailsPanel*>();
+    CHECK(details != nullptr);
+    if (!details) return;
+    details->showVariable("", "Day");
+    QCoreApplication::processEvents();
+    QComboBox* box = nullptr;
+    for (auto* b : details->findChildren<QComboBox*>()) if (b->findText("Sunday") >= 0) box = b;
+    CHECK(box != nullptr);
+    if (!box) return;
+    CHECK_EQ(box->currentText(), QString("Monday"));                 // the first value, not "0"
+    CHECK_EQ(box->count(), 7);
+    const int sunday = box->findText("Sunday");
+    box->setCurrentIndex(sunday);
+    emit box->activated(sunday);
+    QCoreApplication::processEvents();
+    CHECK_EQ(doc->script().findVariable("Day")->def.toInt(), int64_t(7));
+    auto setNodeShows = [&]() -> QString {
+        NodeItem* item = f.scene()->nodeItem(set);
+        if (item)
+            for (auto& p : item->compiled().pins)
+                if (p.name == "Value") return defaultText(p);
+        return "?";
+    };
+    // a Sunday typed into the Set node, then the variable becomes an OperatingSystem: the node shows its first value, not 7
+    doc->edit("Value", [&](fg::Script& s) { s.findGraph(ss(graph))->findNode(set)->defaults["Value"] = fg::Value(int64_t(7)); });
+    QCoreApplication::processEvents();
+    CHECK_EQ(setNodeShows(), QString("Sunday"));
+    doc->edit("Change variable type", [](fg::Script& s) { s.retypeVariable("Day", "OperatingSystem"); });
+    QCoreApplication::processEvents();
+    CHECK(!doc->script().findGraph(ss(graph))->findNode(set)->defaults.count("Value"));      // cleared with the type
+    CHECK_EQ(setNodeShows(), QString("Windows"));
+    // a value the enum does not have (a script from elsewhere) is shown as the first value too
+    doc->edit("Value", [&](fg::Script& s) { s.findGraph(ss(graph))->findNode(set)->defaults["Value"] = fg::Value(int64_t(7)); });
+    QCoreApplication::processEvents();
+    CHECK_EQ(setNodeShows(), QString("Windows"));
+}
+
 TEST(launch_box_is_narrow_and_its_list_shows_long_entries) {
     StudioFixture f;
     auto* combo = f.win.mainToolBar()->findChild<QComboBox*>();

@@ -106,6 +106,11 @@ struct FG_CORE_EXPORT TypeDesc {
     bool isPrimitive() const { return kind == TypeKind::Bool || kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::String; }
     bool isNumeric() const { return kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::Enum || kind == TypeKind::Bool; }
 
+    // Whether `v` is one of the values of this enum.
+    bool hasEnumValue(int64_t v) const {
+        for (auto& e : enumValues) if (e.value == v) return true;
+        return false;
+    }
     // Name of an enum value (or its number when there is none).
     std::string enumName(int64_t v) const {
         for (auto& e : enumValues) if (e.value == v) return e.name;

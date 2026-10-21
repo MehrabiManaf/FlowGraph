@@ -293,7 +293,13 @@ void DetailsPanel::buildVariable() {
             ns.container = TypeSpec::Container(containerBox->currentIndex());
             ns.key = keyEdit->type();
             ns.value = valueEdit->type();
-            mutate([&](fg::VariableDecl& d) { d.type = ss(ns.str()); d.def = fg::Value(); }, "Change variable type", QString());
+            // the default and the values typed into the variable's Set nodes belong to the old type: they are cleared
+            const QString owner = owner_, name = name_;
+            const std::string type = ss(ns.str());
+            edit("Change variable type", [=](fg::Script& sc) {
+                if (!owner.isEmpty()) sc.retypeLocal(ss(owner), ss(name), type);
+                else sc.retypeVariable(ss(name), type);
+            }, QString());
             QTimer::singleShot(0, this, [this] { rebuild(); });
         };
         connect(valueEdit, &TypeEdit::typeEdited, this, apply);
@@ -308,8 +314,23 @@ void DetailsPanel::buildVariable() {
     if (t && (t->isPrimitive() || t->isEnum())) {
         fg::CompiledPin cp;
         cp.type = t;
-        try { cp.def = doc_->registry().convert(v->def, t); } catch (...) { cp.def = doc_->registry().defaultValue(t); }
-        if (t->kind == fg::TypeKind::Bool) {
+        try { cp.def = v->def.isNull() ? doc_->registry().defaultValue(t) : doc_->registry().convert(v->def, t); }
+        catch (...) { cp.def = doc_->registry().defaultValue(t); }
+        if (t->isEnum() && !t->hasEnumValue(cp.def.toInt())) cp.def = doc_->registry().defaultValue(t);     // what the compiler uses too
+        if (t->isEnum() && !t->enumValues.empty()) {
+            // the names of the values to choose from, never a bare number
+            auto* box = new QComboBox;
+            for (auto& e : t->enumValues) {
+                box->addItem(qs(e.name), qlonglong(e.value));
+                if (!e.doc.empty()) box->setItemData(box->count() - 1, qs(e.doc), Qt::ToolTipRole);
+            }
+            box->setCurrentIndex(std::max(0, box->findData(qlonglong(cp.def.toInt()))));
+            connect(box, qOverload<int>(&QComboBox::activated), this, [=, this](int i) {
+                const fg::Value nv(int64_t(box->itemData(i).toLongLong()));
+                mutate([&](fg::VariableDecl& d) { d.def = nv; }, "Edit default value", "vardef:" + name_);
+            });
+            form_->addRow("Default", box);
+        } else if (t->kind == fg::TypeKind::Bool) {
             auto* cb = new QCheckBox;
             cb->setChecked(cp.def.toBool());
             connect(cb, &QCheckBox::toggled, this, [=, this](bool on) { mutate([&](fg::VariableDecl& d) { d.def = fg::Value(on); }, "Edit default value", "vardef:" + name_); });

@@ -11,6 +11,20 @@ namespace {
 
 using Severity = Diagnostic::Severity;
 
+// The default of a variable or an unconnected input: the value the script gives, converted to the type, or the type's default when
+// there is none or it does not fit - also a number that is not one of the enum's values (a value of the type the variable had
+// before, an enum value that was removed): it would show as a bare number in the editor.
+Value defaultFor(const Registry& reg, const Value& given, const TypeDesc* t) {
+    try {
+        if (given.isNull()) return reg.defaultValue(t);
+        Value v = reg.convert(given, t);
+        if (t && t->isEnum() && !t->enumValues.empty() && !t->hasEnumValue(v.toInt())) return reg.defaultValue(t);
+        return v;
+    } catch (const ScriptError&) {
+        return reg.defaultValue(t);
+    }
+}
+
 std::string fallbackOf(const TypeParam& tp) {
     if (!tp.allowed.empty() && std::find(tp.allowed.begin(), tp.allowed.end(), tp.fallback) == tp.allowed.end()) return tp.allowed.front();
     return tp.fallback;
@@ -66,11 +80,7 @@ void resolvePins(const Registry& reg, Work& w) {
             Value d = pd.def;
             auto it = w.node->defaults.find(pd.name);
             if (it != w.node->defaults.end()) d = it->second;
-            try {
-                cp.def = d.isNull() ? reg.defaultValue(cp.type) : reg.convert(d, cp.type);
-            } catch (const ScriptError&) {
-                cp.def = reg.defaultValue(cp.type);
-            }
+            cp.def = defaultFor(reg, d, cp.type);
         }
         w.exprs.push_back(std::move(e));
         w.pins.push_back(std::move(cp));
@@ -143,13 +153,7 @@ struct GraphCompiler {
         return t;
     }
 
-    Value convertDefault(const Value& def, const TypeDesc* t) {
-        try {
-            return def.isNull() ? reg.defaultValue(t) : reg.convert(def, t);
-        } catch (const ScriptError&) {
-            return reg.defaultValue(t);
-        }
-    }
+    Value convertDefault(const Value& def, const TypeDesc* t) { return defaultFor(reg, def, t); }
 
     // ------------------------------------------------------------------ pass A: structure
     void declare() {

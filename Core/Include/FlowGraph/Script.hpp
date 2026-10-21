@@ -121,6 +121,10 @@ public:
     void renameVariable(const std::string& from, const std::string& to);
     void renameFunction(const std::string& from, const std::string& to);
     void renameLocal(const std::string& graph, const std::string& from, const std::string& to);
+    // A variable gets another type: its default and the values typed into its Set nodes (their Value pin) are cleared, as they
+    // were values of the old type (Sunday of a Weekday would be a 7 in another enum, which has no such value).
+    void retypeVariable(const std::string& name, const std::string& type);
+    void retypeLocal(const std::string& graph, const std::string& name, const std::string& type);
 
     // ---- serialization (JSON, extension .flow)
     // Version of the file format this build writes. Older files are read (and migrated); a file written by a newer
