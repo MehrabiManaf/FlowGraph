@@ -128,6 +128,11 @@ void CCollapsiblePanel::UpdateContentsHeight()
     // todo: animate height from current to what it must be
     QTimer::singleShot(0, this, [this]()
     {
+        // While the panel opens or closes, the animation sets the height every frame from the contents' current size, so it ends
+        // at the new height anyway. Jumping to the end here would show the panel fully open for one frame and then small again
+        // when the next frame comes: a flicker at the start of the animation (My Script refreshes right after an item is added).
+        if (mp_ExpandCollapseAnimation->state() == QAbstractAnimation::Running || !mp_PanelButton->isChecked())
+            return;
         SetAnimationProgress(1.0);
     });
 }

@@ -40,6 +40,7 @@
 #include <kddockwidgets/core/TabBar.h>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
+#include <QVBoxLayout>
 #include <QMouseEvent>
 #include <QScrollBar>
 #include <QClipboard>
@@ -1339,6 +1340,40 @@ TEST(search_fields_look_the_same) {
         for (QAction* act : e->actions()) leading += !act->icon().isNull();
         CHECK(leading >= 1);                                          // the magnifier (the clear button is not one of these actions)
     }
+}
+
+// A collapsible panel opens smoothly even when its contents ask for a new height while it opens (My Script refreshes right after an
+// item is added): every height it takes on the way is at least the one before, no jump to the end and back.
+TEST(collapsible_panel_does_not_jump_while_it_opens) {
+    struct HeightLog : QObject {
+        std::vector<int> heights;
+        bool eventFilter(QObject* o, QEvent* e) override {
+            if (e->type() == QEvent::Resize) heights.push_back(static_cast<QWidget*>(o)->height());
+            return false;
+        }
+    };
+    QWidget host;
+    auto* lay = new QVBoxLayout(&host);
+    auto* panel = new CCollapsiblePanel("Section", &host, false);
+    auto* contents = new QWidget;
+    contents->setFixedHeight(200);
+    panel->AddWidget(contents);
+    lay->addWidget(panel);
+    lay->addStretch();
+    host.resize(300, 400);
+    host.show();
+    QCoreApplication::processEvents();
+    const int collapsed = panel->height();
+    HeightLog log;
+    panel->installEventFilter(&log);
+    bool opened = false;
+    QObject::connect(panel, &CCollapsiblePanel::ExpandFinished, &host, [&] { opened = true; });
+    panel->SetContentsExpaned(true);
+    panel->UpdateContentsHeight();                                   // what a refresh of the contents does
+    CHECK(spinUntil([&] { return opened; }));
+    CHECK(panel->height() >= collapsed + 200);
+    CHECK(log.heights.size() > 2);                                   // it really animated
+    for (size_t i = 1; i < log.heights.size(); ++i) CHECK(log.heights[i] >= log.heights[i - 1]);
 }
 
 // Adding a function or a variable in My Script (a section's "+" or the Add menu) opens the section it goes to, if it is collapsed,
