@@ -60,6 +60,7 @@ public:
     bool collapseSelection(const QString& name);
     // View > Theme: shows the theme and keeps it as the choice of this application (EditorHost::offersThemeChoice)
     void chooseTheme(Theme theme);
+    void chooseLanguage(const QString& code);     // saved for the next start of the application
     // Developer aid: "node:<graph>:<id>", "var:<name>" or "graph:<name>" selects that item and shows its details; "theme:light" (dark, system) switches the theme without saving it.
     void devSelect(const QString& spec);
     // Developer aid for real-input smoke tests: writes global screen coordinates / script state to a text file.

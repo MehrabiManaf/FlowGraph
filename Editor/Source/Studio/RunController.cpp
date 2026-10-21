@@ -108,7 +108,7 @@ bool RunController::start(const QString& entry, const std::vector<fg::Value>& ar
     if (isActive()) stop();
     auto program = doc_->program();
     if (!program || program->hasErrors) {
-        emit logMessage(int(fg::LogLevel::Error), "Cannot run: the script has compile errors (see Compile Results).");
+        emit logMessage(int(fg::LogLevel::Error), tr("Cannot run: the script has compile errors (see Compile Results)."));
         return false;
     }
     ax_.reset();
@@ -358,7 +358,7 @@ void RunController::onScriptOpened() {
 void RunController::onDocumentChanged(bool structural) {
     if (structural && isActive() && !attached_) {            // an attached application keeps running the script it has, whatever is edited
         stop();
-        emit logMessage(int(fg::LogLevel::Warning), "The script was modified: the run was stopped.");
+        emit logMessage(int(fg::LogLevel::Warning), tr("The script was modified: the run was stopped."));
     }
 }
 

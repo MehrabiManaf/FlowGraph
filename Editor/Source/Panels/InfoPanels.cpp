@@ -4,6 +4,7 @@
 #include "../Common/Theme.hpp"
 #include "../Graph/Style.hpp"
 
+#include <QCoreApplication>
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
@@ -34,7 +35,7 @@ DiagnosticsPanel::DiagnosticsPanel(Document* doc, QWidget* parent) : QWidget(par
     summary_ = new QLabel(this);
     tree_ = new QTreeWidget(this);
     tree_->setColumnCount(3);
-    tree_->setHeaderLabels({"Graph", "Node", "Message"});
+    tree_->setHeaderLabels({tr("Graph"), tr("Node"), tr("Message")});
     tree_->setRootIsDecorated(false);
     tree_->setUniformRowHeights(true);
     tree_->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -68,8 +69,8 @@ void DiagnosticsPanel::refresh() {
             it->setData(0, Qt::UserRole, qs(d.graph));
             it->setData(0, Qt::UserRole + 1, d.node);
         }
-    if (errors == 0 && warnings == 0) summary_->setText("<span style='color:" + themeColors().css(themeColors().success) + "'>Compiled successfully.</span>");
-    else summary_->setText(QString("%1 error(s), %2 warning(s)").arg(errors).arg(warnings));
+    if (errors == 0 && warnings == 0) summary_->setText("<span style='color:" + themeColors().css(themeColors().success) + "'>" + tr("Compiled successfully.") + "</span>");
+    else summary_->setText(tr("%1 error(s), %2 warning(s)").arg(errors).arg(warnings));
     emit summaryChanged(errors, warnings);
 }
 
@@ -78,11 +79,11 @@ FindPanel::FindPanel(Document* doc, QWidget* parent) : QWidget(parent), doc_(doc
     auto* lay = new QVBoxLayout(this);
     lay->setContentsMargins(4, 4, 4, 4);
     edit_ = new QLineEdit(this);
-    makeSearchField(edit_, "Find in script (node titles, comments, values)");
+    makeSearchField(edit_, tr("Find in script (node titles, comments, values)"));
     summary_ = new QLabel(this);
     tree_ = new QTreeWidget(this);
     tree_->setColumnCount(3);
-    tree_->setHeaderLabels({"Graph", "Node", "Where"});
+    tree_->setHeaderLabels({tr("Graph"), tr("Node"), tr("Where")});
     tree_->setRootIsDecorated(false);
     tree_->setUniformRowHeights(true);
     tree_->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -128,7 +129,7 @@ void FindPanel::refresh() {
     QString what;
     if (references_) {
         refs = fg::findReferences(doc_->script(), prog, target_);
-        what = "References of " + qs(target_.describe());
+        what = tr("References of %1").arg(qs(target_.describe()));
     } else if (!edit_->text().isEmpty()) {
         refs = fg::searchScript(doc_->script(), prog, ss(edit_->text()));
         what = "\"" + edit_->text() + "\"";
@@ -142,8 +143,8 @@ void FindPanel::refresh() {
         it->setData(0, Qt::UserRole, qs(r.graph));
         it->setData(0, Qt::UserRole + 1, r.node);
     }
-    if (what.isEmpty()) summary_->setText("Type to search, or use Find References on a node, variable or function.");
-    else summary_->setText(what + ": " + (refs.empty() ? QString("nothing found") : QString("%1 found").arg(refs.size())));
+    if (what.isEmpty()) summary_->setText(tr("Type to search, or use Find References on a node, variable or function."));
+    else summary_->setText(what + ": " + (refs.empty() ? tr("nothing found") : tr("%1 found").arg(refs.size())));
 }
 
 // ------------------------------------------------------------------ log
@@ -190,7 +191,7 @@ void LogPanel::recolor() {
 QMenu* LogPanel::buildContextMenu() {
     QMenu* menu = createStandardContextMenu();
     menu->addSeparator();
-    QAction* clearAction = menu->addAction(themedIcon(":/Icons/clear.svg"), "Clear");
+    QAction* clearAction = menu->addAction(themedIcon(":/Icons/clear.svg"), tr("Clear"));
     clearAction->setEnabled(!document()->isEmpty());
     connect(clearAction, &QAction::triggered, this, &QPlainTextEdit::clear);
     return menu;
@@ -236,7 +237,7 @@ void updateMoreRow(QTreeWidgetItem* container) {
     auto* more = new QTreeWidgetItem(container);
     more->setData(0, kMoreRole, true);
     more->setText(0, "...");
-    more->setText(1, QString("%1 more - double-click to load %2 more").arg(thousands(total - end), thousands(std::min<qulonglong>(kPage, total - end))));
+    more->setText(1, QCoreApplication::translate("fged::DebugPanel", "%1 more - double-click to load %2 more").arg(thousands(total - end), thousands(std::min<qulonglong>(kPage, total - end))));
     QFont f = more->font(1);
     f.setItalic(true);
     more->setFont(1, f);
@@ -271,7 +272,7 @@ DebugPanel::DebugPanel(Document* doc, RunController* run, QWidget* parent) : QWi
     auto* split = new QSplitter(Qt::Vertical, this);
     lay->addWidget(split);
     stack_ = new QTreeWidget(split);
-    stack_->setHeaderLabels({"Call stack", "Node"});
+    stack_->setHeaderLabels({tr("Call stack"), tr("Node")});
     stack_->setRootIsDecorated(false);
 
     auto setupTree = [](QTreeWidget* t, const QStringList& headers) {
@@ -283,7 +284,7 @@ DebugPanel::DebugPanel(Document* doc, RunController* run, QWidget* parent) : QWi
         t->setColumnWidth(0, 150);
     };
     vars_ = new QTreeWidget(split);
-    setupTree(vars_, {"Variable", "Value", "Type"});
+    setupTree(vars_, {tr("Variable"), tr("Value"), tr("Type")});
 
     auto* watchBox = new QWidget(split);
     auto* wl = new QVBoxLayout(watchBox);
@@ -291,11 +292,11 @@ DebugPanel::DebugPanel(Document* doc, RunController* run, QWidget* parent) : QWi
     wl->setSpacing(0);
     watchEdit_ = new QLineEdit(watchBox);
     watchEdit_->setClearButtonEnabled(true);
-    watchEdit_->setPlaceholderText("Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)");
-    watchEdit_->setToolTip("An expression to watch. A range name[a..b] loads those elements (inclusive); a big array is never loaded as a whole.\n"
-                           "Locals and parameters of the selected stack frame are found first, then the variables of the script.");
+    watchEdit_->setPlaceholderText(tr("Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)"));
+    watchEdit_->setToolTip(tr("An expression to watch. A range name[a..b] loads those elements (inclusive); a big array is never loaded as a whole.\n"
+                           "Locals and parameters of the selected stack frame are found first, then the variables of the script."));
     watches_ = new QTreeWidget(watchBox);
-    setupTree(watches_, {"Watch", "Value", "Type"});
+    setupTree(watches_, {tr("Watch"), tr("Value"), tr("Type")});
     wl->addWidget(watchEdit_);
     wl->addWidget(watches_);
 
@@ -359,7 +360,7 @@ void DebugPanel::refresh() {
     for (size_t i = 0; i < snap.stack.size(); ++i) {
         const auto& e = snap.stack[i];
         auto* it = new QTreeWidgetItem(stack_);
-        it->setText(0, e.graph + (e.isEvent ? " (event)" : ""));
+        it->setText(0, e.graph + (e.isEvent ? " " + tr("(event)") : QString()));
         const fg::CompiledGraph* cg = doc_->program() ? doc_->program()->findGraph(ss(e.graph)) : nullptr;
         const fg::CompiledNode* cn = cg ? cg->findNode(e.node) : nullptr;
         it->setText(1, cn ? qs(cn->title) : QString());
@@ -373,11 +374,11 @@ void DebugPanel::refresh() {
     vars_->clear();
     if (have) {
         if (run_->state() == RunController::State::Paused) {
-            auto* locals = new QTreeWidgetItem(vars_, QStringList{"Locals / parameters"});
+            auto* locals = new QTreeWidgetItem(vars_, QStringList{tr("Locals / parameters")});
             for (auto& v : snap.frameVariables) buildItem(new QTreeWidgetItem(locals), v.value, "l:");
             locals->setExpanded(true);
         }
-        auto* globals = new QTreeWidgetItem(vars_, QStringList{"Variables"});
+        auto* globals = new QTreeWidgetItem(vars_, QStringList{tr("Variables")});
         for (auto& v : snap.globals) buildItem(new QTreeWidgetItem(globals), v.value, "g:");
         globals->setExpanded(true);
         restore(vars_->invisibleRootItem());
@@ -418,7 +419,7 @@ void DebugPanel::refreshWatches() {
         it->setText(0, watchList_[i]);
         const QString prefix = "w:" + watchList_[i] + "|";
         if (!have) {
-            it->setText(1, "(not available: run the script first)");
+            it->setText(1, tr("(not available: run the script first)"));
             it->setForeground(1, qApp->palette().color(QPalette::PlaceholderText));
         } else if (!results[size_t(i)].ok) {
             it->setText(1, "<" + qs(results[size_t(i)].error) + ">");
@@ -496,31 +497,31 @@ void DebugPanel::showContextMenu(QTreeWidget* tree, const QPoint& pos) {
     QMenu menu(this);
     if (!path.isEmpty() && total > end) {
         for (qulonglong n : {qulonglong(kPage), qulonglong(1000), qulonglong(10000)})
-            menu.addAction(themedIcon(":/Icons/load-more.svg"), "Load next " + thousands(n), [this, container, n] { loadMore(container, n); });
+            menu.addAction(themedIcon(":/Icons/load-more.svg"), tr("Load next %1").arg(thousands(n)), [this, container, n] { loadMore(container, n); });
         qulonglong rest = total - end;
         menu.addAction(themedIcon(":/Icons/load-more.svg"),
-                       rest > kMaxLoad ? "Load next " + thousands(kMaxLoad) + " (of " + thousands(rest) + " left)" : "Load all (" + thousands(rest) + " left)",
+                       rest > kMaxLoad ? tr("Load next %1 (of %2 left)").arg(thousands(kMaxLoad), thousands(rest)) : tr("Load all (%1 left)").arg(thousands(rest)),
                        [this, container] { loadMore(container, kMaxLoad); });
         menu.addSeparator();
     }
     if (!path.isEmpty()) {
         if (total > 0)
-            menu.addAction(themedIcon(":/Icons/watch-range.svg"), "Watch a range...", [this, path, total] {
+            menu.addAction(themedIcon(":/Icons/watch-range.svg"), tr("Watch a range..."), [this, path, total] {
                 bool ok = false;
-                QString e = QInputDialog::getText(this, "Watch a range", "Expression (a range is inclusive):", QLineEdit::Normal,
+                QString e = QInputDialog::getText(this, tr("Watch a range"), tr("Expression (a range is inclusive):"), QLineEdit::Normal,
                                                   QString("%1[0..%2]").arg(path).arg(std::min<qulonglong>(total, 100) - 1), &ok);
                 if (ok) addWatch(e);
             });
-        menu.addAction(themedIcon(":/Icons/watch-add.svg"), "Add to watch", [this, path] { addWatch(path); });
+        menu.addAction(themedIcon(":/Icons/watch-add.svg"), tr("Add to watch"), [this, path] { addWatch(path); });
     }
     if (!isMoreRow(item) && !item->text(1).isEmpty())
-        menu.addAction(themedIcon(":/Icons/copy.svg"), "Copy value",[item] { QGuiApplication::clipboard()->setText(item->text(1)); });
+        menu.addAction(themedIcon(":/Icons/copy.svg"), tr("Copy value"),[item] { QGuiApplication::clipboard()->setText(item->text(1)); });
     if (tree == watches_ && item->data(0, kWatchRole).toBool()) {
         menu.addSeparator();
         QString expr = item->text(0);
-        menu.addAction(themedIcon(":/Icons/watch-edit.svg"), "Edit watch...", [this, expr] {
+        menu.addAction(themedIcon(":/Icons/watch-edit.svg"), tr("Edit watch..."), [this, expr] {
             bool ok = false;
-            QString e = QInputDialog::getText(this, "Edit watch", "Expression:", QLineEdit::Normal, expr, &ok).trimmed();
+            QString e = QInputDialog::getText(this, tr("Edit watch"), tr("Expression:"), QLineEdit::Normal, expr, &ok).trimmed();
             if (!ok || e.isEmpty() || e == expr) return;
             int at = watchList_.indexOf(expr);
             if (at < 0 || watchList_.contains(e)) return;
@@ -529,8 +530,8 @@ void DebugPanel::showContextMenu(QTreeWidget* tree, const QPoint& pos) {
             saveWatches();
             refreshWatches();
         });
-        menu.addAction(themedIcon(":/Icons/watch-remove.svg"), "Remove watch", [this, expr] { removeWatch(expr); });
-        menu.addAction(themedIcon(":/Icons/watch-clear.svg"), "Remove all watches", [this] {
+        menu.addAction(themedIcon(":/Icons/watch-remove.svg"), tr("Remove watch"), [this, expr] { removeWatch(expr); });
+        menu.addAction(themedIcon(":/Icons/watch-clear.svg"), tr("Remove all watches"), [this] {
             watchList_.clear();
             saveWatches();
             refreshWatches();

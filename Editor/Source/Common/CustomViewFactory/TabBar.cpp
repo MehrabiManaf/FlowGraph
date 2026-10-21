@@ -187,8 +187,8 @@ void CTabBar::contextMenuEvent(QContextMenuEvent* pEvent)
 
 void CTabBar::FillContextMenu(QMenu& Menu, QAction** ppHide, QAction** ppClose) const
 {
-    QAction* pHide = Menu.addAction(fged::themedIcon(":/Icons/tabbar-hide.svg"), "Hide Tab Bar");
-    QAction* pClose = Menu.addAction(fged::themedIcon(":/Icons/dock-close.svg"), "Close Tab");
+    QAction* pHide = Menu.addAction(fged::themedIcon(":/Icons/tabbar-hide.svg"), tr("Hide Tab Bar"));
+    QAction* pClose = Menu.addAction(fged::themedIcon(":/Icons/dock-close.svg"), tr("Close Tab"));
     pClose->setEnabled(CanCloseCurrentTab());
     if(ppHide)
         *ppHide = pHide;

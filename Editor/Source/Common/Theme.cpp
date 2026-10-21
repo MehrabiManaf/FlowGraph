@@ -3,6 +3,7 @@
 #include "Theme.hpp"
 #include "Settings.hpp"
 
+#include <QCoreApplication>
 #include <QApplication>
 #include <QFile>
 #include <QGuiApplication>
@@ -248,11 +249,11 @@ Theme themeFromKey(const QString& key) {
 }
 QString themeTitle(Theme t) {
     switch (t) {
-    case Theme::Light: return QStringLiteral("Light");
-    case Theme::System: return QStringLiteral("System");
+    case Theme::Light: return QCoreApplication::translate("fged::Theme", "Light");
+    case Theme::System: return QCoreApplication::translate("fged::Theme", "System");
     case Theme::Dark: break;
     }
-    return QStringLiteral("Dark");
+    return QCoreApplication::translate("fged::Theme", "Dark");
 }
 
 ThemeNotifier& ThemeNotifier::instance() {

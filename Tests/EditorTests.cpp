@@ -2679,6 +2679,56 @@ TEST(enum_variable_default_is_chosen_by_name) {
     CHECK_EQ(setNodeShows(), QString("Windows"));
 }
 
+// The editor's languages: English and the translations compiled in. A language is applied before the windows are made: their texts are
+// in it, the layout stays left to right (Persian too), and a host finds its menus by their English names in any
+// language. The choice is kept per application.
+TEST(editor_languages_translate_the_ui) {
+    const QStringList languages = availableLanguages();
+    CHECK(languages.size() >= 2 && languages.front() == "en" && languages.contains("fa"));
+    CHECK_EQ(languageName("en"), QString("English"));
+    CHECK_EQ(languageName("fa"), QString("فارسی"));
+    // region variants and the unknown
+    applyLanguage(*qApp, "fa_IR");
+    CHECK_EQ(currentLanguage(), QString("fa"));
+    applyLanguage(*qApp, "xx");
+    CHECK_EQ(currentLanguage(), QString("en"));
+    CHECK_EQ(QCoreApplication::translate("fged::ScriptEditorWindow", "&File"), QString("&File"));
+
+    applyLanguage(*qApp, "fa");
+    CHECK_EQ(currentLanguage(), QString("fa"));
+    CHECK(qApp->layoutDirection() == Qt::LeftToRight);                   // only the texts change: the panels are not mirrored
+    CHECK_EQ(QCoreApplication::translate("fged::ScriptEditorWindow", "&File"), QString("پرونده(&F)"));
+    {
+        StudioFixture f;
+        QStringList titles;
+        for (QAction* a : f.win.menuBar()->actions()) titles << a->text();
+        CHECK(titles.contains("پرونده(&F)") && titles.contains("ویرایش(&E)"));
+        CHECK(f.view->layoutDirection() == Qt::LeftToRight);             // the graph keeps flowing from left to right
+        // the host adds Launch Configurations to the existing Run menu, found by its English name
+        int runMenus = 0;
+        for (QAction* a : f.win.menuBar()->actions()) runMenus += a->menu() && a->menu()->objectName() == "Run";
+        CHECK_EQ(runMenus, 1);
+        CHECK(f.editor.menu("&Run") != nullptr && f.editor.menu("&Run")->objectName() == "Run");
+        // View > Language: System, English, Persian - each in its own language
+        QMenu* languageMenu = f.win.findChild<QMenu*>("languageMenu");
+        CHECK(languageMenu != nullptr);
+        if (languageMenu) {
+            QStringList items;
+            for (QAction* a : languageMenu->actions()) items << a->text();
+            CHECK(items.contains("English") && items.contains("فارسی") && items.size() == languages.size() + 1);
+        }
+    }
+    applyLanguage(*qApp, "en");                                           // the other tests are in English
+    CHECK(qApp->layoutDirection() == Qt::LeftToRight);
+    CHECK_EQ(QCoreApplication::translate("fged::ScriptEditorWindow", "&File"), QString("&File"));
+
+    // the choice of each application
+    CHECK_EQ(savedLanguage("Language Test App"), QString("system"));
+    saveLanguage("Language Test App", "fa");
+    CHECK_EQ(savedLanguage("Language Test App"), QString("fa"));
+    CHECK_EQ(savedLanguage("Another Language Test App"), QString("system"));
+}
+
 TEST(launch_box_is_narrow_and_its_list_shows_long_entries) {
     StudioFixture f;
     auto* combo = f.win.mainToolBar()->findChild<QComboBox*>();

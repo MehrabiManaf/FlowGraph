@@ -7,11 +7,14 @@
 #include <FlowGraphEditor/ScriptEditor.hpp>
 
 #include <map>
+#include <QCoreApplication>
+
 #include <optional>
 
 namespace flowstudio {
 
 class StandardEditorHost : public fged::EditorHost {
+    Q_DECLARE_TR_FUNCTIONS(flowstudio::StandardEditorHost)      // tr() for the texts it shows (not a QObject)
 public:
     explicit StandardEditorHost(fg::Runtime& rt) : rt_(rt) {}
 

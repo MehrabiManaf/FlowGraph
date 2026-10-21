@@ -21,7 +21,7 @@ PalettePopup::PalettePopup(GraphScene* scene, const PinRef& from, QWidget* paren
     auto* lay = new QVBoxLayout(this);
     lay->setContentsMargins(4, 4, 4, 4);
     search_ = new QLineEdit(this);
-    makeSearchField(search_, from.valid() ? "Search nodes that fit the pin..." : "Search nodes...");      // like every search box of the editor
+    makeSearchField(search_, from.valid() ? tr("Search nodes that fit the pin...") : tr("Search nodes..."));      // like every search box of the editor
     tree_ = new QTreeWidget(this);
     tree_->setHeaderHidden(true);
     tree_->setColumnCount(2);

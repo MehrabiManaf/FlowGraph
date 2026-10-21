@@ -53,7 +53,7 @@ endif()
 
 # ---- editor: Qt 6 widgets + KDDockWidgets ---------------------------------
 if(FG_BUILD_EDITOR AND EXISTS ${CMAKE_SOURCE_DIR}/Editor/CMakeLists.txt)
-    find_package(Qt6 REQUIRED COMPONENTS Widgets Svg SvgWidgets Test)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets Svg SvgWidgets Test LinguistTools)
     qt_standard_project_setup()
     set(KDDockWidgets_FRONTENDS "qtwidgets" CACHE STRING "" FORCE)
     set(KDDockWidgets_QT6 ON CACHE BOOL "" FORCE)

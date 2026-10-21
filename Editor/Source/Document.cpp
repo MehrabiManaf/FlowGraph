@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Document.hpp"
 
+#include <QCoreApplication>
 #include <QFileInfo>
 
 namespace fged {
@@ -9,7 +10,7 @@ namespace fged {
 Document::Document(fg::Runtime& rt, QObject* parent) : QObject(parent), rt_(rt) { newScript(); }
 
 QString Document::displayName() const {
-    QString n = !path_.isEmpty() ? QFileInfo(path_).fileName() : !title_.isEmpty() ? title_ : QString::fromStdString(script_.name);
+    QString n = !path_.isEmpty() ? QFileInfo(path_).fileName() : !title_.isEmpty() ? title_ : (script_.name == "Untitled" ? QCoreApplication::translate("fged::Document", "Untitled") : QString::fromStdString(script_.name));      // the new script's name, in the editor's language
     return dirty_ ? n + "*" : n;
 }
 

@@ -154,8 +154,8 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     top->setContentsMargins(4, 4, 4, 2);
     top->setSpacing(4);
     search_ = new QLineEdit(this);
-    makeSearchField(search_, "Search");
-    search_->setToolTip("Shows only the events, functions and variables whose name contains this text");
+    makeSearchField(search_, tr("Search"));
+    search_->setToolTip(tr("Shows only the events, functions and variables whose name contains this text"));
     addButton_ = new AddButton(this);
     QSize iconSize;
     addButton_->setIcon(addMenuIcon(search_, search_->sizeHint().height(), &iconSize));       // a plus and a drop-down arrow: the button opens a menu
@@ -169,7 +169,7 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
         scheduleRefresh();
     });
     addButton_->setText("+");                         // not shown (icon only), but names the button
-    addButton_->setToolTip("Add a function or a variable");
+    addButton_->setToolTip(tr("Add a function or a variable"));
     addButton_->setPopupMode(QToolButton::InstantPopup);
     addButton_->setFixedSize(iconSize.width() + 2 * kAddMargin, search_->sizeHint().height());     // the same margin on both sides
     top->addWidget(search_, 1);
@@ -180,11 +180,11 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     connect(menu, &QMenu::aboutToShow, this, [this] { showAddMenu(); });
     connect(search_, &QLineEdit::textChanged, this, [this] { applyFilter(); });
 
-    graphs_ = makeSection("Event Graphs", false, graphsPanel_);       // no "+": events are not created here
+    graphs_ = makeSection(tr("Event Graphs"), false, graphsPanel_);       // no "+": events are not created here
     graphs_->setRootIsDecorated(true);
-    functions_ = makeSection("Functions", true, functionsPanel_);
-    vars_ = makeSection("Variables", true, varsPanel_);
-    locals_ = makeSection("Local Variables", true, localsPanel_);
+    functions_ = makeSection(tr("Functions"), true, functionsPanel_);
+    vars_ = makeSection(tr("Variables"), true, varsPanel_);
+    locals_ = makeSection(tr("Local Variables"), true, localsPanel_);
     for (auto* p : {graphsPanel_, functionsPanel_, varsPanel_, localsPanel_}) {
         lay->addWidget(p);
         p->SetContentsExpaned(true);
@@ -359,7 +359,7 @@ void MyScriptPanel::refreshLocals() {
             it->setData(0, kMime, "local|" + qs(v.name));
             if (!keepName.isEmpty() && qs(v.name) == keepName) locals_->setCurrentItem(it);
         }
-        localsPanel_->SetTitle("Local Variables (" + localsGraph_ + ")");
+        localsPanel_->SetTitle(tr("Local Variables (%1)").arg(localsGraph_));
     }
     localsPanel_->setVisible(g != nullptr);
     applyFilter();
@@ -387,9 +387,9 @@ void MyScriptPanel::applyFilter() {
 void MyScriptPanel::showAddMenu() {
     QMenu* menu = addButton_->menu();
     menu->clear();
-    menu->addAction(themedIcon(":/Icons/function.svg"), "Function", this, [this] { addFunction(); });
-    menu->addAction(themedIcon(":/Icons/variable.svg"), "Variable", this, [this] { addVariable(); });
-    if (!localsGraph_.isEmpty()) menu->addAction(themedIcon(":/Icons/local-variable.svg"), "Local Variable (" + localsGraph_ + ")", this, [this] { addLocal(); });
+    menu->addAction(themedIcon(":/Icons/function.svg"), tr("Function"), this, [this] { addFunction(); });
+    menu->addAction(themedIcon(":/Icons/variable.svg"), tr("Variable"), this, [this] { addVariable(); });
+    if (!localsGraph_.isEmpty()) menu->addAction(themedIcon(":/Icons/local-variable.svg"), tr("Local Variable (%1)").arg(localsGraph_), this, [this] { addLocal(); });
 }
 
 void MyScriptPanel::onSelection(FitTree* tree) {
@@ -503,20 +503,20 @@ void MyScriptPanel::onItemChanged(FitTree* tree, QTreeWidgetItem* item) {
     if (tree == graphs_ && item->data(0, kKind).toInt() == int(Kind::Event)) {
         return revert();                                // events belong to the application
     } else if (tree == graphs_ || tree == functions_) {
-        if (s.graphIndex(ss(newName)) >= 0) { QMessageBox::warning(this, "Rename", "A graph named '" + newName + "' already exists."); return revert(); }
+        if (s.graphIndex(ss(newName)) >= 0) { QMessageBox::warning(this, tr("Rename"), tr("A graph named '%1' already exists.").arg(newName)); return revert(); }
         bool fn = tree == functions_;
-        doc_->edit(fn ? "Rename function" : "Rename graph", [&](fg::Script& sc) {
+        doc_->edit(fn ? tr("Rename function") : tr("Rename graph"), [&](fg::Script& sc) {
             if (fn) sc.renameFunction(ss(oldName), ss(newName));
             else if (auto* g = sc.findGraph(ss(oldName))) g->name = ss(newName);
         });
         emit graphRenamed(oldName, newName);
     } else if (tree == vars_) {
-        if (s.variableIndex(ss(newName)) >= 0) { QMessageBox::warning(this, "Rename", "A variable named '" + newName + "' already exists."); return revert(); }
-        doc_->edit("Rename variable", [&](fg::Script& sc) { sc.renameVariable(ss(oldName), ss(newName)); });
+        if (s.variableIndex(ss(newName)) >= 0) { QMessageBox::warning(this, tr("Rename"), tr("A variable named '%1' already exists.").arg(newName)); return revert(); }
+        doc_->edit(tr("Rename variable"), [&](fg::Script& sc) { sc.renameVariable(ss(oldName), ss(newName)); });
     } else if (tree == locals_) {
         const fg::Graph* g = s.findGraph(ss(localsGraph_));
         if (!g || g->findLocal(ss(newName))) return revert();
-        doc_->edit("Rename local variable", [&](fg::Script& sc) { sc.renameLocal(ss(localsGraph_), ss(oldName), ss(newName)); });
+        doc_->edit(tr("Rename local variable"), [&](fg::Script& sc) { sc.renameLocal(ss(localsGraph_), ss(oldName), ss(newName)); });
     }
     item->setData(0, kName, newName);
     // the details panel still shows the old name: tell it about the renamed item
@@ -538,14 +538,14 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     QMenu m;
     QAction *open = nullptr, *rename = nullptr, *dup = nullptr, *del = nullptr, *refs = nullptr;
     if (isEvent) {
-        open = m.addAction(themedIcon(":/Icons/goto.svg"), "Go to handler");        // events belong to the application: they cannot be removed
+        open = m.addAction(themedIcon(":/Icons/goto.svg"), tr("Go to handler"));        // events belong to the application: they cannot be removed
     } else {
-        if (tree == functions_) open = m.addAction(themedIcon(":/Icons/open-function.svg"), "Open");     // only a function has a graph to open
-        rename = m.addAction(themedIcon(":/Icons/rename.svg"), "Rename");
-        if (tree == functions_) dup = m.addAction(themedIcon(":/Icons/duplicate.svg"), "Duplicate");
-        del = m.addAction(themedIcon(":/Icons/delete.svg"), "Delete");
+        if (tree == functions_) open = m.addAction(themedIcon(":/Icons/open-function.svg"), tr("Open"));     // only a function has a graph to open
+        rename = m.addAction(themedIcon(":/Icons/rename.svg"), tr("Rename"));
+        if (tree == functions_) dup = m.addAction(themedIcon(":/Icons/duplicate.svg"), tr("Duplicate"));
+        del = m.addAction(themedIcon(":/Icons/delete.svg"), tr("Delete"));
         m.addSeparator();
-        refs = m.addAction(themedIcon(":/Icons/find-references.svg"), "Find References");
+        refs = m.addAction(themedIcon(":/Icons/find-references.svg"), tr("Find References"));
         refs->setShortcut(QKeySequence("Shift+F12"));
     }
     QAction* a = m.exec(tree->viewport()->mapToGlobal(pos));
@@ -561,7 +561,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     }
     else if (a == rename) tree->editItem(item, 0);
     else if (a == dup) {
-        doc_->edit("Duplicate function", [&](fg::Script& s) {
+        doc_->edit(tr("Duplicate function"), [&](fg::Script& s) {
             const fg::Graph* g = s.findGraph(ss(name));
             if (!g) return;
             fg::Graph copy = *g;
@@ -569,7 +569,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
             s.graphs.push_back(std::move(copy));
         });
     } else if (a == del) {
-        doc_->edit("Delete", [&](fg::Script& s) {
+        doc_->edit(tr("Delete"), [&](fg::Script& s) {
             if (tree == functions_) s.removeGraph(ss(name));
             else if (tree == vars_) s.variables.erase(std::remove_if(s.variables.begin(), s.variables.end(), [&](const fg::VariableDecl& v) { return v.name == ss(name); }), s.variables.end());
             else if (tree == locals_)
@@ -582,7 +582,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
 void MyScriptPanel::addFunction() {
     search_->clear();                // the new item would be hidden by the filter
     QString name = qs(doc_->script().uniqueGraphName("NewFunction"));
-    doc_->edit("Add function", [&](fg::Script& s) { s.addFunction(ss(name)); });
+    doc_->edit(tr("Add function"), [&](fg::Script& s) { s.addFunction(ss(name)); });
     emit openGraph(name);
     beginRename(functions_, name);
 }
@@ -590,7 +590,7 @@ void MyScriptPanel::addFunction() {
 void MyScriptPanel::addVariable() {
     search_->clear();
     QString name = qs(doc_->script().uniqueVariableName("NewVar"));
-    doc_->edit("Add variable", [&](fg::Script& s) { s.variables.push_back({ss(name), "int", fg::Value(int64_t(0)), "", ""}); });
+    doc_->edit(tr("Add variable"), [&](fg::Script& s) { s.variables.push_back({ss(name), "int", fg::Value(int64_t(0)), "", ""}); });
     beginRename(vars_, name);
 }
 
@@ -600,7 +600,7 @@ void MyScriptPanel::addLocal() {
     search_->clear();
     QString name = "NewLocal";
     for (int i = 1; g->findLocal(ss(name)); ++i) name = "NewLocal_" + QString::number(i);
-    doc_->edit("Add local variable", [&](fg::Script& s) {
+    doc_->edit(tr("Add local variable"), [&](fg::Script& s) {
         if (auto* gr = s.findGraph(ss(localsGraph_))) gr->locals.push_back({ss(name), "int", fg::Value(int64_t(0)), "", ""});
     });
     beginRename(locals_, name);
