@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // The message store: the text messages the application has received. Messages arrive one at a time (addMessage); this example makes them up:
 // startGenerating() produces a random log-like message at a fixed interval (every kMessageIntervalMs, two per second, by default), as if they came from a source that never

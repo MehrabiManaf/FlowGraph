@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // The script data model: what the editor edits and what is saved to disk. It is plain data;
 // the Compiler turns it into an executable Program.

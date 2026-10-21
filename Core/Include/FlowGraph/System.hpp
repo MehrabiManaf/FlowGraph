@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Nodes that reach the operating system: running programs and commands. OPT-IN - a script with these nodes can do anything the user
 // running it can, so they are not built in: an application registers them when its scripts may use them. The standard applications

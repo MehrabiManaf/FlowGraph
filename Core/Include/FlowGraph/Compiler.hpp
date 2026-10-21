@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Compiler: Script (editable data) -> Program (resolved, executable). Never throws for problems in
 // the script; they are reported as diagnostics and `Program::hasErrors` is set.

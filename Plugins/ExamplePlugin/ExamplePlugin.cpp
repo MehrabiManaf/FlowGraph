@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // A sample plugin: reflects a small C++ class, a free function and a host event.
 #include <FlowGraph/Plugin.hpp>
 

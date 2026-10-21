@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // Uses an installed FlowGraph like a host application: registers an event and a function, builds a script, runs it.
 // Exit code 0 when the script computed what it should.
 #include <FlowGraph/Runtime.hpp>

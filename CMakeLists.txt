@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+# SPDX-License-Identifier: MIT
 cmake_minimum_required(VERSION 3.21)
 
 project(FlowGraph VERSION 0.2.0 LANGUAGES CXX)
@@ -105,6 +107,14 @@ if(FG_INSTALL)
         install(FILES ${CMAKE_BINARY_DIR}/Editor/Include/FlowGraphEditor/Export.hpp
                 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/FlowGraphEditor COMPONENT FlowGraph)
         install(TARGETS flowstudio RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT FlowGraph)
+    endif()
+
+    # the licenses (LICENSE says which part has which); KDDockWidgets' with the editor, which links it in
+    install(FILES LICENSE LICENSES/MIT.txt LICENSES/GPL-3.0.txt LICENSES/LGPL-3.0.txt DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT FlowGraph)
+    if(FG_INSTALL_EDITOR)
+        install(FILES ThirdParty/KDDockWidgets/LICENSE.txt ThirdParty/KDDockWidgets/LICENSES/GPL-2.0-only.txt
+                      ThirdParty/KDDockWidgets/LICENSES/GPL-3.0-only.txt
+                DESTINATION ${CMAKE_INSTALL_DOCDIR}/KDDockWidgets COMPONENT FlowGraph)
     endif()
 
     install(EXPORT FlowGraphTargets NAMESPACE FlowGraph:: DESTINATION ${FG_CMAKE_DIR} COMPONENT FlowGraph)

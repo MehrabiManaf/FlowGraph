@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Registry: every type, function, event and node definition the runtime knows about.
 // Hosts and plugins extend the system by calling registerClass / registerEnum / addFunction / addNode.

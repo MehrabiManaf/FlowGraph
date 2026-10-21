@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #include <FlowGraph/TypeExpr.hpp>
 
 #include <cctype>

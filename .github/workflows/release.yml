@@ -68,7 +68,7 @@ jobs:
             "dist/$PACKAGE/bin/flowstudio.exe" "dist/$PACKAGE/bin/FlowGraphEditor.dll"
           # the offscreen platform: flowstudio without a display (and the check below)
           cp "$(cygpath -u "$QT_ROOT_DIR")/plugins/platforms/qoffscreen.dll" "dist/$PACKAGE/bin/platforms/"
-          cp LICENSE README.md "dist/$PACKAGE/"
+          cp -r LICENSE LICENSES README.md "dist/$PACKAGE/"          # also in share/doc/FlowGraph (cmake --install), with KDDockWidgets'
       - name: Check that the package runs on its own
         shell: pwsh
         run: |
@@ -141,7 +141,7 @@ jobs:
               [ -e "$dist/lib/$(basename "$dep")" ] || cp -L "$dep" "$dist/lib/"
             done
           done
-          cp LICENSE README.md "$dist/"
+          cp -r LICENSE LICENSES README.md "$dist/"
       - name: Check that the package runs on its own
         run: |
           dist="dist/$PACKAGE"
@@ -195,6 +195,9 @@ jobs:
           - **SHA256SUMS.txt**: checksums of both.
 
           Plugins are binary: build them against this release (the loader refuses a plugin made for another build, with the reason).
+
+          Licenses: the runtime (FlowGraphCore) and \`flow\` are MIT; the editor and \`flowstudio\` are GPL-3.0-only, as they are
+          built on KDDockWidgets (GPL). Qt is used under the LGPL-3.0. The texts are in each package (\`LICENSE\`, \`LICENSES/\`).
 
           EOF
           prerelease=""

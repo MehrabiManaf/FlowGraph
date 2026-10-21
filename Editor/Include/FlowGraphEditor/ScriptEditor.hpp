@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // The script editor as a library. An application that embeds FlowGraph and wants its users to create, change,
 // run and debug scripts creates a ScriptEditor and tells it, through an EditorHost, which runtime to use and what

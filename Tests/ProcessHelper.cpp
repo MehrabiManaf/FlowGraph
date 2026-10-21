@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // A program for the tests of the System nodes (Run Command, For Each Output Line): the same on every platform.
 //   args A B ...        prints each argument in brackets, one per line
 //   exit N              ends with exit code N

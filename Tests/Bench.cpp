@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // FlowGraphBench: how fast does the interpreter run scripts?
 //   FlowGraphBench [--scale F] [--runs N] [--stable] [--debugger] [filter]
 // --stable pins the process to one core at high priority (Windows), which makes the figures repeatable.

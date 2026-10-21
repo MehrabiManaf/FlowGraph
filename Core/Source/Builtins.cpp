@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #include <FlowGraph/Builtins.hpp>
 #include <FlowGraph/Script.hpp>
 #include <FlowGraph/Vm.hpp>

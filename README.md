@@ -350,4 +350,14 @@ Developer aids of flowstudio: `FG_STUDIO_SCREENSHOT=file.png` (screenshot and qu
 
 ## License
 
-GPLv3 (see `LICENSE`); KDDockWidgets is used under its own license (`ThirdParty/KDDockWidgets`).
+FlowGraph has two licenses; `LICENSE` lists which part has which, and every source file names its own in an SPDX line.
+
+| Part | License |
+|-|-|
+| `Core/` (FlowGraphCore), `Apps/Flow/` (`flow`), `Plugins/ExamplePlugin/`, the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
+| `Editor/` (FlowGraphEditor, the ScriptEditor library), `Apps/Studio/` (`flowstudio`), `Examples/Embedded/` | **GPL-3.0-only** (`LICENSES/GPL-3.0.txt`) |
+
+The runtime can be used in any application, closed source included, and plugins may have any license. The editor is GPL
+because it is built on KDDockWidgets (GPL-2.0-only or GPL-3.0-only, `ThirdParty/KDDockWidgets`): an application that embeds
+the editor is a work based on GPL code. Qt, which only the editor uses, is used under the LGPL-3.0 (`LICENSES/LGPL-3.0.txt`).
+`cmake --install` puts the license texts in `share/doc/FlowGraph`; the release packages also have them at their top.

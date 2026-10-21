@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+# SPDX-License-Identifier: GPL-3.0-only
 # The embedded example: a Qt application that embeds the FlowGraph runtime and the script editor (see README.md).
 # Needs the editor, so it is only built when the editor is.
 if(NOT TARGET FlowGraphEditor)

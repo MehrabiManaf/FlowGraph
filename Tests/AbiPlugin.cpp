@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // Plugins that Runtime::loadPlugin must refuse (built twice, see Tests/CMakeLists.txt):
 //   FG_TEST_LEGACY_PLUGIN    exports only fgRegisterPlugin, like a plugin built before the ABI check existed
 //   FG_TEST_MISMATCH_PLUGIN  reports another plugin ABI version

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // One table of the application: a dock widget with a toolbar (load / edit / save the script of the table), the table itself and a status
 // line. A table owns a script (an fg::Script in memory; it starts as the default script and can be loaded from a .flow file) and runs it for

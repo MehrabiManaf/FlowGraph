@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // A program started by the System nodes (System.hpp), with its output read by threads of its own so the script never blocks.
 // Internal to the core library.

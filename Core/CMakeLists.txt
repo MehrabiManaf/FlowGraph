@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+# SPDX-License-Identifier: MIT
 add_library(FlowGraphCore ${FG_LIB_TYPE}
     Source/Json.cpp
     Source/TypeExpr.cpp

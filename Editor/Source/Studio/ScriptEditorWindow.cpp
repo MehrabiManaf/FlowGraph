@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #include "ScriptEditorWindow.hpp"
 #include "../Common/Theme.hpp"
 #include "../Common/CustomViewFactory/DockWidget.hpp"

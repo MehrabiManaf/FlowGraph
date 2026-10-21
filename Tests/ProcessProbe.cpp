@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // Whether a process still runs: for the tests of the System nodes (kept out of Main.cpp so that it does not see <windows.h>).
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN

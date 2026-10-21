@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // The scripting side of the embedded example, without any Qt: what the application tells FlowGraph (a class, an event and a node) and how it
 // runs a script over all the messages. The Qt side (windows, tables, the editor) is in TableDock / MainWindow.

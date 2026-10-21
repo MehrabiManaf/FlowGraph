@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+# SPDX-License-Identifier: MIT
 add_executable(flow main.cpp)
 target_link_libraries(flow PRIVATE FlowGraphCore)
 target_compile_definitions(flow PRIVATE FG_VERSION="${PROJECT_VERSION}")     # flow --version

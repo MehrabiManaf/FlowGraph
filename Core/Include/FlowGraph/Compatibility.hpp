@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Can this application run that script? A script is produced for some application: it refers to the events
 // that application raises (Main, Tick, OnHit...), to its classes and functions and to the plugins it needs.

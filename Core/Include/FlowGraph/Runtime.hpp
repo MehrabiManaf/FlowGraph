@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Runtime: the facade hosts use. Owns the registry (with all built-ins), loads plugins, compiles
 // scripts and creates instances.

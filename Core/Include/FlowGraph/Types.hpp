@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Runtime type descriptions: primitives, enums, containers and reflected C++ classes.
 #include <FlowGraph/Export.hpp>

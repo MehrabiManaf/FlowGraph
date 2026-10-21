@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // The editor's themes (fged::Theme: Dark, Light, System). A theme is a palette for the whole application plus the colours the
 // editor paints with beyond it (ThemeColors): their meaning stays the same, their shade follows the background. The editor's

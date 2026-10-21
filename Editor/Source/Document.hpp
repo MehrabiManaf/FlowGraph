@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // Document: the script being edited, its compiled form, undo history and the debugger.
 #include <FlowGraph/Runtime.hpp>

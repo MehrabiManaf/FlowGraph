@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // The "standard application": the contract shared by `flow` (runs a script) and `flowstudio` (edits and debugs it).
 // A standard application raises exactly one event, Main(Args: array<string>), and scripts can end it early with the

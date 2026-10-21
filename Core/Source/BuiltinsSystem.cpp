@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // The System nodes (System.hpp): Run Command, For Each Output Line, Operating System. Not part of registerBuiltins - an application
 // registers them when its scripts may run programs.
 #include <FlowGraph/System.hpp>

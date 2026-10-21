@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // flowstudio's EditorHost: the editor of the *standard applications* (see StandardApp.hpp). The only thing a
 // standard application can run is Main(Args: array<string>), so "Run" starts Main with the arguments of the

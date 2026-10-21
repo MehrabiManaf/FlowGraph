@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Finding things in a script: the nodes that use a variable, call a function or are of a definition ("Find References"),
 // and the nodes whose title, comment or values contain a text ("Find in Script").

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // The compiled form of a Script: resolved node definitions, pins with concrete types, data links
 // with frame slots, exec targets. Editors read it to draw nodes; the interpreter executes it.

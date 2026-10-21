@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // The main window of the embedded example: how many messages have been received (in the middle), and a dock widget for every table the user adds.
 #include "MessageStore.hpp"

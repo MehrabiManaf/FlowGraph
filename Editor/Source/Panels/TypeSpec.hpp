@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // A type expression split into the parts the editors show in separate columns:
 // container kind (single / array / map), the key type (maps) and the element / value type.

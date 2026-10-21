@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-FileCopyrightText: 2019 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-License-Identifier: GPL-3.0-only
+// The placement of the targets and the window flags follow KDDockWidgets' IndicatorWindow
+// (src/qtwidgets/views/ClassicIndicatorsWindow.cpp, GPL-2.0-only or GPL-3.0-only).
 #include "DropIndicators.hpp"
 #include "../Theme.hpp"
 

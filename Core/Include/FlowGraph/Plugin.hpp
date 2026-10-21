@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Plugin ABI. A plugin is a shared library exporting `fgRegisterPlugin`; it adds classes, functions,
 // events and nodes to the registry. Build it against the same FlowGraphCore version and compiler.

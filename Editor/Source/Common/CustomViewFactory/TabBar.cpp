@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-FileCopyrightText: 2019 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-License-Identifier: GPL-3.0-only
+// CTabBarProxyStyle is adapted from KDDockWidgets (src/qtwidgets/views/TabBar.cpp, GPL-2.0-only or GPL-3.0-only).
 #include "TabBar.hpp"
 #include "TabWidget.hpp"
 #include "DockWidget.hpp"

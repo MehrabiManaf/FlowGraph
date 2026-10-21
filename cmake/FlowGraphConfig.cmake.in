@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+# SPDX-License-Identifier: MIT
 # FlowGraph package configuration.
 #
 #   find_package(FlowGraph REQUIRED)                          # FlowGraph::Core       the runtime (no Qt)

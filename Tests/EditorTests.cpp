@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 // Tests of the editor logic that do not need a visible window (run with QT_QPA_PLATFORM=offscreen).
 #include "Document.hpp"
 #include "Common/Settings.hpp"

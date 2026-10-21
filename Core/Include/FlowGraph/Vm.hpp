@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // The interpreter. A Task is a resumable execution context with an explicit stack, so it can be
 // paused by a debugger at any node, suspended by latent nodes (Delay) and time sliced by the host -

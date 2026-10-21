@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Node definitions: the "classes" of graph nodes. Built-ins, generated nodes and plugins all use these.
 #include <FlowGraph/Types.hpp>

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // Built-in nodes of the Time category. A point in time is a Timestamp: seconds since 1970-01-01 00:00:00 UTC (Unix time) as a
 // float, with millisecond precision. Calendar dates are computed here (days from / to a civil date, proleptic Gregorian calendar)
 // instead of with the C library: that is the same on every platform, thread safe, works before 1970, and a format text with an

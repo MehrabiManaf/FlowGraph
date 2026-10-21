@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Minimal, dependency free JSON document model used for script files.
 // Object members keep their insertion order so files diff nicely.

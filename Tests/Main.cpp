@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 // Minimal test runner: TEST(name) { CHECK(cond); }
 #include <FlowGraph/Runtime.hpp>
 

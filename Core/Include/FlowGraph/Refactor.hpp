@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Changes to a script that keep what it does: the editor's refactoring commands.
 #include <FlowGraph/Export.hpp>

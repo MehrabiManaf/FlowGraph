@@ -1,0 +1,11 @@
+Copyright (C) 2026 Abdolmanaf Mehrabi Sisakht
+
+This part of FlowGraph is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License version 3 as published by the Free Software Foundation (GPL-3.0-only).
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details: LICENSES/GPL-3.0.txt at the root of the source tree, or <https://www.gnu.org/licenses/>.
+
+It uses KDDockWidgets (GPL-2.0-only or GPL-3.0-only, ThirdParty/KDDockWidgets) and Qt (LGPL-3.0, see
+LICENSES/LGPL-3.0.txt).

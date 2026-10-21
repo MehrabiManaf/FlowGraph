@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Template machinery that turns C++ classes, member functions, data members, enums and free
 // functions into script visible types and nodes. Included at the end of Registry.hpp.

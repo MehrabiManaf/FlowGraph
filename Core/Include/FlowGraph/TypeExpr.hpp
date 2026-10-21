@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Type expressions: "int", "Actor", "array<T>", "map<string,array<float>>".
 #include <FlowGraph/Export.hpp>

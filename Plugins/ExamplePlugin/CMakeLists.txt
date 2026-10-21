@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+# SPDX-License-Identifier: MIT
 add_library(ExamplePlugin SHARED ExamplePlugin.cpp)
 target_link_libraries(ExamplePlugin PRIVATE FlowGraphCore)
 set_target_properties(ExamplePlugin PROPERTIES

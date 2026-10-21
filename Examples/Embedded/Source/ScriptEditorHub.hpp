@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 // The one script editor of the application, and how the application uses it. fged::ScriptEditor is one per program; this application has many
 // tables, so "Edit Script" of a table makes the editor edit the script of that table (ScriptEditor::edit).

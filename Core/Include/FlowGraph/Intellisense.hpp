@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // Palette / context menu support for editors: which nodes can be created, which ones fit a pin the
 // user is dragging from, and ranked text search.

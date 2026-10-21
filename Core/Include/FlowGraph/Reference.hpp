@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
+// SPDX-License-Identifier: MIT
 #pragma once
 // A reference of everything a registry offers to scripts - nodes, events, classes, enums - written from the descriptions the
 // registry holds (titles, docs, pins, types, defaults). `flow --reference` writes the one of the standard applications.
