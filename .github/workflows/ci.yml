@@ -62,6 +62,15 @@ jobs:
         run: cmake --build --preset linux-release
       - name: Test
         run: ctest --preset linux-release
+      # Every text of the editor is in the translation files (lupdate finds nothing new) and every one has a translation.
+      - name: The translations are up to date
+        run: |
+          cmake --build --preset linux-release --target flowgraph_lupdate
+          git diff --exit-code -- Editor/Translations
+          if grep -n '<translation type="unfinished"></translation>' Editor/Translations/*.ts; then
+            echo "::error::texts without a translation (above): translate them in Editor/Translations"
+            exit 1
+          fi
 
   # The runtime alone must build without Qt; tests run under AddressSanitizer and UndefinedBehaviorSanitizer.
   core-sanitizers:

@@ -74,6 +74,9 @@
 #include <QMenuBar>
 #include <QMainWindow>
 #include <QDir>
+#include <QRegularExpression>
+#include <QTabBar>
+#include <QTranslator>
 #include <QEventLoop>
 #include <QFile>
 
@@ -2727,6 +2730,77 @@ TEST(editor_languages_translate_the_ui) {
     saveLanguage("Language Test App", "fa");
     CHECK_EQ(savedLanguage("Language Test App"), QString("fa"));
     CHECK_EQ(savedLanguage("Another Language Test App"), QString("system"));
+}
+
+// The missed-text check: with a pseudo language that marks every text it translates ("⟦...⟧"), every text the editor shows in its
+// widgets - labels, buttons, menus, toolbar, tabs, dock and section titles, table headers, placeholders - is marked, i.e. went through
+// the translation system. A text that is not marked was missed (a literal without tr()). The script's own names (graphs, variables,
+// launch configurations) and texts without letters are not the editor's: they are not checked.
+TEST(every_editor_text_is_translatable) {
+    struct Pseudo : QTranslator {
+        bool isEmpty() const override { return false; }
+        QString translate(const char*, const char* source, const char*, int) const override {
+            return source && *source ? QString("⟦") + QString::fromUtf8(source) + QString("⟧") : QString();
+        }
+    };
+    Pseudo pseudo;
+    QCoreApplication::installTranslator(&pseudo);
+    QStringList missed;
+    {
+        StudioFixture f;
+        f.win.document()->edit("Setup", [](fg::Script& s) {
+            s.variables.push_back({"Score", "int", fg::Value(int64_t(0)), "", ""});
+            s.addFunction("Compute").inputs.push_back({"Amount", "float", false, false, fg::Value(0.0)});
+        });
+        QCoreApplication::processEvents();
+        const QStringList scriptNames = {"EventGraph", "Main", "Score", "Compute", "Amount", "Default", "int", "float"};
+        auto check = [&](const QString& where, QString text) {
+            text.remove('&');
+            text = text.section('\t', 0, 0).trimmed();         // the shortcut after a tab is not text
+            if (text.isEmpty() || text.contains(QString("⟦")) || !text.contains(QRegularExpression("[A-Za-z]{2}"))) return;
+            if (text.contains('\\') || text.contains('/')) return;          // a file (Open Recent)
+            for (const QString& n : scriptNames) if (text == n || text.startsWith(n + " ") || text.startsWith(n + "(")) return;
+            if (!missed.contains(where + ": " + text)) missed << where + ": " + text;
+        };
+        auto sweep = [&] {
+            for (QWidget* w : f.win.findChildren<QWidget*>()) {
+                if (!w->isVisibleTo(&f.win)) continue;
+                if (auto* l = qobject_cast<QLabel*>(w)) check("label", l->text());
+                if (auto* b = qobject_cast<QAbstractButton*>(w)) check("button", b->text());
+                if (auto* e = qobject_cast<QLineEdit*>(w)) check("placeholder", e->placeholderText());
+                if (auto* t = qobject_cast<QTabBar*>(w)) for (int i = 0; i < t->count(); ++i) check("tab", t->tabText(i));
+                if (auto* tree = qobject_cast<QTreeWidget*>(w); tree && !tree->isHeaderHidden())
+                    for (int c = 0; c < tree->columnCount(); ++c) check("header", tree->headerItem()->text(c));
+            }
+            for (QAction* a : f.win.menuBar()->actions()) {
+                check("menu", a->text());
+                if (QMenu* m = a->menu())
+                    for (QAction* item : m->actions()) {
+                        check("menu item", item->text());
+                        // the languages are named in their own languages, on purpose (only "System" is translated)
+                        if (QMenu* sub = item->menu(); sub && sub->objectName() != "languageMenu")
+                            for (QAction* s : sub->actions()) check("menu item", s->text());
+                    }
+            }
+            for (QAction* a : f.win.mainToolBar()->actions()) check("toolbar", a->text());
+            for (auto* dock : KDDockWidgets::DockRegistry::self()->dockwidgets())
+                if (!dock->uniqueName().startsWith('-')) check("dock", dock->title());      // "-..." are KDDockWidgets' own
+        };
+        sweep();                                                    // the empty selection
+        auto* details = f.win.findChild<DetailsPanel*>();
+        CHECK(details != nullptr);
+        if (details) {
+            details->showVariable("", "Score");
+            QCoreApplication::processEvents();
+            sweep();
+            details->showGraph("Compute");
+            QCoreApplication::processEvents();
+            sweep();
+        }
+    }
+    QCoreApplication::removeTranslator(&pseudo);
+    for (const QString& m : missed) std::printf("  not translatable: %s\n", m.toUtf8().constData());
+    CHECK(missed.isEmpty());
 }
 
 TEST(launch_box_is_narrow_and_its_list_shows_long_entries) {

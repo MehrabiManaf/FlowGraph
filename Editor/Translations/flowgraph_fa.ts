@@ -1216,6 +1216,30 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Nothing to run: add an event to a graph (this application offers: %1 entries).</source>
         <translation>چیزی برای اجرا نیست: یک رویداد به گراف اضافه کنید (این برنامه %1 ورودی دارد).</translation>
     </message>
+    <message>
+        <source>E&amp;xit</source>
+        <translation>خروج(&amp;X)</translation>
+    </message>
+    <message>
+        <source>Cu&amp;t</source>
+        <translation>برش(&amp;T)</translation>
+    </message>
+    <message>
+        <source>&amp;Copy</source>
+        <translation>رونوشت(&amp;C)</translation>
+    </message>
+    <message>
+        <source>&amp;Paste</source>
+        <translation>چسباندن(&amp;P)</translation>
+    </message>
+    <message>
+        <source>&amp;Duplicate</source>
+        <translation>تکثیر(&amp;D)</translation>
+    </message>
+    <message>
+        <source>De&amp;lete</source>
+        <translation>حذف(&amp;L)</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>
