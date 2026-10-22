@@ -104,7 +104,7 @@ cmake --install build/Release --prefix C:/FlowGraph --component FlowGraph
 ```
 installs the libraries, their headers, `flow` / `flowstudio` and a CMake package. A host project then only needs
 ```cmake
-find_package(FlowGraph 0.2 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
+find_package(FlowGraph 0.3 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
 target_link_libraries(myapp PRIVATE FlowGraph::Core FlowGraph::ScriptEditor)
 ```
 with `CMAKE_PREFIX_PATH` pointing at the prefix (and at Qt). `Tests/Consumer` is such a project; CI builds it against an install.
@@ -120,7 +120,7 @@ build\Release\bin\FlowGraphEditorTests.exe
 
 ### Releases
 
-`git tag v0.2.0 && git push origin v0.2.0` (the tag must match `project(FlowGraph VERSION ...)`) runs
+`git tag v0.3.0 && git push origin v0.3.0` (the tag must match `project(FlowGraph VERSION ...)`) runs
 `.github/workflows/release.yml`: Windows and Linux are built, tested and packed with Qt (`windeployqt`; on Linux the Qt libraries
 and plugins go into the package, the programs find them through `$ORIGIN/../lib`), each package is started once without Qt
 installed, and both are attached to a **draft** release with checksums; publish it on GitHub. *Actions > Release > Run workflow*

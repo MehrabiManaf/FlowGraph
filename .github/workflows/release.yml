@@ -1,6 +1,6 @@
 name: Release
 
-# A release is made by pushing a tag:   git tag v0.2.0 && git push origin v0.2.0
+# A release is made by pushing a tag:   git tag v0.3.0 && git push origin v0.3.0
 # The tag must match project(FlowGraph VERSION ...) in CMakeLists.txt. Windows and Linux are built and tested, packed with what they
 # need to run (Qt included) and attached to a DRAFT release: check its notes on GitHub, then press Publish.
 # Run it by hand (Actions > Release > Run workflow) to build the packages without making a release: they are kept as artifacts of
