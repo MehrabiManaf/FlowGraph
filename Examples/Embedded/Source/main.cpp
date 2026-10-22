@@ -118,6 +118,7 @@ int main(int argc, char** argv) {
             table->editScript();
             fged::ScriptEditor* editor = window.editorHub().editor();
             editor->devSelect("node:EventGraph:1");
+            QTimer::singleShot(1200, &app, [editor] { editor->devFrameAll(); });     // the whole script, as large as it fits
             QTimer::singleShot(1500, &app, [&, editor] {
                 editor->window()->grab().save(screenshot + ".editor.png");
                 app.quit();

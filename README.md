@@ -426,7 +426,8 @@ version is refused rather than read partially and overwritten): variables, and g
 signature of the event when the script was made. A node of a definition with `customInputs` / `customOutputs` (`NodeDef`) can carry
 the data pins the user added: `"inputs"` / `"outputs"` arrays of `{"name", "type", "default"}`, like the signature of a function.
 
-Developer aids of flowstudio: `FG_STUDIO_SCREENSHOT=file.png` (screenshot and quit), `FG_STUDIO_RUN=Main`,
+Developer aids of flowstudio: `FG_STUDIO_SCREENSHOT=file.png` (screenshot and quit; `FG_STUDIO_FRAME=1` frames the graph
+first), `FG_STUDIO_RUN=Main`,
 `FG_STUDIO_BREAK=Graph:id`, `FG_STUDIO_SELECT=node:Graph:id|var:name|graph:name`, `FG_STUDIO_SCENESHOT=file.png`,
 `FG_STUDIO_SIZE=1480x800` (the window's size), `FG_STUDIO_RECORD=folder` (a picture of the window every `FG_STUDIO_RECORD_MS`
 ms, `FG_STUDIO_RECORD_COUNT` of them, then quit: the frames of the GIF above).

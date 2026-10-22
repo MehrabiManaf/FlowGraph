@@ -49,9 +49,11 @@ int main(int argc, char** argv) {
     if (qEnvironmentVariableIsSet("FG_STUDIO_RUN")) {
         QTimer::singleShot(800, &app, [ed] { ed->devRun(qEnvironmentVariable("FG_STUDIO_RUN"), qEnvironmentVariable("FG_STUDIO_BREAK")); });
     }
-    // Developer aid: FG_STUDIO_SCREENSHOT=<file.png> saves a screenshot of the window and exits.
+    // Developer aid: FG_STUDIO_SCREENSHOT=<file.png> saves a screenshot of the window and exits; with FG_STUDIO_FRAME set, the
+    // whole graph is framed first (View > Frame All: a run that stopped at a breakpoint shows the node it is at).
     if (qEnvironmentVariableIsSet("FG_STUDIO_SCREENSHOT")) {
         QString out = qEnvironmentVariable("FG_STUDIO_SCREENSHOT");
+        if (qEnvironmentVariableIsSet("FG_STUDIO_FRAME")) QTimer::singleShot(2200, &app, [ed] { ed->devFrameAll(); });
         QTimer::singleShot(2500, &app, [ed, out, &app] {
             ed->window()->grab().save(out);
             if (qEnvironmentVariableIsSet("FG_STUDIO_SCENESHOT")) ed->devSceneShot(qEnvironmentVariable("FG_STUDIO_SCENESHOT"));

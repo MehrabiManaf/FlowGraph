@@ -62,6 +62,8 @@ public:
     void chooseTheme(Theme theme);
     // Developer aid: "node:<graph>:<id>", "var:<name>" or "graph:<name>" selects that item and shows its details; "theme:light" (dark, system) switches the theme without saving it.
     void devSelect(const QString& spec);
+    // Developer aid: View > Frame All in the graph shown (the whole script in view, as large as it fits).
+    void devFrameAll();
     // Developer aid for real-input smoke tests: writes global screen coordinates / script state to a text file.
     void devProbe(const QString& file, bool coordinates);
     // Developer aid: renders the current graph at 2x into a PNG.
