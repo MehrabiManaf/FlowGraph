@@ -132,7 +132,8 @@ jobs:
           test -x "/opt/Qt/$QT_VERSION/gcc_64/bin/qmake"
           echo "QT_ROOT_DIR=/opt/Qt/$QT_VERSION/gcc_64" >> "$GITHUB_ENV"
       - name: Configure
-        run: cmake --preset linux-release '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
+        # lib, not lib64 (the default of RHEL-like systems): the layout of the package, and where its RPATH looks
+        run: cmake --preset linux-release -DCMAKE_INSTALL_LIBDIR=lib '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
         env:
           QT_DIR: ${{ env.QT_ROOT_DIR }}
       - name: Build
