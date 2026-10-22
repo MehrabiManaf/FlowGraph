@@ -22,6 +22,7 @@
 #include "Graph/GraphView.hpp"
 
 #include <QApplication>
+#include <QFormLayout>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QHash>
@@ -3583,6 +3584,50 @@ TEST(one_button_runs_pauses_and_continues) {
     CHECK(spinUntil([&] { return run->text() == "Run"; }));
 }
 
+// While a section of Details opens or closes, what is above it stays where it is: every frame, the texts above the Outputs of
+// the Main event (its description wraps over several lines) keep their place and size - they used to jump up and down.
+TEST(details_texts_stay_while_a_section_opens_and_closes) {
+    for (const char* language : {"en", "fa"}) {
+        applyLanguage(*qApp, language);
+        StudioFixture f;
+        f.scene()->selectOnly(1);                                   // Main
+        QCoreApplication::processEvents();
+        auto* details = f.win.findChild<DetailsPanel*>();
+        CCollapsiblePanel* outputs = nullptr;
+        for (auto* p : details ? details->findChildren<CCollapsiblePanel*>() : QList<CCollapsiblePanel*>()) outputs = p;
+        CHECK(outputs != nullptr);
+        if (!outputs) continue;
+        QAbstractButton* toggle = nullptr;
+        for (auto* b : outputs->findChildren<QAbstractButton*>())
+            if (b->isCheckable()) toggle = b;
+        CHECK(toggle != nullptr);
+        if (!toggle) continue;
+        const int top = outputs->mapTo(details, QPoint(0, 0)).y();
+        auto above = [&] {                                          // where the labels above the section are, and their sizes
+            QStringList out;
+            for (auto* l : details->findChildren<QLabel*>())
+                if (l->isVisible() && !outputs->isAncestorOf(l) && l->mapTo(details, QPoint(0, 0)).y() < top)
+                    out << QString("%1 %2,%3 %4x%5").arg(l->text()).arg(l->mapTo(details, QPoint(0, 0)).x())
+                               .arg(l->mapTo(details, QPoint(0, 0)).y()).arg(l->width()).arg(l->height());
+            return out;
+        };
+        const QStringList before = above();
+        CHECK(before.size() >= 3);
+        int moved = 0;
+        for (int round = 0; round < 2; ++round) {                   // closes, then opens again
+            toggle->click();
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < 450) {
+                QCoreApplication::processEvents();
+                moved += above() != before;
+            }
+        }
+        CHECK_EQ(moved, 0);
+    }
+    applyLanguage(*qApp, "en");
+}
+
 int main(int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -3593,7 +3638,9 @@ int main(int argc, char** argv) {
     QDir(QDir::temp().filePath("FlowGraphEditorTests-settings")).removeRecursively();
     fged::applyDarkTheme(app);
     fged::initEditor();
+    const QString only = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();      // FlowGraphEditorTests <part of a test's name>
     for (auto& t : tests()) {
+        if (!only.isEmpty() && !QString(t.name).contains(only)) continue;
         int before = g_failures;
         std::printf("[ RUN  ] %s\n", t.name);
         try {

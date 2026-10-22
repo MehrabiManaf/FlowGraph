@@ -403,6 +403,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Comment</source>
         <translation type="unfinished">주석</translation>
     </message>
+    <message>
+        <source>%1 nodes selected</source>
+        <translation type="unfinished">노드 %1개 선택됨</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

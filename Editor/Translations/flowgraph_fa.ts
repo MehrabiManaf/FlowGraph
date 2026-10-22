@@ -403,6 +403,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Comment</source>
         <translation>یادداشت</translation>
     </message>
+    <message>
+        <source>%1 nodes selected</source>
+        <translation>%1 گره انتخاب شده</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

@@ -403,6 +403,10 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <source>Comment</source>
         <translation type="unfinished">Comentario</translation>
     </message>
+    <message>
+        <source>%1 nodes selected</source>
+        <translation type="unfinished">%1 nodos seleccionados</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

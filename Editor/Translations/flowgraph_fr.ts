@@ -403,6 +403,10 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <source>Comment</source>
         <translation type="unfinished">Commentaire</translation>
     </message>
+    <message>
+        <source>%1 nodes selected</source>
+        <translation type="unfinished">%1 nœuds sélectionnés</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

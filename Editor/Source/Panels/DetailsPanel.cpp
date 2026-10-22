@@ -31,6 +31,7 @@
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QResizeEvent>
 #include <QMenu>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -53,9 +54,32 @@ QLabel* heading(const QString& t) {
     return l;
 }
 
+// A word-wrapped label whose preferred size, once it has been laid out, is its width and the height its text needs there. The
+// form keeps two sets of row heights, and takes the one of a word-wrapped label at its preferred width (for a plain label:
+// all of its text on as few lines as it likes) for one of them and at its real width for the other: a label of several
+// lines got two heights, and while an Inputs / Outputs section opens or closes the form uses both every frame - the texts
+// above the section jumped up and down.
+class WrapLabel : public QLabel {
+public:
+    explicit WrapLabel(const QString& text) : QLabel(text) { setWordWrap(true); }
+    QSize sizeHint() const override {
+        if (!laidOut_) return QLabel::sizeHint();
+        return QSize(width(), heightForWidth(width()));
+    }
+
+protected:
+    void resizeEvent(QResizeEvent* e) override {
+        QLabel::resizeEvent(e);
+        laidOut_ = true;
+        if (e->size().width() != e->oldSize().width()) updateGeometry();     // another width: another height
+    }
+
+private:
+    bool laidOut_ = false;
+};
+
 QLabel* dim(const QString& t) {
-    auto* l = new QLabel(t);
-    l->setWordWrap(true);
+    auto* l = new WrapLabel(t);
     l->setForegroundRole(QPalette::PlaceholderText);
     return l;
 }
@@ -898,7 +922,7 @@ void DetailsPanel::buildNodes() {
     const fg::CompiledGraph* cg = doc_->compiledGraph(owner_);
     if (!g || !cg) { form_->addRow(dim("")); return; }
     if (ids_.size() > 1) {
-        form_->addRow(heading(QString::number(ids_.size()) + " nodes selected"));
+        form_->addRow(heading(tr("%1 nodes selected").arg(ids_.size())));
         return;
     }
     const fg::Node* node = g->findNode(ids_.front());
@@ -917,8 +941,7 @@ void DetailsPanel::buildNodes() {
     form_->addRow(tr("Definition"), new QLabel(qs(cn->defId) + (cn->def && !cn->def->source.empty() ? "  [" + qs(cn->def->source) + "]" : QString())));
 
     for (auto& d : doc_->diagnosticsFor(owner_, node->id)) {
-        auto* l = new QLabel(qs(d.message));
-        l->setWordWrap(true);
+        auto* l = new WrapLabel(qs(d.message));
         setTextColor(l, d.severity == fg::Diagnostic::Severity::Error ? themeColors().error : themeColors().warning);
         form_->addRow(l);
     }
@@ -937,7 +960,6 @@ void DetailsPanel::buildNodes() {
         const fg::EventDesc* ev = cn->defId.rfind("event:", 0) == 0 ? doc_->registry().findEvent(cn->defId.substr(6)) : nullptr;
         form_->addRow(tr("Event"), new QLabel(ev ? qs(ev->name) : qs(cn->defId.substr(6))));
         form_->addRow(tr("Arguments"), new QLabel(ev ? qs(fg::describeParams(*ev)) : tr("unknown")));
-        if (ev && !ev->doc.empty()) form_->addRow(dim(qs(ev->doc)));
         form_->addRow(dim(tr("This event is raised by the application. A script can only handle it.")));
     }
     if (cn->op == fg::NodeOp::GetVariable || cn->op == fg::NodeOp::SetVariable)

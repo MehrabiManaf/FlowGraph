@@ -403,6 +403,10 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <source>Comment</source>
         <translation type="unfinished">Kommentar</translation>
     </message>
+    <message>
+        <source>%1 nodes selected</source>
+        <translation type="unfinished">%1 Knoten ausgewählt</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

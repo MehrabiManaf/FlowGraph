@@ -403,6 +403,10 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
         <source>Comment</source>
         <translation type="unfinished">Comentário</translation>
     </message>
+    <message>
+        <source>%1 nodes selected</source>
+        <translation type="unfinished">%1 nós selecionados</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
