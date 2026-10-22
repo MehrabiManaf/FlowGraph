@@ -8,7 +8,7 @@
 //   { "language": "fa", "texts": { "node:flow.branch": ["Branch", "شاخه"], "pin:flow.branch/Condition": ["Condition", "شرط"] } }
 // Every text is kept with the English text it translates: when that English text changes, the translation is not used any more
 // (the English text shows until it is translated again), so an outdated translation is never shown. An empty translation is no
-// translation. Keys:
+// translation. An optional "note" (for translators: "machine translation, to be reviewed"...) is kept by updateCatalog. Keys:
 //   node:<id>                the title of a node (generated ones included: fn:Math.Sin, m:Animal.Speak, event:Main...)
 //   node:<id>#doc            its documentation
 //   pin:<id>/<pin>           the label of a pin of it (pin:<id>/<pin>#doc its documentation); pins a node numbers from a

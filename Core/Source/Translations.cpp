@@ -293,15 +293,19 @@ std::string updateCatalog(const Registry& reg, const std::string& existing, cons
                           const std::string& source) {
     CatalogReport r;
     std::map<std::string, std::pair<std::string, std::string>> old;      // key -> (English, translation)
+    std::string note;
     if (!existing.empty()) {
         Json j = Json::parse(existing);
+        if (j["note"].isString()) note = j["note"].asString();
         for (auto& [key, value] : j["texts"].members())
             if (value.isArray() && value.size() >= 2) old[key] = {value[size_t(0)].asString(), value[size_t(1)].asString()};
     }
     const auto texts = translatableTexts(reg, source);
     std::set<std::string> keys;
     // one text per line, so that a catalog is easy to edit and its changes are easy to read
-    std::string out = "{\n  \"language\": " + Json(language).dump(0) + ",\n  \"texts\": {\n";
+    std::string out = "{\n  \"language\": " + Json(language).dump(0) + ",\n";
+    if (!note.empty()) out += "  \"note\": " + Json(note).dump(0) + ",\n";      // the translators' (kept as it is)
+    out += "  \"texts\": {\n";
     for (size_t i = 0; i < texts.size(); ++i) {
         const auto& [key, english] = texts[i];
         keys.insert(key);

@@ -332,6 +332,10 @@ The editor can show its texts in another language: *View > Language* (System, En
 and is kept per application). Only texts change - the layout stays left to right in every language - and scripts do not depend on
 the language: they keep the English node names, so a script made in one language opens unchanged in any other.
 
+* **The languages:** English; Persian; Chinese (Simplified), Spanish, German, Japanese, Portuguese (Brazil), French, Russian and
+  Korean. Apart from Persian, these are machine translations waiting for a review by native speakers: their editor texts are
+  marked unfinished (Qt Linguist lists them as not reviewed; they are used all the same), and their node catalogs say so in their
+  `"note"`. Corrections are welcome.
 * **The editor's own texts** (menus, panels, dialogs) are Qt translations: `Editor/Translations/flowgraph_<code>.ts`, edited with
   Qt Linguist and compiled into the editor. `cmake --build <build> --target flowgraph_lupdate` adds new texts of the sources to
   every file.

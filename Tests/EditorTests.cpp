@@ -2866,6 +2866,32 @@ TEST(node_texts_follow_the_language) {
     CHECK(nodeTexts().empty());
 }
 
+// Every language there is has a name of its own, translates the editor and the nodes; system languages with a region or a script
+// find theirs (zh-Hans-CN: zh_CN, pt-BR: pt_BR, de-AT: de).
+TEST(every_language_translates_the_editor_and_the_nodes) {
+    const QStringList languages = availableLanguages();
+    CHECK(languages.size() >= 10);
+    QSet<QString> names;
+    for (const QString& code : languages) {
+        const QString name = languageName(code);
+        CHECK(!name.isEmpty() && !names.contains(name));
+        names.insert(name);
+        std::printf("  %s: %s\n", qPrintable(code), name.toUtf8().constData());
+        if (code == "en") continue;
+        applyLanguage(*qApp, code);
+        CHECK_EQ(currentLanguage(), code);
+        CHECK(QCoreApplication::translate("fged::ScriptEditorWindow", "&File") != QString("&File"));
+        fg::Runtime rt;
+        CHECK(nodeTexts().nodeTitle(rt.registry().findNode("flow.branch"), {}, "Branch") != "Branch");
+    }
+    for (auto [system, expected] : {std::pair<const char*, const char*>{"zh-Hans-CN", "zh_CN"}, {"pt-BR", "pt_BR"}, {"de-AT", "de"}}) {
+        if (!languages.contains(expected)) continue;
+        applyLanguage(*qApp, system);
+        CHECK_EQ(currentLanguage(), QString(expected));
+    }
+    applyLanguage(*qApp, "en");
+}
+
 TEST(plugin_node_texts_follow_the_language) {
 #if defined(_WIN32)
     const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.dll";

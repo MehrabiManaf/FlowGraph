@@ -36,7 +36,8 @@ const QString kPrefix = QStringLiteral(":/i18n/");
 
 bool hasTranslation(const QString& code) { return code == QLatin1String("en") || QFile::exists(kPrefix + "flowgraph_" + code + ".qm"); }
 
-// "system" and region variants to a language there is a translation of: fa-IR -> fa_IR, else fa; nothing fits -> en
+// "system" and region variants to a language there is a translation of: fa-IR -> fa_IR, else fa; zh-Hans-CN -> zh_CN (the
+// locale's own name); nothing fits -> en
 QString resolve(const QString& code) {
     QStringList wanted;
     if (code.isEmpty() || code == QLatin1String("system")) wanted = QLocale::system().uiLanguages();
@@ -44,6 +45,7 @@ QString resolve(const QString& code) {
     for (QString w : wanted) {
         w.replace('-', '_');
         if (hasTranslation(w)) return w;
+        if (const QString name = QLocale(w).name(); hasTranslation(name)) return name;
         const QString language = w.section('_', 0, 0);
         if (hasTranslation(language)) return language;
     }
@@ -67,7 +69,13 @@ QStringList availableLanguages() {
 }
 
 QString languageName(const QString& code) {
-    if (code == QLatin1String("en")) return QStringLiteral("English");
+    //: The name of the language of this translation, written in it: Deutsch, Español, Português (Brasil)... (the Language menu)
+    static const char* const kName = QT_TRANSLATE_NOOP("fged::Language", "English");
+    if (code == QLatin1String("en")) return QString::fromLatin1(kName);
+    // the translation's own name for its language; Qt's name of the language when it has none
+    QTranslator translation;
+    if (translation.load(kPrefix + "flowgraph_" + code + ".qm"))
+        if (const QString own = translation.translate("fged::Language", kName); !own.isEmpty()) return own;
     QString n = QLocale(code).nativeLanguageName();
     if (n.isEmpty()) return code;
     n[0] = n[0].toUpper();          // "deutsch" -> "Deutsch" (no effect on scripts without letter case)

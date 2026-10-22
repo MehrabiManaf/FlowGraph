@@ -1,0 +1,30 @@
+{
+  "language": "fr",
+  "note": "Machine translation: to be reviewed by a native speaker.",
+  "texts": {
+    "pin:*/Object": ["Object", "Objet"],
+    "pin:*/Step": ["Step", "Pas"],
+    "pin:*/Target": ["Target", "Cible"],
+    "pin:*/Target#doc": ["The object the method is called on", "L'objet sur lequel la méthode est appelée"],
+    "node:cast:Counter": ["Cast To Counter", "Convertir en Counter"],
+    "pin:cast:Counter/Success": ["Success", "Succès"],
+    "pin:cast:Counter/Failed": ["Failed", "Échec"],
+    "pin:cast:Counter/As Counter": ["As Counter", "En tant que Counter"],
+    "node:fn:Example.Greet": ["Greet", "Saluer"],
+    "node:fn:Example.Greet#doc": ["Builds a greeting.", "Construit une salutation."],
+    "pin:fn:Example.Greet/Name": ["Name", "Nom"],
+    "node:get:Counter.Step": ["Get Step", "Lire le pas"],
+    "node:get:Counter.Value": ["Get Value", "Lire la valeur"],
+    "node:m:Counter.Add": ["Add", "Additionner"],
+    "pin:m:Counter.Add/Amount": ["Amount", "Quantité"],
+    "node:m:Counter.Increment": ["Increment", "Incrémenter"],
+    "node:m:Counter.Is Zero": ["Is Zero", "Est zéro"],
+    "node:m:Counter.Reset": ["Reset", "Réinitialiser"],
+    "node:new:Counter": ["New Counter", "Nouveau Counter"],
+    "node:set:Counter.Step": ["Set Step", "Définir le pas"],
+    "node:set:Counter.Value": ["Set Value", "Définir la valeur"],
+    "category:Casting": ["Casting", "Conversion"],
+    "category:Counter": ["Counter", "Counter"],
+    "category:Example": ["Example", "Exemple"]
+  }
+}

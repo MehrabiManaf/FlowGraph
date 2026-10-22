@@ -688,6 +688,11 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>%1 shows the new language when it is started again.</source>
         <translation>%1 پس از اجرای دوباره، زبان تازه را نشان می‌دهد.</translation>
     </message>
+    <message>
+        <source>English</source>
+        <extracomment>The name of the language of this translation, written in it: Deutsch, Español, Português (Brasil)... (the Language menu)</extracomment>
+        <translation>فارسی</translation>
+    </message>
 </context>
 <context>
     <name>fged::LogPanel</name>
