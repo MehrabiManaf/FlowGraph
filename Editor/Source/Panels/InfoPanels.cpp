@@ -61,7 +61,7 @@ void DiagnosticsPanel::refresh() {
             bool err = d.severity == fg::Diagnostic::Severity::Error;
             (err ? errors : warnings)++;
             auto* it = new QTreeWidgetItem(tree_);
-            it->setText(0, qs(d.graph));
+            it->setText(0, Document::graphTitle(d.graph));
             const fg::CompiledGraph* cg = prog->findGraph(d.graph);
             const fg::CompiledNode* cn = cg ? cg->findNode(d.node) : nullptr;
             it->setText(1, cn ? nodeTitle(*cn) : QString());
@@ -137,7 +137,7 @@ void FindPanel::refresh() {
     }
     for (auto& r : refs) {
         auto* it = new QTreeWidgetItem(tree_);
-        it->setText(0, qs(r.graph));
+        it->setText(0, Document::graphTitle(r.graph));
         const fg::CompiledGraph* cg = prog ? prog->findGraph(r.graph) : nullptr;
         const fg::CompiledNode* cn = cg ? cg->findNode(r.node) : nullptr;
         it->setText(1, cn ? nodeTitle(*cn) : qs(r.title));          // the node's title in the language of the editor
@@ -363,7 +363,7 @@ void DebugPanel::refresh() {
     for (size_t i = 0; i < snap.stack.size(); ++i) {
         const auto& e = snap.stack[i];
         auto* it = new QTreeWidgetItem(stack_);
-        it->setText(0, e.graph + (e.isEvent ? " " + tr("(event)") : QString()));
+        it->setText(0, Document::graphTitle(e.graph) + (e.isEvent ? " " + tr("(event)") : QString()));
         const fg::CompiledGraph* cg = doc_->program() ? doc_->program()->findGraph(ss(e.graph)) : nullptr;
         const fg::CompiledNode* cn = cg ? cg->findNode(e.node) : nullptr;
         it->setText(1, cn ? nodeTitle(*cn) : QString());

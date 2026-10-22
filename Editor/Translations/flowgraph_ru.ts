@@ -433,6 +433,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Untitled</source>
         <translation type="unfinished">Без имени</translation>
     </message>
+    <message>
+        <source>EventGraph</source>
+        <translation type="unfinished">Граф событий</translation>
+    </message>
 </context>
 <context>
     <name>fged::EditorHost</name>

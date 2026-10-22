@@ -433,6 +433,10 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <source>Untitled</source>
         <translation type="unfinished">Sans titre</translation>
     </message>
+    <message>
+        <source>EventGraph</source>
+        <translation type="unfinished">Graphe d&apos;événements</translation>
+    </message>
 </context>
 <context>
     <name>fged::EditorHost</name>

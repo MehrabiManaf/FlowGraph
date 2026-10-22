@@ -2755,7 +2755,7 @@ TEST(every_editor_text_is_translatable) {
             s.addFunction("Compute").inputs.push_back({"Amount", "float", false, false, fg::Value(0.0)});
         });
         QCoreApplication::processEvents();
-        const QStringList scriptNames = {"EventGraph", "Main", "Score", "Compute", "Amount", "Default", "int", "float"};
+        const QStringList scriptNames = {"Main", "Score", "Compute", "Amount", "Default", "int", "float"};
         auto check = [&](const QString& where, QString text) {
             text.remove('&');
             text = text.section('\t', 0, 0).trimmed();         // the shortcut after a tab is not text

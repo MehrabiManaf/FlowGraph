@@ -600,7 +600,7 @@ GraphView* ScriptEditorWindow::openGraph(const QString& name) {
     });
     scene->sync();
     bool isFn = doc_.graph(name)->kind == fg::GraphKind::Function;
-    int idx = tabs_->addTab(view, (isFn ? QString::fromUtf8("ƒ ") : QString()) + name);
+    int idx = tabs_->addTab(view, (isFn ? QString::fromUtf8("ƒ ") : QString()) + Document::graphTitle(name));
     tabs_->setCurrentIndex(idx);
     QTimer::singleShot(0, view, [view] { view->frameAll(); });
     return view;
@@ -634,7 +634,7 @@ void ScriptEditorWindow::syncScenes() {
         if (ng) {
             s->setGraphName(nn);
             int idx = tabs_->indexOf(missing[0]);
-            tabs_->setTabText(idx, (ng->kind == fg::GraphKind::Function ? QString::fromUtf8("ƒ ") : QString()) + nn);
+            tabs_->setTabText(idx, (ng->kind == fg::GraphKind::Function ? QString::fromUtf8("ƒ ") : QString()) + Document::graphTitle(nn));
             missing.clear();
         }
     }

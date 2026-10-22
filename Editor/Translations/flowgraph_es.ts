@@ -433,6 +433,10 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <source>Untitled</source>
         <translation type="unfinished">Sin título</translation>
     </message>
+    <message>
+        <source>EventGraph</source>
+        <translation type="unfinished">Grafo de eventos</translation>
+    </message>
 </context>
 <context>
     <name>fged::EditorHost</name>

@@ -433,6 +433,10 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
         <source>Untitled</source>
         <translation type="unfinished">Sem título</translation>
     </message>
+    <message>
+        <source>EventGraph</source>
+        <translation type="unfinished">Grafo de eventos</translation>
+    </message>
 </context>
 <context>
     <name>fged::EditorHost</name>

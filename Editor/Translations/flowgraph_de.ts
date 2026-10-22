@@ -433,6 +433,10 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <source>Untitled</source>
         <translation type="unfinished">Unbenannt</translation>
     </message>
+    <message>
+        <source>EventGraph</source>
+        <translation type="unfinished">Ereignisgraph</translation>
+    </message>
 </context>
 <context>
     <name>fged::EditorHost</name>

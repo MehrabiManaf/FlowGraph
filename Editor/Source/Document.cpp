@@ -16,6 +16,10 @@ QString Document::displayName() const {
     return dirty_ ? n + "*" : n;
 }
 
+QString Document::graphTitle(const std::string& name) {
+    return name == "EventGraph" ? QCoreApplication::translate("fged::Document", "EventGraph") : QString::fromStdString(name);
+}
+
 void Document::markDirty(bool d) {
     if (dirty_ == d) return;
     dirty_ = d;
