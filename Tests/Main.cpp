@@ -3,6 +3,7 @@
 // Minimal test runner: TEST(name) { CHECK(cond); }
 #include <FlowGraph/Runtime.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -857,8 +858,10 @@ TEST(plugin_translation_catalog) {
     CHECK(bool(in));
     std::stringstream text;
     text << in.rdbuf();
+    std::string lf = text.str();                            // a Windows checkout may have made its line ends CRLF
+    lf.erase(std::remove(lf.begin(), lf.end(), '\r'), lf.end());
     CatalogReport report;
-    CHECK(updateCatalog(rt.registry(), text.str(), "fa", &report, "ExamplePlugin") == text.str());
+    CHECK(updateCatalog(rt.registry(), lf, "fa", &report, "ExamplePlugin") == lf);
     CHECK(report.texts > 0 && report.translated == report.texts);
     Translations t;
     CHECK(t.loadFile(catalog));
