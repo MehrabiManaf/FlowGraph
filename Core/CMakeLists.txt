@@ -21,6 +21,7 @@ add_library(FlowGraphCore ${FG_LIB_TYPE}
     Source/Search.cpp
     Source/Refactor.cpp
     Source/Reference.cpp
+    Source/Translations.cpp
     Source/Runtime.cpp)
 add_library(FlowGraph::Core ALIAS FlowGraphCore)
 set_target_properties(FlowGraphCore PROPERTIES

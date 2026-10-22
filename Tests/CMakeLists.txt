@@ -7,7 +7,7 @@ add_executable(FlowGraphBench Bench.cpp)
 target_link_libraries(FlowGraphBench PRIVATE FlowGraphCore)
 
 # Plugins the loader must refuse (bin/testplugins, so that no application loads them by accident).
-foreach(kind LEGACY MISMATCH)
+foreach(kind LEGACY MISMATCH EVENT)
     string(TOLOWER ${kind} lower)
     set(target AbiPlugin_${lower})
     add_library(${target} SHARED AbiPlugin.cpp)

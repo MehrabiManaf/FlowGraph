@@ -52,7 +52,7 @@
 namespace fged {
 
 namespace {
-const char* kFilter = "FlowGraph scripts (*.flow);;All files (*)";
+const char* kFilter = QT_TRANSLATE_NOOP("fged::ScriptEditorWindow", "FlowGraph scripts (*.flow);;All files (*)");     // tr(kFilter) where shown
 }
 
 namespace {
@@ -152,7 +152,7 @@ ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, Q
             v->graphScene()->setDebugNode(node);
             v->centerOnNode(node, true);
         }
-        statusBar()->showMessage("Paused at '" + graph + "'", 5000);
+        statusBar()->showMessage(tr("Paused at '%1'").arg(graph), 5000);
     });
     connect(&run_, &RunController::resumed, this, [this] { clearDebugMarks(); });
     connect(&run_, &RunController::finished, this, [this] { clearDebugMarks(); });
@@ -183,8 +183,10 @@ ScriptEditorWindow::~ScriptEditorWindow() {
 void ScriptEditorWindow::createDocks() {
     KDDockWidgets::DockWidgetOptions opts = KDDockWidgets::DockWidgetOption_None;
     KDDockWidgets::LayoutSaverOptions lopts = KDDockWidgets::LayoutSaverOption::None;
-    auto makeDock = [&](const QString& title, QWidget* w, bool scroll) {
-        auto* dock = new CDockWidget(title, opts, lopts);
+    // the unique name stays English (saved layouts and View find the dock by it); the title is translated
+    auto makeDock = [&](const QString& name, const QString& title, QWidget* w, bool scroll) {
+        auto* dock = new CDockWidget(name, opts, lopts);
+        dock->setTitle(title);
         dock->setAffinities(affinities());
         if (scroll) {
             auto* sa = new QScrollArea(this);
@@ -205,13 +207,13 @@ void ScriptEditorWindow::createDocks() {
     debug_ = new DebugPanel(&doc_, &run_);
     find_ = new FindPanel(&doc_);
 
-    dMy_ = makeDock("My Script", myScript_, true);
-    dDetails_ = makeDock("Details", details_, true);
-    diagDock_ = makeDock("Compile Results", diagnostics_, false);
-    auto* dLog = makeDock("Output Log", log_, false);
+    dMy_ = makeDock("My Script", tr("My Script"), myScript_, true);
+    dDetails_ = makeDock("Details", tr("Details"), details_, true);
+    diagDock_ = makeDock("Compile Results", tr("Compile Results"), diagnostics_, false);
+    auto* dLog = makeDock("Output Log", tr("Output Log"), log_, false);
     logDock_ = dLog;
-    debugDock_ = makeDock("Debugger", debug_, false);
-    findDock_ = makeDock("Find Results", find_, false);
+    debugDock_ = makeDock("Debugger", tr("Debugger"), debug_, false);
+    findDock_ = makeDock("Find Results", tr("Find Results"), find_, false);
 
     addDockWidget(dMy_, KDDockWidgets::Location_OnLeft, nullptr, KDDockWidgets::InitialOption(QSize(280, 400)));
     addDockWidget(dDetails_, KDDockWidgets::Location_OnRight, nullptr, KDDockWidgets::InitialOption(QSize(340, 400)));
@@ -239,7 +241,7 @@ void ScriptEditorWindow::createDocks() {
     });
     connect(diagnostics_, &DiagnosticsPanel::activated, this, [this](const QString& g, int n) { focusNode(g, n); });
     connect(diagnostics_, &DiagnosticsPanel::summaryChanged, this, [this](int e, int w) {
-        statusLabel_->setText(e || w ? QString("%1 error(s), %2 warning(s)").arg(e).arg(w) : QString("OK"));
+        statusLabel_->setText(e || w ? tr("%1 error(s), %2 warning(s)").arg(e).arg(w) : tr("OK"));
         const ThemeColors& tc = themeColors();
         setTextColor(statusLabel_, e ? tc.error : w ? tc.warning : tc.success);
     });
@@ -264,23 +266,23 @@ void ScriptEditorWindow::createActions() {
         a->setShortcutContext(Qt::WindowShortcut);
         return a;
     };
-    actNew_ = act("&New", QKeySequence::New);
-    actOpen_ = act("&Open...", QKeySequence::Open);
-    actSave_ = act("&Save", QKeySequence::Save);
+    actNew_ = act(tr("&New"), QKeySequence::New);
+    actOpen_ = act(tr("&Open..."), QKeySequence::Open);
+    actSave_ = act(tr("&Save"), QKeySequence::Save);
     actNew_->setIcon(themedIcon(":/Icons/new.svg"));
     actOpen_->setIcon(themedIcon(":/Icons/open.svg"));
     actSave_->setIcon(themedIcon(":/Icons/save.svg"));
-    actSaveAs_ = act("Save &As...", QKeySequence("Ctrl+Shift+S"));
-    actExit_ = act("E&xit");
-    actUndo_ = act("&Undo", QKeySequence::Undo);
-    actRedo_ = act("&Redo", QKeySequence("Ctrl+Y"));
-    actCut_ = act("Cu&t\tCtrl+X");
-    actCopy_ = act("&Copy\tCtrl+C");
-    actPaste_ = act("&Paste\tCtrl+V");
-    actDuplicate_ = act("&Duplicate\tCtrl+D");
-    actDelete_ = act("De&lete\tDel");
-    actSelectAll_ = act("Select &All\tCtrl+A");
-    actComment_ = act("Add Co&mment\tC");
+    actSaveAs_ = act(tr("Save &As..."), QKeySequence("Ctrl+Shift+S"));
+    actExit_ = act(tr("E&xit"));
+    actUndo_ = act(tr("&Undo"), QKeySequence::Undo);
+    actRedo_ = act(tr("&Redo"), QKeySequence("Ctrl+Y"));
+    actCut_ = act(tr("Cu&t") + "\tCtrl+X");
+    actCopy_ = act(tr("&Copy") + "\tCtrl+C");
+    actPaste_ = act(tr("&Paste") + "\tCtrl+V");
+    actDuplicate_ = act(tr("&Duplicate") + "\tCtrl+D");
+    actDelete_ = act(tr("De&lete") + "\tDel");
+    actSelectAll_ = act(tr("Select &All") + "\tCtrl+A");
+    actComment_ = act(tr("Add Co&mment") + "\tC");
     actSaveAs_->setIcon(themedIcon(":/Icons/save-as.svg"));
     actExit_->setIcon(themedIcon(":/Icons/exit.svg"));
     actUndo_->setIcon(themedIcon(":/Icons/undo.svg"));
@@ -292,52 +294,52 @@ void ScriptEditorWindow::createActions() {
     actDelete_->setIcon(themedIcon(":/Icons/delete.svg"));
     actSelectAll_->setIcon(themedIcon(":/Icons/select-all.svg"));
     actComment_->setIcon(themedIcon(":/Icons/comment.svg"));
-    actFrame_ = act("&Frame All\tHome");
+    actFrame_ = act(tr("&Frame All") + "\tHome");
     {
         QSettings settings = editorSettings();
         snapToGrid_ = settings.value("editor/snapToGrid", true).toBool();
         snapStep_ = settings.value("editor/snapStep", 20.0).toDouble();
         if (snapStep_ != 10.0 && snapStep_ != 20.0 && snapStep_ != 40.0) snapStep_ = 20.0;
     }
-    actSnap_ = act("Snap to &Grid");
+    actSnap_ = act(tr("Snap to &Grid"));
     actSnap_->setCheckable(true);
     actSnap_->setChecked(snapToGrid_);
-    actSnap_->setToolTip("Nodes you move or place land on the grid. Hold Alt while dragging to move freely.");
+    actSnap_->setToolTip(tr("Nodes you move or place land on the grid. Hold Alt while dragging to move freely."));
     // One button: Run when nothing runs, Pause while the script runs, Continue while it is paused (see updateRunActions)
-    actRun_ = new QAction(themedIcon(":/Icons/continue.svg"), "Run", this);
+    actRun_ = new QAction(themedIcon(":/Icons/continue.svg"), tr("Run"), this);
     actRun_->setShortcuts({QKeySequence(Qt::Key_F5), QKeySequence(Qt::Key_F6)});
-    actStop_ = new QAction(themedIcon(":/Icons/stop.svg"), "Stop", this);
+    actStop_ = new QAction(themedIcon(":/Icons/stop.svg"), tr("Stop"), this);
     actStop_->setShortcut(QKeySequence("Shift+F5"));
-    actStepOver_ = new QAction(themedIcon(":/Icons/step-over.svg"), "Step Over", this);
+    actStepOver_ = new QAction(themedIcon(":/Icons/step-over.svg"), tr("Step Over"), this);
     actStepOver_->setShortcut(QKeySequence(Qt::Key_F10));
-    actStepInto_ = new QAction(themedIcon(":/Icons/step-into.svg"), "Step Into", this);
+    actStepInto_ = new QAction(themedIcon(":/Icons/step-into.svg"), tr("Step Into"), this);
     actStepInto_->setShortcut(QKeySequence(Qt::Key_F11));
-    actStepOut_ = new QAction(themedIcon(":/Icons/step-out.svg"), "Step Out", this);
+    actStepOut_ = new QAction(themedIcon(":/Icons/step-out.svg"), tr("Step Out"), this);
     actStepOut_->setShortcut(QKeySequence("Shift+F11"));
-    actBreakpoint_ = act("Toggle &Breakpoint", QKeySequence(Qt::Key_F9));
+    actBreakpoint_ = act(tr("Toggle &Breakpoint"), QKeySequence(Qt::Key_F9));
     if (embedded_) {
         // no Run: the application runs the script, the debugger attaches to it
-        actAttach_ = new QAction(themedIcon(":/Icons/attach.svg"), "&Attach", this);
-        actAttach_->setToolTip("Debug the script that the application is running now: breakpoints stop it, and you can step through it");
-        actDetach_ = new QAction(themedIcon(":/Icons/detach.svg"), "&Detach", this);
-        actDetach_->setToolTip("Stop debugging: whatever is stopped continues");
-        actRun_->setText("Continue");
+        actAttach_ = new QAction(themedIcon(":/Icons/attach.svg"), tr("&Attach"), this);
+        actAttach_->setToolTip(tr("Debug the script that the application is running now: breakpoints stop it, and you can step through it"));
+        actDetach_ = new QAction(themedIcon(":/Icons/detach.svg"), tr("&Detach"), this);
+        actDetach_->setToolTip(tr("Stop debugging: whatever is stopped continues"));
+        actRun_->setText(tr("Continue"));
     }
-    actAbout_ = act("&About " + host_.applicationName());
-    actFind_ = act("&Find in Script...", QKeySequence::Find);
+    actAbout_ = act(tr("&About %1").arg(host_.applicationName()));
+    actFind_ = act(tr("&Find in Script..."), QKeySequence::Find);
     actFind_->setIcon(themedIcon(":/Icons/find.svg"));
-    actFind_->setToolTip("Find nodes by their title, comment or values in every graph of the script");
-    actFindRefs_ = act("Find &References", QKeySequence("Shift+F12"));
+    actFind_->setToolTip(tr("Find nodes by their title, comment or values in every graph of the script"));
+    actFindRefs_ = act(tr("Find &References"), QKeySequence("Shift+F12"));
     actFindRefs_->setIcon(themedIcon(":/Icons/find-references.svg"));
-    actFindRefs_->setToolTip("The nodes that use the selected variable or function, or the nodes of the same kind as the selected node");
+    actFindRefs_->setToolTip(tr("The nodes that use the selected variable or function, or the nodes of the same kind as the selected node"));
     connect(actFind_, &QAction::triggered, this, [this] {
         if (findDock_) { findDock_->open(); findDock_->raise(); }
         find_->focusSearch();
     });
     connect(actFindRefs_, &QAction::triggered, this, [this] { findReferencesOfSelection(); });
-    actCollapse_ = act("Collapse to &Function...");
+    actCollapse_ = act(tr("Collapse to &Function..."));
     actCollapse_->setIcon(themedIcon(":/Icons/function.svg"));
-    actCollapse_->setToolTip("Moves the selected nodes into a new function and calls it in their place");
+    actCollapse_->setToolTip(tr("Moves the selected nodes into a new function and calls it in their place"));
     connect(actCollapse_, &QAction::triggered, this, [this] { collapseSelection(QString()); });
 
     connect(actNew_, &QAction::triggered, this, [this] { fileNew(); });
@@ -384,14 +386,15 @@ void ScriptEditorWindow::createActions() {
     });
     connect(actAbout_, &QAction::triggered, this, [this] {
         QMessageBox::about(this, host_.applicationName(),
-                           "<b>" + host_.applicationName().toHtmlEscaped() + "</b><br>Visual scripting editor built on FlowGraph.<br><br>"
-                           "Right-click or drag from a pin to add nodes, F5 to run, F9 for breakpoints.");
+                           "<b>" + host_.applicationName().toHtmlEscaped() + "</b><br>" + tr("Visual scripting editor built on FlowGraph.") + "<br><br>"
+                           + tr("Right-click or drag from a pin to add nodes, F5 to run, F9 for breakpoints."));
     });
 }
 
 void ScriptEditorWindow::createMenus() {
-    QMenu* file = menuBar()->addMenu("&File");
-    recentMenu_ = new QMenu("Open &Recent", this);
+    QMenu* file = menuBar()->addMenu(tr("&File"));
+    file->setObjectName("File");                // its English name: menuNamed() finds it in any language
+    recentMenu_ = new QMenu(tr("Open &Recent"), this);
     recentMenu_->setObjectName("recentFiles");
     if (embedded_) {
         // the application owns the script: no New / Exit; Open takes only scripts that fit the application; Save gives the script back,
@@ -408,7 +411,8 @@ void ScriptEditorWindow::createMenus() {
     }
     rebuildRecentMenu();
 
-    QMenu* edit = menuBar()->addMenu("&Edit");
+    QMenu* edit = menuBar()->addMenu(tr("&Edit"));
+    edit->setObjectName("Edit");                // its English name: menuNamed() finds it in any language
     edit->addActions({actUndo_, actRedo_});
     edit->addSeparator();
     edit->addActions({actCut_, actCopy_, actPaste_, actDuplicate_, actDelete_});
@@ -419,14 +423,15 @@ void ScriptEditorWindow::createMenus() {
     edit->addSeparator();
     edit->addAction(actCollapse_);
 
-    QMenu* view = menuBar()->addMenu("&View");
+    QMenu* view = menuBar()->addMenu(tr("&View"));
+    view->setObjectName("View");                // its English name: menuNamed() finds it in any language
     view->addAction(actFrame_);
     view->addSeparator();
     view->addAction(actSnap_);
-    QMenu* gridSize = view->addMenu("Grid Snap Si&ze");
+    QMenu* gridSize = view->addMenu(tr("Grid Snap Si&ze"));
     snapSizeGroup_ = new QActionGroup(this);
     for (double step : {10.0, 20.0, 40.0}) {
-        QAction* a = gridSize->addAction(QString::number(int(step)) + " units");
+        QAction* a = gridSize->addAction(tr("%1 units").arg(int(step)));
         a->setCheckable(true);
         a->setChecked(step == snapStep_);
         a->setData(step);
@@ -439,7 +444,7 @@ void ScriptEditorWindow::createMenus() {
     }
     if (host_.offersThemeChoice()) {
         view->addSeparator();
-        QMenu* themeMenu = view->addMenu("&Theme");
+        QMenu* themeMenu = view->addMenu(tr("&Theme"));
         themeMenu->setObjectName("themeMenu");
         themeGroup_ = new QActionGroup(this);
         for (Theme t : {Theme::Dark, Theme::Light, Theme::System}) {
@@ -447,16 +452,22 @@ void ScriptEditorWindow::createMenus() {
             a->setCheckable(true);
             a->setChecked(currentThemeChoice() == t);
             a->setData(int(t));
-            if (t == Theme::System) a->setToolTip("Light or dark like the operating system, and it follows when the system switches");
+            if (t == Theme::System) a->setToolTip(tr("Light or dark like the operating system, and it follows when the system switches"));
             themeGroup_->addAction(a);
             connect(a, &QAction::triggered, this, [this, t] { chooseTheme(t); });
         }
+    }
+    if (host_.offersLanguageChoice()) {
+        QMenu* languageMenu = createLanguageMenu(host_.applicationName(), this);       // it applies at the next start
+        languageMenu->setObjectName("languageMenu");
+        view->addMenu(languageMenu);
     }
     view->addSeparator();
     for (auto* dw : docks_) view->addAction(dw->toggleAction());
 
     if (embedded_) {
-        QMenu* debug = menuBar()->addMenu("&Debug");
+        QMenu* debug = menuBar()->addMenu(tr("&Debug"));
+        debug->setObjectName("Debug");                // its English name: menuNamed() finds it in any language
         debug->addActions({actAttach_, actDetach_});
         debug->addSeparator();
         debug->addAction(actRun_);
@@ -465,16 +476,17 @@ void ScriptEditorWindow::createMenus() {
         debug->addSeparator();
         debug->addAction(actBreakpoint_);
     } else {
-        QMenu* runMenu = menuBar()->addMenu("&Run");
+        QMenu* runMenu = menuBar()->addMenu(tr("&Run"));
+        runMenu->setObjectName("Run");                // its English name: menuNamed() finds it in any language
         runMenu->addActions({actRun_, actStop_});
         runMenu->addSeparator();
         runMenu->addActions({actStepOver_, actStepInto_, actStepOut_});
         runMenu->addSeparator();
         runMenu->addAction(actBreakpoint_);
-        QMenu* speed = runMenu->addMenu("Execution speed");
+        QMenu* speed = runMenu->addMenu(tr("Execution speed"));
         speedGroup_ = new QActionGroup(this);
-        for (auto [label, ms] : {std::pair<const char*, int>{"Full speed", 0}, {"Slow (100 ms / node)", 100}, {"Slower (300 ms / node)", 300}, {"Step by step (1 s / node)", 1000}}) {
-            QAction* a = speed->addAction(label);
+        for (auto [label, ms] : {std::pair<const char*, int>{QT_TR_NOOP("Full speed"), 0}, {QT_TR_NOOP("Slow (100 ms / node)"), 100}, {QT_TR_NOOP("Slower (300 ms / node)"), 300}, {QT_TR_NOOP("Step by step (1 s / node)"), 1000}}) {
+            QAction* a = speed->addAction(tr(label));
             a->setCheckable(true);
             a->setData(ms);
             a->setChecked(ms == 0);
@@ -483,12 +495,13 @@ void ScriptEditorWindow::createMenus() {
         }
     }
 
-    QMenu* help = menuBar()->addMenu("&Help");
+    QMenu* help = menuBar()->addMenu(tr("&Help"));
+    help->setObjectName("Help");                // its English name: menuNamed() finds it in any language
     help->addAction(actAbout_);
 }
 
 void ScriptEditorWindow::createToolBar() {
-    auto* tb = addToolBar("Main");
+    auto* tb = addToolBar(tr("Main"));
     toolBar_ = tb;
     tb->setObjectName("MainToolBar");
     tb->setIconSize(QSize(22, 22));
@@ -528,11 +541,14 @@ void ScriptEditorWindow::createToolBar() {
     tb->addActions({actStepOver_, actStepInto_, actStepOut_});
 }
 
+// A host names a menu in English ("&Run"): the menus have their English name as object name, so it is found in any language.
 QMenu* ScriptEditorWindow::menuNamed(const QString& title) {
     QString wanted = QString(title).remove('&');
     for (QAction* a : menuBar()->actions())
-        if (a->menu() && QString(a->menu()->title()).remove('&') == wanted) return a->menu();
-    return menuBar()->addMenu(title);
+        if (a->menu() && (a->menu()->objectName() == wanted || QString(a->menu()->title()).remove('&') == wanted)) return a->menu();
+    QMenu* m = menuBar()->addMenu(title);
+    m->setObjectName(wanted);
+    return m;
 }
 
 void ScriptEditorWindow::addToLaunchSelector(QAction* action) {
@@ -584,7 +600,7 @@ GraphView* ScriptEditorWindow::openGraph(const QString& name) {
     });
     scene->sync();
     bool isFn = doc_.graph(name)->kind == fg::GraphKind::Function;
-    int idx = tabs_->addTab(view, (isFn ? QString::fromUtf8("ƒ ") : QString()) + name);
+    int idx = tabs_->addTab(view, (isFn ? QString::fromUtf8("ƒ ") : QString()) + Document::graphTitle(name));
     tabs_->setCurrentIndex(idx);
     QTimer::singleShot(0, view, [view] { view->frameAll(); });
     return view;
@@ -618,7 +634,7 @@ void ScriptEditorWindow::syncScenes() {
         if (ng) {
             s->setGraphName(nn);
             int idx = tabs_->indexOf(missing[0]);
-            tabs_->setTabText(idx, (ng->kind == fg::GraphKind::Function ? QString::fromUtf8("ƒ ") : QString()) + nn);
+            tabs_->setTabText(idx, (ng->kind == fg::GraphKind::Function ? QString::fromUtf8("ƒ ") : QString()) + Document::graphTitle(nn));
             missing.clear();
         }
     }
@@ -644,7 +660,7 @@ void ScriptEditorWindow::focusNode(const QString& graph, int node) {
 void ScriptEditorWindow::showReferences(const fg::RefTarget& target) {
     find_->findReferences(target);
     if (findDock_) { findDock_->open(); findDock_->raise(); }
-    statusBar()->showMessage(QString("%1 reference(s) of %2").arg(find_->resultCount()).arg(qs(target.describe())), 4000);
+    statusBar()->showMessage(tr("%1 reference(s) of %2").arg(find_->resultCount()).arg(qs(target.describe())), 4000);
 }
 
 void ScriptEditorWindow::findReferencesOfSelection() {
@@ -665,7 +681,7 @@ void ScriptEditorWindow::findReferencesOfSelection() {
     const fg::Graph* g = s ? doc_.graph(s->graphName()) : nullptr;
     const fg::Node* n = g && ids.size() == 1 ? g->findNode(ids.front()) : nullptr;
     if (!n) {
-        statusBar()->showMessage("Select a node, or a variable or function in My Script, to find its references", 4000);
+        statusBar()->showMessage(tr("Select a node, or a variable or function in My Script, to find its references"), 4000);
         return;
     }
     showReferences(fg::referenceTargetOf(doc_.script(), ss(s->graphName()), *n));
@@ -674,7 +690,7 @@ void ScriptEditorWindow::findReferencesOfSelection() {
 void ScriptEditorWindow::chooseTheme(Theme theme) {
     applyTheme(*qApp, theme);                    // ThemeNotifier::changed: the graphs, panels and icons follow
     saveTheme(host_.applicationName(), theme);
-    statusBar()->showMessage(themeTitle(theme) + " theme", 3000);
+    statusBar()->showMessage(tr("%1 theme").arg(themeTitle(theme)), 3000);
 }
 
 void ScriptEditorWindow::updateCollapseAction() {
@@ -687,7 +703,7 @@ bool ScriptEditorWindow::collapseSelection(const QString& givenName) {
     GraphScene* s = currentScene();
     const QList<fg::NodeId> sel = s ? s->selectedNodeIds() : QList<fg::NodeId>();
     if (!s || sel.size() < GraphScene::kMinCollapseNodes) {
-        statusBar()->showMessage("Select at least two nodes to collapse them into a function", 4000);
+        statusBar()->showMessage(tr("Select at least two nodes to collapse them into a function"), 4000);
         return false;
     }
     const std::string graph = ss(s->graphName());
@@ -696,24 +712,24 @@ bool ScriptEditorWindow::collapseSelection(const QString& givenName) {
     fg::Script trial = doc_.script();
     fg::CollapseResult probe = fg::collapseToFunction(trial, rt_.registry(), graph, ids);
     if (!probe.ok) {
-        QMessageBox::information(this, "Collapse to Function", "These nodes cannot be collapsed into a function:\n" + qs(probe.error));
+        QMessageBox::information(this, tr("Collapse to Function"), tr("These nodes cannot be collapsed into a function:") + "\n" + qs(probe.error));
         return false;
     }
     QString name = givenName;
     if (name.isEmpty()) {
         bool ok = false;
-        name = QInputDialog::getText(this, "Collapse to Function", "Name of the new function:", QLineEdit::Normal,
+        name = QInputDialog::getText(this, tr("Collapse to Function"), tr("Name of the new function:"), QLineEdit::Normal,
                                      qs(doc_.script().uniqueGraphName("NewFunction")), &ok).trimmed();
         if (!ok || name.isEmpty()) return false;
     }
     fg::CollapseResult result;
-    doc_.edit("Collapse to function", [&](fg::Script& script) { result = fg::collapseToFunction(script, rt_.registry(), graph, ids, ss(name)); });
+    doc_.edit(tr("Collapse to function"), [&](fg::Script& script) { result = fg::collapseToFunction(script, rt_.registry(), graph, ids, ss(name)); });
     if (!result.ok) {                                    // cannot happen after the trial, but never keep a half change
         doc_.undo();
         return false;
     }
-    for (auto& w : result.warnings) log(int(fg::LogLevel::Warning), "Collapse to Function: " + qs(w));
-    statusBar()->showMessage("Collapsed " + QString::number(ids.size()) + " node(s) into " + qs(result.function), 4000);
+    for (auto& w : result.warnings) log(int(fg::LogLevel::Warning), tr("Collapse to Function: %1").arg(qs(w)));
+    statusBar()->showMessage(tr("Collapsed %1 node(s) into %2").arg(ids.size()).arg(qs(result.function)), 4000);
     if (GraphView* v = openGraph(s->graphName())) v->graphScene()->selectOnly(result.callNode);
     return true;
 }
@@ -745,7 +761,7 @@ void ScriptEditorWindow::clearDebugMarks() {
 // ------------------------------------------------------------------ files
 bool ScriptEditorWindow::maybeSave() {
     if (!doc_.isDirty()) return true;
-    auto r = QMessageBox::question(this, host_.applicationName(), "Save changes to '" + doc_.displayName().remove('*') + "'?",
+    auto r = QMessageBox::question(this, host_.applicationName(), tr("Save changes to '%1'?").arg(doc_.displayName().remove('*')),
                                    QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
     if (r == QMessageBox::Cancel) return false;
     if (r == QMessageBox::Save) return fileSave();
@@ -768,7 +784,7 @@ void ScriptEditorWindow::newScript() {
 
 void ScriptEditorWindow::fileOpen() {
     if (!embedded_ && !maybeSave()) return;      // embedded: a script that does not fit is refused before anything is asked
-    QString path = QFileDialog::getOpenFileName(this, "Open script", QString(), kFilter, nullptr, QFileDialog::DontUseNativeDialog);
+    QString path = QFileDialog::getOpenFileName(this, tr("Open script"), QString(), tr(kFilter), nullptr, QFileDialog::DontUseNativeDialog);
     if (!path.isEmpty()) openPath(path, !embedded_);
 }
 
@@ -780,7 +796,7 @@ void ScriptEditorWindow::openPath(const QString& path, bool alreadyAsked) {
         try {
             script = fg::Script::load(path.toStdString());
         } catch (const std::exception& e) {
-            QMessageBox::critical(this, "Open script", "Cannot open '" + path + "':\n" + e.what());
+            QMessageBox::critical(this, tr("Open script"), tr("Cannot open '%1':").arg(path) + "\n" + e.what());
             return;
         }
         if (!acceptable(script, &reason)) {
@@ -855,7 +871,7 @@ void ScriptEditorWindow::rebuildRecentMenu() {
     }
     if (!list.isEmpty()) {
         recentMenu_->addSeparator();
-        recentMenu_->addAction(themedIcon(":/Icons/clear.svg"), "&Clear Recent Files", this, [this] {
+        recentMenu_->addAction(themedIcon(":/Icons/clear.svg"), tr("&Clear Recent Files"), this, [this] {
             editorSettings().remove(recentKey());
             rebuildRecentMenu();
         });
@@ -865,7 +881,7 @@ void ScriptEditorWindow::rebuildRecentMenu() {
 
 void ScriptEditorWindow::openRecent(const QString& path) {
     if (!QFileInfo::exists(path)) {
-        QMessageBox::warning(this, "Open Recent", "'" + QDir::toNativeSeparators(path) + "' does not exist any more. It is removed from the list.");
+        QMessageBox::warning(this, tr("Open Recent"), tr("'%1' does not exist any more. It is removed from the list.").arg(QDir::toNativeSeparators(path)));
         QStringList list = recentFiles();
         list.removeAll(path);
         editorSettings().setValue(recentKey(), list);
@@ -882,7 +898,7 @@ bool ScriptEditorWindow::openFile(const QString& path) {
         try {
             script = fg::Script::load(path.toStdString());
         } catch (const std::exception& e) {
-            QMessageBox::critical(this, "Open script", "Cannot open '" + path + "':\n" + e.what());
+            QMessageBox::critical(this, tr("Open script"), tr("Cannot open '%1':").arg(path) + "\n" + e.what());
             return false;
         }
         QString reason;
@@ -895,22 +911,22 @@ bool ScriptEditorWindow::openFile(const QString& path) {
     QString err;
     while (tabs_->count()) closeTab(0);
     if (!doc_.load(path, &err)) {
-        QMessageBox::critical(this, "Open script", "Cannot open '" + path + "':\n" + err);
+        QMessageBox::critical(this, tr("Open script"), tr("Cannot open '%1':").arg(path) + "\n" + err);
         doc_.newScript([this](fg::Script& s) { host_.initializeNewScript(s); });
         host_.scriptChanged(facade_, ScriptChange::Created);
         emit facade_.scriptChanged();
         return false;
     }
-    log(int(fg::LogLevel::Info), "Opened " + path);
+    log(int(fg::LogLevel::Info), tr("Opened %1").arg(path));
     addRecentFile(path);
     host_.scriptChanged(facade_, ScriptChange::Opened);   // a host may load plugins / launch files for this script
     auto report = fg::checkCompatibility(doc_.script(), rt_.registry());
     if (!report.ok()) {
         // the editor still opens it so that it can be repaired, but it cannot run here
         QString text = qs(report.toText());
-        log(int(fg::LogLevel::Warning), "This script was made for another application:\n" + text.trimmed());
-        statusBar()->showMessage("This script needs things " + host_.applicationName() + " does not provide - see the Output Log", 8000);
-        auto* box = new QMessageBox(QMessageBox::Warning, host_.applicationName(), "This script cannot run in " + host_.applicationName() + ":\n\n" + text, QMessageBox::Ok, this);
+        log(int(fg::LogLevel::Warning), tr("This script was made for another application:") + "\n" + text.trimmed());
+        statusBar()->showMessage(tr("This script needs things %1 does not provide - see the Output Log").arg(host_.applicationName()), 8000);
+        auto* box = new QMessageBox(QMessageBox::Warning, host_.applicationName(), tr("This script cannot run in %1:").arg(host_.applicationName()) + "\n\n" + text, QMessageBox::Ok, this);
         box->setAttribute(Qt::WA_DeleteOnClose);
         box->open();                                    // non modal for the program flow
     }
@@ -923,8 +939,8 @@ bool ScriptEditorWindow::editScript(const fg::Script& script, const QString& tit
     if (embedded_) {
         QString reason;
         if (!acceptable(script, &reason)) {
-            log(int(fg::LogLevel::Warning), "'" + title + "' was not taken: " + reason.trimmed());
-            statusBar()->showMessage("The script '" + title + "' does not fit " + host_.applicationName() + ": see the Output Log", 8000);
+            log(int(fg::LogLevel::Warning), tr("'%1' was not taken: %2").arg(title, reason.trimmed()));
+            statusBar()->showMessage(tr("The script '%1' does not fit %2: see the Output Log").arg(title, host_.applicationName()), 8000);
             return false;
         }
     }
@@ -935,8 +951,8 @@ bool ScriptEditorWindow::editScript(const fg::Script& script, const QString& tit
     auto report = fg::checkCompatibility(doc_.script(), rt_.registry());
     if (!report.ok()) {
         const QString text = qs(report.toText());
-        log(int(fg::LogLevel::Warning), "This script needs things " + host_.applicationName() + " does not provide:\n" + text.trimmed());
-        statusBar()->showMessage("This script needs things " + host_.applicationName() + " does not provide - see the Output Log", 8000);
+        log(int(fg::LogLevel::Warning), tr("This script needs things %1 does not provide:").arg(host_.applicationName()) + "\n" + text.trimmed());
+        statusBar()->showMessage(tr("This script needs things %1 does not provide - see the Output Log").arg(host_.applicationName()), 8000);
     }
     emit facade_.scriptChanged();
     return true;
@@ -945,7 +961,7 @@ bool ScriptEditorWindow::editScript(const fg::Script& script, const QString& tit
 bool ScriptEditorWindow::attachExecutor(std::shared_ptr<fg::AsyncExecutor> executor) {
     const bool ok = run_.attach(std::move(executor));
     if (ok) {
-        log(int(fg::LogLevel::Info), "--- attached ---");
+        log(int(fg::LogLevel::Info), tr("--- attached ---"));
         if (logDock_) logDock_->raise();
     }
     return ok;
@@ -954,7 +970,7 @@ bool ScriptEditorWindow::attachExecutor(std::shared_ptr<fg::AsyncExecutor> execu
 void ScriptEditorWindow::attachToApplication() {
     std::shared_ptr<fg::AsyncExecutor> target = host_.debugTarget(facade_);
     if (!target) {
-        statusBar()->showMessage("Nothing is running in " + host_.applicationName() + " to attach to", 5000);
+        statusBar()->showMessage(tr("Nothing is running in %1 to attach to").arg(host_.applicationName()), 5000);
         return;
     }
     attachExecutor(std::move(target));
@@ -963,22 +979,22 @@ void ScriptEditorWindow::attachToApplication() {
 bool ScriptEditorWindow::acceptable(const fg::Script& script, QString* reason) const {
     const auto report = fg::checkCompatibility(script, rt_.registry());
     if (!report.ok()) {
-        if (reason) *reason = "This script needs things " + host_.applicationName() + " does not provide:\n" + qs(report.toText());
+        if (reason) *reason = tr("This script needs things %1 does not provide:").arg(host_.applicationName()) + "\n" + qs(report.toText());
         return false;
     }
     QString why;
     if (!host_.acceptsScript(script, &why)) {
-        if (reason) *reason = why.isEmpty() ? "This script does not fit " + host_.applicationName() + "." : why;
+        if (reason) *reason = why.isEmpty() ? tr("This script does not fit %1.").arg(host_.applicationName()) : why;
         return false;
     }
     return true;
 }
 
 void ScriptEditorWindow::showRejected(const QString& what, const QString& reason) {
-    log(int(fg::LogLevel::Warning), "'" + what + "' was not opened: " + reason.trimmed());
-    statusBar()->showMessage("That script does not fit " + host_.applicationName() + " - it was not opened", 8000);
+    log(int(fg::LogLevel::Warning), tr("'%1' was not opened: %2").arg(what, reason.trimmed()));
+    statusBar()->showMessage(tr("That script does not fit %1 - it was not opened").arg(host_.applicationName()), 8000);
     auto* box = new QMessageBox(QMessageBox::Warning, host_.applicationName(),
-                                "This script cannot be opened here:\n\n" + reason.trimmed() + "\n\nThe script that was open is unchanged.", QMessageBox::Ok, this);
+                                tr("This script cannot be opened here:") + "\n\n" + reason.trimmed() + "\n\n" + tr("The script that was open is unchanged."), QMessageBox::Ok, this);
     box->setAttribute(Qt::WA_DeleteOnClose);
     box->open();                                        // not modal for the flow of the program
 }
@@ -986,11 +1002,11 @@ void ScriptEditorWindow::showRejected(const QString& what, const QString& reason
 // Save of an embedded editor: no file. The script goes to the application, which decides what to do with it.
 bool ScriptEditorWindow::embeddedSave() {
     if (!host_.applyScript(facade_, doc_.script())) {
-        statusBar()->showMessage(host_.applicationName() + " did not take the script: the changes are still unsaved", 6000);
+        statusBar()->showMessage(tr("%1 did not take the script: the changes are still unsaved").arg(host_.applicationName()), 6000);
         return false;
     }
     doc_.markSaved();
-    statusBar()->showMessage("The script was handed over to " + host_.applicationName(), 3000);
+    statusBar()->showMessage(tr("The script was handed over to %1").arg(host_.applicationName()), 3000);
     emit facade_.scriptChanged();
     return true;
 }
@@ -1000,10 +1016,10 @@ bool ScriptEditorWindow::fileSave() {
     if (doc_.path().isEmpty()) return fileSaveAs();
     QString err;
     if (!doc_.save(QString(), &err)) {
-        QMessageBox::critical(this, "Save script", err);
+        QMessageBox::critical(this, tr("Save script"), err);
         return false;
     }
-    statusBar()->showMessage("Saved " + doc_.path(), 3000);
+    statusBar()->showMessage(tr("Saved %1").arg(doc_.path()), 3000);
     addRecentFile(doc_.path());
     host_.scriptChanged(facade_, ScriptChange::Saved);
     emit facade_.scriptChanged();
@@ -1014,27 +1030,27 @@ bool ScriptEditorWindow::fileSaveAs() {
     if (embedded_) {
         // a copy in a file: the script stays the application's (unsaved changes stay unsaved)
         QString sel = kFilter;
-        QString file = QFileDialog::getSaveFileName(this, "Save a copy of the script", doc_.displayName().remove('*'), kFilter, &sel, QFileDialog::DontUseNativeDialog);
+        QString file = QFileDialog::getSaveFileName(this, tr("Save a copy of the script"), doc_.displayName().remove('*'), tr(kFilter), &sel, QFileDialog::DontUseNativeDialog);
         if (file.isEmpty()) return false;
         if (!file.contains('.')) file += ".flow";
         QString err;
         if (!doc_.exportTo(file, &err)) {
-            QMessageBox::critical(this, "Save script", err);
+            QMessageBox::critical(this, tr("Save script"), err);
             return false;
         }
-        statusBar()->showMessage("Saved " + file, 3000);
+        statusBar()->showMessage(tr("Saved %1").arg(file), 3000);
         return true;
     }
     QString sel = kFilter;
-    QString path = QFileDialog::getSaveFileName(this, "Save script", doc_.path(), kFilter, &sel, QFileDialog::DontUseNativeDialog);
+    QString path = QFileDialog::getSaveFileName(this, tr("Save script"), doc_.path(), tr(kFilter), &sel, QFileDialog::DontUseNativeDialog);
     if (path.isEmpty()) return false;
     if (!path.contains('.')) path += ".flow";
     QString err;
     if (!doc_.save(path, &err)) {
-        QMessageBox::critical(this, "Save script", err);
+        QMessageBox::critical(this, tr("Save script"), err);
         return false;
     }
-    statusBar()->showMessage("Saved " + path, 3000);
+    statusBar()->showMessage(tr("Saved %1").arg(path), 3000);
     addRecentFile(path);
     host_.scriptChanged(facade_, ScriptChange::Saved);
     emit facade_.scriptChanged();
@@ -1108,8 +1124,8 @@ void ScriptEditorWindow::updateTitle() { setWindowTitle(doc_.displayName() + " -
 void ScriptEditorWindow::updateEditActions() {
     actUndo_->setEnabled(doc_.canUndo());
     actRedo_->setEnabled(doc_.canRedo());
-    actUndo_->setText(doc_.canUndo() ? "&Undo " + doc_.undoLabel() : "&Undo");
-    actRedo_->setText(doc_.canRedo() ? "&Redo " + doc_.redoLabel() : "&Redo");
+    actUndo_->setText(doc_.canUndo() ? tr("&Undo %1").arg(doc_.undoLabel()) : tr("&Undo"));
+    actRedo_->setText(doc_.canRedo() ? tr("&Redo %1").arg(doc_.redoLabel()) : tr("&Redo"));
 }
 
 void ScriptEditorWindow::updateRunActions() {
@@ -1122,7 +1138,7 @@ void ScriptEditorWindow::updateRunActions() {
         actAttach_->setEnabled(!attached);
         actDetach_->setEnabled(attached);
         actRun_->setEnabled(attached);
-        actRun_->setText(s == S::Paused ? "Continue" : "Pause");
+        actRun_->setText(s == S::Paused ? tr("Continue") : tr("Pause"));
         actRun_->setIcon(themedIcon(s == S::Paused ? ":/Icons/continue.svg" : ":/Icons/interrupt.svg"));
         actStop_->setEnabled(false);
         actStepOver_->setEnabled(s == S::Paused);
@@ -1130,7 +1146,7 @@ void ScriptEditorWindow::updateRunActions() {
         actStepOut_->setEnabled(s == S::Paused);
         return;
     }
-    actRun_->setText(busy ? "Pause" : s == S::Paused ? "Continue" : "Run");
+    actRun_->setText(busy ? tr("Pause") : s == S::Paused ? tr("Continue") : tr("Run"));
     actRun_->setIcon(themedIcon(busy ? ":/Icons/interrupt.svg" : ":/Icons/continue.svg"));
     actStop_->setEnabled(s != S::Idle);
     actStepOver_->setEnabled(s == S::Paused);
@@ -1180,7 +1196,7 @@ void ScriptEditorWindow::runOrContinue() {
         if (!run_.start(spec.entry, spec.args) && runPending_) { runPending_ = false; host_.runFinished(); }
         return;
     }
-    log(int(fg::LogLevel::Warning), "Nothing to run: add an event to a graph (this application offers: " + QString::number(entries_.size()) + " entries).");
+    log(int(fg::LogLevel::Warning), tr("Nothing to run: add an event to a graph (this application offers: %1 entries).").arg(entries_.size()));
 }
 
 void ScriptEditorWindow::runEntry(const QString& entry) {

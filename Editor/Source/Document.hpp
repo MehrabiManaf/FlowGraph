@@ -32,6 +32,10 @@ public:
     const QString& path() const { return path_; }
     bool isDirty() const { return dirty_; }
     QString displayName() const;
+    // A graph's name as the editor shows it: the name a new script's event graph gets ("EventGraph") in the editor's language,
+    // every other name as it is. The script keeps the name itself.
+    static QString graphTitle(const std::string& name);
+    static QString graphTitle(const QString& name) { return graphTitle(name.toStdString()); }
 
     // Compiles again (the application added plugins or events after the script was opened).
     void refresh();

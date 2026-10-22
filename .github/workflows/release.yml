@@ -64,7 +64,9 @@ jobs:
         shell: bash
         run: |
           cmake --install build/windows-release --prefix "dist/$PACKAGE" --component FlowGraph
-          windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw --compiler-runtime \
+          # Qt's own translations (its dialogs and buttons) for the languages the editor has (Editor/Translations/flowgraph_<code>.ts)
+          languages=$(ls Editor/Translations/flowgraph_*.ts | sed 's|.*/flowgraph_||; s|\.ts$||' | paste -sd, -)
+          windeployqt --release --translations "$languages" --no-system-d3d-compiler --no-opengl-sw --compiler-runtime \
             "dist/$PACKAGE/bin/flowstudio.exe" "dist/$PACKAGE/bin/FlowGraphEditor.dll"
           # the offscreen platform: flowstudio without a display (and the check below)
           cp "$(cygpath -u "$QT_ROOT_DIR")/plugins/platforms/qoffscreen.dll" "dist/$PACKAGE/bin/platforms/"
@@ -140,6 +142,12 @@ jobs:
             done | sort -u | while read -r dep; do
               [ -e "$dist/lib/$(basename "$dep")" ] || cp -L "$dep" "$dist/lib/"
             done
+          done
+          # Qt's own translations for the editor's languages, where the editor looks for them (bin/../translations)
+          mkdir -p "$dist/translations"
+          for ts in Editor/Translations/flowgraph_*.ts; do
+            code=$(basename "$ts" .ts); code=${code#flowgraph_}
+            cp "$QT_ROOT_DIR/translations/qtbase_$code.qm" "$dist/translations/" 2>/dev/null || echo "no Qt translation for $code"
           done
           cp -r LICENSE LICENSES README.md "$dist/"
       - name: Check that the package runs on its own

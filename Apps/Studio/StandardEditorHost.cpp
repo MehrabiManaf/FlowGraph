@@ -111,11 +111,11 @@ void StandardEditorHost::attached(fged::ScriptEditor& editor) {
     editor_ = &editor;
     QMenu* run = editor.menu("&Run");
     run->addSeparator();
-    QAction* a = run->addAction(QIcon(":/Icons/configure.svg"), "Launch &Configurations...");
+    QAction* a = run->addAction(QIcon(":/Icons/configure.svg"), tr("Launch &Configurations..."));
     QObject::connect(a, &QAction::triggered, &editor, [this] { editConfigurations(); });
     // a button next to the selector of the toolbar
-    QAction* configure = new QAction(QIcon(":/Icons/configure.svg"), "Configure...", &editor);
-    configure->setToolTip("Edit the launch configurations of this script");
+    QAction* configure = new QAction(QIcon(":/Icons/configure.svg"), tr("Configure..."), &editor);
+    configure->setToolTip(tr("Edit the launch configurations of this script"));
     QObject::connect(configure, &QAction::triggered, &editor, [this] { editConfigurations(); });
     editor.addToLaunchSelector(configure);
 }
@@ -147,7 +147,7 @@ void StandardEditorHost::scriptChanged(fged::ScriptEditor& editor, fged::ScriptC
         try {
             launch_ = LaunchFile::load(LaunchFile::pathFor(s(path)));
         } catch (const std::exception& e) {
-            editor.log(1, "Cannot read the launch file of this script: " + q(e.what()));
+            editor.log(1, tr("Cannot read the launch file of this script: %1").arg(q(e.what())));
             launch_ = LaunchFile();
             launch_.current();
         }
@@ -168,7 +168,7 @@ void StandardEditorHost::saveLaunchFile() {
     try {
         launch_.save(LaunchFile::pathFor(s(scriptPath_)));
     } catch (const std::exception& e) {
-        if (editor_) editor_->log(2, "Cannot save the launch file: " + q(e.what()));
+        if (editor_) editor_->log(2, tr("Cannot save the launch file: %1").arg(q(e.what())));
     }
 }
 
@@ -177,7 +177,7 @@ void StandardEditorHost::editConfigurations() {
     LaunchFile work = launch_;
     work.current();
     QDialog dlg(editor_->window());
-    dlg.setWindowTitle("Launch Configurations");
+    dlg.setWindowTitle(tr("Launch Configurations"));
     dlg.resize(760, 460);
     auto* outer = new QVBoxLayout(&dlg);
     auto* body = new QHBoxLayout;
@@ -185,9 +185,9 @@ void StandardEditorHost::editConfigurations() {
 
     auto* left = new QVBoxLayout;
     auto* list = new QListWidget;
-    auto* add = new QPushButton("Add");
-    auto* dup = new QPushButton("Duplicate");
-    auto* del = new QPushButton("Remove");
+    auto* add = new QPushButton(tr("Add"));
+    auto* dup = new QPushButton(tr("Duplicate"));
+    auto* del = new QPushButton(tr("Remove"));
     left->addWidget(list, 1);
     auto* lb = new QHBoxLayout;
     lb->addWidget(add);
@@ -203,19 +203,19 @@ void StandardEditorHost::editConfigurations() {
     auto* cwd = new QLineEdit;
     cwd->setPlaceholderText("relative to the script's folder; empty = unchanged");
     auto* env = new QPlainTextEdit;
-    env->setPlaceholderText("NAME=value, one per line");
+    env->setPlaceholderText(tr("NAME=value, one per line"));
     auto* plugins = new QPlainTextEdit;
     plugins->setPlaceholderText("plugin directories (relative to the script), one per line");
     auto* delay = new QSpinBox;
     delay->setRange(0, 10000);
     delay->setSuffix(" ms");
-    delay->setToolTip("Delay between two nodes while running: slow motion for watching the links");
-    form->addRow("Name", name);
-    form->addRow("Arguments", args);
-    form->addRow("Working directory", cwd);
-    form->addRow("Environment", env);
-    form->addRow("Plugin directories", plugins);
-    form->addRow("Step delay", delay);
+    delay->setToolTip(tr("Delay between two nodes while running: slow motion for watching the links"));
+    form->addRow(tr("Name"), name);
+    form->addRow(tr("Arguments"), args);
+    form->addRow(tr("Working directory"), cwd);
+    form->addRow(tr("Environment"), env);
+    form->addRow(tr("Plugin directories"), plugins);
+    form->addRow(tr("Step delay"), delay);
     body->addLayout(form, 2);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -265,7 +265,7 @@ void StandardEditorHost::editConfigurations() {
     QObject::connect(add, &QPushButton::clicked, &dlg, [&] {
         store();
         LaunchConfig c;
-        c.name = "Configuration " + std::to_string(work.configs.size() + 1);
+        c.name = tr("Configuration %1").arg(work.configs.size() + 1).toStdString();
         work.configs.push_back(c);
         fill(int(work.configs.size()) - 1);
     });
@@ -300,7 +300,7 @@ void StandardEditorHost::editConfigurations() {
     saveLaunchFile();
     for (auto& c : launch_.configs) loadPluginPaths(c);
     editor_->refreshLaunchEntries();
-    if (scriptPath_.isEmpty()) editor_->log(0, "The launch configurations are saved together with the script.");
+    if (scriptPath_.isEmpty()) editor_->log(0, tr("The launch configurations are saved together with the script."));
 }
 
 } // namespace flowstudio

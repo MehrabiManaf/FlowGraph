@@ -276,7 +276,7 @@ void registerTimeNodes(Registry& r) {
         d.pins = {dataIn("Year", "int", Value(2000)), dataIn("Month", "int", Value(1)), dataIn("Day", "int", Value(1)), dataIn("Hour", "int", Value(0)),
                   dataIn("Minute", "int", Value(0)), dataIn("Second", "int", Value(0)), dataIn("Millisecond", "int", Value(0)),
                   dataIn("Local", "bool", Value(true)), dataOut("Timestamp", "float")};
-        d.pins[8].doc = "Local time (on) or UTC (off)";
+        d.pins[7].doc = "Local time (on) or UTC (off)";
         d.run = [](NodeCtx& c) {
             c.out(0, Value(makeTimestamp(c.inInt(0), c.inInt(1), c.inInt(2), c.inInt(3), c.inInt(4), c.inInt(5), c.inInt(6), c.inBool(7))));
         };

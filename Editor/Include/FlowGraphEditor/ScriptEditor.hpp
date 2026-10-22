@@ -26,6 +26,7 @@
 #include <QIcon>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QWidget>
 
 #include <memory>
@@ -111,8 +112,8 @@ public:
     // The entry that is preselected in the toolbar when the list of entries is rebuilt.
     virtual QString preferredEntry() const { return QStringLiteral("Main"); }
     // Title of the tooltip of the entries box of the toolbar ("Run" / "Launch configuration"; a trailing colon is dropped) and the text below it.
-    virtual QString launchLabel() const { return QStringLiteral("Run:"); }
-    virtual QString launchToolTip() const { return QStringLiteral("Event or function to run"); }
+    virtual QString launchLabel() const { return QCoreApplication::translate("fged::EditorHost", "Run:"); }
+    virtual QString launchToolTip() const { return QCoreApplication::translate("fged::EditorHost", "Event or function to run"); }
     // The user picked another entry in the toolbar.
     virtual void launchEntrySelected(const QString& /*id*/) {}
 
@@ -120,6 +121,10 @@ public:
     // application that looks after its own appearance says no. When it offers it, the editor applies the choice saved for this
     // application (applicationName()) when it is created and saves every new choice. Default: in Standalone mode.
     virtual bool offersThemeChoice() const { return mode() == EditorMode::Standalone; }
+    // Does the editor offer View > Language? The language is the one of the whole application's Qt texts, so an application that
+    // chooses it itself says no. The choice is saved per application (applicationName()) and applies at the next start
+    // (applySavedLanguage). Default: in Standalone mode.
+    virtual bool offersLanguageChoice() const { return mode() == EditorMode::Standalone; }
 };
 
 // There is ONE script editor in a program: creating a second one while the first exists throws std::logic_error. An application with
@@ -197,6 +202,35 @@ FG_EDITOR_EXPORT void applyDarkTheme(QApplication& app);
 // before it shows a window, so that its own windows come up in that theme too.
 FG_EDITOR_EXPORT Theme savedTheme(const QString& applicationName);
 FG_EDITOR_EXPORT void applySavedTheme(QApplication& app, const QString& applicationName);
+
+// The language of the editor's texts (menus, panels, dialogs; Qt's own dialogs too). Scripts do not depend on it: they keep their
+// English node names, so a script made in one language opens unchanged in any other.
+// A language is a code ("en", "fa", "de", "pt_BR"...); "system" is the operating system's language. English is built in; another
+// language is there when its translation is (Translations/flowgraph_<code>.ts, compiled into the editor): adding a language is adding
+// that file. A text without a translation shows in English. Only the texts change: the layout stays left to right in every language,
+// right-to-left ones (Persian, Arabic, Hebrew...) included - their texts read from right to left inside each label.
+// Languages there are, "en" first. languageName gives a language's name in that language ("English", "فارسی").
+FG_EDITOR_EXPORT QStringList availableLanguages();
+FG_EDITOR_EXPORT QString languageName(const QString& code);
+// Installs the translations of `code` ("system": the system's language when there is a translation of it, else English); the layout
+// stays left to right. Call it before the windows are created: the texts are taken when the widgets are made.
+FG_EDITOR_EXPORT void applyLanguage(QApplication& app, const QString& code);
+// The language chosen in the editor of the application `applicationName` (View > Language, kept per application), "system" when none
+// was chosen; applySavedLanguage = applyLanguage(app, savedLanguage(applicationName)), at the start of the application.
+FG_EDITOR_EXPORT QString savedLanguage(const QString& applicationName);
+FG_EDITOR_EXPORT void saveLanguage(const QString& applicationName, const QString& code);
+FG_EDITOR_EXPORT void applySavedLanguage(QApplication& app, const QString& applicationName);
+// The language whose translations are installed ("en" when none is).
+FG_EDITOR_EXPORT QString currentLanguage();
+// A Language menu - System and every language there is, the chosen one checked - for the windows of an application: the editor's
+// View > Language is one (EditorHost::offersLanguageChoice). Choosing a language saves it for `applicationName` (savedLanguage) and
+// says it shows at the next start. The menu belongs to `parent`.
+FG_EDITOR_EXPORT QMenu* createLanguageMenu(const QString& applicationName, QWidget* parent);
+// Adds a catalog that translates the texts of nodes (fg::Translations, Translations.hpp): the built-in nodes' is loaded by
+// applyLanguage; an application adds the one for its own nodes and classes, after applyLanguage and before the windows are made (a
+// file `flow --translations` wrote, or one in the application's resources). False, and `error`, when it cannot be read. A plugin's
+// catalog needs no call: the editor loads it for every plugin of the runtime (translations/<Plugin>_<code>.json next to its library).
+FG_EDITOR_EXPORT bool loadNodeTranslations(const QString& catalogFile, QString* error = nullptr);
 // An icon of the editor's resources (":/Icons/save.svg"...) drawn in the colours of the theme in use: on a light background its
 // neutral greys get darker, its colours stay. It follows theme changes by itself. Applications that use the editor's icons for
 // their own buttons take them from here.

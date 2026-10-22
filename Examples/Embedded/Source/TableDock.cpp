@@ -37,12 +37,12 @@ TableDock::TableDock(int number, fg::Runtime& rt, MessageStore& store, ScriptEdi
     auto* bar = new QToolBar(body);
     bar->setIconSize(QSize(18, 18));
     bar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    QAction* load = bar->addAction(fged::themedIcon(":/Icons/open.svg"), "Load Script", this, [this] { loadScript(); });
-    QAction* edit = bar->addAction(fged::themedIcon(":/Icons/configure.svg"), "Edit Script", this, [this] { editScript(); });
-    QAction* save = bar->addAction(fged::themedIcon(":/Icons/save.svg"), "Save Script", this, [this] { saveScript(); });
-    load->setToolTip("Load a .flow script into this table");
-    edit->setToolTip("Open the script of this table in the script editor. Save in the editor makes the table run the edited script.");
-    save->setToolTip("Write the script of this table to a .flow file");
+    QAction* load = bar->addAction(fged::themedIcon(":/Icons/open.svg"), tr("Load Script"), this, [this] { loadScript(); });
+    QAction* edit = bar->addAction(fged::themedIcon(":/Icons/configure.svg"), tr("Edit Script"), this, [this] { editScript(); });
+    QAction* save = bar->addAction(fged::themedIcon(":/Icons/save.svg"), tr("Save Script"), this, [this] { saveScript(); });
+    load->setToolTip(tr("Load a .flow script into this table"));
+    edit->setToolTip(tr("Open the script of this table in the script editor. Save in the editor makes the table run the edited script."));
+    save->setToolTip(tr("Write the script of this table to a .flow file"));
     bar->addSeparator();
     scriptLabel_ = new QLabel(bar);
     bar->addWidget(scriptLabel_);
@@ -84,13 +84,13 @@ TableDock::~TableDock() {
 }
 
 QString TableDock::scriptTitle() const {
-    return "Table " + QString::number(number_) + (scriptPath_.isEmpty() ? QString() : " - " + QFileInfo(scriptPath_).fileName());
+    return scriptPath_.isEmpty() ? tr("Table %1").arg(number_) : tr("Table %1 - %2").arg(number_).arg(QFileInfo(scriptPath_).fileName());
 }
 
 void TableDock::updateTitle() {
-    const QString name = scriptPath_.isEmpty() ? QString("default script") : QFileInfo(scriptPath_).fileName();
-    setWindowTitle("Table " + QString::number(number_));
-    scriptLabel_->setText("  " + name + (changedSinceFile_ ? " (changed in the editor)" : QString()));
+    const QString name = scriptPath_.isEmpty() ? tr("default script") : QFileInfo(scriptPath_).fileName();
+    setWindowTitle(tr("Table %1").arg(number_));
+    scriptLabel_->setText("  " + (changedSinceFile_ ? tr("%1 (changed in the editor)").arg(name) : name));
     scriptLabel_->setToolTip(scriptPath_);
 }
 
@@ -99,10 +99,10 @@ std::shared_ptr<fg::AsyncExecutor> TableDock::executor() const { return run_ ? r
 // ---- the toolbar
 void TableDock::loadScript() {
     const QString dir = scriptPath_.isEmpty() ? QString() : QFileInfo(scriptPath_).absolutePath();
-    const QString path = QFileDialog::getOpenFileName(this, "Load Script", dir, "FlowGraph scripts (*.flow)");
+    const QString path = QFileDialog::getOpenFileName(this, tr("Load Script"), dir, tr("FlowGraph scripts (*.flow)"));
     if (path.isEmpty()) return;
     QString reason;
-    if (!openScript(path, &reason)) QMessageBox::warning(this, "Load Script", reason + "\n\nThe script of the table is unchanged.");
+    if (!openScript(path, &reason)) QMessageBox::warning(this, tr("Load Script"), reason + "\n\n" + tr("The script of the table is unchanged."));
 }
 
 bool TableDock::openScript(const QString& path, QString* reason) {
@@ -115,7 +115,7 @@ bool TableDock::openScript(const QString& path, QString* reason) {
     // only a script that fits this application replaces the script of the table: a standalone script (Main...) or one without a NewMessage
     // handler is refused, and the table, its script and the editor stay as they are
     const std::string why = whyNotUsable(loaded.script, rt_.registry());
-    if (!why.empty()) return refuse("Cannot use '" + QFileInfo(path).fileName() + "':\n" + QString::fromStdString(why));
+    if (!why.empty()) return refuse(tr("Cannot use '%1':").arg(QFileInfo(path).fileName()) + "\n" + QString::fromStdString(why));
     // the table gets another script: if the editor was editing the old one it lets go of this table (the next "Edit Script" shows the new file)
     if (hub_ && !hub_->release(this)) return false;
     script_ = std::move(loaded.script);
@@ -134,14 +134,14 @@ void TableDock::editScript() {
 bool TableDock::saveScript() {
     QString path = scriptPath_;
     if (path.isEmpty()) {
-        path = QFileDialog::getSaveFileName(this, "Save Script", QString(), "FlowGraph scripts (*.flow)");
+        path = QFileDialog::getSaveFileName(this, tr("Save Script"), QString(), tr("FlowGraph scripts (*.flow)"));
         if (path.isEmpty()) return false;
         if (!path.contains('.')) path += ".flow";
     }
     try {
         script_.save(path.toStdString());
     } catch (const std::exception& e) {
-        QMessageBox::warning(this, "Save Script", QString::fromStdString(e.what()));
+        QMessageBox::warning(this, tr("Save Script"), QString::fromStdString(e.what()));
         return false;
     }
     scriptPath_ = path;
@@ -188,19 +188,19 @@ void TableDock::restart() {
     stopRun();
     const fg::CompatibilityReport compat = fg::checkCompatibility(script_, rt_.registry());
     if (!compat.ok()) {
-        showFailure("This script needs things this application does not provide:\n" + QString::fromStdString(compat.toText()));
+        showFailure(tr("This script needs things this application does not provide:") + "\n" + QString::fromStdString(compat.toText()));
         return;
     }
     std::shared_ptr<fg::Program> program = rt_.compile(script_);
     if (!program->ok()) {
-        QString first = "The script has compile errors.";
+        QString first = tr("The script has compile errors.");
         for (auto& d : program->diagnostics)
-            if (d.severity == fg::Diagnostic::Severity::Error) { first = "Compile error: " + QString::fromStdString(d.message); break; }
+            if (d.severity == fg::Diagnostic::Severity::Error) { first = tr("Compile error: %1").arg(QString::fromStdString(d.message)); break; }
         showFailure(first);
         return;
     }
     if (!program->events.count(kNewMessageEvent)) {
-        showFailure("The script has no NewMessage event: nothing runs.");
+        showFailure(tr("The script has no %1 event: nothing runs.").arg(kNewMessageEvent));
         return;
     }
     // a new run: an empty table with the columns of the script (so that it has headers before the first row), fresh variables
@@ -260,10 +260,11 @@ void TableDock::poll() {
 }
 
 void TableDock::showStatus() {
-    QString text = QString("%1 rows (%2 shown), %3 messages handled").arg(rows_).arg(table_->rowCount()).arg(processed_);
-    if (failed_) text = "<span style='color:" + errorColor() + "'>" + text + QString(" - %1 failed (%2)</span>").arg(failed_).arg(firstError_.toHtmlEscaped());
+    QString text = tr("%1 rows (%2 shown), %3 messages handled").arg(rows_).arg(table_->rowCount()).arg(processed_);
+    if (failed_)
+        text = "<span style='color:" + errorColor() + "'>" + tr("%1 - %2 failed (%3)").arg(text).arg(failed_).arg(firstError_.toHtmlEscaped()) + "</span>";
     status_->setText(text);
-    status_->setToolTip(log_.isEmpty() ? QString() : "Print String output:\n" + log_.join('\n'));
+    status_->setToolTip(log_.isEmpty() ? QString() : tr("Print String output:") + "\n" + log_.join('\n'));
 }
 
 QString TableDock::statusText() const { return status_->text(); }

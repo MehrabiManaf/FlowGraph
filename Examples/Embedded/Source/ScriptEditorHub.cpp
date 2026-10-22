@@ -15,19 +15,21 @@ public:
     Host(ScriptEditorHub& hub, fg::Runtime& rt) : hub_(hub), rt_(rt) {}
 
     fg::Runtime& runtime() override { return rt_; }
-    QString applicationName() const override { return "Message Tables"; }
+    QString applicationName() const override { return kApplicationName; }
 
     // The application owns the scripts and runs them: the editor has no files and no Run button.
     fged::EditorMode mode() const override { return fged::EditorMode::Embedded; }
     // The theme of the editor is the theme of the whole application (its tables too): the user may choose it in the editor.
     // main() applies the saved choice before the first window is shown.
     bool offersThemeChoice() const override { return true; }
+    // So is its language: the editor has View > Language too (the same choice as the main window's), applied by main() at the start.
+    bool offersLanguageChoice() const override { return true; }
 
     // A script is only taken (edit(), File > Open) when it handles the event of this application. The editor has already checked that the
     // application provides everything the script uses: a script made for another application (Main, Tick...) never gets here.
     bool acceptsScript(const fg::Script& script, QString* reason) override {
         if (handlesNewMessage(script)) return true;
-        if (reason) *reason = QString("The script does not handle the event %1: nothing would run.").arg(kNewMessageEvent);
+        if (reason) *reason = ScriptEditorHub::tr("The script does not handle the event %1: nothing would run.").arg(kNewMessageEvent);
         return false;
     }
 
@@ -40,10 +42,14 @@ public:
             auto program = rt_.compile(script);
             if (!program->ok())
                 for (auto& d : program->diagnostics)
-                    if (d.severity == fg::Diagnostic::Severity::Error) { why = "The script has a compile error: " + d.message; break; }
+                    if (d.severity == fg::Diagnostic::Severity::Error) {
+                        why = ScriptEditorHub::tr("The script has a compile error: %1").arg(QString::fromStdString(d.message)).toStdString();
+                        break;
+                    }
         }
         if (!why.empty()) {
-            auto* box = new QMessageBox(QMessageBox::Warning, "Save", "The table keeps its script, this one cannot be used:\n\n" + QString::fromStdString(why),
+            auto* box = new QMessageBox(QMessageBox::Warning, ScriptEditorHub::tr("Save"),
+                                        ScriptEditorHub::tr("The table keeps its script, this one cannot be used:") + "\n\n" + QString::fromStdString(why),
                                         QMessageBox::Ok, editor.window());
             box->setAttribute(Qt::WA_DeleteOnClose);
             box->open();

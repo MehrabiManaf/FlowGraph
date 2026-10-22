@@ -13,12 +13,14 @@
 // loading, plugins and compiling are not part of it.
 #include <FlowGraph/Runtime.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -54,6 +56,9 @@ void usage() {
         "                        working directory, plugin directories); command line arguments are appended\n"
         "  --reference [FILE]    write the reference of every node, event, class and enum flow offers (plugins\n"
         "                        included) as Markdown to FILE or to the standard output; no script is needed\n"
+        "  --translations FILE   create or update the catalog FILE (<language>.json) that translates the nodes flow\n"
+        "                        offers in an editor: new texts are added untranslated, removed ones dropped\n"
+        "  --only PLUGIN         with --translations: only the texts of PLUGIN (its catalog, <PLUGIN>_<language>.json)\n"
         "  --version             print the version\n"
         "  --help                show this text\n"
         "  --                    end of options (the next word is the script)\n"
@@ -73,6 +78,7 @@ int main(int argc, char** argv) {
     std::string script, launchName;
     std::vector<std::string> scriptArgs, extraPlugins;
     bool checkOnly = false, launch = false, reference = false, defaultPlugins = true;
+    std::string catalogFile, catalogSource;
     std::string referenceFile;
     int i = 1;
     for (; i < argc; ++i) {
@@ -89,10 +95,12 @@ int main(int argc, char** argv) {
             reference = true;
             if (i + 1 < argc && argv[i + 1][0] != '-') referenceFile = argv[++i];
         }
+        else if (a == "--translations" && i + 1 < argc) catalogFile = argv[++i];
+        else if (a == "--only" && i + 1 < argc) catalogSource = argv[++i];
         else return fail("unknown option '" + a + "' (see flow --help)");
     }
-    if (reference) {
-        Runtime rt;
+    // the registry of the standard applications, with the plugins flow would load (for --reference and --translations)
+    auto standardRuntime = [&](Runtime& rt) {
         standard::registerStandardApp(rt.registry());
         std::vector<std::string> errors;
         if (defaultPlugins) rt.loadPluginsFromEnvironment("FLOW_PLUGIN_PATH", &errors);
@@ -100,6 +108,48 @@ int main(int argc, char** argv) {
         if (defaultPlugins && fs::exists(self.parent_path() / "plugins")) rt.loadPluginsFrom((self.parent_path() / "plugins").string(), &errors);
         for (auto& d : extraPlugins) rt.loadPluginsFrom(d, &errors);
         for (auto& e : errors) std::fprintf(stderr, "flow: warning: %s\n", e.c_str());
+    };
+    if (!catalogFile.empty()) {
+        Runtime rt;
+        standardRuntime(rt);
+        std::string existing, language = fs::path(catalogFile).stem().string();     // "fa.json" translates to "fa"
+        // --only: the standard nodes and that plugin, no other one (what its catalog shares with the standard nodes' catalog - In,
+        // Then... - is left out of it, and other plugins must not change that)
+        Runtime alone;
+        Runtime* catalogRuntime = &rt;
+        if (!catalogSource.empty()) {
+            const auto& loaded = rt.loadedPlugins();
+            auto it = std::find(loaded.begin(), loaded.end(), catalogSource);
+            if (it == loaded.end()) return fail("no plugin '" + catalogSource + "' was loaded (see --plugins)");
+            standard::registerStandardApp(alone.registry());
+            std::string error;
+            if (!alone.loadPlugin(rt.loadedPluginFiles()[size_t(it - loaded.begin())], &error)) return fail(error);
+            catalogRuntime = &alone;
+            if (language.rfind(catalogSource + "_", 0) == 0) language = language.substr(catalogSource.size() + 1);   // "ExamplePlugin_fa"
+        }
+        if (std::ifstream in(catalogFile, std::ios::binary); in) {
+            std::stringstream ss;
+            ss << in.rdbuf();
+            existing = ss.str();
+        }
+        CatalogReport report;
+        std::string text;
+        try {
+            text = updateCatalog(catalogRuntime->registry(), existing, language, &report, catalogSource);
+        } catch (const std::exception& e) {
+            return fail("cannot read '" + catalogFile + "': " + e.what());
+        }
+        std::ofstream out(catalogFile, std::ios::binary | std::ios::trunc);
+        out << text;
+        if (!out) return fail("cannot write '" + catalogFile + "'");
+        std::printf("%s: %zu texts, %zu translated, %zu new, %zu outdated, %zu removed\n", catalogFile.c_str(), report.texts, report.translated,
+                    report.added, report.outdated, report.removed);
+        for (auto& k : report.outdatedKeys) std::printf("  outdated (its English text changed): %s\n", k.c_str());
+        return 0;
+    }
+    if (reference) {
+        Runtime rt;
+        standardRuntime(rt);
         ReferenceOptions ro;
         ro.title = "FlowGraph node reference";
         ro.intro = "Everything a script of the standard applications (`flow`, `flowstudio`) can use: the built-in nodes, the nodes of the "

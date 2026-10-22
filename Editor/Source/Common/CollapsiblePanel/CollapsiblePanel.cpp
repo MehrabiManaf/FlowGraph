@@ -151,9 +151,17 @@ void CCollapsiblePanel::SetAnimationProgress(const double& Progress)
     // now. Until then this panel is already its new (say, shorter) height but the row below hasn't moved up yet, so a
     // sliver of this panel's clipped contents shows through the gap between them. Activating the layout here keeps
     // every row in sync with this frame's height, every frame.
-    if (QWidget* parent = parentWidget())
-        if (QLayout* parentLayout = parent->layout())
-            parentLayout->activate();
+    // It is the outermost layout of the panel that holds this one (the Details panel, not its form inside it), told first that
+    // everything in between has another size: laying out only the parent would place its rows in the parent's old size -
+    // smaller while this panel opens, so the rows above were squeezed for a moment and their texts jumped.
+    QWidget* top = parentWidget();
+    while (top && top->parentWidget() && top->parentWidget()->layout() && top->parentWidget()->layout()->indexOf(top) >= 0) {
+        top->updateGeometry();
+        top = top->parentWidget();
+    }
+    if (top)
+        if (QLayout* topLayout = top->layout())
+            topLayout->activate();
 }
 
 // The height the panel must have right now, between the collapsed and the fully expanded height according to

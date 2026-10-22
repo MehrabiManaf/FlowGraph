@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace fg {
 
@@ -345,6 +346,9 @@ std::vector<const FunctionDesc*> Registry::functions() const {
 }
 
 EventDesc& Registry::addEvent(const std::string& name, std::vector<std::pair<std::string, std::string>> params) {
+    if (plugin_)
+        throw std::logic_error("it declares the event '" + name + "': events are declared by the application that raises them, a plugin " +
+                               "adds classes, functions, enums and nodes");
     auto it = eventByName_.find(name);
     EventDesc* ed;
     if (it != eventByName_.end()) ed = it->second;
@@ -378,6 +382,8 @@ std::vector<const EventDesc*> Registry::events() const {
 }
 
 NodeDef& Registry::addNode(NodeDef def) {
+    if (plugin_ && def.op == NodeOp::Event)
+        throw std::logic_error("it adds the event node '" + def.id + "': events are declared by the application that raises them");
     std::lock_guard lk(typeMu_);
     if (def.source.empty()) def.source = source_;
     auto& slot = nodes_[def.id];

@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: MIT
-// A sample plugin: reflects a small C++ class, a free function and a host event.
+// A sample plugin: reflects a small C++ class and a free function. (Events are the application's: a plugin declares none.)
 #include <FlowGraph/Plugin.hpp>
 
 namespace {
@@ -32,6 +32,4 @@ FG_PLUGIN(reg) {
         .makePure()
         .withDefault(0, fg::Value("world"))
         .withDoc("Builds a greeting.");
-
-    reg.addEvent("OnExample", {{"Message", "string"}});
 }

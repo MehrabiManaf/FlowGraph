@@ -1,0 +1,25 @@
+{
+  "language": "fa",
+  "texts": {
+    "pin:*/Target": ["Target", "هدف"],
+    "node:cast:Message": ["Cast To Message", "تبدیل به Message"],
+    "pin:cast:Message/Success": ["Success", "موفق"],
+    "pin:cast:Message/Failed": ["Failed", "ناموفق"],
+    "pin:cast:Message/Object": ["Object", "شیء"],
+    "pin:cast:Message/As Message": ["As Message", "به‌عنوان Message"],
+    "node:event:NewMessage": ["NewMessage", "پیام تازه"],
+    "node:event:NewMessage#doc": ["A message of the messages file. The script is run once for every message.", "یک پیام از پروندهٔ پیام‌ها. اسکریپت برای هر پیام یک بار اجرا می‌شود."],
+    "pin:event:NewMessage/Message": ["Message", "پیام"],
+    "node:get:Message.Line": ["Get Line", "خواندن سطر"],
+    "pin:get:Message.Line/Line": ["Line", "سطر"],
+    "node:get:Message.Text": ["Get Text", "خواندن متن"],
+    "pin:get:Message.Text/Text": ["Text", "متن"],
+    "node:table.addrow": ["Add Row", "افزودن سطر"],
+    "node:table.addrow#doc": ["Adds a row to the table. Every input pin is a column of the table: the name of the pin is the name of the column.", "یک سطر به جدول می‌افزاید. هر پایهٔ ورودی یک ستون جدول است: نام پایه نام ستون است."],
+    "category:Casting": ["Casting", "تبدیل نوع"],
+    "category:Events": ["Events", "رویدادها"],
+    "category:Message": ["Message", "Message"],
+    "category:Messages": ["Messages", "پیام‌ها"],
+    "category:Table": ["Table", "جدول"]
+  }
+}

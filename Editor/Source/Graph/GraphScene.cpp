@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "GraphScene.hpp"
+#include "../Common/NodeTexts.hpp"
 #include "CommentItem.hpp"
 #include "LinkItem.hpp"
 
@@ -287,7 +288,7 @@ void GraphScene::commitLayout() {
             resized.push_back({id, item->pos().x(), item->pos().y(), r.width(), r.height()});
     }
     if (moved.empty() && resized.empty()) return;
-    doc_->edit(moved.empty() ? "Edit comment" : "Move", [&](fg::Script& s) {
+    doc_->edit(moved.empty() ? tr("Edit comment") : tr("Move"), [&](fg::Script& s) {
         fg::Graph* gr = mutableGraph(s);
         if (!gr) return;
         for (auto& m : moved) if (auto* n = gr->findNode(m.id)) { n->x = m.x; n->y = m.y; }
@@ -327,13 +328,13 @@ QString GraphScene::pinTooltip(const PinRef& ref, const QString& doc) const {
     if (ref.wildcard) t += "  [type resolved on connect]";
     if (!doc.isEmpty()) t += "\n" + doc;
     QString v;
-    if (ref.kind == fg::PinKind::Data && pinValueProvider && pinValueProvider(ref, v)) t += "\nValue: " + v;
+    if (ref.kind == fg::PinKind::Data && pinValueProvider && pinValueProvider(ref, v)) t += "\n" + tr("Value: %1").arg(v);
     return t;
 }
 
 // ------------------------------------------------------------------ pin editing
 void GraphScene::setPinDefault(fg::NodeId node, const std::string& pin, const fg::Value& v) {
-    doc_->edit("Edit value", [&](fg::Script& s) {
+    doc_->edit(tr("Edit value"), [&](fg::Script& s) {
         if (auto* g = mutableGraph(s))
             if (auto* n = g->findNode(node)) n->defaults[pin] = v;
     }, EditKind::Structural, QString("pin:%1:%2:%3").arg(name_).arg(node).arg(qs(pin)));
@@ -391,9 +392,9 @@ void GraphScene::chooseEnumValue(NodeItem* item, const std::string& pin, const f
     if (!type) return;
     QMenu menu;
     for (auto& e : type->enumValues) {
-        QAction* a = menu.addAction(qs(e.name));
+        QAction* a = menu.addAction(enumValueText(type->name, e.name));      // shown translated; the value is what is stored
         a->setData(qlonglong(e.value));
-        if (!e.doc.empty()) a->setToolTip(qs(e.doc));
+        if (!e.doc.empty()) a->setToolTip(QString::fromStdString(nodeTexts().enumValueDoc(type->name, e.name, e.doc)));
     }
     if (QAction* a = menu.exec(screenPos)) setPinDefault(item->nodeId(), pin, fg::Value(int64_t(a->data().toLongLong())));
 }
@@ -458,11 +459,11 @@ void addConnection(fg::Graph& g, const fg::Connection& c, bool exec) {
 
 bool GraphScene::connectPins(const PinRef& a, const PinRef& b, QString* why) {
     auto fail = [&](const QString& m) { if (why) *why = m; return false; };
-    if (a.dir == b.dir) return fail("Connect an output pin to an input pin");
+    if (a.dir == b.dir) return fail(tr("Connect an output pin to an input pin"));
     const PinRef& out = a.dir == fg::PinDir::Out ? a : b;
     const PinRef& in = a.dir == fg::PinDir::Out ? b : a;
-    if (out.node == in.node) return fail("A node cannot be connected to itself");
-    if (out.kind != in.kind) return fail("Execution pins only connect to execution pins");
+    if (out.node == in.node) return fail(tr("A node cannot be connected to itself"));
+    if (out.kind != in.kind) return fail(tr("Execution pins only connect to execution pins"));
     if (out.kind == fg::PinKind::Data) {
         // a pin whose type is still open only fixes the "shape" (array / map) it can take
         auto shapeOk = [](const PinRef& w, const PinRef& other) {
@@ -472,7 +473,7 @@ bool GraphScene::connectPins(const PinRef& a, const PinRef& b, QString* why) {
         bool ok = (out.wildcard || in.wildcard) ? (shapeOk(out.wildcard ? out : in, out.wildcard ? in : out) && (!(out.wildcard && in.wildcard) || shapeOk(in, out)))
                                                  : registry().canConnect(out.type, in.type);
         if (!ok)
-            return fail(QString("Cannot connect %1 to %2").arg(out.type ? qs(out.type->name) : "?", in.type ? qs(in.type->name) : "?"));
+            return fail(tr("Cannot connect %1 to %2").arg(out.type ? qs(out.type->name) : "?", in.type ? qs(in.type->name) : "?"));
     }
     fg::Connection c{out.node, out.pin, in.node, in.pin};
     bool exec = out.kind == fg::PinKind::Exec;
@@ -485,18 +486,18 @@ bool GraphScene::connectPins(const PinRef& a, const PinRef& b, QString* why) {
         };
         const int from = index(out.node), to = index(in.node);
         if (!exec && fg::closesPureDataCycle(*cg, from, to))
-            return fail("This link would make the value depend on itself (the data links would form a cycle)");
+            return fail(tr("This link would make the value depend on itself (the data links would form a cycle)"));
         if (exec && fg::closesEndlessExecLoop(*cg, from, to))
-            return fail("This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first");
+            return fail(tr("This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first"));
     }
-    doc_->edit("Connect pins", [&](fg::Script& s) {
+    doc_->edit(tr("Connect pins"), [&](fg::Script& s) {
         if (auto* g = mutableGraph(s)) addConnection(*g, c, exec);
     });
     return true;
 }
 
 void GraphScene::breakPinLinks(const PinRef& p) {
-    doc_->edit("Break links", [&](fg::Script& s) {
+    doc_->edit(tr("Break links"), [&](fg::Script& s) {
         auto* g = mutableGraph(s);
         if (!g) return;
         auto& v = g->connections;
@@ -511,10 +512,10 @@ void GraphScene::insertReroute(const fg::Connection& c, const QPointF& scenePos)
     if (!from) return;
     for (auto& p : from->compiled().pins)
         if (p.name == c.fromPin && p.kind == fg::PinKind::Exec) {
-            emit message("Reroute nodes are only available for data links");
+            emit message(tr("Reroute nodes are only available for data links"));
             return;
         }
-    doc_->edit("Add reroute", [&](fg::Script& s) {
+    doc_->edit(tr("Add reroute"), [&](fg::Script& s) {
         auto* g = mutableGraph(s);
         if (!g) return;
         g->connections.erase(std::remove(g->connections.begin(), g->connections.end(), c), g->connections.end());
@@ -538,7 +539,7 @@ fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPoi
         filter.type = from->wildcard ? nullptr : from->type;
         connect = fg::templateAccepts(registry(), t, filter, &pinName);
     }
-    doc_->edit("Add node", [&](fg::Script& s) {
+    doc_->edit(tr("Add node"), [&](fg::Script& s) {
         fg::Graph* g = mutableGraph(s);
         if (!g) return;
         fg::Node& n = fg::instantiate(*g, t, at.x(), at.y());
@@ -556,7 +557,7 @@ fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPoi
 fg::NodeId GraphScene::addVariableNode(const QString& name, const QString& scope, bool isSet, const QPointF& where) {
     const QPointF pos = snapped(where);
     fg::NodeId id = 0;
-    doc_->edit(isSet ? "Add Set variable" : "Add Get variable", [&](fg::Script& s) {
+    doc_->edit(isSet ? tr("Add Set variable") : tr("Add Get variable"), [&](fg::Script& s) {
         if (auto* g = mutableGraph(s)) {
             fg::Node& n = g->addNode(isSet ? "var.set" : "var.get", pos.x(), pos.y());
             n.props["name"] = ss(name);
@@ -573,7 +574,7 @@ fg::NodeId GraphScene::addFunctionCall(const QString& function, const QPointF& w
     if (!callee || callee->kind != fg::GraphKind::Function) return 0;
     const QPointF pos = snapped(where);
     fg::NodeId id = 0;
-    doc_->edit("Add call to " + function, [&](fg::Script& s) {
+    doc_->edit(tr("Add call to %1").arg(function), [&](fg::Script& s) {
         if (auto* g = mutableGraph(s)) {
             fg::Node& n = g->addNode("func.call", pos.x(), pos.y());
             n.props["function"] = ss(function);
@@ -598,9 +599,9 @@ void GraphScene::deleteSelected() {
         } else if (auto* l = dynamic_cast<LinkItem*>(it)) links.push_back(l->connection());
         else if (auto* c = dynamic_cast<CommentItem*>(it)) comments.insert(c->commentId());
     }
-    if (refusedEvent) emit message("Events belong to the application and cannot be deleted");
+    if (refusedEvent) emit message(tr("Events belong to the application and cannot be deleted"));
     if (nodes.empty() && links.empty() && comments.empty()) return;
-    doc_->edit("Delete", [&](fg::Script& s) {
+    doc_->edit(tr("Delete"), [&](fg::Script& s) {
         auto* g = mutableGraph(s);
         if (!g) return;
         auto& cv = g->connections;
@@ -663,7 +664,7 @@ void GraphScene::pasteClip(const QByteArray& data, const QPointF& at, bool keepO
     for (auto& n : src.nodes) { minX = std::min(minX, n.x); minY = std::min(minY, n.y); }
     QPointF delta = keepOffset ? at : QPointF(at.x() - minX, at.y() - minY);
     std::vector<fg::NodeId> created;
-    doc_->edit("Paste", [&](fg::Script& s) {
+    doc_->edit(tr("Paste"), [&](fg::Script& s) {
         fg::Graph* g = mutableGraph(s);
         if (!g) return;
         std::map<fg::NodeId, fg::NodeId> remap;
@@ -710,10 +711,10 @@ void GraphScene::addComment(const QPointF& at) {
         if (dynamic_cast<NodeItem*>(it)) r = r.united(it->sceneBoundingRect());
     if (r.isNull()) r = QRectF(at, QSizeF(320, 180));
     else r.adjust(-30, -50, 30, 30);
-    doc_->edit("Add comment", [&](fg::Script& s) {
+    doc_->edit(tr("Add comment"), [&](fg::Script& s) {
         if (auto* g = mutableGraph(s)) {
             auto& c = g->addComment(r.x(), r.y(), r.width(), r.height());
-            c.text = "Comment";
+            c.text = ss(tr("Comment"));
         }
     });
 }
@@ -724,16 +725,16 @@ void GraphScene::editCommentText(int id) {
     QString cur;
     for (auto& c : g->comments) if (c.id == id) cur = qs(c.text);
     bool ok = false;
-    QString t = QInputDialog::getText(views().isEmpty() ? static_cast<QWidget*>(nullptr) : static_cast<QWidget*>(views().front()), "Comment", "Text:", QLineEdit::Normal, cur, &ok);
+    QString t = QInputDialog::getText(views().isEmpty() ? static_cast<QWidget*>(nullptr) : static_cast<QWidget*>(views().front()), tr("Comment"), tr("Text:"), QLineEdit::Normal, cur, &ok);
     if (!ok) return;
-    doc_->edit("Edit comment", [&](fg::Script& s) {
+    doc_->edit(tr("Edit comment"), [&](fg::Script& s) {
         if (auto* gr = mutableGraph(s))
             if (auto* c = gr->findComment(id)) c->text = ss(t);
     }, EditKind::Layout);
 }
 
 void GraphScene::setNodeComment(fg::NodeId id, const QString& text) {
-    doc_->edit("Edit node comment", [&](fg::Script& s) {
+    doc_->edit(tr("Edit node comment"), [&](fg::Script& s) {
         if (auto* g = mutableGraph(s))
             if (auto* n = g->findNode(id)) n->comment = ss(text);
     }, EditKind::Structural, QString("comment:%1:%2").arg(name_).arg(id));

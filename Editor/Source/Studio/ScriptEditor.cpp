@@ -8,6 +8,7 @@
 #include "../Graph/Style.hpp"
 #include "RunController.hpp"
 
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -42,7 +43,8 @@ void initEditor() {
 
 // ------------------------------------------------------------------ EditorHost defaults
 std::vector<LaunchEntry> EditorHost::launchEntries(const fg::Program& program) {
-    std::vector<LaunchEntry> out;
+    // events first, then functions, each by name (not by their titles: those are translated)
+    std::vector<LaunchEntry> out, functions;
     for (auto& [name, loc] : program.events) {
         LaunchEntry e;
         e.id = e.entry = qs(name);
@@ -53,7 +55,7 @@ std::vector<LaunchEntry> EditorHost::launchEntries(const fg::Program& program) {
             e.params.push_back({p.name, p.type ? p.type->name : "any", false, false, fg::Value()});
             sig << qs(p.name) + ": " + (p.type ? qs(p.type->name) : "any");
         }
-        e.title = "Event  " + e.entry + "(" + sig.join(", ") + ")";
+        e.title = QCoreApplication::translate("fged::EditorHost", "Event  %1(%2)").arg(e.entry, sig.join(", "));
         out.push_back(std::move(e));
     }
     for (auto& [name, gi] : program.functions) {
@@ -64,14 +66,13 @@ std::vector<LaunchEntry> EditorHost::launchEntries(const fg::Program& program) {
             e.params.push_back(p.decl);
             sig << qs(p.decl.name) + ": " + qs(p.decl.type);
         }
-        e.title = "Function  " + e.entry + "(" + sig.join(", ") + ")";
-        out.push_back(std::move(e));
+        e.title = QCoreApplication::translate("fged::EditorHost", "Function  %1(%2)").arg(e.entry, sig.join(", "));
+        functions.push_back(std::move(e));
     }
-    std::sort(out.begin(), out.end(), [](const LaunchEntry& a, const LaunchEntry& b) {
-        bool ea = a.title.startsWith("Event"), eb = b.title.startsWith("Event");
-        if (ea != eb) return ea;
-        return a.entry < b.entry;
-    });
+    auto byName = [](const LaunchEntry& a, const LaunchEntry& b) { return a.entry < b.entry; };
+    std::sort(out.begin(), out.end(), byName);
+    std::sort(functions.begin(), functions.end(), byName);
+    for (auto& f : functions) out.push_back(std::move(f));
     return out;
 }
 
@@ -80,7 +81,7 @@ bool EditorHost::prepareLaunch(const LaunchEntry& entry, LaunchSpec& spec, QWidg
     spec.args.clear();
     if (entry.params.empty()) return true;
     QDialog dlg(parent);
-    dlg.setWindowTitle("Arguments for " + entry.entry);
+    dlg.setWindowTitle(QCoreApplication::translate("fged::EditorHost", "Arguments for %1").arg(entry.entry));
     auto* form = new QFormLayout(&dlg);
     std::vector<QLineEdit*> edits;
     for (auto& p : entry.params) {

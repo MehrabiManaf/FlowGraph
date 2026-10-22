@@ -196,7 +196,9 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
   `loadPluginsFrom(dir)`, `loadPluginsFromPathList("a;b")`, `loadPluginsFromEnvironment("VAR")`. Build them with the same
   compiler and FlowGraphCore version: `FG_PLUGIN` also exports how the plugin was built (plugin ABI version, compiler family,
   Debug / Release runtime, sizes of the shared classes) and the loader refuses a plugin that does not match, with the reason,
-  instead of crashing later. A plugin that is reachable through several directories is loaded once.
+  instead of crashing later. A plugin that is reachable through several directories is loaded once. A plugin adds classes,
+  functions, enums and nodes, but no events: the application raises its events, so only the application declares them (a
+  plugin that calls `addEvent` is refused).
 * Custom nodes: `registry.addNode(fg::NodeDef{...})` with pins, optional dynamic pins and a `run` callback.
 * **Asynchronous functions.** A function that returns a `std::future<T>` (or `std::shared_future<T>`) becomes a node that waits:
   ```cpp
@@ -323,6 +325,34 @@ The editor has two modes, chosen by `EditorHost::mode()`:
   `ScriptEditor::attach(executor)`); breakpoints stop its tasks, the Debugger panel shows them, Pause / Continue / Step control
   them, *Detach* lets everything continue. When the application replaces the executor while the editor is attached it attaches the new
   one before posting the first event.
+
+### Languages
+
+The editor can show its texts in another language: *View > Language* (System, English, فارسی...; it applies at the next start
+and is kept per application). Only texts change - the layout stays left to right in every language - and scripts do not depend on
+the language: they keep the English node names, so a script made in one language opens unchanged in any other.
+
+* **The languages:** English; Persian; Chinese (Simplified), Spanish, German, Japanese, Portuguese (Brazil), French, Russian and
+  Korean. Apart from Persian, these are machine translations waiting for a review by native speakers: their editor texts are
+  marked unfinished (Qt Linguist lists them as not reviewed; they are used all the same), and their node catalogs say so in their
+  `"note"`. Corrections are welcome.
+* **The editor's own texts** (menus, panels, dialogs) are Qt translations: `Editor/Translations/flowgraph_<code>.ts`, edited with
+  Qt Linguist and compiled into the editor. `cmake --build <build> --target flowgraph_lupdate` adds new texts of the sources to
+  every file.
+* **The texts of the nodes** (titles, pins, categories, docs, settings, enum values) are catalogs:
+  `Core/Translations/<code>.json`, one text per line with its English text next to it
+  (`"node:flow.branch": ["Branch", "شاخه"]`). `flow --translations Core/Translations/<code>.json` creates or updates one: new
+  texts are added untranslated, removed ones dropped, and a translation whose English text changed is not used until it is
+  translated again. Node searches find a node by its translated and its English name.
+* **A new language** is one `.ts` file and one `.json` file with those names; nothing else changes.
+* **A plugin** ships catalogs of its own nodes next to its library: `plugins/translations/<Plugin>_<code>.json`. The editor loads
+  the one of its language for every plugin the runtime loads, also for plugins loaded later (a launch configuration's).
+  `flow --plugins <dir> --only <Plugin> --translations <Plugin>_<code>.json` writes or updates one with the plugin's texts only;
+  `Plugins/ExamplePlugin/Translations` is an example (its build copies them next to the library).
+* An application translates the nodes it registers itself with a catalog of its own: `fged::loadNodeTranslations(file)` after
+  `fged::applyLanguage` / `applySavedLanguage`.
+* CI checks that every text of the sources is in the files and that none is without a translation; the editor tests check that
+  every text the editor shows goes through the translation system.
 
 ## FlowGraph Studio keys
 

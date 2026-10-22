@@ -21,6 +21,9 @@
 
 namespace msgapp {
 
+// The name the editor keeps the choices of this application under (theme, language, dock layout).
+inline constexpr const char* kApplicationName = "Message Tables";
+
 class TableDock;
 
 class ScriptEditorHub : public QObject {

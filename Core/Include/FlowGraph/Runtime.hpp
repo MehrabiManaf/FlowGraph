@@ -16,6 +16,7 @@
 #include <FlowGraph/Reference.hpp>
 #include <FlowGraph/Search.hpp>
 #include <FlowGraph/System.hpp>
+#include <FlowGraph/Translations.hpp>
 #include <FlowGraph/Vm.hpp>
 
 #include <memory>
@@ -58,6 +59,8 @@ public:
     // The directories listed in an environment variable (FLOW_PLUGIN_PATH by default); nothing happens when it is unset.
     int loadPluginsFromEnvironment(const char* variable = "FLOW_PLUGIN_PATH", std::vector<std::string>* errors = nullptr);
     const std::vector<std::string>& loadedPlugins() const { return pluginNames_; }
+    // the library of each plugin of loadedPlugins(), in the same order (its catalogs of translations are next to it, Translations.hpp)
+    const std::vector<std::string>& loadedPluginFiles() const { return pluginPaths_; }
 
 private:
     // Libraries must outlive the registry (it holds code that lives inside them), so they are declared first.
@@ -65,7 +68,7 @@ private:
     std::unique_ptr<Libs> libs_;
     std::unique_ptr<Registry> reg_;
     std::vector<std::string> pluginNames_;
-    std::vector<std::string> pluginPaths_;       // canonical paths of the libraries that are loaded
+    std::vector<std::string> pluginPaths_;       // canonical paths of the libraries that are loaded (as given when that failed)
 };
 
 } // namespace fg

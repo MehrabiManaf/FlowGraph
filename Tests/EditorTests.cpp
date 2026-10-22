@@ -4,6 +4,7 @@
 #include "Document.hpp"
 #include "Common/Settings.hpp"
 #include "Common/Theme.hpp"
+#include "Common/NodeTexts.hpp"
 #include "Graph/GraphScene.hpp"
 #include "Graph/Style.hpp"
 #include "Graph/LinkItem.hpp"
@@ -21,6 +22,8 @@
 #include "Graph/GraphView.hpp"
 
 #include <QApplication>
+#include <QFormLayout>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QHash>
 #include <QStyleHints>
@@ -74,6 +77,9 @@
 #include <QMenuBar>
 #include <QMainWindow>
 #include <QDir>
+#include <QRegularExpression>
+#include <QTabBar>
+#include <QTranslator>
 #include <QEventLoop>
 #include <QFile>
 
@@ -2679,6 +2685,245 @@ TEST(enum_variable_default_is_chosen_by_name) {
     CHECK_EQ(setNodeShows(), QString("Windows"));
 }
 
+// The editor's languages: English and the translations compiled in. A language is applied before the windows are made: their texts are
+// in it, the layout stays left to right (Persian too), and a host finds its menus by their English names in any
+// language. The choice is kept per application.
+TEST(editor_languages_translate_the_ui) {
+    const QStringList languages = availableLanguages();
+    CHECK(languages.size() >= 2 && languages.front() == "en" && languages.contains("fa"));
+    CHECK_EQ(languageName("en"), QString("English"));
+    CHECK_EQ(languageName("fa"), QString("فارسی"));
+    // region variants and the unknown
+    applyLanguage(*qApp, "fa_IR");
+    CHECK_EQ(currentLanguage(), QString("fa"));
+    applyLanguage(*qApp, "xx");
+    CHECK_EQ(currentLanguage(), QString("en"));
+    CHECK_EQ(QCoreApplication::translate("fged::ScriptEditorWindow", "&File"), QString("&File"));
+
+    applyLanguage(*qApp, "fa");
+    CHECK_EQ(currentLanguage(), QString("fa"));
+    CHECK(qApp->layoutDirection() == Qt::LeftToRight);                   // only the texts change: the panels are not mirrored
+    CHECK_EQ(QCoreApplication::translate("fged::ScriptEditorWindow", "&File"), QString("پرونده(&F)"));
+    {
+        StudioFixture f;
+        QStringList titles;
+        for (QAction* a : f.win.menuBar()->actions()) titles << a->text();
+        CHECK(titles.contains("پرونده(&F)") && titles.contains("ویرایش(&E)"));
+        CHECK(f.view->layoutDirection() == Qt::LeftToRight);             // the graph keeps flowing from left to right
+        // the host adds Launch Configurations to the existing Run menu, found by its English name
+        int runMenus = 0;
+        for (QAction* a : f.win.menuBar()->actions()) runMenus += a->menu() && a->menu()->objectName() == "Run";
+        CHECK_EQ(runMenus, 1);
+        CHECK(f.editor.menu("&Run") != nullptr && f.editor.menu("&Run")->objectName() == "Run");
+        // View > Language: System, English, Persian - each in its own language
+        QMenu* languageMenu = f.win.findChild<QMenu*>("languageMenu");
+        CHECK(languageMenu != nullptr);
+        if (languageMenu) {
+            QStringList items;
+            for (QAction* a : languageMenu->actions()) items << a->text();
+            CHECK(items.contains("English") && items.contains("فارسی") && items.size() == languages.size() + 1);
+        }
+    }
+    applyLanguage(*qApp, "en");                                           // the other tests are in English
+    CHECK(qApp->layoutDirection() == Qt::LeftToRight);
+    CHECK_EQ(QCoreApplication::translate("fged::ScriptEditorWindow", "&File"), QString("&File"));
+
+    // the choice of each application
+    CHECK_EQ(savedLanguage("Language Test App"), QString("system"));
+    saveLanguage("Language Test App", "fa");
+    CHECK_EQ(savedLanguage("Language Test App"), QString("fa"));
+    CHECK_EQ(savedLanguage("Another Language Test App"), QString("system"));
+}
+
+// The missed-text check: with a pseudo language that marks every text it translates ("⟦...⟧"), every text the editor shows in its
+// widgets - labels, buttons, menus, toolbar, tabs, dock and section titles, table headers, placeholders - is marked, i.e. went through
+// the translation system. A text that is not marked was missed (a literal without tr()). The script's own names (graphs, variables,
+// launch configurations) and texts without letters are not the editor's: they are not checked.
+TEST(every_editor_text_is_translatable) {
+    struct Pseudo : QTranslator {
+        bool isEmpty() const override { return false; }
+        QString translate(const char*, const char* source, const char*, int) const override {
+            return source && *source ? QString("⟦") + QString::fromUtf8(source) + QString("⟧") : QString();
+        }
+    };
+    Pseudo pseudo;
+    QCoreApplication::installTranslator(&pseudo);
+    QStringList missed;
+    {
+        StudioFixture f;
+        f.win.document()->edit("Setup", [](fg::Script& s) {
+            s.variables.push_back({"Score", "int", fg::Value(int64_t(0)), "", ""});
+            s.addFunction("Compute").inputs.push_back({"Amount", "float", false, false, fg::Value(0.0)});
+        });
+        QCoreApplication::processEvents();
+        const QStringList scriptNames = {"Main", "Score", "Compute", "Amount", "Default", "int", "float"};
+        auto check = [&](const QString& where, QString text) {
+            text.remove('&');
+            text = text.section('\t', 0, 0).trimmed();         // the shortcut after a tab is not text
+            if (text.isEmpty() || text.contains(QString("⟦")) || !text.contains(QRegularExpression("[A-Za-z]{2}"))) return;
+            if (text.contains('\\') || text.contains('/')) return;          // a file (Open Recent)
+            for (const QString& n : scriptNames) if (text == n || text.startsWith(n + " ") || text.startsWith(n + "(")) return;
+            if (!missed.contains(where + ": " + text)) missed << where + ": " + text;
+        };
+        auto sweep = [&] {
+            for (QWidget* w : f.win.findChildren<QWidget*>()) {
+                if (!w->isVisibleTo(&f.win)) continue;
+                if (auto* l = qobject_cast<QLabel*>(w)) check("label", l->text());
+                if (auto* b = qobject_cast<QAbstractButton*>(w)) check("button", b->text());
+                if (auto* e = qobject_cast<QLineEdit*>(w)) check("placeholder", e->placeholderText());
+                if (auto* t = qobject_cast<QTabBar*>(w)) for (int i = 0; i < t->count(); ++i) check("tab", t->tabText(i));
+                if (auto* tree = qobject_cast<QTreeWidget*>(w); tree && !tree->isHeaderHidden())
+                    for (int c = 0; c < tree->columnCount(); ++c) check("header", tree->headerItem()->text(c));
+            }
+            for (QAction* a : f.win.menuBar()->actions()) {
+                check("menu", a->text());
+                if (QMenu* m = a->menu())
+                    for (QAction* item : m->actions()) {
+                        check("menu item", item->text());
+                        // the languages are named in their own languages, on purpose (only "System" is translated)
+                        if (QMenu* sub = item->menu(); sub && sub->objectName() != "languageMenu")
+                            for (QAction* s : sub->actions()) check("menu item", s->text());
+                    }
+            }
+            for (QAction* a : f.win.mainToolBar()->actions()) check("toolbar", a->text());
+            for (auto* dock : KDDockWidgets::DockRegistry::self()->dockwidgets())
+                if (!dock->uniqueName().startsWith('-')) check("dock", dock->title());      // "-..." are KDDockWidgets' own
+        };
+        sweep();                                                    // the empty selection
+        auto* details = f.win.findChild<DetailsPanel*>();
+        CHECK(details != nullptr);
+        if (details) {
+            details->showVariable("", "Score");
+            QCoreApplication::processEvents();
+            sweep();
+            details->showGraph("Compute");
+            QCoreApplication::processEvents();
+            sweep();
+        }
+    }
+    QCoreApplication::removeTranslator(&pseudo);
+    for (const QString& m : missed) std::printf("  not translatable: %s\n", m.toUtf8().constData());
+    CHECK(missed.isEmpty());
+}
+
+// In Persian the nodes show their texts in Persian - titles, pins, categories, settings, enum values - while the script keeps the
+// English names; the node search finds a node in both languages.
+TEST(node_texts_follow_the_language) {
+    applyLanguage(*qApp, "fa");
+    {
+        StudioFixture f;
+        Document* doc = f.win.document();
+        const QString graph = f.scene()->graphName();
+        fg::NodeId print = 0, day = 0, seq = 0;
+        doc->edit("Setup", [&](fg::Script& s) {
+            fg::Graph* g = s.findGraph(ss(graph));
+            print = g->addNode("util.print", 300, 300).id;
+            fg::Node& e = g->addNode("enum:Weekday", 300, 500);
+            e.props["value"] = "Friday";
+            day = e.id;
+            seq = g->addNode("flow.sequence", 600, 300).id;
+        });
+        QCoreApplication::processEvents();
+        NodeItem* item = f.scene()->nodeItem(print);
+        CHECK(item != nullptr);
+        if (item) CHECK_EQ(nodeTitle(item->compiled()), QString("چاپ رشته"));
+        CHECK_EQ(pinLabel("util.print", "String"), QString("رشته"));
+        NodeItem* dayItem = f.scene()->nodeItem(day);
+        if (dayItem) CHECK_EQ(nodeTitle(dayItem->compiled()), QString("Weekday.جمعه"));
+        CHECK(doc->script().findGraph(ss(graph))->findNode(day)->props.at("value") == "Friday");     // the script keeps English
+        // the node search, in Persian and in English
+        PalettePopup popup(f.scene(), PinRef());
+        auto* search = popup.findChild<QLineEdit*>();
+        auto* tree = popup.findChild<QTreeWidget*>();
+        CHECK(search && tree);
+        if (search && tree) {
+            auto found = [&](const QString& query, const QString& title) {
+                search->setText(query);
+                for (QTreeWidgetItemIterator it(tree); *it; ++it)
+                    if ((*it)->text(0) == title) return true;
+                return false;
+            };
+            CHECK(found("چاپ", "چاپ رشته"));
+            CHECK(found("Print String", "چاپ رشته"));
+            CHECK(found("Branch", "شاخه"));
+            bool folder = false;
+            search->setText("");
+            for (int i = 0; i < tree->topLevelItemCount(); ++i) folder |= tree->topLevelItem(i)->text(0) == "جریان";
+            CHECK(folder);
+        }
+        // Details: the title and the label of a setting
+        f.scene()->selectOnly(seq);
+        QCoreApplication::processEvents();
+        auto* details = f.win.findChild<DetailsPanel*>();
+        bool heading = false, setting = false;
+        if (details)
+            for (auto* l : details->findChildren<QLabel*>()) {
+                heading |= l->text() == "<b>دنباله</b>";                     // headings are bold
+                setting |= l->text().startsWith("پایه‌های خروجی");
+            }
+        CHECK(heading && setting);
+    }
+    applyLanguage(*qApp, "en");
+    CHECK(nodeTexts().empty());
+}
+
+// Every language there is has a name of its own, translates the editor and the nodes; system languages with a region or a script
+// find theirs (zh-Hans-CN: zh_CN, pt-BR: pt_BR, de-AT: de).
+TEST(every_language_translates_the_editor_and_the_nodes) {
+    const QStringList languages = availableLanguages();
+    CHECK(languages.size() >= 10);
+    QSet<QString> names;
+    for (const QString& code : languages) {
+        const QString name = languageName(code);
+        CHECK(!name.isEmpty() && !names.contains(name));
+        names.insert(name);
+        std::printf("  %s: %s\n", qPrintable(code), name.toUtf8().constData());
+        if (code == "en") continue;
+        applyLanguage(*qApp, code);
+        CHECK_EQ(currentLanguage(), code);
+        CHECK(QCoreApplication::translate("fged::ScriptEditorWindow", "&File") != QString("&File"));
+        fg::Runtime rt;
+        CHECK(nodeTexts().nodeTitle(rt.registry().findNode("flow.branch"), {}, "Branch") != "Branch");
+    }
+    for (auto [system, expected] : {std::pair<const char*, const char*>{"zh-Hans-CN", "zh_CN"}, {"pt-BR", "pt_BR"}, {"de-AT", "de"}}) {
+        if (!languages.contains(expected)) continue;
+        applyLanguage(*qApp, system);
+        CHECK_EQ(currentLanguage(), QString(expected));
+    }
+    applyLanguage(*qApp, "en");
+}
+
+TEST(plugin_node_texts_follow_the_language) {
+#if defined(_WIN32)
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.dll";
+#elif defined(__APPLE__)
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.dylib";
+#else
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.so";
+#endif
+    if (!QFileInfo::exists(plugin)) { std::printf("  (skipped: the example plugin is not built)\n"); return; }
+    applyLanguage(*qApp, "fa");
+    {
+        StudioFixture f;
+        // loaded once the editor is open (as a launch configuration's plugin is): its catalog comes along with the refresh
+        CHECK(f.rt.loadPlugin(plugin.toStdString()));
+        f.editor.refreshScript();
+        Document* doc = f.win.document();
+        fg::NodeId greet = 0;
+        doc->edit("Add", [&](fg::Script& s) { greet = s.findGraph(ss(f.scene()->graphName()))->addNode("fn:Example.Greet", 300, 300).id; });
+        QCoreApplication::processEvents();
+        NodeItem* item = f.scene()->nodeItem(greet);
+        CHECK(item != nullptr);
+        if (item) CHECK_EQ(nodeTitle(item->compiled()), QString("خوشامدگویی"));
+        CHECK_EQ(pinLabel("fn:Example.Greet", "Name"), QString("نام"));
+        CHECK_EQ(pinLabel("m:Counter.Add", "Amount"), QString("میزان"));
+        CHECK_EQ(categoryText("Example"), QString("نمونه"));
+        CHECK(doc->script().findGraph(ss(f.scene()->graphName()))->findNode(greet)->def == "fn:Example.Greet");
+    }
+    applyLanguage(*qApp, "en");
+    CHECK(nodeTexts().empty());
+}
+
 TEST(launch_box_is_narrow_and_its_list_shows_long_entries) {
     StudioFixture f;
     auto* combo = f.win.mainToolBar()->findChild<QComboBox*>();
@@ -3339,6 +3584,50 @@ TEST(one_button_runs_pauses_and_continues) {
     CHECK(spinUntil([&] { return run->text() == "Run"; }));
 }
 
+// While a section of Details opens or closes, what is above it stays where it is: every frame, the texts above the Outputs of
+// the Main event (its description wraps over several lines) keep their place and size - they used to jump up and down.
+TEST(details_texts_stay_while_a_section_opens_and_closes) {
+    for (const char* language : {"en", "fa"}) {
+        applyLanguage(*qApp, language);
+        StudioFixture f;
+        f.scene()->selectOnly(1);                                   // Main
+        QCoreApplication::processEvents();
+        auto* details = f.win.findChild<DetailsPanel*>();
+        CCollapsiblePanel* outputs = nullptr;
+        for (auto* p : details ? details->findChildren<CCollapsiblePanel*>() : QList<CCollapsiblePanel*>()) outputs = p;
+        CHECK(outputs != nullptr);
+        if (!outputs) continue;
+        QAbstractButton* toggle = nullptr;
+        for (auto* b : outputs->findChildren<QAbstractButton*>())
+            if (b->isCheckable()) toggle = b;
+        CHECK(toggle != nullptr);
+        if (!toggle) continue;
+        const int top = outputs->mapTo(details, QPoint(0, 0)).y();
+        auto above = [&] {                                          // where the labels above the section are, and their sizes
+            QStringList out;
+            for (auto* l : details->findChildren<QLabel*>())
+                if (l->isVisible() && !outputs->isAncestorOf(l) && l->mapTo(details, QPoint(0, 0)).y() < top)
+                    out << QString("%1 %2,%3 %4x%5").arg(l->text()).arg(l->mapTo(details, QPoint(0, 0)).x())
+                               .arg(l->mapTo(details, QPoint(0, 0)).y()).arg(l->width()).arg(l->height());
+            return out;
+        };
+        const QStringList before = above();
+        CHECK(before.size() >= 3);
+        int moved = 0;
+        for (int round = 0; round < 2; ++round) {                   // closes, then opens again
+            toggle->click();
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < 450) {
+                QCoreApplication::processEvents();
+                moved += above() != before;
+            }
+        }
+        CHECK_EQ(moved, 0);
+    }
+    applyLanguage(*qApp, "en");
+}
+
 int main(int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -3349,7 +3638,9 @@ int main(int argc, char** argv) {
     QDir(QDir::temp().filePath("FlowGraphEditorTests-settings")).removeRecursively();
     fged::applyDarkTheme(app);
     fged::initEditor();
+    const QString only = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();      // FlowGraphEditorTests <part of a test's name>
     for (auto& t : tests()) {
+        if (!only.isEmpty() && !QString(t.name).contains(only)) continue;
         int before = g_failures;
         std::printf("[ RUN  ] %s\n", t.name);
         try {

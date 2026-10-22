@@ -7,6 +7,7 @@
 
 #include <FlowGraph/Compatibility.hpp>
 #include "../Common/CollapsiblePanel/CollapsiblePanel.hpp"
+#include "../Common/NodeTexts.hpp"
 #include "../Common/SearchField.hpp"
 #include "TypeEdit.hpp"
 #include "TypeSpec.hpp"
@@ -17,6 +18,7 @@
 #include <QCompleter>
 #include <QElapsedTimer>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -29,6 +31,7 @@
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QResizeEvent>
 #include <QMenu>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -43,15 +46,40 @@ namespace fged {
 
 namespace {
 
+QString containerName(int i);            // Single, Array, Map in the language of the editor (defined with the parameter tables)
+
 QLabel* heading(const QString& t) {
     auto* l = new QLabel("<b>" + t.toHtmlEscaped() + "</b>");
     l->setProperty("fgHeading", true);
     return l;
 }
 
+// A word-wrapped label whose preferred size, once it has been laid out, is its width and the height its text needs there. The
+// form keeps two sets of row heights, and takes the one of a word-wrapped label at its preferred width (for a plain label:
+// all of its text on as few lines as it likes) for one of them and at its real width for the other: a label of several
+// lines got two heights, and while an Inputs / Outputs section opens or closes the form uses both every frame - the texts
+// above the section jumped up and down.
+class WrapLabel : public QLabel {
+public:
+    explicit WrapLabel(const QString& text) : QLabel(text) { setWordWrap(true); }
+    QSize sizeHint() const override {
+        if (!laidOut_) return QLabel::sizeHint();
+        return QSize(width(), heightForWidth(width()));
+    }
+
+protected:
+    void resizeEvent(QResizeEvent* e) override {
+        QLabel::resizeEvent(e);
+        laidOut_ = true;
+        if (e->size().width() != e->oldSize().width()) updateGeometry();     // another width: another height
+    }
+
+private:
+    bool laidOut_ = false;
+};
+
 QLabel* dim(const QString& t) {
-    auto* l = new QLabel(t);
-    l->setWordWrap(true);
+    auto* l = new WrapLabel(t);
     l->setForegroundRole(QPalette::PlaceholderText);
     return l;
 }
@@ -137,8 +165,8 @@ DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), do
     outer->setContentsMargins(6, 6, 6, 6);
     outer->setAlignment(Qt::AlignTop);
     search_ = new QLineEdit(this);
-    makeSearchField(search_, "Search");
-    search_->setToolTip("Shows only the properties whose name or value contains this text");
+    makeSearchField(search_, tr("Search"));
+    search_->setToolTip(tr("Shows only the properties whose name or value contains this text"));
     outer->addWidget(search_);
     connect(search_, &QLineEdit::textChanged, this, [this] { applyFilter(); });
     body_ = new QWidget(this);
@@ -146,7 +174,7 @@ DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), do
     form_->setContentsMargins(0, 0, 0, 0);
     form_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     outer->addWidget(body_);
-    noMatch_ = dim("Nothing matches the search.");
+    noMatch_ = dim(tr("Nothing matches the search."));
     noMatch_->hide();
     outer->addWidget(noMatch_);
     outer->addStretch(1);
@@ -185,7 +213,7 @@ void DetailsPanel::clearForm() {
 void DetailsPanel::rebuild() {
     clearForm();
     switch (mode_) {
-    case Mode::None: form_->addRow(dim("Select a variable, function or node to see its properties.")); break;
+    case Mode::None: form_->addRow(dim(tr("Select a variable, function or node to see its properties."))); break;
     case Mode::Variable: buildVariable(); break;
     case Mode::Graph: buildGraph(); break;
     case Mode::Nodes: buildNodes(); break;
@@ -252,8 +280,8 @@ void DetailsPanel::buildVariable() {
     if (local) {
         if (auto* g = s.findGraph(ss(owner_))) v = g->findLocal(ss(name_));
     } else v = s.findVariable(ss(name_));
-    if (!v) { form_->addRow(dim("The variable no longer exists.")); return; }
-    form_->addRow(heading(local ? "Local variable" : "Variable"));
+    if (!v) { form_->addRow(dim(tr("The variable no longer exists."))); return; }
+    form_->addRow(heading(local ? tr("Local variable") : tr("Variable")));
 
     auto mutate = [this, local](const std::function<void(fg::VariableDecl&)>& fn, const QString& label, const QString& key) {
         QString owner = owner_, name = name_;
@@ -272,21 +300,21 @@ void DetailsPanel::buildVariable() {
         if (nn.isEmpty() || nn == name_) { nameEdit->setText(name_); return; }
         const fg::Script& sc = doc_->script();
         bool clash = local ? (sc.findGraph(ss(owner_)) && sc.findGraph(ss(owner_))->findLocal(ss(nn))) : sc.findVariable(ss(nn)) != nullptr;
-        if (clash) { QMessageBox::warning(this, "Rename", "That name is already used."); nameEdit->setText(name_); return; }
+        if (clash) { QMessageBox::warning(this, tr("Rename"), tr("That name is already used.")); nameEdit->setText(name_); return; }
         QString old = name_;
-        edit("Rename variable", [&](fg::Script& s2) {
+        edit(tr("Rename variable"), [&](fg::Script& s2) {
             if (local) s2.renameLocal(ss(owner_), ss(old), ss(nn)); else s2.renameVariable(ss(old), ss(nn));
         });
         name_ = nn;
     });
-    form_->addRow("Name", nameEdit);
+    form_->addRow(tr("Name"), nameEdit);
 
     {
         TypeSpec spec = TypeSpec::parse(qs(v->type));
         auto* valueEdit = new TypeEdit(doc_->registry());
         valueEdit->setType(spec.value);
         auto* containerBox = new QComboBox;
-        containerBox->addItems({"Single", "Array", "Map"});
+        containerBox->addItems({containerName(0), containerName(1), containerName(2)});
         containerBox->setCurrentIndex(int(spec.container));
         auto* keyEdit = new TypeEdit(doc_->registry());
         keyEdit->setType(spec.key);
@@ -298,7 +326,7 @@ void DetailsPanel::buildVariable() {
             // the default and the values typed into the variable's Set nodes belong to the old type: they are cleared
             const QString owner = owner_, name = name_;
             const std::string type = ss(ns.str());
-            edit("Change variable type", [=](fg::Script& sc) {
+            edit(tr("Change variable type"), [=](fg::Script& sc) {
                 if (!owner.isEmpty()) sc.retypeLocal(ss(owner), ss(name), type);
                 else sc.retypeVariable(ss(name), type);
             }, QString());
@@ -307,9 +335,9 @@ void DetailsPanel::buildVariable() {
         connect(valueEdit, &TypeEdit::typeEdited, this, apply);
         connect(keyEdit, &TypeEdit::typeEdited, this, apply);
         connect(containerBox, qOverload<int>(&QComboBox::activated), this, apply);
-        form_->addRow("Type", valueEdit);
-        form_->addRow("Container", containerBox);
-        if (spec.container == TypeSpec::Container::Map) form_->addRow("Key type", keyEdit);
+        form_->addRow(tr("Type"), valueEdit);
+        form_->addRow(tr("Container"), containerBox);
+        if (spec.container == TypeSpec::Container::Map) form_->addRow(tr("Key type"), keyEdit);
     }
 
     const fg::TypeDesc* t = doc_->registry().findType(v->type);
@@ -323,37 +351,37 @@ void DetailsPanel::buildVariable() {
             // the names of the values to choose from, never a bare number
             auto* box = new QComboBox;
             for (auto& e : t->enumValues) {
-                box->addItem(qs(e.name), qlonglong(e.value));
+                box->addItem(enumValueText(t->name, e.name), qlonglong(e.value));
                 if (!e.doc.empty()) box->setItemData(box->count() - 1, qs(e.doc), Qt::ToolTipRole);
             }
             box->setCurrentIndex(std::max(0, box->findData(qlonglong(cp.def.toInt()))));
             connect(box, qOverload<int>(&QComboBox::activated), this, [=, this](int i) {
                 const fg::Value nv(int64_t(box->itemData(i).toLongLong()));
-                mutate([&](fg::VariableDecl& d) { d.def = nv; }, "Edit default value", "vardef:" + name_);
+                mutate([&](fg::VariableDecl& d) { d.def = nv; }, tr("Edit default value"), "vardef:" + name_);
             });
-            form_->addRow("Default", box);
+            form_->addRow(tr("Default"), box);
         } else if (t->kind == fg::TypeKind::Bool) {
             auto* cb = new QCheckBox;
             cb->setChecked(cp.def.toBool());
-            connect(cb, &QCheckBox::toggled, this, [=, this](bool on) { mutate([&](fg::VariableDecl& d) { d.def = fg::Value(on); }, "Edit default value", "vardef:" + name_); });
-            form_->addRow("Default", cb);
+            connect(cb, &QCheckBox::toggled, this, [=, this](bool on) { mutate([&](fg::VariableDecl& d) { d.def = fg::Value(on); }, tr("Edit default value"), "vardef:" + name_); });
+            form_->addRow(tr("Default"), cb);
         } else {
             auto* le = new QLineEdit(t->isEnum() ? qs(t->enumName(cp.def.toInt())) : qs(cp.def.toString() == "null" ? "" : (cp.def.isString() ? cp.def.str() : cp.def.toString())));
             connect(le, &QLineEdit::editingFinished, this, [=, this] {
                 fg::Value nv = RunController::parseArgument(doc_->registry(), t, le->text());
-                mutate([&](fg::VariableDecl& d) { d.def = nv; }, "Edit default value", "vardef:" + name_);
+                mutate([&](fg::VariableDecl& d) { d.def = nv; }, tr("Edit default value"), "vardef:" + name_);
             });
-            form_->addRow("Default", le);
+            form_->addRow(tr("Default"), le);
         }
     } else {
-        form_->addRow("Default", dim(t && t->isContainer() ? "Containers start empty." : "Objects start as null."));
+        form_->addRow(tr("Default"), dim(t && t->isContainer() ? tr("Containers start empty.") : tr("Objects start as null.")));
     }
     auto* cat = new QLineEdit(qs(v->category));
-    connect(cat, &QLineEdit::editingFinished, this, [=, this] { mutate([&](fg::VariableDecl& d) { d.category = ss(cat->text()); }, "Edit category", "varcat:" + name_); });
-    form_->addRow("Category", cat);
+    connect(cat, &QLineEdit::editingFinished, this, [=, this] { mutate([&](fg::VariableDecl& d) { d.category = ss(cat->text()); }, tr("Edit category"), "varcat:" + name_); });
+    form_->addRow(tr("Category"), cat);
     auto* doc = new QLineEdit(qs(v->doc));
-    connect(doc, &QLineEdit::editingFinished, this, [=, this] { mutate([&](fg::VariableDecl& d) { d.doc = ss(doc->text()); }, "Edit description", "vardoc:" + name_); });
-    form_->addRow("Description", doc);
+    connect(doc, &QLineEdit::editingFinished, this, [=, this] { mutate([&](fg::VariableDecl& d) { d.doc = ss(doc->text()); }, tr("Edit description"), "vardoc:" + name_); });
+    form_->addRow(tr("Description"), doc);
 }
 
 // ------------------------------------------------------------------ parameter tables
@@ -362,16 +390,20 @@ namespace {
 enum ParamColumn { ColName, ColType, ColContainer, ColKey, ColRef, ColConst, ColCount };
 
 // What the table shows for a parameter and what it says about it in its tooltip (the table has no header: the tooltip names the column).
-const char* const kContainerNames[] = {"Single", "Array", "Map"};
+const char* const kContainerNames[] = {QT_TRANSLATE_NOOP("fged::DetailsPanel", "Single"), QT_TRANSLATE_NOOP("fged::DetailsPanel", "Array"),
+                                       QT_TRANSLATE_NOOP("fged::DetailsPanel", "Map")};
+// what the table shows (and compares with) for a container kind: the translation
+QString containerName(int i) { return QCoreApplication::translate("fged::DetailsPanel", kContainerNames[i]); }
+QString tip(const char* text) { return QCoreApplication::translate("fged::DetailsPanel", text); }
 
 QString columnTip(int col, const QString& value) {
     switch (col) {
-    case ColName: return "<b>Name</b>: " + value.toHtmlEscaped();
-    case ColType: return "<b>Type</b>: " + value.toHtmlEscaped() + "<br><i>Double-click to change it.</i>";
-    case ColContainer: return "<b>Container</b>: " + value + "<br>A single value, an array of it, or a map from a key type to it.<br><i>Double-click to change it.</i>";
-    case ColKey: return "<b>Key</b>: " + (value.isEmpty() ? QString("(none)") : value.toHtmlEscaped()) + "<br>The key type of a map; only used when the container is a Map.";
-    case ColRef: return "<b>Ref</b>: " + value + "<br>Passed by reference: the function reads and writes the caller's variable.";
-    default: return "<b>Const</b>: " + value + "<br>The function may not modify the parameter (a const reference needs no variable and makes no copy).";
+    case ColName: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Name")) + "</b>: " + value.toHtmlEscaped();
+    case ColType: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Type")) + "</b>: " + value.toHtmlEscaped() + "<br><i>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Double-click to change it.")) + "</i>";
+    case ColContainer: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Container")) + "</b>: " + value + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "A single value, an array of it, or a map from a key type to it.")) + "<br><i>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Double-click to change it.")) + "</i>";
+    case ColKey: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Key")) + "</b>: " + (value.isEmpty() ? tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "(none)")) : value.toHtmlEscaped()) + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "The key type of a map; only used when the container is a Map."));
+    case ColRef: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Ref")) + "</b>: " + value + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Passed by reference: the function reads and writes the caller's variable."));
+    default: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Const")) + "</b>: " + value + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "The function may not modify the parameter (a const reference needs no variable and makes no copy)."));
     }
 }
 
@@ -422,11 +454,11 @@ public:
         switch (index.column()) {
         case ColType: return typeEditor(parent);
         case ColKey:
-            if (index.sibling(index.row(), ColContainer).data(Qt::DisplayRole).toString() != kContainerNames[2]) return nullptr;
+            if (index.sibling(index.row(), ColContainer).data(Qt::DisplayRole).toString() != containerName(2)) return nullptr;
             return typeEditor(parent);
         case ColContainer: {
             auto* box = new PopupCombo(parent);
-            for (auto* n : kContainerNames) box->addItem(n);
+            for (int i = 0; i < 3; ++i) box->addItem(containerName(i));
             QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { if (!box->justOpened()) finish(box); });
             box->expectPopup();                                         // the choice is made right away, like a menu
             return box;
@@ -553,7 +585,7 @@ private:
 
 // Tooltips (they replace the header) and the look of the Key cell, which only means something for maps.
 void styleParamRow(QTableWidget* table, int r) {
-    const bool isMap = table->item(r, ColContainer)->text() == kContainerNames[2];
+    const bool isMap = table->item(r, ColContainer)->text() == containerName(2);
     QSignalBlocker block(table);
     const QColor dimColor = table->palette().color(QPalette::PlaceholderText);
     // only a map has a key type: the cell is empty for the other containers (the type is remembered for when it becomes a map again)
@@ -606,7 +638,7 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
             p.name = ss(table->item(r, ColName)->text().trimmed());
             TypeSpec spec;
             spec.value = table->item(r, ColType)->text();
-            spec.container = TypeSpec::Container(std::max(0, int(QStringList{kContainerNames[0], kContainerNames[1], kContainerNames[2]}.indexOf(table->item(r, ColContainer)->text()))));
+            spec.container = TypeSpec::Container(std::max(0, int(QStringList{containerName(0), containerName(1), containerName(2)}.indexOf(table->item(r, ColContainer)->text()))));
             if (spec.container == TypeSpec::Container::Map) spec.key = table->item(r, ColKey)->text();
             p.type = ss(spec.str());
             if (inputs) {
@@ -628,7 +660,7 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
         };
         text(ColName, qs(p.name));
         text(ColType, spec.value);
-        text(ColContainer, kContainerNames[int(spec.container)]);
+        text(ColContainer, containerName(int(spec.container)));
         text(ColKey, spec.container == TypeSpec::Container::Map ? spec.key : QString());
         table->item(r, ColKey)->setData(Qt::UserRole, spec.key);
         if (inputs) {
@@ -657,16 +689,16 @@ void DetailsPanel::buildGraph() { buildGraphFor(name_); }
 void DetailsPanel::buildGraphFor(const QString& graphName) {
     graphTarget_ = graphName;
     const fg::Graph* g = doc_->script().findGraph(ss(graphName));
-    if (!g) { form_->addRow(dim("The graph no longer exists.")); return; }
+    if (!g) { form_->addRow(dim(tr("The graph no longer exists."))); return; }
     const bool fn = g->kind == fg::GraphKind::Function;
-    form_->addRow(heading(fn ? "Function" : "Event graph"));
+    form_->addRow(heading(fn ? tr("Function") : tr("Event graph")));
     auto* nameEdit = new QLineEdit(qs(g->name));
     connect(nameEdit, &QLineEdit::editingFinished, this, [this, nameEdit, fn] {
         QString nn = nameEdit->text().trimmed();
         if (nn.isEmpty() || nn == graphTarget_) { nameEdit->setText(graphTarget_); return; }
-        if (doc_->script().graphIndex(ss(nn)) >= 0) { QMessageBox::warning(this, "Rename", "A graph with that name exists."); nameEdit->setText(graphTarget_); return; }
+        if (doc_->script().graphIndex(ss(nn)) >= 0) { QMessageBox::warning(this, tr("Rename"), tr("A graph with that name exists.")); nameEdit->setText(graphTarget_); return; }
         QString old = graphTarget_;
-        edit("Rename graph", [&](fg::Script& s) {
+        edit(tr("Rename graph"), [&](fg::Script& s) {
             if (fn) s.renameFunction(ss(old), ss(nn));
             else if (auto* gr = s.findGraph(ss(old))) gr->name = ss(nn);
         });
@@ -675,13 +707,13 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
         if (owner_ == old) owner_ = nn;
         emit graphRenamed(old, nn);
     });
-    form_->addRow("Name", nameEdit);
+    form_->addRow(tr("Name"), nameEdit);
     auto* docEdit = new QLineEdit(qs(g->doc));
     connect(docEdit, &QLineEdit::editingFinished, this, [this, docEdit] {
         QString name = graphTarget_, text = docEdit->text();
-        edit("Edit description", [=](fg::Script& s) { if (auto* gr = s.findGraph(ss(name))) gr->doc = ss(text); }, "graphdoc:" + graphTarget_);
+        edit(tr("Edit description"), [=](fg::Script& s) { if (auto* gr = s.findGraph(ss(name))) gr->doc = ss(text); }, "graphdoc:" + graphTarget_);
     });
-    form_->addRow("Description", docEdit);
+    form_->addRow(tr("Description"), docEdit);
     if (!fn) return;
 
     auto section = [&](bool inputs) {
@@ -694,14 +726,14 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
             std::set<std::string> names;
             for (auto& p : np)
                 if (p.name.empty() || !names.insert(p.name).second) {
-                    QMessageBox::warning(this, "Parameters", "Parameter names must be unique and not empty.");
+                    QMessageBox::warning(this, tr("Parameters"), tr("Parameter names must be unique and not empty."));
                     QTimer::singleShot(0, this, [this] { rebuild(); });
                     return;
                 }
             std::vector<fg::ParamDecl> oldCopy = old;
             for (auto& p : np)       // keep defaults of unchanged rows
                 for (auto& o : oldCopy) if (o.name == p.name) p.def = o.def;
-            edit("Edit parameters", [&](fg::Script& s) {
+            edit(tr("Edit parameters"), [&](fg::Script& s) {
                 auto* gr = s.findGraph(ss(gname));
                 if (!gr) return;
                 auto& dst = inputs ? gr->inputs : gr->outputs;
@@ -713,11 +745,11 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
         };
         auto* table = buildParamTable(inputs, params, apply);
         // a panel like the ones of My Script: "+" in its header adds a parameter, "Remove" is in the right click menu
-        auto* panel = new CCollapsiblePanel(inputs ? "Inputs" : "Outputs", nullptr, true);
+        auto* panel = new CCollapsiblePanel(inputs ? tr("Inputs") : tr("Outputs"), nullptr, true);
         panel->AddWidget(table);
         panel->ExpandImmediately();
         connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [this, gname, inputs] {
-            edit("Add parameter", [&](fg::Script& s) {
+            edit(tr("Add parameter"), [&](fg::Script& s) {
                 auto* gr = s.findGraph(ss(gname));
                 if (!gr) return;
                 auto& dst = inputs ? gr->inputs : gr->outputs;
@@ -737,9 +769,9 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
             if (row < 0) return;
             table->selectRow(row);
             QMenu menu;
-            QAction* remove = menu.addAction("Remove");
+            QAction* remove = menu.addAction(tr("Remove"));
             if (menu.exec(table->viewport()->mapToGlobal(pos)) != remove) return;
-            edit("Remove parameter", [&](fg::Script& s) {
+            edit(tr("Remove parameter"), [&](fg::Script& s) {
                 auto* gr = s.findGraph(ss(gname));
                 if (!gr) return;
                 auto& dst = inputs ? gr->inputs : gr->outputs;
@@ -780,7 +812,7 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
         }
         if (fixed.empty() && !custom) continue;
 
-        auto* panel = new CCollapsiblePanel(inputs ? "Inputs" : "Outputs", nullptr, custom);
+        auto* panel = new CCollapsiblePanel(inputs ? tr("Inputs") : tr("Outputs"), nullptr, custom);
         if (!fixed.empty()) {
             auto* table = new QTableWidget(int(fixed.size()), 2);
             table->setObjectName(inputs ? "fixedInputs" : "fixedOutputs");
@@ -799,9 +831,9 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
             const QBrush dimmed = table->palette().brush(QPalette::Disabled, QPalette::Text);
             for (int r = 0; r < int(fixed.size()); ++r) {
                 const fg::CompiledPin& p = *fixed[size_t(r)];
-                auto* name = new QTableWidgetItem(qs(p.name));
+                auto* name = new QTableWidgetItem(pinLabel(cn, p.name));          // the label; the pin keeps its name
                 auto* type = new QTableWidgetItem(p.kind == fg::PinKind::Exec ? QString("exec") : p.type ? qs(p.type->name) : QString("any"));
-                name->setToolTip(qs(p.doc.empty() ? std::string("Part of the definition of the node: it cannot be changed.") : p.doc));
+                name->setToolTip(p.doc.empty() ? tr("Part of the definition of the node: it cannot be changed.") : pinDoc(cn.defId, p.name, p.doc));
                 for (auto* it : {name, type}) {
                     it->setFlags(Qt::ItemIsEnabled);
                     it->setForeground(dimmed);
@@ -826,11 +858,11 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
                 std::set<std::string> names = fixedNames;
                 for (auto& p : np)
                     if (p.name.empty() || !names.insert(p.name).second) {
-                        QMessageBox::warning(this, "Pins", "Pin names must be unique and not empty.");
+                        QMessageBox::warning(this, tr("Pins"), tr("Pin names must be unique and not empty."));
                         QTimer::singleShot(0, this, [this] { rebuild(); });
                         return;
                     }
-                change("Edit node pins", [&](std::vector<fg::ParamDecl>& list, fg::Graph& gr) {
+                change(tr("Edit node pins"), [&](std::vector<fg::ParamDecl>& list, fg::Graph& gr) {
                     for (size_t i = 0; i < np.size(); ++i) {
                         if (list.size() == np.size() && list[i].name != np[i].name) moveNodePin(gr, id, dir, list[i].name, np[i].name);
                         const fg::ParamDecl* old = nullptr;       // keep the default of a pin that is still the same
@@ -845,7 +877,7 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
             table->setObjectName(inputs ? "customInputs" : "customOutputs");
             panel->AddWidget(table);
             connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [=] {
-                change("Add pin", [&](std::vector<fg::ParamDecl>& list, fg::Graph&) {
+                change(tr("Add pin"), [&](std::vector<fg::ParamDecl>& list, fg::Graph&) {
                     const std::string base = inputs ? "Input" : "Output";
                     std::string n = base;
                     auto taken = [&](const std::string& name) {
@@ -861,14 +893,14 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
                 if (row < 0) return;
                 table->selectRow(row);
                 QMenu menu;
-                QAction* remove = menu.addAction(themedIcon(":/Icons/delete.svg"), "Remove");
-                QAction* up = menu.addAction("Move Up");
-                QAction* down = menu.addAction("Move Down");
+                QAction* remove = menu.addAction(themedIcon(":/Icons/delete.svg"), tr("Remove"));
+                QAction* up = menu.addAction(tr("Move Up"));
+                QAction* down = menu.addAction(tr("Move Down"));
                 up->setEnabled(row > 0);
                 down->setEnabled(row + 1 < table->rowCount());
                 QAction* chosen = menu.exec(table->viewport()->mapToGlobal(pos));
                 if (!chosen) return;
-                change(chosen == remove ? "Remove pin" : "Move pin", [&](std::vector<fg::ParamDecl>& list, fg::Graph& gr) {
+                change(chosen == remove ? tr("Remove pin") : tr("Move pin"), [&](std::vector<fg::ParamDecl>& list, fg::Graph& gr) {
                     if (size_t(row) >= list.size()) return;
                     if (chosen == remove) {
                         moveNodePin(gr, id, dir, list[size_t(row)].name, std::string());
@@ -890,7 +922,7 @@ void DetailsPanel::buildNodes() {
     const fg::CompiledGraph* cg = doc_->compiledGraph(owner_);
     if (!g || !cg) { form_->addRow(dim("")); return; }
     if (ids_.size() > 1) {
-        form_->addRow(heading(QString::number(ids_.size()) + " nodes selected"));
+        form_->addRow(heading(tr("%1 nodes selected").arg(ids_.size())));
         return;
     }
     const fg::Node* node = g->findNode(ids_.front());
@@ -904,13 +936,12 @@ void DetailsPanel::buildNodes() {
         buildGraphFor(isCall ? calledFunction : owner_);     // the function's name and its inputs / outputs
         form_->addRow(new QLabel(QString()));
     }
-    form_->addRow(heading(cn->op == fg::NodeOp::FunctionEntry ? QString("Function entry node") : qs(cn->title)));
-    if (cn->def && !cn->def->doc.empty()) form_->addRow(dim(qs(cn->def->doc)));
-    form_->addRow("Definition", new QLabel(qs(cn->defId) + (cn->def && !cn->def->source.empty() ? "  [" + qs(cn->def->source) + "]" : QString())));
+    form_->addRow(heading(cn->op == fg::NodeOp::FunctionEntry ? tr("Function entry node") : nodeTitle(*cn)));
+    if (cn->def && !cn->def->doc.empty()) form_->addRow(dim(nodeDoc(cn->def)));
+    form_->addRow(tr("Definition"), new QLabel(qs(cn->defId) + (cn->def && !cn->def->source.empty() ? "  [" + qs(cn->def->source) + "]" : QString())));
 
     for (auto& d : doc_->diagnosticsFor(owner_, node->id)) {
-        auto* l = new QLabel(qs(d.message));
-        l->setWordWrap(true);
+        auto* l = new WrapLabel(qs(d.message));
         setTextColor(l, d.severity == fg::Diagnostic::Severity::Error ? themeColors().error : themeColors().warning);
         form_->addRow(l);
     }
@@ -927,36 +958,37 @@ void DetailsPanel::buildNodes() {
     if (cn->op == fg::NodeOp::Event) {
         // events belong to the application: they can be handled (or not), but never created, renamed or changed
         const fg::EventDesc* ev = cn->defId.rfind("event:", 0) == 0 ? doc_->registry().findEvent(cn->defId.substr(6)) : nullptr;
-        form_->addRow("Event", new QLabel(ev ? qs(ev->name) : qs(cn->defId.substr(6))));
-        form_->addRow("Arguments", new QLabel(ev ? qs(fg::describeParams(*ev)) : QString("unknown")));
-        if (ev && !ev->doc.empty()) form_->addRow(dim(qs(ev->doc)));
-        form_->addRow(dim("This event is raised by the application. A script can only handle it."));
+        form_->addRow(tr("Event"), new QLabel(ev ? qs(ev->name) : qs(cn->defId.substr(6))));
+        form_->addRow(tr("Arguments"), new QLabel(ev ? qs(fg::describeParams(*ev)) : tr("unknown")));
+        form_->addRow(dim(tr("This event is raised by the application. A script can only handle it.")));
     }
     if (cn->op == fg::NodeOp::GetVariable || cn->op == fg::NodeOp::SetVariable)
-        form_->addRow("Variable", new QLabel(qs(node->prop("name")) + "  (" + qs(node->prop("scope")) + ")"));
+        form_->addRow(tr("Variable"), new QLabel(qs(node->prop("name")) + "  (" + qs(node->prop("scope")) + ")"));
     // the settings of the node (NodeDef::settings): pin counts, the cases of a switch...
     if (cn->def)
         for (const fg::NodeSetting& setting : cn->def->settings) {
             const std::string key = setting.key;
-            const QString label = qs(setting.label.empty() ? setting.key : setting.label);
+            const QString label = QString::fromStdString(nodeTexts().setting(cn->defId, setting));
             QWidget* editor = nullptr;
             if (setting.kind == fg::NodeSetting::Kind::Count) {
                 auto* sp = new QSpinBox;
                 sp->setRange(setting.min, setting.max);
                 sp->setValue(qs(node->prop(key, setting.def)).toInt());
                 connect(sp, qOverload<int>(&QSpinBox::valueChanged), this, [=](int v) {
-                    mutateNode([&](fg::Node& n) { n.props[key] = std::to_string(v); }, "Change " + label.toLower(), qs(key) + ":" + graph + QString::number(id));
+                    mutateNode([&](fg::Node& n) { n.props[key] = std::to_string(v); }, tr("Change %1").arg(label.toLower()), qs(key) + ":" + graph + QString::number(id));
                 });
                 editor = sp;
             } else if (setting.kind == fg::NodeSetting::Kind::Choice) {
                 auto* combo = new QComboBox;
-                for (auto& c : setting.choices) combo->addItem(qs(c));
+                // the choices are shown translated (an enum literal: its values) and stored as they are
+                const std::string enumType = cn->defId.rfind("enum:", 0) == 0 ? cn->defId.substr(5) : std::string();
+                for (auto& c : setting.choices) combo->addItem(enumType.empty() ? qs(c) : enumValueText(enumType, c), qs(c));
                 const QString current = qs(node->prop(key, setting.def));
-                if (combo->findText(current) < 0) combo->addItem(current);      // a value the definition does not have (any more)
-                combo->setCurrentText(current);
+                if (combo->findData(current) < 0) combo->addItem(current, current);      // a value the definition does not have (any more)
+                combo->setCurrentIndex(combo->findData(current));
                 connect(combo, qOverload<int>(&QComboBox::activated), this, [=](int i) {
-                    const std::string v = ss(combo->itemText(i));
-                    mutateNode([&](fg::Node& n) { n.props[key] = v; }, "Change " + label.toLower(), QString());
+                    const std::string v = ss(combo->itemData(i).toString());
+                    mutateNode([&](fg::Node& n) { n.props[key] = v; }, tr("Change %1").arg(label.toLower()), QString());
                 });
                 editor = combo;
             } else {
@@ -970,11 +1002,11 @@ void DetailsPanel::buildNodes() {
                     const fg::Graph* gr = doc_->script().findGraph(ss(graph));
                     const fg::Node* now = gr ? gr->findNode(id) : nullptr;
                     if (!now || now->prop(key, setting.def) == text) return;
-                    mutateNode([&](fg::Node& n) { n.props[key] = text; }, "Change " + label.toLower(), QString());
+                    mutateNode([&](fg::Node& n) { n.props[key] = text; }, tr("Change %1").arg(label.toLower()), QString());
                 };
                 editor = te;
             }
-            if (!setting.doc.empty()) editor->setToolTip(qs(setting.doc));
+            if (!setting.doc.empty()) editor->setToolTip(QString::fromStdString(nodeTexts().settingDoc(cn->defId, setting)));
             form_->addRow(label, editor);
         }
     // type parameters
@@ -983,7 +1015,7 @@ void DetailsPanel::buildNodes() {
             auto* combo = new QComboBox;
             auto it = cn->typeArgs.find(tp.name);
             QString resolved = it != cn->typeArgs.end() ? qs(it->second) : QString();
-            combo->addItem("Auto" + (resolved.isEmpty() ? QString() : " (" + resolved + ")"), QString());
+            combo->addItem(resolved.isEmpty() ? tr("Auto") : tr("Auto (%1)").arg(resolved), QString());
             QStringList choices;
             if (!tp.allowed.empty()) for (auto& a : tp.allowed) choices << qs(a);
             else for (auto* t : doc_->registry().types()) choices << qs(t->name);
@@ -996,18 +1028,18 @@ void DetailsPanel::buildNodes() {
                 mutateNode([&](fg::Node& n) {
                     if (v.isEmpty()) n.typeArgs.erase(ss(pname));
                     else n.typeArgs[ss(pname)] = ss(v);
-                }, "Change node type", QString());
+                }, tr("Change node type"), QString());
             });
-            form_->addRow("Type " + pname, combo);
+            form_->addRow(tr("Type %1").arg(pname), combo);
         }
     // the inputs and outputs of the node (the function's own are shown above, where they can be edited)
     if (!(isEntryOrReturn || isCall)) buildNodePins(*node, *cn, graph);
     auto* comment = new QLineEdit(qs(node->comment));
     connect(comment, &QLineEdit::editingFinished, this, [=] {
         QString t = comment->text();
-        mutateNode([&](fg::Node& n) { n.comment = ss(t); }, "Edit node comment", "comment:" + graph + QString::number(id));
+        mutateNode([&](fg::Node& n) { n.comment = ss(t); }, tr("Edit node comment"), "comment:" + graph + QString::number(id));
     });
-    form_->addRow("Comment", comment);
+    form_->addRow(tr("Comment"), comment);
 }
 
 } // namespace fged

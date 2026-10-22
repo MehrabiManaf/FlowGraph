@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 // Plugin ABI. A plugin is a shared library exporting `fgRegisterPlugin`; it adds classes, functions,
-// events and nodes to the registry. Build it against the same FlowGraphCore version and compiler.
+// enums and nodes to the registry. It declares no events: the application raises its events, so only the
+// application declares them (Runtime::loadPlugin refuses a plugin that does). Build it against the same
+// FlowGraphCore version and compiler.
 //
 //   FG_PLUGIN(reg) {
 //       reg.addFunction("My.Hello", [] { return std::string("hi"); }).makePure();
