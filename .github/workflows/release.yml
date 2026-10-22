@@ -24,7 +24,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: v
         run: |
           version=$(grep -oP 'project\(FlowGraph VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
@@ -42,10 +42,10 @@ jobs:
     env:
       PACKAGE: FlowGraph-${{ needs.version.outputs.version }}-windows-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ./.github/actions/msvc-env
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -90,7 +90,7 @@ jobs:
       - name: Pack
         shell: bash
         run: cd dist && 7z a -tzip "../$PACKAGE.zip" "$PACKAGE" > /dev/null
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-windows
           path: ${{ env.PACKAGE }}.zip
@@ -103,7 +103,7 @@ jobs:
     env:
       PACKAGE: FlowGraph-${{ needs.version.outputs.version }}-linux-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Install build tools
@@ -167,7 +167,7 @@ jobs:
           test -s smoke.png
       - name: Pack
         run: tar -C dist -czf "$PACKAGE.tar.gz" "$PACKAGE"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-linux
           path: ${{ env.PACKAGE }}.tar.gz
@@ -181,7 +181,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: assets
