@@ -71,6 +71,7 @@ jobs:
           # the offscreen platform: flowstudio without a display (and the check below)
           cp "$(cygpath -u "$QT_ROOT_DIR")/plugins/platforms/qoffscreen.dll" "dist/$PACKAGE/bin/platforms/"
           cp -r LICENSE LICENSES README.md "dist/$PACKAGE/"          # also in share/doc/FlowGraph (cmake --install), with KDDockWidgets'
+          mkdir -p "dist/$PACKAGE/examples" && cp Examples/Scripts/*.flow "dist/$PACKAGE/examples/"   # to try it (README: Try it)
       - name: Check that the package runs on its own
         shell: pwsh
         run: |
@@ -81,6 +82,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "flow does not start" }
           & "$bin\flow.exe" --no-plugins --reference smoke-reference.md
           if ($LASTEXITCODE -ne 0) { throw "flow --reference failed" }
+          $out = & "$bin\flow.exe" "dist\$env:PACKAGE\examples\fizzbuzz.flow"
+          if ($LASTEXITCODE -ne 0 -or $out -notcontains "FizzBuzz") { throw "the FizzBuzz example does not run: $out" }
           $env:QT_QPA_PLATFORM = "offscreen"
           $env:FG_STUDIO_SCREENSHOT = "$PWD\smoke.png"
           $p = Start-Process "$bin\flowstudio.exe" -PassThru
@@ -150,6 +153,7 @@ jobs:
             cp "$QT_ROOT_DIR/translations/qtbase_$code.qm" "$dist/translations/" 2>/dev/null || echo "no Qt translation for $code"
           done
           cp -r LICENSE LICENSES README.md "$dist/"
+          mkdir -p "$dist/examples" && cp Examples/Scripts/*.flow "$dist/examples/"     # to try it (README: Try it)
       - name: Check that the package runs on its own
         run: |
           dist="dist/$PACKAGE"
@@ -163,6 +167,7 @@ jobs:
           done
           "$dist/bin/flow" --version
           "$dist/bin/flow" --no-plugins --reference smoke-reference.md
+          "$dist/bin/flow" "$dist/examples/fizzbuzz.flow" | grep -qx FizzBuzz
           QT_QPA_PLATFORM=offscreen FG_STUDIO_SCREENSHOT="$PWD/smoke.png" timeout 60 "$dist/bin/flowstudio"
           test -s smoke.png
       - name: Pack

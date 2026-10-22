@@ -1,0 +1,32 @@
+name: Translation
+description: A text in your language is wrong, unclear or missing
+labels: [translation]
+body:
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      options:
+        - Chinese (Simplified)
+        - French
+        - German
+        - Japanese
+        - Korean
+        - Persian
+        - Portuguese (Brazil)
+        - Russian
+        - Spanish
+        - Another language (a new one)
+    validations:
+      required: true
+  - type: textarea
+    id: texts
+    attributes:
+      label: Texts
+      description: For each text, where you see it, what it says now, and what it should say.
+      placeholder: |
+        Where: Details panel, a variable
+        Now: ...
+        Better: ...
+    validations:
+      required: true

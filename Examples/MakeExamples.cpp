@@ -186,6 +186,43 @@ void inventory(const std::string& dir) {
     saveScript(s, dir + "/inventory.flow");
 }
 
+// FizzBuzz: 1 to 15, "Fizz" for multiples of 3, "Buzz" for multiples of 5, "FizzBuzz" for both. Run it slowly (a launch
+// configuration with a step delay) to watch the execution take its branches.
+void fizzbuzz(const std::string& dir) {
+    Script s;
+    s.name = "FizzBuzz";
+    s.doc = "Counts from 1 to 15: Fizz for the multiples of 3, Buzz for the multiples of 5, FizzBuzz for both.";
+    Graph& g = s.addEventGraph();
+    NodeId ev = event(g, "Main");
+    NodeId loop = add(g, "flow.for", 230, 0);
+    g.findNode(loop)->defaults["First"] = Value(1);
+    g.findNode(loop)->defaults["Last"] = Value(16);       // Last is exclusive: counts 1..15
+    link(g, ev, "Then", loop, "In");
+    std::pair<NodeId, std::string> next = {loop, "Loop Body"};
+    const std::pair<int, const char*> checks[] = {{15, "FizzBuzz"}, {3, "Fizz"}, {5, "Buzz"}};
+    double x = 650, y = 0;                                // a row for each check, each a step to the right and down
+    for (auto& [divisor, word] : checks) {
+        // Index % divisor == 0 decides the branch
+        NodeId mod = add(g, "math.mod", x - 430, y + 135);       // ids, not Node&: adding a node may move the others
+        g.findNode(mod)->defaults["B"] = Value(divisor);
+        NodeId zero = add(g, "cmp.eq", x - 215, y + 135);
+        g.findNode(zero)->defaults["B"] = Value(0);
+        NodeId br = add(g, "flow.branch", x, y);
+        link(g, loop, "Index", mod, "A");
+        link(g, mod, "Result", zero, "A");
+        link(g, zero, "Result", br, "Condition");
+        link(g, next.first, next.second, br, "In");
+        link(g, br, "True", print(g, x + 220, y - 10, word), "In");
+        next = {br, "False"};
+        x += 260;
+        y += 240;
+    }
+    NodeId number = print(g, x - 40, y - 120);           // none of them: the number itself
+    link(g, next.first, next.second, number, "In");
+    link(g, loop, "Index", number, "String");
+    saveScript(s, dir + "/fizzbuzz.flow");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -197,6 +234,7 @@ int main(int argc, char** argv) {
     hello(dir);
     fibonacci(dir);
     inventory(dir);
-    std::printf("wrote hello.flow, fibonacci.flow, inventory.flow to %s\n", dir.c_str());
+    fizzbuzz(dir);
+    std::printf("wrote hello.flow, fibonacci.flow, inventory.flow, fizzbuzz.flow to %s\n", dir.c_str());
     return 0;
 }

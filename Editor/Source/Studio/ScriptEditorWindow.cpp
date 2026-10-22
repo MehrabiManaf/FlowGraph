@@ -1205,6 +1205,8 @@ void ScriptEditorWindow::runEntry(const QString& entry) {
     runOrContinue();
 }
 
+void ScriptEditorWindow::devFrameAll() { actFrame_->trigger(); }
+
 void ScriptEditorWindow::devSelect(const QString& spec) {
     QStringList p = spec.split(':');
     if (p.size() == 3 && p[0] == "node") focusNode(p[1], p[2].toInt());

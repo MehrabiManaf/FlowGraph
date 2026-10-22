@@ -173,9 +173,11 @@ public:
     void refreshScript();                            // compile again (plugins or events were added to the runtime)
     void log(int level, const QString& text);        // level: 0 info, 1 warning, 2 error (fg::LogLevel)
 
-    // Developer aids used by the smoke tests: run an entry, select an item, write screen coordinates, render the graph.
+    // Developer aids used by the smoke tests: run an entry, select an item, frame the graph, write screen coordinates, render the
+    // graph.
     void devRun(const QString& entry, const QString& breakpoint = QString());
     void devSelect(const QString& spec);
+    void devFrameAll();
     void devProbe(const QString& file, bool coordinates);
     void devSceneShot(const QString& file);
 
