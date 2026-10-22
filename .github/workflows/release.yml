@@ -100,27 +100,40 @@ jobs:
           if-no-files-found: error
 
   # The same for Linux: the programs find their libraries next to them (RPATH $ORIGIN/../lib), Qt and its plugins are bundled.
+  # Built on AlmaLinux 8 (glibc 2.28) with GCC 13 (gcc-toolset: the parts of its C++ library that GCC 8's lacks are linked into
+  # the binaries): a program needs the C library of the system it was built on or a newer one, so the package runs on the
+  # distributions of 2019 on - RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu 20.04 and newer.
   linux:
     needs: version
     runs-on: ubuntu-24.04
+    container: almalinux:8
     env:
       PACKAGE: FlowGraph-${{ needs.version.outputs.version }}-linux-x64
+      CC: /opt/rh/gcc-toolset-13/root/usr/bin/gcc
+      CXX: /opt/rh/gcc-toolset-13/root/usr/bin/g++
     steps:
+      - name: Install build tools
+        run: |
+          dnf install -y dnf-plugins-core epel-release
+          dnf config-manager --set-enabled powertools
+          # the compiler, the build tools, git for the checkout, Python for aqtinstall, and what Qt needs to build and to run the
+          # tests (offscreen: fontconfig, freetype, a font)
+          dnf install -y gcc-toolset-13-gcc-c++ git cmake ninja-build python3.11 python3.11-pip which file findutils tar gzip \
+            binutils mesa-libGL-devel mesa-libEGL-devel libxkbcommon-devel fontconfig-devel freetype-devel vulkan-headers \
+            dejavu-sans-fonts dejavu-sans-mono-fonts
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libvulkan-dev libfontconfig1-dev
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          arch: linux_gcc_64
-          cache: true
+        run: |
+          # with aqtinstall (the install-qt-action would set up a Python built for Ubuntu, which needs a newer glibc than this)
+          python3.11 -m pip install --quiet aqtinstall
+          python3.11 -m aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 --outputdir /opt/Qt
+          test -x "/opt/Qt/$QT_VERSION/gcc_64/bin/qmake"
+          echo "QT_ROOT_DIR=/opt/Qt/$QT_VERSION/gcc_64" >> "$GITHUB_ENV"
       - name: Configure
-        run: cmake --preset linux-release '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
+        # lib, not lib64 (the default of RHEL-like systems): the layout of the package, and where its RPATH looks
+        run: cmake --preset linux-release -DCMAKE_INSTALL_LIBDIR=lib '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
         env:
           QT_DIR: ${{ env.QT_ROOT_DIR }}
       - name: Build
@@ -164,6 +177,17 @@ jobs:
           done
           for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist/plugins/platforms/libqoffscreen.so"; do
             if ldd "$f" | grep "not found"; then echo "::error::$f needs a library the package does not bring"; exit 1; fi
+          done
+          # what the package needs of the system's C and C++ libraries: not newer than this AlmaLinux 8's (glibc 2.28, libstdc++
+          # of GCC 8 = GLIBCXX_3.4.25), or it does not run on the systems the package is for
+          needs=$(find "$dist" -type f \( -name '*.so*' -o -perm -u+x \) -exec objdump -T {} + 2>/dev/null | grep -oE 'GLIBC(XX)?_[0-9.]+' | sort -u)
+          for lib in GLIBC:2.28 GLIBCXX:3.4.25; do
+            name=${lib%%:*}; limit=${lib#*:}
+            newest=$(echo "$needs" | grep "^${name}_" | sed "s/^${name}_//" | sort -V | tail -1)
+            echo "$name: newest needed $newest (at most $limit)"
+            if [ "$(printf '%s\n%s\n' "$newest" "$limit" | sort -V | tail -1)" != "$limit" ]; then
+              echo "::error::the package needs ${name}_$newest: it would not run on the systems it is for"; exit 1
+            fi
           done
           "$dist/bin/flow" --version
           "$dist/bin/flow" --no-plugins --reference smoke-reference.md

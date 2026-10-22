@@ -25,6 +25,10 @@ Download the package for Windows or Linux from [Releases](https://github.com/Meh
 `bin/flowstudio`, open `examples/fizzbuzz.flow` (*File > Open*) and press **F5**: *Run > Execution speed* slows the run down
 so you can follow it. In a terminal, `bin/flow examples/fizzbuzz.flow` runs the same script without the editor.
 
+On Linux the package runs on distributions with glibc 2.28 or newer: RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu
+20.04 and newer. `flowstudio` uses the system's X11 libraries, and Qt 6 needs `xcb-util-cursor` among them (RHEL family, from
+EPEL: `dnf install xcb-util-cursor`; Debian / Ubuntu: `apt install libxcb-cursor0`). `flow` needs none of them.
+
 ## Put it in your application
 
 ```cpp
