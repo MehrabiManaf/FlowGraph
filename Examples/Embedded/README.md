@@ -74,6 +74,7 @@ messages are processed and you can step through it; saving while attached attach
 | Debugging the script while the application runs it: Attach / Detach, breakpoints, stepping | `EditorHost::debugTarget`, `ScriptEditor::attach` | no (editor library; uses the public `AsyncExecutor::inspect`, `Instance::setDebugHooks`, `Debugger`) |
 | Add Row has no pins of its own; the user adds columns like the inputs of a function | `NodeDef::customInputs` (the node keeps the pins in `Node::inputs`) | **yes**: new, see below |
 | Every node shows its inputs and outputs in the Details panel; the custom ones can be edited | `DetailsPanel` (editor library) | no (editor library) |
+| The application and its editor in another language (*View > Language*, in the main window and in the editor; it applies at the next start) | `fged::applySavedLanguage`, `fged::createLanguageMenu`, `EditorHost::offersLanguageChoice`; its windows: Qt translations (`Translations/embedded_example_<code>.ts`); its nodes: `fged::loadNodeTranslations` with `Translations/messages_<code>.json` (`embedded_example --translations <file>` writes it) | no (editor library) |
 
 The changes of `Core/` for this example are the two marked **yes**: serial mode and custom pins (see below).
 

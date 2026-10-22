@@ -67,7 +67,7 @@ bool Runtime::loadPlugin(const std::string& path, std::string* error) {
     std::string mismatch = pluginAbiMismatch(*abiFn(), currentPluginAbi());
     if (!mismatch.empty()) { unload(); return fail("plugin '" + name + "' cannot be loaded: " + mismatch); }
     libs_->handles.push_back(h);
-    reg_->beginSource(name);
+    reg_->beginPluginSource(name);
     try {
         fn(*reg_);
     } catch (const std::exception& e) {
@@ -76,7 +76,7 @@ bool Runtime::loadPlugin(const std::string& path, std::string* error) {
     }
     reg_->endSource();
     pluginNames_.push_back(name);
-    if (!canonError) pluginPaths_.push_back(canon);
+    pluginPaths_.push_back(canonError ? path : canon);
     return true;
 }
 

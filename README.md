@@ -196,7 +196,9 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
   `loadPluginsFrom(dir)`, `loadPluginsFromPathList("a;b")`, `loadPluginsFromEnvironment("VAR")`. Build them with the same
   compiler and FlowGraphCore version: `FG_PLUGIN` also exports how the plugin was built (plugin ABI version, compiler family,
   Debug / Release runtime, sizes of the shared classes) and the loader refuses a plugin that does not match, with the reason,
-  instead of crashing later. A plugin that is reachable through several directories is loaded once.
+  instead of crashing later. A plugin that is reachable through several directories is loaded once. A plugin adds classes,
+  functions, enums and nodes, but no events: the application raises its events, so only the application declares them (a
+  plugin that calls `addEvent` is refused).
 * Custom nodes: `registry.addNode(fg::NodeDef{...})` with pins, optional dynamic pins and a `run` callback.
 * **Asynchronous functions.** A function that returns a `std::future<T>` (or `std::shared_future<T>`) becomes a node that waits:
   ```cpp
@@ -339,8 +341,12 @@ the language: they keep the English node names, so a script made in one language
   texts are added untranslated, removed ones dropped, and a translation whose English text changed is not used until it is
   translated again. Node searches find a node by its translated and its English name.
 * **A new language** is one `.ts` file and one `.json` file with those names; nothing else changes.
-* An application or plugin translates its own nodes with a catalog of its own (`flow --translations` with its plugins loaded writes
-  one): `fged::loadNodeTranslations(file)` after `fged::applyLanguage` / `applySavedLanguage`.
+* **A plugin** ships catalogs of its own nodes next to its library: `plugins/translations/<Plugin>_<code>.json`. The editor loads
+  the one of its language for every plugin the runtime loads, also for plugins loaded later (a launch configuration's).
+  `flow --plugins <dir> --only <Plugin> --translations <Plugin>_<code>.json` writes or updates one with the plugin's texts only;
+  `Plugins/ExamplePlugin/Translations` is an example (its build copies them next to the library).
+* An application translates the nodes it registers itself with a catalog of its own: `fged::loadNodeTranslations(file)` after
+  `fged::applyLanguage` / `applySavedLanguage`.
 * CI checks that every text of the sources is in the files and that none is without a translation; the editor tests check that
   every text the editor shows goes through the translation system.
 

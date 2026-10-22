@@ -77,7 +77,8 @@ public:
     // Register a free function / lambda as a callable node. Id convention: "Category.Name".
     template <class F>
     FunctionDesc& addFunction(const std::string& id, F fn, std::vector<std::string> paramNames = {});
-    // Declare an event the host will raise: addEvent("Tick", {{"DeltaTime", "float"}})
+    // Declare an event the host will raise: addEvent("Tick", {{"DeltaTime", "float"}}). Only the application declares events (it
+    // raises them): a plugin that tries is refused (std::logic_error while Runtime::loadPlugin registers it).
     EventDesc& addEvent(const std::string& name, std::vector<std::pair<std::string, std::string>> params = {});
     // Register a completely custom node definition.
     NodeDef& addNode(NodeDef def);
@@ -88,9 +89,11 @@ public:
     template <class T> Value wrapPtr(T* ptr) const;                        // non-owning, null => null value
     template <class T> std::shared_ptr<T> unwrap(const Value& v) const;    // null when not a T
 
-    // Source tag (plugin name) assigned to everything registered while set.
-    void beginSource(const std::string& s) { source_ = s; }
-    void endSource() { source_ = "core"; }
+    // Source tag (plugin name) assigned to everything registered while set. beginPluginSource (Runtime::loadPlugin) also refuses
+    // events: a plugin adds classes, functions, enums and nodes, the application the events it raises.
+    void beginSource(const std::string& s) { source_ = s; plugin_ = false; }
+    void beginPluginSource(const std::string& s) { source_ = s; plugin_ = true; }
+    void endSource() { source_ = "core"; plugin_ = false; }
     const std::string& source() const { return source_; }
 
     // ---- functions, events, nodes ----------------------------------------------------------
@@ -128,6 +131,7 @@ private:
     std::map<std::string, EventDesc*> eventByName_;
     mutable std::map<std::string, std::unique_ptr<NodeDef>> nodes_;
     std::string source_ = "core";
+    bool plugin_ = false;                       // a plugin is registering (no events)
     mutable std::recursive_mutex typeMu_;
     mutable std::atomic<bool> dirty_{true};
 };

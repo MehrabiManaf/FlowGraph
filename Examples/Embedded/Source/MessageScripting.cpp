@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "MessageScripting.hpp"
 
+#include <QCoreApplication>
+
 #include <algorithm>
 #include <map>
 
@@ -111,8 +113,12 @@ bool handlesNewMessage(const Script& script) {
 
 std::string whyNotUsable(const Script& script, const Registry& reg) {
     const CompatibilityReport report = checkCompatibility(script, reg);
-    if (!report.ok()) return "This script needs things this application does not provide:\n" + report.toText();
-    if (!handlesNewMessage(script)) return std::string("The script does not handle the event ") + kNewMessageEvent + ": nothing would run.";
+    if (!report.ok())
+        return QCoreApplication::translate("msgapp::MessageScripting", "This script needs things this application does not provide:").toStdString() +
+               '\n' + report.toText();
+    if (!handlesNewMessage(script))
+        return QCoreApplication::translate("msgapp::MessageScripting", "The script does not handle the event %1: nothing would run.")
+            .arg(kNewMessageEvent).toStdString();
     return {};
 }
 

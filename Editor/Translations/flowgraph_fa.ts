@@ -177,7 +177,7 @@ Locals and parameters of the selected stack frame are found first, then the vari
     </message>
     <message>
         <source>Container</source>
-        <translation>ظرف</translation>
+        <translation>مخزن</translation>
     </message>
     <message>
         <source>Key type</source>
@@ -193,7 +193,7 @@ Locals and parameters of the selected stack frame are found first, then the vari
     </message>
     <message>
         <source>Containers start empty.</source>
-        <translation>ظرف‌ها خالی آغاز می‌شوند.</translation>
+        <translation>مخزن‌ها خالی آغاز می‌شوند.</translation>
     </message>
     <message>
         <source>Objects start as null.</source>
@@ -245,7 +245,7 @@ Locals and parameters of the selected stack frame are found first, then the vari
     </message>
     <message>
         <source>The key type of a map; only used when the container is a Map.</source>
-        <translation>نوع کلید یک نگاشت؛ فقط وقتی ظرف «نگاشت» باشد به کار می‌رود.</translation>
+        <translation>نوع کلید یک نگاشت؛ فقط وقتی مخزن «نگاشت» باشد به کار می‌رود.</translation>
     </message>
     <message>
         <source>Ref</source>
@@ -667,6 +667,29 @@ Locals and parameters of the selected stack frame are found first, then the vari
     </message>
 </context>
 <context>
+    <name>fged::Language</name>
+    <message>
+        <source>&amp;Language</source>
+        <translation>زبان(&amp;L)</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation>سیستم</translation>
+    </message>
+    <message>
+        <source>The language of the operating system, when there is a translation of it</source>
+        <translation>زبان سیستم‌عامل، اگر ترجمه‌ای از آن موجود باشد</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>زبان</translation>
+    </message>
+    <message>
+        <source>%1 shows the new language when it is started again.</source>
+        <translation>%1 پس از اجرای دوباره، زبان تازه را نشان می‌دهد.</translation>
+    </message>
+</context>
+<context>
     <name>fged::LogPanel</name>
     <message>
         <source>Clear</source>
@@ -1009,18 +1032,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation>روشن یا تیره مثل سیستم‌عامل، و با تغییر سیستم همراه می‌شود</translation>
     </message>
     <message>
-        <source>&amp;Language</source>
-        <translation>زبان(&amp;L)</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation>سیستم</translation>
-    </message>
-    <message>
-        <source>The language of the operating system, when there is a translation of it</source>
-        <translation>زبان سیستم‌عامل، اگر ترجمه‌ای از آن موجود باشد</translation>
-    </message>
-    <message>
         <source>&amp;Debug</source>
         <translation>اشکال‌زدایی(&amp;D)</translation>
     </message>
@@ -1063,14 +1074,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>Select a node, or a variable or function in My Script, to find its references</source>
         <translation>برای یافتن ارجاع‌ها، یک گره، یا یک متغیر یا تابع در «اسکریپت من» را انتخاب کنید</translation>
-    </message>
-    <message>
-        <source>Language</source>
-        <translation>زبان</translation>
-    </message>
-    <message>
-        <source>%1 shows the new language when it is started again.</source>
-        <translation>%1 پس از اجرای دوباره، زبان تازه را نشان می‌دهد.</translation>
     </message>
     <message>
         <source>%1 theme</source>

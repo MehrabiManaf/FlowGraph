@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Document.hpp"
 
+#include "Common/NodeTexts.hpp"
+
 #include <QCoreApplication>
 #include <QFileInfo>
 
@@ -21,6 +23,7 @@ void Document::markDirty(bool d) {
 }
 
 void Document::recompile() {
+    loadPluginTranslations(rt_);                // plugins loaded since (a launch configuration's) bring their texts
     program_ = fg::compile(script_, rt_.registry());
     emit compiled();
 }

@@ -12,7 +12,7 @@
 namespace msgapp {
 
 MainWindow::MainWindow(fg::Runtime& rt, MessageStore& store, QWidget* parent) : QMainWindow(parent), rt_(rt), store_(store) {
-    setWindowTitle("Message Tables - FlowGraph embedded example");
+    setWindowTitle(tr("Message Tables - FlowGraph embedded example"));
     resize(1200, 700);
     setDockOptions(AllowTabbedDocks | AllowNestedDocks | AnimatedDocks);
     hub_ = new ScriptEditorHub(rt_, store_, this);       // the application's only script editor (made when it is first needed)
@@ -25,29 +25,33 @@ MainWindow::MainWindow(fg::Runtime& rt, MessageStore& store, QWidget* parent) : 
     count_->setFont(big);
     setCentralWidget(count_);
 
-    QToolBar* bar = addToolBar("Main");
+    QToolBar* bar = addToolBar(tr("Main"));
+    bar->setObjectName("Main");
     bar->setMovable(false);
     bar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    QAction* table = bar->addAction(fged::themedIcon(":/Icons/add.svg"), "New Table", this, [this] { newTable(); });
+    QAction* table = bar->addAction(fged::themedIcon(":/Icons/add.svg"), tr("New Table"), this, [this] { newTable(); });
     table->setShortcut(QKeySequence::New);
-    table->setToolTip("Adds a table. Its script decides which columns it has and what goes into its rows.");
+    table->setToolTip(tr("Adds a table. Its script decides which columns it has and what goes into its rows."));
     // the source of the messages can be stopped, e.g. to look at a table, or while a script is stopped at a breakpoint
-    QAction* source = bar->addAction(fged::themedIcon(":/Icons/interrupt.svg"), "Pause Messages");
+    QAction* source = bar->addAction(fged::themedIcon(":/Icons/interrupt.svg"), tr("Pause Messages"));
     source->setCheckable(true);
-    source->setToolTip("Stops the source of the messages (a random message, two per second); the scripts get no new messages until you go on");
+    source->setToolTip(tr("Stops the source of the messages (a random message, two per second); the scripts get no new messages until you go on"));
     connect(source, &QAction::toggled, this, [this, source](bool paused) {
         if (paused) store_.stopGenerating();
         else store_.startGenerating();
-        source->setText(paused ? "Resume Messages" : "Pause Messages");
+        source->setText(paused ? tr("Resume Messages") : tr("Pause Messages"));
         source->setIcon(fged::themedIcon(paused ? ":/Icons/continue.svg" : ":/Icons/interrupt.svg"));
         showCount();
     });
 
-    QMenu* file = menuBar()->addMenu("&File");
+    QMenu* file = menuBar()->addMenu(tr("&File"));
     file->addAction(table);
     file->addAction(source);
     file->addSeparator();
-    file->addAction("E&xit", this, &QWidget::close);
+    file->addAction(tr("E&xit"), this, &QWidget::close);
+    // the language of the application and of its script editor (the same choice as the editor's View > Language); main() applies it
+    QMenu* view = menuBar()->addMenu(tr("&View"));
+    view->addMenu(fged::createLanguageMenu(kApplicationName, this));
 
     connect(&store_, &MessageStore::messageAdded, this, [this] { showCount(); });
     connect(&store_, &MessageStore::cleared, this, [this] { showCount(); });
@@ -55,8 +59,8 @@ MainWindow::MainWindow(fg::Runtime& rt, MessageStore& store, QWidget* parent) : 
 }
 
 void MainWindow::showCount() {
-    count_->setText(QString("%1 messages received\n%2").arg(store_.total())
-                        .arg(store_.generating() ? "(a random one, two per second)" : "(paused)"));
+    count_->setText(tr("%1 messages received\n%2").arg(store_.total())
+                        .arg(store_.generating() ? tr("(a random one, two per second)") : tr("(paused)")));
 }
 
 void MainWindow::closeEvent(QCloseEvent* e) {

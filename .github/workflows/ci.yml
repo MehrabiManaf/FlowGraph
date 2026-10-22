@@ -73,9 +73,22 @@ jobs:
           fi
           # the same for the texts of the nodes (Core/Translations/<code>.json, written by flow --translations)
           for catalog in Core/Translations/*.json; do ./build/linux-release/bin/flow --no-plugins --translations "$catalog"; done
-          git diff --exit-code -- Core/Translations
-          if grep -n '", ""\]' Core/Translations/*.json; then
-            echo "::error::node texts without a translation (above): translate them in Core/Translations"
+          # and of the example plugin (its own catalogs: only its texts)
+          for catalog in Plugins/ExamplePlugin/Translations/*.json; do
+            ./build/linux-release/bin/flow --no-plugins --plugins build/linux-release/bin/plugins --only ExamplePlugin --translations "$catalog"
+          done
+          # and of the embedded example (its windows and its nodes)
+          cmake --build --preset linux-release --target embedded_example_lupdate
+          for catalog in Examples/Embedded/Translations/messages_*.json; do
+            QT_QPA_PLATFORM=offscreen ./build/linux-release/bin/embedded_example --translations "$catalog"
+          done
+          git diff --exit-code -- Core/Translations Plugins/ExamplePlugin/Translations Examples/Embedded/Translations
+          if grep -n '<translation type="unfinished"></translation>' Examples/Embedded/Translations/*.ts; then
+            echo "::error::texts without a translation (above): translate them in Examples/Embedded/Translations"
+            exit 1
+          fi
+          if grep -n '", ""\]' Core/Translations/*.json Plugins/ExamplePlugin/Translations/*.json Examples/Embedded/Translations/*.json; then
+            echo "::error::node texts without a translation (above): translate them in their Translations folder"
             exit 1
           fi
 

@@ -12,8 +12,10 @@
 #include <filesystem>
 #include <mutex>
 #include <set>
+#include <sstream>
 #include <thread>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <string>
@@ -811,10 +813,11 @@ TEST(plugin_loading) {
     CHECK(rt.registry().findType("Counter") != nullptr);
     CHECK(rt.registry().findNode("m:Counter.Increment") != nullptr);
     CHECK_EQ(rt.registry().findNode("fn:Example.Greet")->source, std::string("ExamplePlugin"));
+    rt.registry().addEvent("OnGreeting", {{"Message", "string"}});      // the application's event (a plugin declares none)
     Script s;
     s.variables.push_back({"Msg", "string", Value(""), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event:OnExample").id;
+    NodeId ev = g.addNode("event:OnGreeting").id;
     NodeId greet = g.addNode("fn:Example.Greet").id;
     NodeId set = g.addNode("var.set").id;
     g.findNode(set)->props = {{"name", "Msg"}, {"scope", "global"}};
@@ -824,8 +827,43 @@ TEST(plugin_loading) {
     auto prog = build(rt, s);
     CHECK(prog->ok());
     Instance inst(prog);
-    CHECK(inst.callEvent("OnExample", {Value("plugin")}).ok);
+    CHECK(inst.callEvent("OnGreeting", {Value("plugin")}).ok);
     CHECK_EQ(inst.getVariable("Msg").toString(), std::string("Hello, plugin!"));
+}
+
+TEST(plugin_translation_catalog) {
+    std::string path = g_exeDir + "/plugins/ExamplePlugin" + kLibExt;
+    if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
+    Runtime rt;                                 // the nodes the plugin's catalog is made with (flow --only)
+    standard::registerStandardApp(rt.registry());
+    CHECK(rt.loadPlugin(path));
+    CHECK_EQ(rt.loadedPluginFiles().size(), rt.loadedPlugins().size());
+    // a plugin's catalog: its texts only (no built-in node, no template)
+    auto has = [](const std::vector<std::pair<std::string, std::string>>& texts, const std::string& key) {
+        for (auto& t : texts)
+            if (t.first == key) return true;
+        return false;
+    };
+    const auto texts = translatableTexts(rt.registry(), "ExamplePlugin");
+    CHECK(has(texts, "node:fn:Example.Greet"));
+    CHECK(has(texts, "node:m:Counter.Increment"));
+    CHECK(has(texts, "pin:m:Counter.Add/Amount"));
+    CHECK(!has(texts, "node:flow.branch"));
+    CHECK(!has(texts, "template:get-variable"));
+    CHECK(has(translatableTexts(rt.registry()), "node:fn:Example.Greet"));       // the whole registry has them too
+    // its Persian catalog is next to the library (the build copies it there), up to date and translated
+    const std::string catalog = (std::filesystem::path(rt.loadedPluginFiles().front()).parent_path() / "translations" / "ExamplePlugin_fa.json").string();
+    std::ifstream in(catalog, std::ios::binary);
+    CHECK(bool(in));
+    std::stringstream text;
+    text << in.rdbuf();
+    CatalogReport report;
+    CHECK(updateCatalog(rt.registry(), text.str(), "fa", &report, "ExamplePlugin") == text.str());
+    CHECK(report.texts > 0 && report.translated == report.texts);
+    Translations t;
+    CHECK(t.loadFile(catalog));
+    CHECK(t.nodeTitle(rt.registry().findNode("fn:Example.Greet"), {}, "Greet") != "Greet");
+    CHECK(t.pin("m:Counter.Add", "Amount") != "Amount");
 }
 
 // ---- Exit, Executor, AsyncExecutor -------------------------------------------------------------------
@@ -1282,8 +1320,14 @@ TEST(plugins_built_for_another_abi_are_refused) {
     CHECK(!rt.loadPlugin(mismatch, &err));
     CHECK(err.find("plugin ABI version") != std::string::npos);
     // Their registration functions never ran.
-    CHECK(rt.registry().findEvent("LegacyPluginRegistered") == nullptr);
-    CHECK(rt.registry().findEvent("MismatchPluginRegistered") == nullptr);
+    CHECK(rt.registry().findFunction("Test.Legacy Plugin Registered") == nullptr);
+    CHECK(rt.registry().findFunction("Test.Mismatch Plugin Registered") == nullptr);
+    CHECK(rt.loadedPlugins().empty());
+    // A plugin that declares an event is refused: the events are the application's
+    const std::string events = g_exeDir + "/testplugins/AbiPlugin_event" + kLibExt;
+    CHECK(!rt.loadPlugin(events, &err));
+    CHECK(err.find("declares the event 'PluginEvent'") != std::string::npos);
+    CHECK(rt.registry().findEvent("PluginEvent") == nullptr);
     CHECK(rt.loadedPlugins().empty());
     // A failed library is not remembered as loaded: trying again reports the reason again.
     err.clear();
@@ -3235,11 +3279,22 @@ TEST(node_translations_catalogs) {
 
     // a catalog for a registry: every text once, the translations kept, the outdated reported, the removed dropped
     const auto texts = translatableTexts(reg);
-    CHECK(texts.size() > 300);
+    CHECK(texts.size() > 200);
     std::set<std::string> keys;
     for (auto& [k, en] : texts) CHECK(keys.insert(k).second && !en.empty());
-    CHECK(keys.count("node:flow.branch") && keys.count("pin:flow.for/Loop Body") && keys.count("enum:Weekday.Sunday") && keys.count("category:Math"));
-    CHECK(keys.count("pin:flow.sequence/Then {N}") && keys.count("pin:flow.switch.int/Default") && !keys.count("pin:flow.sequence/Then 0"));
+    CHECK(keys.count("node:flow.branch") && keys.count("pin:flow.branch/True") && keys.count("enum:Weekday.Sunday") && keys.count("category:Math"));
+    CHECK(keys.count("pin:flow.sequence/Then {N}") && !keys.count("pin:flow.sequence/Then 0"));
+    // a pin name more than one node has is one text (pin:*/), not one per node
+    CHECK(keys.count("pin:*/In") && keys.count("pin:*/Then") && keys.count("pin:*/Default") && keys.count("pin:*/Loop Body"));
+    CHECK(!keys.count("pin:flow.branch/In") && !keys.count("pin:flow.switch.int/Default") && !keys.count("pin:flow.for/Loop Body"));
+    Translations shared;
+    const std::string sharedCatalog = R"json({"texts": {"pin:*/In": ["In", "ورود"], "pin:flow.branch/In": ["In", "ورودی شاخه"],
+        "pin:*/Local#doc": ["Local time (on) or UTC (off)", "وقت محلی"]}})json";
+    CHECK(shared.loadJson(sharedCatalog));
+    CHECK_EQ(shared.pin("flow.for", "In"), std::string("ورود"));                        // the shared text
+    CHECK_EQ(shared.pin("flow.branch", "In"), std::string("ورودی شاخه"));              // a node's own wins
+    CHECK_EQ(shared.pinDoc("fn:Time.Make", "Local", "Local time (on) or UTC (off)"), std::string("وقت محلی"));
+    CHECK_EQ(shared.pinDoc("fn:Other", "Local", "Something else"), std::string("Something else"));   // another English text
     CatalogReport report;
     const std::string first = updateCatalog(reg, "", "fa", &report);
     CHECK(report.texts == texts.size() && report.added == texts.size() && report.translated == 0);

@@ -8,13 +8,19 @@
 #include "NodeTexts.hpp"
 #include "Settings.hpp"
 
+#include <QActionGroup>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QLibraryInfo>
 #include <QLocale>
+#include <QMenu>
+#include <QMessageBox>
 #include <QRegularExpression>
 #include <QTranslator>
+
+#include <set>
 
 namespace fged {
 
@@ -24,6 +30,7 @@ QTranslator* g_editor = nullptr;        // the installed translators (null while
 QTranslator* g_qt = nullptr;
 QString g_current = QStringLiteral("en");
 fg::Translations g_nodes;               // the texts of the nodes (empty while the language is English)
+std::set<std::string> g_pluginsLooked;  // the plugin libraries whose catalog of this language was looked for
 
 const QString kPrefix = QStringLiteral(":/i18n/");
 
@@ -76,6 +83,7 @@ void applyLanguage(QApplication& app, const QString& code) {
         }
     g_current = resolve(code);
     g_nodes.clear();
+    g_pluginsLooked.clear();
     if (g_current != QLatin1String("en")) {
         g_editor = new QTranslator(&app);
         if (g_editor->load(kPrefix + "flowgraph_" + g_current + ".qm")) app.installTranslator(g_editor);
@@ -91,6 +99,34 @@ void applyLanguage(QApplication& app, const QString& code) {
 
 QString currentLanguage() { return g_current; }
 
+QMenu* createLanguageMenu(const QString& applicationName, QWidget* parent) {
+    // System, then every language there is a translation of, each in its own language
+    auto* menu = new QMenu(QCoreApplication::translate("fged::Language", "&Language"), parent);
+    auto* group = new QActionGroup(menu);
+    const QString chosen = savedLanguage(applicationName);
+    QStringList codes{QStringLiteral("system")};
+    codes << availableLanguages();
+    for (const QString& code : codes) {
+        QAction* a = menu->addAction(code == QLatin1String("system") ? QCoreApplication::translate("fged::Language", "System") : languageName(code));
+        a->setCheckable(true);
+        a->setChecked(chosen == code);
+        a->setData(code);
+        if (code == QLatin1String("system"))
+            a->setToolTip(QCoreApplication::translate("fged::Language", "The language of the operating system, when there is a translation of it"));
+        group->addAction(a);
+        QObject::connect(a, &QAction::triggered, menu, [menu, applicationName, code] {
+            if (savedLanguage(applicationName) == code) return;
+            saveLanguage(applicationName, code);
+            // the texts are taken when the widgets are made: a restart shows the new language everywhere
+            QMessageBox::information(menu->parentWidget() ? menu->parentWidget()->window() : nullptr,
+                                     QCoreApplication::translate("fged::Language", "Language"),
+                                     QCoreApplication::translate("fged::Language", "%1 shows the new language when it is started again.")
+                                         .arg(applicationName));
+        });
+    }
+    return menu;
+}
+
 bool loadNodeTranslations(const QString& catalogFile, QString* error) {
     QFile f(catalogFile);
     if (!f.open(QIODevice::ReadOnly)) {
@@ -101,6 +137,20 @@ bool loadNodeTranslations(const QString& catalogFile, QString* error) {
     const bool ok = g_nodes.loadJson(f.readAll().toStdString(), &why);
     if (!ok && error) *error = QString::fromStdString(why);
     return ok;
+}
+
+void loadPluginTranslations(const fg::Runtime& rt) {
+    if (g_current == QLatin1String("en")) return;
+    const auto& names = rt.loadedPlugins();
+    const auto& files = rt.loadedPluginFiles();
+    for (size_t i = 0; i < files.size() && i < names.size(); ++i) {
+        if (!g_pluginsLooked.insert(files[i]).second) continue;
+        // <plugin folder>/translations/<Plugin>_<code>.json (Translations.hpp)
+        const QString catalog = QFileInfo(QString::fromStdString(files[i])).dir().filePath(
+            QStringLiteral("translations/%1_%2.json").arg(QString::fromStdString(names[i]), g_current));
+        QString error;
+        if (QFile::exists(catalog) && !loadNodeTranslations(catalog, &error)) qWarning("%s: %s", qPrintable(catalog), qPrintable(error));
+    }
 }
 
 const fg::Translations& nodeTexts() { return g_nodes; }

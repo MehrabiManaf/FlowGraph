@@ -106,11 +106,15 @@ std::string numberedPattern(const std::string& pin, std::string* number = nullpt
 } // namespace
 
 std::string Translations::pin(const std::string& defId, const std::string& pin) const {
-    const std::string key = "pin:" + defId + "/" + pin;
-    if (texts_.count(key)) return text(key, pin);
+    // the pin's own text, else the one all pins of that name share (pin:*/In); a numbered pin ("Then 3") by its pattern ("Then {N}")
     std::string number;
     const std::string pattern = numberedPattern(pin, &number);
-    if (!pattern.empty()) return replaceAll(text("pin:" + defId + "/" + pattern, pattern), "{N}", number);
+    for (const std::string& owner : {defId, std::string("*")}) {
+        const std::string key = "pin:" + owner + "/" + pin;
+        if (texts_.count(key)) return text(key, pin);
+        if (!pattern.empty() && texts_.count("pin:" + owner + "/" + pattern))
+            return replaceAll(text("pin:" + owner + "/" + pattern, pattern), "{N}", number);
+    }
     return pin;
 }
 
@@ -121,7 +125,8 @@ std::string Translations::pin(const NodeDef* def, const std::map<std::string, st
 }
 
 std::string Translations::pinDoc(const std::string& defId, const std::string& pin, const std::string& english) const {
-    return text("pin:" + defId + "/" + pin + "#doc", english);
+    const std::string key = "pin:" + defId + "/" + pin + "#doc";
+    return text(texts_.count(key) ? key : "pin:*/" + pin + "#doc", english);      // a shared one is used for its English text only
 }
 
 std::string Translations::setting(const std::string& defId, const NodeSetting& s) const {
@@ -156,46 +161,110 @@ std::string Translations::enumValueDoc(const std::string& type, const std::strin
 
 // ------------------------------------------------------------------ catalogs
 
-std::vector<std::pair<std::string, std::string>> translatableTexts(const Registry& reg) {
+namespace {
+
+struct PinText {
+    std::string name, doc;      // the name as a catalog has it ("Then {N}" for numbered pins)
+};
+
+// The pins of a node a catalog translates: its own, and the ones it makes from its settings (with their defaults): "Then 0",
+// "Then 1" give one text "Then {N}"; pins without letters ("0", "1") need none; the outputs of a Switch on Enum are enum values
+// (translated as such).
+std::vector<PinText> pinTexts(const Registry& reg, const NodeDef& def) {
+    std::vector<PinText> out;
+    std::set<std::string> seen;
+    for (const PinDef& p : def.pins)
+        if (!p.name.empty() && seen.insert(p.name).second) out.push_back({p.name, p.doc});
+    if (def.dynamicPins) {
+        Node n;
+        n.def = def.id;
+        const TypeDesc* cases = nullptr;
+        if (def.id == "flow.switch.enum")
+            for (const TypeDesc* t : reg.types())
+                if (t->isEnum() && !cases) cases = t;
+        if (cases) n.props["enum"] = cases->name;
+        std::vector<PinDef> made;
+        def.dynamicPins(n, NodeBuildCtx{reg, nullptr, nullptr}, made);
+        for (const PinDef& p : made) {
+            if (p.name.empty() || (cases && p.dir == PinDir::Out)) continue;
+            const std::string pattern = numberedPattern(p.name);
+            const std::string name = pattern.empty() ? p.name : pattern;
+            if (name.find_first_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") == std::string::npos) continue;
+            if (seen.insert(name).second) out.push_back({name, pattern.empty() ? p.doc : std::string()});
+        }
+    }
+    return out;
+}
+
+// The pin texts nodes share: a pin name more than one node has (one text, pin:*/<name>) and, for such a name, the documentation
+// more than one of them has (the most common one, pin:*/<name>#doc).
+struct SharedPins {
+    std::map<std::string, int> names;
+    std::map<std::string, std::map<std::string, int>> docs;
+
+    void add(const PinText& p) {
+        ++names[p.name];
+        if (!p.doc.empty()) ++docs[p.name][p.doc];
+    }
+    bool shared(const std::string& name) const {
+        auto it = names.find(name);
+        return it != names.end() && it->second > 1;
+    }
+    std::string sharedDoc(const std::string& name) const {
+        auto it = docs.find(name);
+        if (it == docs.end()) return {};
+        std::string best;
+        int most = 1;
+        for (auto& [doc, count] : it->second)
+            if (count > most) best = doc, most = count;
+        return best;
+    }
+};
+
+} // namespace
+
+std::vector<std::pair<std::string, std::string>> translatableTexts(const Registry& reg, const std::string& source) {
     std::vector<std::pair<std::string, std::string>> out;
     std::set<std::string> seen;
     auto add = [&](const std::string& key, const std::string& english) {
         if (!english.empty() && seen.insert(key).second) out.emplace_back(key, english);
     };
-    add("template:get-variable", kGetVariable);
-    add("template:set-variable", kSetVariable);
-    add("template:switch-on-enum", kSwitchOnEnum);
-    std::set<std::string> categories;
+    // The shared pins of the nodes of this catalog (`mine`) and of the others (`base`: what the catalog of the application a plugin
+    // is loaded into translates). A plugin's catalog leaves out what the base shares (In, Then, Result...), and it shares among its
+    // own nodes only names the base does not share, so its pin:*/ texts never replace the base's.
+    SharedPins mine, base;
+    std::vector<std::pair<const NodeDef*, std::vector<PinText>>> nodes;
     for (const NodeDef* def : reg.nodes()) {
+        const bool inCatalog = source.empty() || def->source == source;
+        auto pins = pinTexts(reg, *def);
+        for (const PinText& p : pins) (inCatalog ? mine : base).add(p);
+        if (inCatalog) nodes.emplace_back(def, std::move(pins));
+    }
+    auto sharedLabel = [&](const std::string& name) { return base.shared(name) || mine.shared(name); };
+    auto sharedDoc = [&](const std::string& name, const std::string& doc) {
+        if (base.shared(name)) return doc == base.sharedDoc(name);      // the base translates it; any other is the node's own
+        return doc == mine.sharedDoc(name);
+    };
+
+    if (source.empty()) {                    // the templates are the editor's: the core catalog has them, a plugin's does not
+        add("template:get-variable", kGetVariable);
+        add("template:set-variable", kSetVariable);
+        add("template:switch-on-enum", kSwitchOnEnum);
+    }
+    for (auto& [name, count] : mine.names) {
+        if (count < 2 || base.shared(name)) continue;
+        add("pin:*/" + name, name);
+        add("pin:*/" + name + "#doc", mine.sharedDoc(name));
+    }
+    std::set<std::string> categories;
+    for (auto& [def, pins] : nodes) {
         const std::string& id = def->id;
         // an enum literal is titled with its type (code) and its value (enum:<Type>.<Value>)
         if (id.rfind("enum:", 0) != 0) add("node:" + id, def->title);
         add("node:" + id + "#doc", def->doc);
-        for (const PinDef& p : def->pins) {
-            if (p.name.empty()) continue;
-            add("pin:" + id + "/" + p.name, p.name);
-            add("pin:" + id + "/" + p.name + "#doc", p.doc);
-        }
-        // the pins a node makes from its settings (with their defaults): "Then 0", "Then 1" give one text "Then {N}"; pins without
-        // letters ("0", "1") need none; the outputs of a Switch on Enum are enum values (translated as such)
-        if (def->dynamicPins) {
-            Node n;
-            n.def = id;
-            const TypeDesc* cases = nullptr;
-            if (id == "flow.switch.enum")
-                for (const TypeDesc* t : reg.types())
-                    if (t->isEnum() && !cases) cases = t;
-            if (cases) n.props["enum"] = cases->name;
-            std::vector<PinDef> made;
-            def->dynamicPins(n, NodeBuildCtx{reg, nullptr, nullptr}, made);
-            for (const PinDef& p : made) {
-                if (p.name.empty() || (cases && p.dir == PinDir::Out)) continue;
-                const std::string pattern = numberedPattern(p.name);
-                const std::string name = pattern.empty() ? p.name : pattern;
-                if (name.find_first_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") == std::string::npos) continue;
-                add("pin:" + id + "/" + name, name);
-                if (pattern.empty()) add("pin:" + id + "/" + name + "#doc", p.doc);
-            }
+        for (const PinText& p : pins) {
+            if (!sharedLabel(p.name)) add("pin:" + id + "/" + p.name, p.name);
+            if (!p.doc.empty() && !sharedDoc(p.name, p.doc)) add("pin:" + id + "/" + p.name + "#doc", p.doc);
         }
         for (const NodeSetting& s : def->settings) {
             add("setting:" + id + "/" + s.key, s.label.empty() ? s.key : s.label);
@@ -211,7 +280,7 @@ std::vector<std::pair<std::string, std::string>> translatableTexts(const Registr
     }
     for (const std::string& c : categories) add("category:" + c, c);
     for (const TypeDesc* t : reg.types()) {
-        if (!t->isEnum()) continue;
+        if (!t->isEnum() || (!source.empty() && t->source != source)) continue;
         for (const EnumValueDesc& v : t->enumValues) {
             add("enum:" + t->name + "." + v.name, v.name);
             add("enum:" + t->name + "." + v.name + "#doc", v.doc);
@@ -220,7 +289,8 @@ std::vector<std::pair<std::string, std::string>> translatableTexts(const Registr
     return out;
 }
 
-std::string updateCatalog(const Registry& reg, const std::string& existing, const std::string& language, CatalogReport* report) {
+std::string updateCatalog(const Registry& reg, const std::string& existing, const std::string& language, CatalogReport* report,
+                          const std::string& source) {
     CatalogReport r;
     std::map<std::string, std::pair<std::string, std::string>> old;      // key -> (English, translation)
     if (!existing.empty()) {
@@ -228,7 +298,7 @@ std::string updateCatalog(const Registry& reg, const std::string& existing, cons
         for (auto& [key, value] : j["texts"].members())
             if (value.isArray() && value.size() >= 2) old[key] = {value[size_t(0)].asString(), value[size_t(1)].asString()};
     }
-    const auto texts = translatableTexts(reg);
+    const auto texts = translatableTexts(reg, source);
     std::set<std::string> keys;
     // one text per line, so that a catalog is easy to edit and its changes are easy to read
     std::string out = "{\n  \"language\": " + Json(language).dump(0) + ",\n  \"texts\": {\n";

@@ -222,9 +222,14 @@ FG_EDITOR_EXPORT void saveLanguage(const QString& applicationName, const QString
 FG_EDITOR_EXPORT void applySavedLanguage(QApplication& app, const QString& applicationName);
 // The language whose translations are installed ("en" when none is).
 FG_EDITOR_EXPORT QString currentLanguage();
+// A Language menu - System and every language there is, the chosen one checked - for the windows of an application: the editor's
+// View > Language is one (EditorHost::offersLanguageChoice). Choosing a language saves it for `applicationName` (savedLanguage) and
+// says it shows at the next start. The menu belongs to `parent`.
+FG_EDITOR_EXPORT QMenu* createLanguageMenu(const QString& applicationName, QWidget* parent);
 // Adds a catalog that translates the texts of nodes (fg::Translations, Translations.hpp): the built-in nodes' is loaded by
-// applyLanguage; an application or plugin adds the one for its own nodes and classes, after applyLanguage and before the windows are
-// made (a file `flow --translations` wrote, or one in the application's resources). False, and `error`, when it cannot be read.
+// applyLanguage; an application adds the one for its own nodes and classes, after applyLanguage and before the windows are made (a
+// file `flow --translations` wrote, or one in the application's resources). False, and `error`, when it cannot be read. A plugin's
+// catalog needs no call: the editor loads it for every plugin of the runtime (translations/<Plugin>_<code>.json next to its library).
 FG_EDITOR_EXPORT bool loadNodeTranslations(const QString& catalogFile, QString* error = nullptr);
 // An icon of the editor's resources (":/Icons/save.svg"...) drawn in the colours of the theme in use: on a light background its
 // neutral greys get darker, its colours stay. It follows theme changes by itself. Applications that use the editor's icons for

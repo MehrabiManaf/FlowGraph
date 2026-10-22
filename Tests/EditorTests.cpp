@@ -22,6 +22,7 @@
 #include "Graph/GraphView.hpp"
 
 #include <QApplication>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QHash>
 #include <QStyleHints>
@@ -2860,6 +2861,37 @@ TEST(node_texts_follow_the_language) {
                 setting |= l->text().startsWith("پایه‌های خروجی");
             }
         CHECK(heading && setting);
+    }
+    applyLanguage(*qApp, "en");
+    CHECK(nodeTexts().empty());
+}
+
+TEST(plugin_node_texts_follow_the_language) {
+#if defined(_WIN32)
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.dll";
+#elif defined(__APPLE__)
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.dylib";
+#else
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.so";
+#endif
+    if (!QFileInfo::exists(plugin)) { std::printf("  (skipped: the example plugin is not built)\n"); return; }
+    applyLanguage(*qApp, "fa");
+    {
+        StudioFixture f;
+        // loaded once the editor is open (as a launch configuration's plugin is): its catalog comes along with the refresh
+        CHECK(f.rt.loadPlugin(plugin.toStdString()));
+        f.editor.refreshScript();
+        Document* doc = f.win.document();
+        fg::NodeId greet = 0;
+        doc->edit("Add", [&](fg::Script& s) { greet = s.findGraph(ss(f.scene()->graphName()))->addNode("fn:Example.Greet", 300, 300).id; });
+        QCoreApplication::processEvents();
+        NodeItem* item = f.scene()->nodeItem(greet);
+        CHECK(item != nullptr);
+        if (item) CHECK_EQ(nodeTitle(item->compiled()), QString("خوشامدگویی"));
+        CHECK_EQ(pinLabel("fn:Example.Greet", "Name"), QString("نام"));
+        CHECK_EQ(pinLabel("m:Counter.Add", "Amount"), QString("میزان"));
+        CHECK_EQ(categoryText("Example"), QString("نمونه"));
+        CHECK(doc->script().findGraph(ss(f.scene()->graphName()))->findNode(greet)->def == "fn:Example.Greet");
     }
     applyLanguage(*qApp, "en");
     CHECK(nodeTexts().empty());

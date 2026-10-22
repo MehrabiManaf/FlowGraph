@@ -13,6 +13,7 @@
 // loading, plugins and compiling are not part of it.
 #include <FlowGraph/Runtime.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -57,6 +58,7 @@ void usage() {
         "                        included) as Markdown to FILE or to the standard output; no script is needed\n"
         "  --translations FILE   create or update the catalog FILE (<language>.json) that translates the nodes flow\n"
         "                        offers in an editor: new texts are added untranslated, removed ones dropped\n"
+        "  --only PLUGIN         with --translations: only the texts of PLUGIN (its catalog, <PLUGIN>_<language>.json)\n"
         "  --version             print the version\n"
         "  --help                show this text\n"
         "  --                    end of options (the next word is the script)\n"
@@ -76,7 +78,7 @@ int main(int argc, char** argv) {
     std::string script, launchName;
     std::vector<std::string> scriptArgs, extraPlugins;
     bool checkOnly = false, launch = false, reference = false, defaultPlugins = true;
-    std::string catalogFile;
+    std::string catalogFile, catalogSource;
     std::string referenceFile;
     int i = 1;
     for (; i < argc; ++i) {
@@ -94,6 +96,7 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') referenceFile = argv[++i];
         }
         else if (a == "--translations" && i + 1 < argc) catalogFile = argv[++i];
+        else if (a == "--only" && i + 1 < argc) catalogSource = argv[++i];
         else return fail("unknown option '" + a + "' (see flow --help)");
     }
     // the registry of the standard applications, with the plugins flow would load (for --reference and --translations)
@@ -110,6 +113,20 @@ int main(int argc, char** argv) {
         Runtime rt;
         standardRuntime(rt);
         std::string existing, language = fs::path(catalogFile).stem().string();     // "fa.json" translates to "fa"
+        // --only: the standard nodes and that plugin, no other one (what its catalog shares with the standard nodes' catalog - In,
+        // Then... - is left out of it, and other plugins must not change that)
+        Runtime alone;
+        Runtime* catalogRuntime = &rt;
+        if (!catalogSource.empty()) {
+            const auto& loaded = rt.loadedPlugins();
+            auto it = std::find(loaded.begin(), loaded.end(), catalogSource);
+            if (it == loaded.end()) return fail("no plugin '" + catalogSource + "' was loaded (see --plugins)");
+            standard::registerStandardApp(alone.registry());
+            std::string error;
+            if (!alone.loadPlugin(rt.loadedPluginFiles()[size_t(it - loaded.begin())], &error)) return fail(error);
+            catalogRuntime = &alone;
+            if (language.rfind(catalogSource + "_", 0) == 0) language = language.substr(catalogSource.size() + 1);   // "ExamplePlugin_fa"
+        }
         if (std::ifstream in(catalogFile, std::ios::binary); in) {
             std::stringstream ss;
             ss << in.rdbuf();
@@ -118,7 +135,7 @@ int main(int argc, char** argv) {
         CatalogReport report;
         std::string text;
         try {
-            text = updateCatalog(rt.registry(), existing, language, &report);
+            text = updateCatalog(catalogRuntime->registry(), existing, language, &report, catalogSource);
         } catch (const std::exception& e) {
             return fail("cannot read '" + catalogFile + "': " + e.what());
         }

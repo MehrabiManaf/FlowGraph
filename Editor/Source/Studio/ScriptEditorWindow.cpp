@@ -458,22 +458,9 @@ void ScriptEditorWindow::createMenus() {
         }
     }
     if (host_.offersLanguageChoice()) {
-        // System, then every language there is a translation of, each in its own language; it applies at the next start
-        QMenu* languageMenu = view->addMenu(tr("&Language"));
+        QMenu* languageMenu = createLanguageMenu(host_.applicationName(), this);       // it applies at the next start
         languageMenu->setObjectName("languageMenu");
-        auto* group = new QActionGroup(this);
-        const QString chosen = savedLanguage(host_.applicationName());
-        QStringList codes{QStringLiteral("system")};
-        codes << availableLanguages();
-        for (const QString& code : codes) {
-            QAction* a = languageMenu->addAction(code == QLatin1String("system") ? tr("System") : languageName(code));
-            a->setCheckable(true);
-            a->setChecked(chosen == code);
-            a->setData(code);
-            if (code == QLatin1String("system")) a->setToolTip(tr("The language of the operating system, when there is a translation of it"));
-            group->addAction(a);
-            connect(a, &QAction::triggered, this, [this, code] { chooseLanguage(code); });
-        }
+        view->addMenu(languageMenu);
     }
     view->addSeparator();
     for (auto* dw : docks_) view->addAction(dw->toggleAction());
@@ -698,13 +685,6 @@ void ScriptEditorWindow::findReferencesOfSelection() {
         return;
     }
     showReferences(fg::referenceTargetOf(doc_.script(), ss(s->graphName()), *n));
-}
-
-void ScriptEditorWindow::chooseLanguage(const QString& code) {
-    if (savedLanguage(host_.applicationName()) == code) return;
-    saveLanguage(host_.applicationName(), code);
-    // the texts are taken when the widgets are made: a restart shows the new language everywhere
-    QMessageBox::information(this, tr("Language"), tr("%1 shows the new language when it is started again.").arg(host_.applicationName()));
 }
 
 void ScriptEditorWindow::chooseTheme(Theme theme) {

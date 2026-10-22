@@ -5,6 +5,7 @@
 // (fg::Translations: Core/Translations/<code>.json compiled in, plugins add theirs with loadNodeTranslations). Display only: what is
 // stored in scripts (node ids, pin names, enum values) stays English. Every place that shows a node text takes it from here.
 #include <FlowGraph/Program.hpp>
+#include <FlowGraph/Runtime.hpp>
 #include <FlowGraph/Translations.hpp>
 #include <FlowGraph/Types.hpp>
 
@@ -14,6 +15,9 @@ namespace fged {
 
 const fg::Translations& nodeTexts();
 fg::Translations& editableNodeTexts();          // Language.cpp loads into it
+// Loads the catalog of the editor's language of every plugin of `rt` not looked at yet (translations/<Plugin>_<code>.json next to
+// its library, Translations.hpp). The document does it before it compiles, so that the nodes of a plugin loaded later show translated.
+void loadPluginTranslations(const fg::Runtime& rt);
 
 inline QString nodeTitle(const fg::CompiledNode& cn) {
     return QString::fromStdString(nodeTexts().nodeTitle(cn.def, cn.props, cn.title));

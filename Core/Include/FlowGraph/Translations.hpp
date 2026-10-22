@@ -13,6 +13,9 @@
 //   node:<id>#doc            its documentation
 //   pin:<id>/<pin>           the label of a pin of it (pin:<id>/<pin>#doc its documentation); pins a node numbers from a
 //                            setting share one: pin:flow.sequence/Then {N}
+//   pin:*/<pin>              the label of the pins of that name more than one node has (In, Then, Result, Target...): one text
+//                            for all of them, used where a node has no pin:<id>/<pin> of its own; pin:*/<pin>#doc likewise
+//                            for the documentation most of them share (used where a pin's documentation is that English text)
 //   setting:<id>/<key>       the label of a node setting (setting:<id>/<key>#doc)
 //   category:<name>          one part of a category path ("Flow|Switch": category:Flow and category:Switch)
 //   enum:<Type>.<Value>      the name of an enum value as shown (enum:<Type>.<Value>#doc)
@@ -20,6 +23,10 @@
 //                            "Switch on {Enum}"
 // `flow --translations <file>` writes or updates a catalog for the nodes of the standard applications (texts added with an empty
 // translation, removed ones dropped, outdated ones reported); updateCatalog does it for any registry.
+//
+// A plugin's catalogs hold the texts of what it registers only (`flow --plugins DIR --only <Plugin> --translations <file>`) -
+// without the pin texts the application's catalog shares (In, Then...) - and are next to its library: <plugin folder>/translations/<Plugin>_<code>.json (plugins/translations/ExamplePlugin_fa.json). The
+// editor loads the one of its language for every plugin the runtime loads.
 #include <FlowGraph/Export.hpp>
 #include <FlowGraph/NodeDef.hpp>
 
@@ -63,17 +70,20 @@ private:
     std::string language_;
 };
 
-// Every text of `reg` a catalog can translate, with its English text, in a stable order.
-FG_CORE_EXPORT std::vector<std::pair<std::string, std::string>> translatableTexts(const Registry& reg);
+// Every text of `reg` a catalog can translate, with its English text, in a stable order. With a `source` (a plugin's name, as
+// Registry::beginSource was given it), only the texts of the nodes and enums that source registered: the catalog of a plugin. It
+// leaves out the shared pin texts (pin:*/) of the other nodes of `reg`, which the application's catalog has.
+FG_CORE_EXPORT std::vector<std::pair<std::string, std::string>> translatableTexts(const Registry& reg, const std::string& source = {});
 
-// The catalog `existing` (JSON text, empty for a new one) brought up to date with `reg`: new texts are added with an empty
-// translation, texts the registry does not have any more are dropped, the others keep their translation. `report` says what changed
-// (counts of texts, translated, new, outdated - their English text changed - and removed).
+// The catalog `existing` (JSON text, empty for a new one) brought up to date with `reg` (the texts of `source` only, when it is
+// given): new texts are added with an empty translation, texts the registry does not have any more are dropped, the others keep
+// their translation. `report` says what changed (counts of texts, translated, new, outdated - their English text changed - and
+// removed).
 struct CatalogReport {
     size_t texts = 0, translated = 0, added = 0, outdated = 0, removed = 0;
     std::vector<std::string> outdatedKeys;
 };
 FG_CORE_EXPORT std::string updateCatalog(const Registry& reg, const std::string& existing, const std::string& language,
-                                         CatalogReport* report = nullptr);
+                                         CatalogReport* report = nullptr, const std::string& source = {});
 
 } // namespace fg
