@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: The steps that show it. Attach the .flow script when the bug is about a script (it is a small JSON file).
+      placeholder: |
+        1. Open ...
+        2. Connect ...
+        3. Press F5
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`flow --version`, or the release you downloaded, or the commit you built."
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - flowstudio (the editor)
+        - flow (command line)
+        - The runtime library in my application
+        - The editor library in my application
+        - Building FlowGraph
+  - type: input
+    id: system
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, Ubuntu 24.04...

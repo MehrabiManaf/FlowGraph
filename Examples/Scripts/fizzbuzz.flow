@@ -1,0 +1,213 @@
+{
+  "format": "flowgraph",
+  "version": 1,
+  "name": "FizzBuzz",
+  "doc": "Counts from 1 to 15: Fizz for the multiples of 3, Buzz for the multiples of 5, FizzBuzz for both.",
+  "variables": [],
+  "graphs": [
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event:Main",
+          "x": 0.0,
+          "y": 0.0,
+          "props": {
+            "sig": "(Args: array<string>)"
+          }
+        },
+        {
+          "id": 2,
+          "def": "flow.for",
+          "x": 230.0,
+          "y": 0.0,
+          "defaults": {
+            "First": 1,
+            "Last": 16
+          }
+        },
+        {
+          "id": 3,
+          "def": "math.mod",
+          "x": 220.0,
+          "y": 135.0,
+          "defaults": {
+            "B": 15
+          }
+        },
+        {
+          "id": 4,
+          "def": "cmp.eq",
+          "x": 435.0,
+          "y": 135.0,
+          "defaults": {
+            "B": 0
+          }
+        },
+        {
+          "id": 5,
+          "def": "flow.branch",
+          "x": 650.0,
+          "y": 0.0
+        },
+        {
+          "id": 6,
+          "def": "util.print",
+          "x": 870.0,
+          "y": -10.0,
+          "defaults": {
+            "String": "FizzBuzz"
+          }
+        },
+        {
+          "id": 7,
+          "def": "math.mod",
+          "x": 480.0,
+          "y": 375.0,
+          "defaults": {
+            "B": 3
+          }
+        },
+        {
+          "id": 8,
+          "def": "cmp.eq",
+          "x": 695.0,
+          "y": 375.0,
+          "defaults": {
+            "B": 0
+          }
+        },
+        {
+          "id": 9,
+          "def": "flow.branch",
+          "x": 910.0,
+          "y": 240.0
+        },
+        {
+          "id": 10,
+          "def": "util.print",
+          "x": 1130.0,
+          "y": 230.0,
+          "defaults": {
+            "String": "Fizz"
+          }
+        },
+        {
+          "id": 11,
+          "def": "math.mod",
+          "x": 740.0,
+          "y": 615.0,
+          "defaults": {
+            "B": 5
+          }
+        },
+        {
+          "id": 12,
+          "def": "cmp.eq",
+          "x": 955.0,
+          "y": 615.0,
+          "defaults": {
+            "B": 0
+          }
+        },
+        {
+          "id": 13,
+          "def": "flow.branch",
+          "x": 1170.0,
+          "y": 480.0
+        },
+        {
+          "id": 14,
+          "def": "util.print",
+          "x": 1390.0,
+          "y": 470.0,
+          "defaults": {
+            "String": "Buzz"
+          }
+        },
+        {
+          "id": 15,
+          "def": "util.print",
+          "x": 1390.0,
+          "y": 600.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [2, "In"]
+        },
+        {
+          "from": [2, "Index"],
+          "to": [3, "A"]
+        },
+        {
+          "from": [3, "Result"],
+          "to": [4, "A"]
+        },
+        {
+          "from": [4, "Result"],
+          "to": [5, "Condition"]
+        },
+        {
+          "from": [2, "Loop Body"],
+          "to": [5, "In"]
+        },
+        {
+          "from": [5, "True"],
+          "to": [6, "In"]
+        },
+        {
+          "from": [2, "Index"],
+          "to": [7, "A"]
+        },
+        {
+          "from": [7, "Result"],
+          "to": [8, "A"]
+        },
+        {
+          "from": [8, "Result"],
+          "to": [9, "Condition"]
+        },
+        {
+          "from": [5, "False"],
+          "to": [9, "In"]
+        },
+        {
+          "from": [9, "True"],
+          "to": [10, "In"]
+        },
+        {
+          "from": [2, "Index"],
+          "to": [11, "A"]
+        },
+        {
+          "from": [11, "Result"],
+          "to": [12, "A"]
+        },
+        {
+          "from": [12, "Result"],
+          "to": [13, "Condition"]
+        },
+        {
+          "from": [9, "False"],
+          "to": [13, "In"]
+        },
+        {
+          "from": [13, "True"],
+          "to": [14, "In"]
+        },
+        {
+          "from": [13, "False"],
+          "to": [15, "In"]
+        },
+        {
+          "from": [2, "Index"],
+          "to": [15, "String"]
+        }
+      ]
+    }
+  ]
+}

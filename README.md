@@ -1,8 +1,55 @@
 # FlowGraph
 
-A visual scripting system that is meant to be **embedded in C++ applications**. Scripts are node graphs (events,
-functions, variables, flow control, generic math / string / container nodes) that run on a small resumable interpreter
-and can call into your own reflected C++ classes.
+**Visual scripting for C++ applications**, in the style of Unreal's Blueprints. Users build scripts as node graphs in an
+editor and debug them step by step; your application runs them in a small interpreter, and they call your own C++ classes.
+
+![FizzBuzz running in flowstudio: each link lights up when the execution takes it](Docs/Images/flowstudio.gif)
+
+* **Made to be embedded.** The runtime is a C++20 library with no Qt in it: load, check and run scripts, make your classes,
+  functions and events available to them. Scripts can also run on a worker thread, so your application never waits for them.
+* **A real debugger.** Breakpoints, step over / into / out, the call stack, the script's variables and watches, values shown
+  when you hover a pin - also on a script your application is running right now.
+* **Ready to use on its own.** `flow script.flow` runs a script from the command line, like `python script.py`; `flowstudio`
+  edits, runs and debugs it.
+* **Safe with scripts users write.** Every script is checked against what the application provides before it runs. Limits keep a
+  script you do not trust from running away, and a changed script can be reloaded while the application runs.
+* **Extensible.** Plugins add classes, functions, enums and nodes; a plugin built for another version is refused, not run.
+* **In 10 languages.** The editor speaks English, Persian, Chinese, Spanish, German, Japanese, Portuguese, French, Russian and
+  Korean (most of them machine translations: reviews are welcome).
+
+![The debugger paused in a loop: the call stack and the script's variables](Docs/Images/debugger.png)
+
+## Try it
+
+Download the package for Windows or Linux from [Releases](https://github.com/MehrabiManaf/FlowGraph/releases) and unzip it. Start
+`bin/flowstudio`, open `examples/fizzbuzz.flow` (*File > Open*) and press **F5**: *Run > Execution speed* slows the run down
+so you can follow it. In a terminal, `bin/flow examples/fizzbuzz.flow` runs the same script without the editor.
+
+## Put it in your application
+
+```cpp
+#include <FlowGraph/Runtime.hpp>
+
+fg::Runtime rt;
+rt.registry().addEvent("Tick", {{"DeltaTime", "float"}});                          // what your application raises
+rt.registry().addFunction("Game.Log", [](const std::string& s) { puts(s.c_str()); }, {"Text"});   // what scripts may call
+
+auto loaded = rt.loadScript("level.flow");                                         // read, and check it fits this application
+auto program = rt.compile(loaded.script);
+fg::Instance instance(program);
+instance.callEvent("Tick", {0.016});
+```
+
+Your users get the same editor as `flowstudio`: `fged::ScriptEditor` is a class your Qt application creates, with an
+`EditorHost` that tells it what *Run* means in your application (see [Embedding the script editor](#embedding-the-script-editor)).
+The [embedded example](Examples/Embedded) is a complete one: an application whose tables are filled by scripts, edited and
+debugged while it runs.
+
+![An application and its script editor: the table on the left is filled by the script on the right](Docs/Images/embedded.png)
+
+**Licenses:** the runtime and `flow` are **MIT**, so they can go into any application, closed source included. The editor and
+`flowstudio` are **GPL-3.0** (they are built on KDDockWidgets), so an application that embeds the editor is GPL too. See
+[License](#license).
 
 ## The pieces
 
@@ -380,7 +427,9 @@ signature of the event when the script was made. A node of a definition with `cu
 the data pins the user added: `"inputs"` / `"outputs"` arrays of `{"name", "type", "default"}`, like the signature of a function.
 
 Developer aids of flowstudio: `FG_STUDIO_SCREENSHOT=file.png` (screenshot and quit), `FG_STUDIO_RUN=Main`,
-`FG_STUDIO_BREAK=Graph:id`, `FG_STUDIO_SELECT=node:Graph:id|var:name|graph:name`, `FG_STUDIO_SCENESHOT=file.png`.
+`FG_STUDIO_BREAK=Graph:id`, `FG_STUDIO_SELECT=node:Graph:id|var:name|graph:name`, `FG_STUDIO_SCENESHOT=file.png`,
+`FG_STUDIO_SIZE=1480x800` (the window's size), `FG_STUDIO_RECORD=folder` (a picture of the window every `FG_STUDIO_RECORD_MS`
+ms, `FG_STUDIO_RECORD_COUNT` of them, then quit: the frames of the GIF above).
 
 ## License
 
@@ -395,3 +444,8 @@ The runtime can be used in any application, closed source included, and plugins 
 because it is built on KDDockWidgets (GPL-2.0-only or GPL-3.0-only, `ThirdParty/KDDockWidgets`): an application that embeds
 the editor is a work based on GPL code. Qt, which only the editor uses, is used under the LGPL-3.0 (`LICENSES/LGPL-3.0.txt`).
 `cmake --install` puts the license texts in `share/doc/FlowGraph`; the release packages also have them at their top.
+
+## About
+
+FlowGraph is developed by Abdolmanaf Mehrabi Sisakht, with the assistance of AI tools, which supported the coding process,
+debugging and problem-solving.

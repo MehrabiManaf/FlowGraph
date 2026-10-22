@@ -58,5 +58,29 @@ int main(int argc, char** argv) {
             app.quit();
         });
     }
+    // Developer aid: FG_STUDIO_SIZE=<width>x<height> sizes the window. FG_STUDIO_RECORD=<folder> saves a picture of the window
+    // every FG_STUDIO_RECORD_MS (100) ms from 1 s after the start, FG_STUDIO_RECORD_COUNT (50) of them, then exits: the frames of
+    // a recording (the GIF of the README).
+    if (qEnvironmentVariableIsSet("FG_STUDIO_SIZE")) {
+        const QStringList wh = qEnvironmentVariable("FG_STUDIO_SIZE").split('x');
+        if (wh.size() == 2) ed->window()->resize(wh[0].toInt(), wh[1].toInt());
+    }
+    if (qEnvironmentVariableIsSet("FG_STUDIO_RECORD")) {
+        const QString dir = qEnvironmentVariable("FG_STUDIO_RECORD");
+        const int every = qEnvironmentVariableIsSet("FG_STUDIO_RECORD_MS") ? qEnvironmentVariableIntValue("FG_STUDIO_RECORD_MS") : 100;
+        const int count = qEnvironmentVariableIsSet("FG_STUDIO_RECORD_COUNT") ? qEnvironmentVariableIntValue("FG_STUDIO_RECORD_COUNT") : 50;
+        QDir().mkpath(dir);
+        auto* timer = new QTimer(&app);
+        auto* taken = new int(0);
+        QObject::connect(timer, &QTimer::timeout, &app, [=, &app] {
+            ed->window()->grab().save(QDir(dir).filePath(QString("frame_%1.png").arg(*taken, 4, 10, QChar('0'))));
+            if (++*taken >= count) {
+                timer->stop();
+                delete taken;
+                app.quit();
+            }
+        });
+        QTimer::singleShot(1000, &app, [timer, every] { timer->start(every); });
+    }
     return app.exec();
 }

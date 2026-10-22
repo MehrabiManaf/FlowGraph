@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // embedded_example: FlowGraph embedded in a Qt application.
 //
-//   embedded_example [--selftest] [--screenshot file.png] [--write-samples dir] [--translations messages_<code>.json]
+//   embedded_example [--load script.flow] [--selftest] [--screenshot file.png] [--write-samples dir] [--translations messages_<code>.json]
 //
 // A main window with dock widgets. The application receives text messages (here: a random one, two per second) into a message store. "New Table"
 // adds a table; the script of a table (a .flow file, edited with the embedded FlowGraph script editor) decides which columns the table has and
@@ -64,12 +64,14 @@ int main(int argc, char** argv) {
     QString screenshot;                     // developer aid: save a picture of the window a little after the start, then quit
     QString samples;                        // --write-samples dir: writes the sample scripts (list.flow, counter.flow) there and quits
     QString catalog;                        // --translations FILE: see writeTranslations
+    QString load;                           // --load FILE: the first table starts with that script (list.flow, counter.flow...)
     const QStringList args = app.arguments().mid(1);
     for (int i = 0; i < args.size(); ++i) {
         if (args[i] == "--selftest") selftest = true;
         else if (args[i] == "--screenshot" && i + 1 < args.size()) screenshot = args[++i];
         else if (args[i] == "--write-samples" && i + 1 < args.size()) samples = args[++i];
         else if (args[i] == "--translations" && i + 1 < args.size()) catalog = args[++i];
+        else if (args[i] == "--load" && i + 1 < args.size()) load = args[++i];
     }
 
     fged::applySavedTheme(app, msgapp::kApplicationName);     // optional: the theme chosen in the editor (View > Theme), Dark at first
@@ -102,7 +104,9 @@ int main(int argc, char** argv) {
     }
 
     msgapp::MainWindow window(runtime, store);
-    window.newTable();
+    msgapp::TableDock* first = window.newTable();
+    QString reason;
+    if (!load.isEmpty() && !first->openScript(load, &reason)) std::fprintf(stderr, "%s\n", qPrintable(reason));
     window.show();
     store.startGenerating();                // a random message every 500 ms (two per second): the tables run their scripts for each of them
     if (!screenshot.isEmpty()) {
