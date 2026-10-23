@@ -80,7 +80,7 @@ debugged while it runs.
   `flowstudio` is the script editor specialised for them.
 
 Other directories: `Examples/` (script generator, `Scripts/*.flow`), `Plugins/FileSystem/` (the FileSystem plugin),
-`Plugins/ExamplePlugin/` (a sample plugin), `Tests/` (core tests and editor tests).
+`Tests/` (core tests and editor tests).
 
 ## Build (Windows, MSVC 2022, Qt 6.9)
 
@@ -174,7 +174,8 @@ used while debugging. `flow --launch Verbose script.flow` uses the same file.
 (category *File System*) without anything to set up:
 
 * **File:** Open File (Read, Write or Append) gives a `File` to read a line at a time (Read Line, Read Text, Is At End) or to
-  write a piece at a time (Write Line, Write Text); each write is in the file at once. Close it when it is done.
+  write a piece at a time (Write Line, Write Text); each write is in the file at once. Close it when it is done. Each of them
+  goes on with Failed when it cannot be done (a closed file, writing a file opened for Read, a failing disk).
 * **Files and Folders:** Copy, Move, Delete, Create Folder, List Folder, For Each File (patterns like `*.txt;*.md`, Recursive).
 * **Paths** and **Information** (pure): Join Path, Parent Folder, File Name, Extension, Change Extension, Absolute Path, Current /
   Temp / Home Folder; Exists, Is File, Is Folder, File Size, Last Modified.
@@ -260,7 +261,7 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
   a custom node gets the same editors by declaring them. A node with several exec inputs asks `NodeCtx::entryPin()` which one fired.
 * Nodes are generic where it makes sense (`T` in Add / Select / For Each / array and map nodes); the type is inferred from
   the connections. Function parameters can be passed by value, by reference or as const (checked at compile time).
-* Plugins are shared libraries exporting `FG_PLUGIN(reg) { ... }` (see `Plugins/ExamplePlugin`): `loadPlugin`,
+* Plugins are shared libraries exporting `FG_PLUGIN(reg) { ... }` (see `Plugins/FileSystem`): `loadPlugin`,
   `loadPluginsFrom(dir)`, `loadPluginsFromPathList("a;b")`, `loadPluginsFromEnvironment("VAR")`. Build them with the same
   compiler and FlowGraphCore version: `FG_PLUGIN` also exports how the plugin was built (plugin ABI version, compiler family,
   Debug / Release runtime, sizes of the shared classes) and the loader refuses a plugin that does not match, with the reason,
@@ -417,7 +418,7 @@ the language: they keep the English node names, so a script made in one language
 * **A plugin** ships catalogs of its own nodes next to its library: `plugins/translations/<Plugin>_<code>.json`. The editor loads
   the one of its language for every plugin the runtime loads, also for plugins loaded later (a launch configuration's).
   `flow --plugins <dir> --only <Plugin> --translations <Plugin>_<code>.json` writes or updates one with the plugin's texts only;
-  `Plugins/ExamplePlugin/Translations` is an example (its build copies them next to the library).
+  `Plugins/FileSystem/Translations` is an example (its build copies them next to the library).
 * An application translates the nodes it registers itself with a catalog of its own: `fged::loadNodeTranslations(file)` after
   `fged::applyLanguage` / `applySavedLanguage`.
 * CI checks that every text of the sources is in the files and that none is without a translation; the editor tests check that
@@ -460,7 +461,7 @@ FlowGraph has two licenses; `LICENSE` lists which part has which, and every sour
 
 | Part | License |
 |-|-|
-| `Core/` (FlowGraphCore), `Apps/Flow/` (`flow`), `Plugins/` (FileSystem, ExamplePlugin), the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
+| `Core/` (FlowGraphCore), `Apps/Flow/` (`flow`), `Plugins/FileSystem/`, the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
 | `Editor/` (FlowGraphEditor, the ScriptEditor library), `Apps/Studio/` (`flowstudio`), `Examples/Embedded/` | **GPL-3.0-only** (`LICENSES/GPL-3.0.txt`) |
 
 The runtime can be used in any application, closed source included, and plugins may have any license. The editor is GPL

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
@@ -750,6 +751,24 @@ TEST(palette_search_and_pin_filter) {
         }
     }
     CHECK(hasAdd);
+    // every value converts to a string: offered for the primary types; for the others (a class, an enum) only by Print String and
+    // the nodes that take any value
+    auto offers = [&](const TypeDesc* type, const char* id) {
+        PinFilter d;
+        d.kind = PinKind::Data; d.dir = PinDir::Out; d.type = type;
+        for (auto& t : filterPalette(rt.registry(), all, d))
+            if (t.defId == id) return true;
+        return false;
+    };
+    CHECK(offers(rt.registry().tInt(), "fn:String.To Upper") && offers(rt.registry().tInt(), "util.print"));
+    for (const char* type : {"Dog", "Weekday"}) {
+        const TypeDesc* td = rt.registry().findType(type);
+        CHECK(td != nullptr);
+        if (!td) continue;
+        CHECK(offers(td, "util.print"));
+        CHECK(offers(td, "fn:String.To String"));
+        CHECK(!offers(td, "fn:String.To Upper"));
+    }
     // dragging an exec output: only nodes with an exec input
     PinFilter e; e.kind = PinKind::Exec; e.dir = PinDir::Out;
     for (auto& t : filterPalette(rt.registry(), all, e)) CHECK(t.defId != "math.add");
@@ -805,35 +824,35 @@ TEST(inspect_values_and_frames) {
 }
 
 TEST(plugin_loading) {
-    std::string path = g_exeDir + "/plugins/ExamplePlugin" + kLibExt;
+    std::string path = g_exeDir + "/plugins/FileSystem" + kLibExt;
     if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
     TestRuntime rt;
     std::string err;
     CHECK(rt.loadPlugin(path, &err));
     if (!err.empty()) std::printf("  %s\n", err.c_str());
-    CHECK(rt.registry().findType("Counter") != nullptr);
-    CHECK(rt.registry().findNode("m:Counter.Increment") != nullptr);
-    CHECK_EQ(rt.registry().findNode("fn:Example.Greet")->source, std::string("ExamplePlugin"));
-    rt.registry().addEvent("OnGreeting", {{"Message", "string"}});      // the application's event (a plugin declares none)
+    CHECK(rt.registry().findType("File") != nullptr);
+    CHECK(rt.registry().findNode("m:File.Is At End") != nullptr);
+    CHECK_EQ(rt.registry().findNode("fn:FileSystem.File Name")->source, std::string("FileSystem"));
+    rt.registry().addEvent("OnPath", {{"Path", "string"}});      // the application's event (a plugin declares none)
     Script s;
-    s.variables.push_back({"Msg", "string", Value(""), "", ""});
+    s.variables.push_back({"Name", "string", Value(""), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event:OnGreeting").id;
-    NodeId greet = g.addNode("fn:Example.Greet").id;
+    NodeId ev = g.addNode("event:OnPath").id;
+    NodeId name = g.addNode("fn:FileSystem.File Name").id;
     NodeId set = g.addNode("var.set").id;
-    g.findNode(set)->props = {{"name", "Msg"}, {"scope", "global"}};
+    g.findNode(set)->props = {{"name", "Name"}, {"scope", "global"}};
     link(g, ev, "Then", set, "In");
-    link(g, ev, "Message", greet, "Name");
-    link(g, greet, "Result", set, "Value");
+    link(g, ev, "Path", name, "Path");
+    link(g, name, "Name", set, "Value");
     auto prog = build(rt, s);
     CHECK(prog->ok());
     Instance inst(prog);
-    CHECK(inst.callEvent("OnGreeting", {Value("plugin")}).ok);
-    CHECK_EQ(inst.getVariable("Msg").toString(), std::string("Hello, plugin!"));
+    CHECK(inst.callEvent("OnPath", {Value("notes/today.txt")}).ok);
+    CHECK_EQ(inst.getVariable("Name").toString(), std::string("today.txt"));
 }
 
 TEST(plugin_translation_catalog) {
-    std::string path = g_exeDir + "/plugins/ExamplePlugin" + kLibExt;
+    std::string path = g_exeDir + "/plugins/FileSystem" + kLibExt;
     if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
     Runtime rt;                                 // the nodes the plugin's catalog is made with (flow --only)
     standard::registerStandardApp(rt.registry());
@@ -845,15 +864,15 @@ TEST(plugin_translation_catalog) {
             if (t.first == key) return true;
         return false;
     };
-    const auto texts = translatableTexts(rt.registry(), "ExamplePlugin");
-    CHECK(has(texts, "node:fn:Example.Greet"));
-    CHECK(has(texts, "node:m:Counter.Increment"));
-    CHECK(has(texts, "pin:m:Counter.Add/Amount"));
+    const auto texts = translatableTexts(rt.registry(), "FileSystem");
+    CHECK(has(texts, "node:fn:FileSystem.Join Path"));
+    CHECK(has(texts, "node:m:File.Is At End"));
+    CHECK(has(texts, "pin:filesystem.open/Mode"));
     CHECK(!has(texts, "node:flow.branch"));
     CHECK(!has(texts, "template:get-variable"));
-    CHECK(has(translatableTexts(rt.registry()), "node:fn:Example.Greet"));       // the whole registry has them too
+    CHECK(has(translatableTexts(rt.registry()), "node:fn:FileSystem.Join Path"));   // the whole registry has them too
     // its Persian catalog is next to the library (the build copies it there), up to date and translated
-    const std::string catalog = (std::filesystem::path(rt.loadedPluginFiles().front()).parent_path() / "translations" / "ExamplePlugin_fa.json").string();
+    const std::string catalog = (std::filesystem::path(rt.loadedPluginFiles().front()).parent_path() / "translations" / "FileSystem_fa.json").string();
     std::ifstream in(catalog, std::ios::binary);
     CHECK(bool(in));
     std::stringstream text;
@@ -861,12 +880,12 @@ TEST(plugin_translation_catalog) {
     std::string lf = text.str();                            // a Windows checkout may have made its line ends CRLF
     lf.erase(std::remove(lf.begin(), lf.end(), '\r'), lf.end());
     CatalogReport report;
-    CHECK(updateCatalog(rt.registry(), lf, "fa", &report, "ExamplePlugin") == lf);
+    CHECK(updateCatalog(rt.registry(), lf, "fa", &report, "FileSystem") == lf);
     CHECK(report.texts > 0 && report.translated == report.texts);
     Translations t;
     CHECK(t.loadFile(catalog));
-    CHECK(t.nodeTitle(rt.registry().findNode("fn:Example.Greet"), {}, "Greet") != "Greet");
-    CHECK(t.pin("m:Counter.Add", "Amount") != "Amount");
+    CHECK(t.nodeTitle(rt.registry().findNode("fn:FileSystem.Join Path"), {}, "Join Path") != "Join Path");
+    CHECK(t.pin("filesystem.open", "Mode") != "Mode");
 }
 
 // ---- Exit, Executor, AsyncExecutor -------------------------------------------------------------------
@@ -1307,8 +1326,8 @@ TEST(plugin_path_lists_load_each_plugin_once) {
     std::vector<std::string> errors;
     rt.loadPluginsFromPathList(list, &errors);
     CHECK(errors.empty());
-    CHECK(rt.registry().findType("Counter") != nullptr);
-    size_t libraries = 0;                   // ExamplePlugin, the standard plugins (FileSystem): each once
+    CHECK(rt.registry().findType("File") != nullptr);
+    size_t libraries = 0;                   // the standard plugins (FileSystem): each once
     for (auto& e : std::filesystem::directory_iterator(dir)) libraries += e.path().extension() == kLibExt;
     CHECK_EQ(rt.loadedPlugins().size(), libraries);
 }
@@ -4252,6 +4271,17 @@ TEST(filesystem_paths_and_questions) {
     if (!rt.loaded) return;
     namespace fs = std::filesystem;
     CHECK_EQ(rt.registry().findNode("filesystem.open")->source, std::string("FileSystem"));
+    {   // dragging a File: its own nodes and Print String, not every string node
+        Script s;
+        Graph& g = s.addEventGraph();
+        NodeBuildCtx ctx{rt.registry(), &s, &g};
+        PinFilter f;
+        f.kind = PinKind::Data; f.dir = PinDir::Out; f.type = rt.registry().findType("File");
+        std::set<std::string> ids;
+        for (auto& t : filterPalette(rt.registry(), buildPalette(ctx), f)) ids.insert(t.defId);
+        CHECK(ids.count("filesystem.file.writeline") && ids.count("m:File.Is At End") && ids.count("util.print"));
+        CHECK(!ids.count("fn:String.To Upper") && !ids.count("fn:FileSystem.Join Path"));
+    }
     auto text = [&](const char* id, std::vector<Value> args) { return fnCall(rt, std::string("FileSystem.") + id, std::move(args)).toString(); };
     CHECK_EQ(text("Join Path", {Value("notes"), Value("today.txt")}), (fs::path("notes") / "today.txt").string());
     CHECK_EQ(text("Join Path", {Value(""), Value("today.txt")}), std::string("today.txt"));
@@ -4461,8 +4491,12 @@ std::string withFile(Runtime& rt, const std::string& path, int mode, const std::
     return out;
 }
 // a method of the file: In from `after` (its exec output `pin`), Target = the file of Open File
+// a node of the file (Read Line -> filesystem.file.readline): In from `after` (its exec output `pin`), Target = the file of Open File
 NodeId method(GoGraph& t, NodeId open, NodeId after, const char* pin, const char* name, std::map<std::string, Value> defaults = {}) {
-    NodeId m = t.node(std::string("m:File.") + name, std::move(defaults));
+    std::string id = "filesystem.file.";
+    for (const char* c = name; *c; ++c)
+        if (*c != ' ') id += char(std::tolower(static_cast<unsigned char>(*c)));
+    NodeId m = t.node(id, std::move(defaults));
     t.link(open, "File", m, "Target");
     t.link(after, pin, m, "In");
     return m;
@@ -4556,15 +4590,41 @@ TEST(filesystem_file_failures_and_mistakes) {
     CHECK(has(out, "failed: ") && has(out, "does not exist"));
     out = withFile(rt, u8text(dir.path), kRead, nothing);
     CHECK(has(out, "it is a folder"));
-    // a mistake with an open file is a script error
-    out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Write Line", {{"Text", Value("x")}}); });
-    CHECK(has(out, "error: ") && has(out, "it is open for reading"));
-    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Read Line"); });
-    CHECK(has(out, "error: ") && has(out, "it is open for writing"));
+    // what cannot be done with an open file goes to Failed of that node, with the reason: "then," or "why: <Error>,"
+    auto outcome = [&](GoGraph& t, NodeId node) {
+        NodeId why = t.node("fn:String.Concat", {{"A", Value("why: ")}});
+        t.link(node, "Error", why, "B");
+        NodeId say = t.node("util.print");
+        t.link(node, "Failed", say, "In");
+        t.link(why, "Result", say, "String");
+        t.link(node, "Then", t.say("then"), "In");
+        return node;
+    };
+    out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) { return outcome(t, method(t, open, open, "Then", "Write Line", {{"Text", Value("x")}})); });
+    CHECK(has(out, "why: cannot write") && has(out, "it is open for reading") && !has(out, "error"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) { return outcome(t, method(t, open, open, "Then", "Read Line")); });
+    CHECK(has(out, "why: cannot read") && has(out, "it is open for writing"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) { return outcome(t, method(t, open, open, "Then", "Read Text")); });
+    CHECK(has(out, "it is open for writing"));
     out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
-        return method(t, open, method(t, open, open, "Then", "Close"), "Then", "Read Line");
+        return outcome(t, method(t, open, method(t, open, open, "Then", "Close"), "Then", "Read Line"));
     });
-    CHECK(has(out, "error: ") && has(out, "the file is closed"));
+    CHECK(has(out, "why: ") && has(out, "the file is closed"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) {
+        return outcome(t, method(t, open, method(t, open, open, "Then", "Close"), "Then", "Write Text", {{"Text", Value("x")}}));
+    });
+    CHECK(has(out, "the file is closed"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) {   // closing twice is fine
+        return outcome(t, method(t, open, method(t, open, open, "Then", "Close"), "Then", "Close"));
+    });
+    CHECK_EQ(out, std::string("then,"));
+    // nothing connected to Target
+    out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId read = t.node("filesystem.file.readline");
+        t.link(open, "Then", read, "In");
+        return outcome(t, read);
+    });
+    CHECK(has(out, "why: no file"));
     CHECK_EQ(fileText(notes), std::string(""));                              // Write emptied it
 }
 

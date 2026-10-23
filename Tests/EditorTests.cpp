@@ -2895,13 +2895,13 @@ TEST(every_language_translates_the_editor_and_the_nodes) {
 
 TEST(plugin_node_texts_follow_the_language) {
 #if defined(_WIN32)
-    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.dll";
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/FileSystem.dll";
 #elif defined(__APPLE__)
-    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.dylib";
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/FileSystem.dylib";
 #else
-    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/ExamplePlugin.so";
+    const QString plugin = QCoreApplication::applicationDirPath() + "/plugins/FileSystem.so";
 #endif
-    if (!QFileInfo::exists(plugin)) { std::printf("  (skipped: the example plugin is not built)\n"); return; }
+    if (!QFileInfo::exists(plugin)) { std::printf("  (skipped: the FileSystem plugin is not built)\n"); return; }
     applyLanguage(*qApp, "fa");
     {
         StudioFixture f;
@@ -2909,16 +2909,16 @@ TEST(plugin_node_texts_follow_the_language) {
         CHECK(f.rt.loadPlugin(plugin.toStdString()));
         f.editor.refreshScript();
         Document* doc = f.win.document();
-        fg::NodeId greet = 0;
-        doc->edit("Add", [&](fg::Script& s) { greet = s.findGraph(ss(f.scene()->graphName()))->addNode("fn:Example.Greet", 300, 300).id; });
+        fg::NodeId join = 0;
+        doc->edit("Add", [&](fg::Script& s) { join = s.findGraph(ss(f.scene()->graphName()))->addNode("fn:FileSystem.Join Path", 300, 300).id; });
         QCoreApplication::processEvents();
-        NodeItem* item = f.scene()->nodeItem(greet);
+        NodeItem* item = f.scene()->nodeItem(join);
         CHECK(item != nullptr);
-        if (item) CHECK_EQ(nodeTitle(item->compiled()), QString("خوشامدگویی"));
-        CHECK_EQ(pinLabel("fn:Example.Greet", "Name"), QString("نام"));
-        CHECK_EQ(pinLabel("m:Counter.Add", "Amount"), QString("میزان"));
-        CHECK_EQ(categoryText("Example"), QString("نمونه"));
-        CHECK(doc->script().findGraph(ss(f.scene()->graphName()))->findNode(greet)->def == "fn:Example.Greet");
+        if (item) CHECK_EQ(nodeTitle(item->compiled()), QString("ترکیب مسیر"));
+        CHECK_EQ(pinLabel("fn:FileSystem.File Name", "Name"), QString("نام"));
+        CHECK_EQ(pinLabel("filesystem.open", "Mode"), QString("حالت"));
+        CHECK_EQ(categoryText("File System"), QString("سیستم فایل"));
+        CHECK(doc->script().findGraph(ss(f.scene()->graphName()))->findNode(join)->def == "fn:FileSystem.Join Path");
     }
     applyLanguage(*qApp, "en");
     CHECK(nodeTexts().empty());

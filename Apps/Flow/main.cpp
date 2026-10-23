@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
             std::string error;
             if (!alone.loadPlugin(rt.loadedPluginFiles()[size_t(it - loaded.begin())], &error)) return fail(error);
             catalogRuntime = &alone;
-            if (language.rfind(catalogSource + "_", 0) == 0) language = language.substr(catalogSource.size() + 1);   // "ExamplePlugin_fa"
+            if (language.rfind(catalogSource + "_", 0) == 0) language = language.substr(catalogSource.size() + 1);   // "FileSystem_fa"
         }
         if (std::ifstream in(catalogFile, std::ios::binary); in) {
             std::stringstream ss;

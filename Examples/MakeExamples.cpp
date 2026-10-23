@@ -266,7 +266,7 @@ void files(const std::string& dir) {
     link(g, size, "Bytes", bytes, "A");
     link(g, label, "Result", line, "A");
     link(g, bytes, "Result", line, "B");
-    NodeId writeLine = add(g, "m:File.Write Line", 1740, 250);
+    NodeId writeLine = add(g, "filesystem.file.writeline", 1740, 250);
     link(g, each, "Loop Body", writeLine, "In");
     link(g, open, "File", writeLine, "Target");
     link(g, line, "Result", writeLine, "Text");
@@ -276,7 +276,7 @@ void files(const std::string& dir) {
     g.addComment(1070, 220, 1100, 330).text = "Each script";
 
     // Completed: Close, then where the list is
-    NodeId close = add(g, "m:File.Close", 1300, -140);
+    NodeId close = add(g, "filesystem.file.close", 1300, -140);
     link(g, each, "Completed", close, "In");
     link(g, open, "File", close, "Target");
     NodeId path = add(g, "get:File.Path", 1100, -280);

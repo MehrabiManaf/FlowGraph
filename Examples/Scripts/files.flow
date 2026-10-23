@@ -103,7 +103,7 @@
         },
         {
           "id": 13,
-          "def": "m:File.Write Line",
+          "def": "filesystem.file.writeline",
           "x": 1740.0,
           "y": 250.0
         },
@@ -115,7 +115,7 @@
         },
         {
           "id": 15,
-          "def": "m:File.Close",
+          "def": "filesystem.file.close",
           "x": 1300.0,
           "y": -140.0
         },

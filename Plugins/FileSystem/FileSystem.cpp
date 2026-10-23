@@ -266,7 +266,7 @@ enum class FileMode { Read, Write, Append };
 // It is closed by Close, or when nothing refers to it any more - which can be long after the script has run: an Instance keeps
 // the outputs of its nodes (flowstudio keeps the instance of the last run to inspect it). So every write goes to the file at once
 // (a forgotten Close loses nothing), at a few microseconds a write. Reading goes through a buffer; both run on the thread of the
-// script. A mistake (writing a file opened for reading, a closed file) or a failing disk is a script error.
+// script. What cannot be done (writing a file opened for reading, a closed file, a failing disk) goes to Failed, as Open File.
 class OpenFile {
 public:
     OpenFile(std::string path, FileMode mode) : path_(std::move(path)), mode_(mode) {}
@@ -306,51 +306,61 @@ public:
         return true;
     }
 
-    std::string readLine() {
-        need(true, "read");
-        std::string line;
+    // Each of these is false, with the reason in `error`, when it cannot be done: the file is closed, it is open the other way,
+    // or the disk fails. The end of the file is not a failure: Read Line gives "" there (At End says it).
+    bool readLine(std::string& line, std::string& error) {
+        line.clear();
+        if (!can(true, "read", error)) return false;
         if (!std::getline(stream_, line)) {
-            failed("read");
-            return std::string();                // at the end
+            line.clear();                       // at the end
+            return worked("read", error);
         }
         if (!line.empty() && line.back() == '\r') line.pop_back();
-        return line;
+        return true;
     }
-    std::string readText() {
-        need(true, "read");
-        std::string text{std::istreambuf_iterator<char>(stream_), std::istreambuf_iterator<char>()};
-        failed("read");
-        return text;
+    bool readText(std::string& text, std::string& error) {
+        text.clear();
+        if (!can(true, "read", error)) return false;
+        text.assign(std::istreambuf_iterator<char>(stream_), std::istreambuf_iterator<char>());
+        return worked("read", error);
     }
     bool atEnd() const { return !open_ || mode_ != FileMode::Read || stream_.peek() == std::char_traits<char>::eof(); }
-    void writeText(const std::string& text) {
-        need(false, "write");
+    bool writeText(const std::string& text, std::string& error) {
+        if (!can(false, "write", error)) return false;
         stream_.write(text.data(), static_cast<std::streamsize>(text.size()));
         stream_.flush();                         // in the file now, not when it is closed
-        failed("write");
+        return worked("write", error);
     }
-    void writeLine(const std::string& text) { writeText(text + "\n"); }
-    void close() {                               // closing a closed file is fine
-        if (!open_) return;
+    bool writeLine(const std::string& text, std::string& error) { return writeText(text + "\n", error); }
+    bool close(std::string& error) {             // closing a closed file is fine
+        if (!open_) return true;
         open_ = false;
         stream_.close();
-        if (!stream_ && mode_ != FileMode::Read) throw ScriptError("cannot write '" + path_ + "': writing failed (is the disk full?)");
+        if (stream_ || mode_ == FileMode::Read) return true;
+        error = "cannot write '" + path_ + "': writing failed (is the disk full?)";
+        return false;
     }
     const std::string& path() const { return path_; }
     bool isOpen() const { return open_; }
 
 private:
-    void need(bool reading, const char* what) const {
-        if (!open_) throw ScriptError(std::string("cannot ") + what + " '" + path_ + "': the file is closed");
-        if (reading != (mode_ == FileMode::Read))
-            throw ScriptError(std::string("cannot ") + what + " '" + path_ + "': it is open for " + (reading ? "writing" : "reading"));
+    bool can(bool reading, const char* what, std::string& error) const {
+        if (!open_) error = std::string("cannot ") + what + " '" + path_ + "': the file is closed";
+        else if (reading != (mode_ == FileMode::Read))
+            error = std::string("cannot ") + what + " '" + path_ + "': it is open for " + (reading ? "writing" : "reading");
+        else return true;
+        return false;
     }
-    // After a read or write: a failing disk is a script error (the end of the file is not).
-    void failed(const char* what) {
-        if (stream_.bad())
-            throw ScriptError(std::string("cannot ") + what + " '" + path_ + "': " +
-                              (mode_ == FileMode::Read ? "reading failed" : "writing failed (is the disk full?)"));
+    // After a read or write: did the disk fail? (Reaching the end of the file is no failure.)
+    bool worked(const char* what, std::string& error) {
+        const bool failed = mode_ == FileMode::Read ? stream_.bad() : !stream_;
+        if (failed) {
+            error = std::string("cannot ") + what + " '" + path_ + "': " +
+                    (mode_ == FileMode::Read ? "reading failed" : "writing failed (is the disk full?)");
+            return false;
+        }
         if (mode_ == FileMode::Read) stream_.clear(stream_.rdstate() & ~std::ios::failbit);
+        return true;
     }
 
     std::string path_;
@@ -693,24 +703,73 @@ void registerOpenFiles(Registry& reg) {
     auto file = reg.registerClass<OpenFile>("File", kCategory);
     file.doc("A file Open File opened: read a line at a time, or written a piece at a time (each write is in the file at once). "
              "Close it when it is done: until then other programs may not be able to delete or rename it.")
-        .method("Read Line", &OpenFile::readLine).keywords("read line next text")
-        .describe("The next line of the file, without its line break; empty at the end (Is At End says when).")
-        .method("Read Text", &OpenFile::readText).keywords("read rest all text content")
-        .describe("The rest of the file, from where reading is.")
         .method("Is At End", &OpenFile::atEnd).keywords("end eof finished done")
         .describe("Whether everything has been read (always for a file opened for writing, or a closed one).")
-        .method("Write Text", &OpenFile::writeText, {"Text"}).keywords("write text append add")
-        .describe("Writes the text (UTF-8) at the end of what was written.")
-        .method("Write Line", &OpenFile::writeLine, {"Text"}).keywords("write line text append add")
-        .describe("Writes the text (UTF-8) and a line break (\\n).")
-        .method("Close", &OpenFile::close).keywords("close end finish release")
-        .describe("Closes the file, so that other programs can delete or rename it. Closing a closed file does nothing.")
         .readonly("Path", [](const OpenFile& f) { return f.path(); })
         .readonly("Is Open", [](const OpenFile& f) { return f.isOpen(); });
     file.type()->properties[0].doc = "The path it was opened with";
     file.type()->properties[1].doc = "Whether it is open (not closed yet)";
-    for (auto [id, result] : {std::pair{"File.Read Line", "Line"}, {"File.Read Text", "Text"}, {"File.Is At End", "At End"}})
-        reg.mutableFunction(id)->retName = result;
+    reg.mutableFunction("File.Is At End")->retName = "At End";
+
+    // Reading, writing and closing: nodes of their own (not methods), for their Failed output. They are quick (a buffer, one
+    // write), so they run at once on the thread of the script. `act` does the work: false and the reason when it cannot.
+    using Act = std::function<bool(NodeCtx&, OpenFile&, std::string& error)>;
+    auto fileNode = [&reg](const char* id, const char* title, const char* keywords, std::string text, std::vector<PinDef> inputs,
+                           std::vector<PinDef> outputs, Act act) {
+        NodeDef d;
+        d.id = id;
+        d.title = title;
+        d.category = std::string(kCategory) + "|File";
+        d.keywords = keywords;
+        d.doc = std::move(text) + " Failed, and the reason in Error, when it cannot be done (a closed file, a file opened the "
+                                 "other way, a failing disk).";
+        d.pins.push_back(execIn());
+        d.pins.push_back(doc(dataIn("Target", "File"), "The file Open File opened"));
+        for (auto& p : inputs) d.pins.push_back(std::move(p));
+        d.pins.push_back(execOut());
+        d.pins.push_back(doc(execOut("Failed"), "When it could not be done: Error says why"));
+        for (auto& p : outputs) d.pins.push_back(std::move(p));
+        d.pins.push_back(doc(dataOut("Error", "string"), "Why it failed (empty when it worked)"));
+        const size_t errorOut = outputs.size();
+        d.run = [act, errorOut](NodeCtx& c) {
+            std::string error;
+            auto f = c.registry().unwrap<OpenFile>(c.in(0));
+            if (!f) error = "no file: connect the File of Open File to Target";
+            else if (act(c, *f, error)) {
+                c.out(errorOut, Value(std::string()));
+                c.next(0);
+                return;
+            }
+            c.out(errorOut, Value(std::move(error)));
+            c.next(1);
+        };
+        reg.addNode(std::move(d));
+    };
+    fileNode("filesystem.file.readline", "Read Line", "file read line next text",
+             "Reads the next line of the file, without its line break; empty at the end (Is At End says when).", {},
+             {doc(dataOut("Line", "string"), "The line (empty when it failed)")}, [](NodeCtx& c, OpenFile& f, std::string& error) {
+                 std::string line;
+                 const bool ok = f.readLine(line, error);
+                 c.out(0, Value(std::move(line)));
+                 return ok;
+             });
+    fileNode("filesystem.file.readtext", "Read Text", "file read rest all text content",
+             "Reads the rest of the file, from where reading is.", {},
+             {doc(dataOut("Text", "string"), "The text (empty when it failed)")}, [](NodeCtx& c, OpenFile& f, std::string& error) {
+                 std::string text;
+                 const bool ok = f.readText(text, error);
+                 c.out(0, Value(std::move(text)));
+                 return ok;
+             });
+    fileNode("filesystem.file.writeline", "Write Line", "file write line text append add",
+             "Writes the text (UTF-8) and a line break (\\n).", {dataIn("Text", "string", Value(""))}, {},
+             [](NodeCtx& c, OpenFile& f, std::string& error) { return f.writeLine(c.inString(1), error); });
+    fileNode("filesystem.file.writetext", "Write Text", "file write text append add",
+             "Writes the text (UTF-8) at the end of what was written.", {dataIn("Text", "string", Value(""))}, {},
+             [](NodeCtx& c, OpenFile& f, std::string& error) { return f.writeText(c.inString(1), error); });
+    fileNode("filesystem.file.close", "Close", "file close end finish release",
+             "Closes the file, so that other programs can delete or rename it. Closing a closed file does nothing.", {}, {},
+             [](NodeCtx&, OpenFile& f, std::string& error) { return f.close(error); });
 
     NodeDef d = waitingNode("filesystem.open", "Open File", "File", "file open read write append stream handle create",
                             "Opens a file to read it a line at a time (Read), or to write it a piece at a time: Write starts it "

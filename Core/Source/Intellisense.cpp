@@ -78,7 +78,16 @@ static bool pinAccepts(const Registry& reg, const NodeDef* def, const PinDef& p,
     }
     const TypeDesc* t = reg.findType(p.type);
     if (!t) return false;
-    return f.dir == PinDir::Out ? reg.canConnect(f.type, t) : reg.canConnect(t, f.type);
+    const TypeDesc* from = f.dir == PinDir::Out ? f.type : t;
+    const TypeDesc* to = f.dir == PinDir::Out ? t : f.type;
+    // Every value converts to a string; offered for the primary types, otherwise only by the nodes that print anything (a File
+    // would bring every string node with it)
+    auto primary = [](const TypeDesc* x) {
+        return x->kind == TypeKind::Bool || x->kind == TypeKind::Int || x->kind == TypeKind::Float || x->kind == TypeKind::String ||
+               x->kind == TypeKind::Any;
+    };
+    if (to->kind == TypeKind::String && !primary(from) && !(def && def->printsAnything)) return false;
+    return reg.canConnect(from, to);
 }
 
 bool templateAccepts(const Registry& reg, const NodeTemplate& t, const PinFilter& f, std::string* pinName) {
