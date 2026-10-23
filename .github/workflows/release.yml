@@ -84,6 +84,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "flow --reference failed" }
           $out = & "$bin\flow.exe" "dist\$env:PACKAGE\examples\fizzbuzz.flow"
           if ($LASTEXITCODE -ne 0 -or $out -notcontains "FizzBuzz") { throw "the FizzBuzz example does not run: $out" }
+          $nodes = & "$bin\flow.exe" --reference | Select-String -SimpleMatch "from FileSystem"
+          if ($LASTEXITCODE -ne 0 -or -not $nodes) { throw "flow does not load the FileSystem plugin (bin\plugins)" }
           $env:QT_QPA_PLATFORM = "offscreen"
           $env:FG_STUDIO_SCREENSHOT = "$PWD\smoke.png"
           $p = Start-Process "$bin\flowstudio.exe" -PassThru
@@ -172,10 +174,10 @@ jobs:
           dist="dist/$PACKAGE"
           unset LD_LIBRARY_PATH QT_PLUGIN_PATH QML2_IMPORT_PATH
           # nothing may come from the Qt installation; the X11 libraries the xcb plugin loads are the system's (not on this machine)
-          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist"/lib/*.so* "$dist"/plugins/*/*.so; do
+          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist"/lib/*.so* "$dist"/plugins/*/*.so "$dist"/bin/plugins/*.so; do
             if ldd "$f" | grep -F "$QT_ROOT_DIR"; then echo "::error::$f takes a library from the Qt installation"; exit 1; fi
           done
-          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist/plugins/platforms/libqoffscreen.so"; do
+          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist/plugins/platforms/libqoffscreen.so" "$dist"/bin/plugins/*.so; do
             if ldd "$f" | grep "not found"; then echo "::error::$f needs a library the package does not bring"; exit 1; fi
           done
           # what the package needs of the system's C and C++ libraries: not newer than this AlmaLinux 8's (glibc 2.28, libstdc++
@@ -192,6 +194,7 @@ jobs:
           "$dist/bin/flow" --version
           "$dist/bin/flow" --no-plugins --reference smoke-reference.md
           "$dist/bin/flow" "$dist/examples/fizzbuzz.flow" | grep -qx FizzBuzz
+          "$dist/bin/flow" --reference | grep -q "from FileSystem" || { echo "::error::flow does not load the FileSystem plugin (bin/plugins)"; exit 1; }
           QT_QPA_PLATFORM=offscreen FG_STUDIO_SCREENSHOT="$PWD/smoke.png" timeout 60 "$dist/bin/flowstudio"
           test -s smoke.png
       - name: Pack

@@ -14,6 +14,7 @@ editor and debug them step by step; your application runs them in a small interp
 * **Safe with scripts users write.** Every script is checked against what the application provides before it runs. Limits keep a
   script you do not trust from running away, and a changed script can be reloaded while the application runs.
 * **Extensible.** Plugins add classes, functions, enums and nodes; a plugin built for another version is refused, not run.
+  The **FileSystem** plugin comes with it: open, read and write files; copy, move, list and delete files and folders.
 * **In 10 languages.** The editor speaks English, Persian, Chinese, Spanish, German, Japanese, Portuguese, French, Russian and
   Korean (most of them machine translations: reviews are welcome).
 
@@ -78,8 +79,8 @@ debugged while it runs.
   and scripts may end them with the **Exit** node. `flow script.flow [arguments]` runs a script (like `python script.py`),
   `flowstudio` is the script editor specialised for them.
 
-Other directories: `Examples/` (script generator, `Scripts/*.flow`), `Plugins/ExamplePlugin/` (a sample plugin),
-`Tests/` (core tests and editor tests).
+Other directories: `Examples/` (script generator, `Scripts/*.flow`), `Plugins/FileSystem/` (the FileSystem plugin),
+`Plugins/ExamplePlugin/` (a sample plugin), `Tests/` (core tests and editor tests).
 
 ## Build (Windows, MSVC 2022, Qt 6.9)
 
@@ -87,7 +88,7 @@ Other directories: `Examples/` (script generator, `Scripts/*.flow`), `Plugins/Ex
 git submodule update --init
 Tools\build.bat Release        # configures with Ninja and builds everything into build\Release\bin
 ```
-`FG_BUILD_EDITOR`, `FG_BUILD_TESTS` and `FG_BUILD_EXAMPLES` switch parts off. The runtime has no Qt dependency; `flow`
+`FG_BUILD_EDITOR`, `FG_BUILD_TESTS`, `FG_BUILD_EXAMPLES` and `FG_BUILD_PLUGINS` (the FileSystem plugin) switch parts off. The runtime has no Qt dependency; `flow`
 needs only the runtime. (`build.bat` builds Release unless you pass `Debug`: rebuild the configuration you launch.)
 `build.bat` finds Visual Studio 2022 (any edition) with `vswhere` and takes Qt from `QT_DIR` (default `C:\Qt\6.9.0\msvc2022_64`).
 
@@ -106,7 +107,7 @@ AddressSanitizer / UndefinedBehaviorSanitizer.
 ```
 cmake --install build/Release --prefix C:/FlowGraph --component FlowGraph
 ```
-installs the libraries, their headers, `flow` / `flowstudio` and a CMake package. A host project then only needs
+installs the libraries, their headers, `flow` / `flowstudio` (with the FileSystem plugin in `bin/plugins`) and a CMake package. A host project then only needs
 ```cmake
 find_package(FlowGraph 0.3 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
 target_link_libraries(myapp PRIVATE FlowGraph::Core FlowGraph::ScriptEditor)
@@ -166,6 +167,22 @@ stored next to the script as `script.flowlaunch` (JSON; *Run > Launch Configurat
 The toolbar of flowstudio has a **Launch configuration** selector (and a *Configure...* button) instead of an event box: Main is the only event, so the choice is how to launch it. `args` become `Args` of `Main`; `env` and `cwd` apply
 while the script runs (`cwd` and `pluginPaths` are relative to the script's folder); `stepDelayMs` is the slow motion
 used while debugging. `flow --launch Verbose script.flow` uses the same file.
+
+## The FileSystem plugin
+
+`Plugins/FileSystem` is built into `bin/plugins` and is in the release packages, so `flow` and `flowstudio` have its nodes
+(category *File System*) without anything to set up:
+
+* **File:** Open File (Read, Write or Append) gives a `File` to read a line at a time (Read Line, Read Text, Is At End) or to
+  write a piece at a time (Write Line, Write Text); each write is in the file at once. Close it when it is done.
+* **Files and Folders:** Copy, Move, Delete, Create Folder, List Folder, For Each File (patterns like `*.txt;*.md`, Recursive).
+* **Paths** and **Information** (pure): Join Path, Parent Folder, File Name, Extension, Change Extension, Absolute Path, Current /
+  Temp / Home Folder; Exists, Is File, Is Folder, File Size, Last Modified.
+
+Open File and the nodes for files and folders go on with **Then**, or with **Failed** and the reason in **Error** (a missing file
+is not a script error). Their work runs on a thread of its own: the script waits for a big copy or a slow drive, the application
+does not, and Stop or a hot reload stops the work. Paths are UTF-8, relative to the working directory (the `cwd` of a launch
+configuration); files are read and written as UTF-8 text.
 
 ## Using the runtime from C++
 
@@ -268,7 +285,7 @@ A script that comes from somewhere else (a user, the network) can be kept in bou
 
 ```cpp
 fg::CompileOptions opts;                                       // which nodes a script may use at all
-opts.allowNode = [](const fg::NodeDef& d) { return d.source != "FilesPlugin"; };
+opts.allowNode = [](const fg::NodeDef& d) { return d.source != "FileSystem"; };
 auto program = rt.compile(script, opts);                       // a refused node is a compile error
 
 fg::Instance::Limits lim;
@@ -281,7 +298,8 @@ instance.setMaxCallDepth(64);                                  // nested functio
 ```
 A script that goes beyond a limit fails with a script error at the node that did it; the host goes on. A runtime has no node
 that reaches the operating system unless the application registers the System nodes (`fg::registerSystemNodes`, also done by
-`registerStandardApp`); `allowNode` can refuse them per script (`d.source != "system"`).
+`registerStandardApp`) or loads the FileSystem plugin; `allowNode` can refuse them per script (`d.source != "system"`,
+`d.source != "FileSystem"`).
 
 ### Hot reload
 
@@ -442,7 +460,7 @@ FlowGraph has two licenses; `LICENSE` lists which part has which, and every sour
 
 | Part | License |
 |-|-|
-| `Core/` (FlowGraphCore), `Apps/Flow/` (`flow`), `Plugins/ExamplePlugin/`, the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
+| `Core/` (FlowGraphCore), `Apps/Flow/` (`flow`), `Plugins/` (FileSystem, ExamplePlugin), the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
 | `Editor/` (FlowGraphEditor, the ScriptEditor library), `Apps/Studio/` (`flowstudio`), `Examples/Embedded/` | **GPL-3.0-only** (`LICENSES/GPL-3.0.txt`) |
 
 The runtime can be used in any application, closed source included, and plugins may have any license. The editor is GPL

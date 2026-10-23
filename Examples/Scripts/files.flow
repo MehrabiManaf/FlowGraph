@@ -1,0 +1,259 @@
+{
+  "format": "flowgraph",
+  "version": 1,
+  "name": "Files",
+  "doc": "Lists the scripts (*.flow) in the working directory and its folders with their sizes, into flowgraph-files.txt in the temporary folder (FileSystem plugin).",
+  "variables": [],
+  "graphs": [
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event:Main",
+          "x": 0.0,
+          "y": 0.0,
+          "props": {
+            "sig": "(Args: array<string>)"
+          }
+        },
+        {
+          "id": 2,
+          "def": "fn:FileSystem.Temp Folder",
+          "x": 0.0,
+          "y": 200.0
+        },
+        {
+          "id": 3,
+          "def": "fn:FileSystem.Join Path",
+          "x": 180.0,
+          "y": 200.0,
+          "defaults": {
+            "B": "flowgraph-files.txt"
+          }
+        },
+        {
+          "id": 4,
+          "def": "filesystem.open",
+          "x": 480.0,
+          "y": 0.0,
+          "defaults": {
+            "Mode": 1
+          }
+        },
+        {
+          "id": 5,
+          "def": "util.print",
+          "x": 780.0,
+          "y": -160.0
+        },
+        {
+          "id": 6,
+          "def": "filesystem.foreach",
+          "x": 780.0,
+          "y": 0.0,
+          "defaults": {
+            "Folder": ".",
+            "Pattern": "*.flow",
+            "Recursive": true
+          }
+        },
+        {
+          "id": 7,
+          "def": "util.print",
+          "x": 1300.0,
+          "y": 40.0
+        },
+        {
+          "id": 8,
+          "def": "fn:FileSystem.File Name",
+          "x": 1100.0,
+          "y": 340.0
+        },
+        {
+          "id": 9,
+          "def": "fn:FileSystem.File Size",
+          "x": 1100.0,
+          "y": 440.0
+        },
+        {
+          "id": 10,
+          "def": "fn:String.Concat",
+          "x": 1300.0,
+          "y": 340.0,
+          "defaults": {
+            "B": ": "
+          }
+        },
+        {
+          "id": 11,
+          "def": "fn:String.Concat",
+          "x": 1300.0,
+          "y": 440.0,
+          "defaults": {
+            "B": " bytes"
+          }
+        },
+        {
+          "id": 12,
+          "def": "fn:String.Concat",
+          "x": 1520.0,
+          "y": 380.0
+        },
+        {
+          "id": 13,
+          "def": "m:File.Write Line",
+          "x": 1740.0,
+          "y": 250.0
+        },
+        {
+          "id": 14,
+          "def": "util.print",
+          "x": 1980.0,
+          "y": 250.0
+        },
+        {
+          "id": 15,
+          "def": "m:File.Close",
+          "x": 1300.0,
+          "y": -140.0
+        },
+        {
+          "id": 16,
+          "def": "get:File.Path",
+          "x": 1100.0,
+          "y": -280.0
+        },
+        {
+          "id": 17,
+          "def": "fn:String.Concat",
+          "x": 1300.0,
+          "y": -280.0,
+          "defaults": {
+            "A": "Written to "
+          }
+        },
+        {
+          "id": 18,
+          "def": "util.print",
+          "x": 1560.0,
+          "y": -160.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [2, "Folder"],
+          "to": [3, "A"]
+        },
+        {
+          "from": [1, "Then"],
+          "to": [4, "In"]
+        },
+        {
+          "from": [3, "Path"],
+          "to": [4, "Path"]
+        },
+        {
+          "from": [4, "Failed"],
+          "to": [5, "In"]
+        },
+        {
+          "from": [4, "Error"],
+          "to": [5, "String"]
+        },
+        {
+          "from": [4, "Then"],
+          "to": [6, "In"]
+        },
+        {
+          "from": [6, "Failed"],
+          "to": [7, "In"]
+        },
+        {
+          "from": [6, "Error"],
+          "to": [7, "String"]
+        },
+        {
+          "from": [6, "Path"],
+          "to": [8, "Path"]
+        },
+        {
+          "from": [6, "Path"],
+          "to": [9, "Path"]
+        },
+        {
+          "from": [8, "Name"],
+          "to": [10, "A"]
+        },
+        {
+          "from": [9, "Bytes"],
+          "to": [11, "A"]
+        },
+        {
+          "from": [10, "Result"],
+          "to": [12, "A"]
+        },
+        {
+          "from": [11, "Result"],
+          "to": [12, "B"]
+        },
+        {
+          "from": [6, "Loop Body"],
+          "to": [13, "In"]
+        },
+        {
+          "from": [4, "File"],
+          "to": [13, "Target"]
+        },
+        {
+          "from": [12, "Result"],
+          "to": [13, "Text"]
+        },
+        {
+          "from": [13, "Then"],
+          "to": [14, "In"]
+        },
+        {
+          "from": [12, "Result"],
+          "to": [14, "String"]
+        },
+        {
+          "from": [6, "Completed"],
+          "to": [15, "In"]
+        },
+        {
+          "from": [4, "File"],
+          "to": [15, "Target"]
+        },
+        {
+          "from": [4, "File"],
+          "to": [16, "Target"]
+        },
+        {
+          "from": [16, "Path"],
+          "to": [17, "B"]
+        },
+        {
+          "from": [15, "Then"],
+          "to": [18, "In"]
+        },
+        {
+          "from": [17, "Result"],
+          "to": [18, "String"]
+        }
+      ],
+      "comments": [
+        {
+          "id": 1,
+          "text": "Each script",
+          "x": 1070.0,
+          "y": 220.0,
+          "w": 1100.0,
+          "h": 330.0,
+          "color": 4878245
+        }
+      ]
+    }
+  ]
+}

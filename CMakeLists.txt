@@ -15,6 +15,8 @@ option(FG_BUILD_EDITOR   "Build the Qt based editor and FlowGraph Studio" ON)
 option(FG_BUILD_TESTS    "Build the unit tests"                            ON)
 option(FG_BUILD_EXAMPLES "Build examples and sample plugins"               ON)
 option(FG_SHARED         "Build FlowGraphCore and FlowGraphEditor as shared libraries" ON)
+option(FG_BUILD_PLUGINS  "Build the standard plugins (FileSystem)"         ON)
+option(FG_INSTALL        "Generate the install rules"                      ON)
 
 if(FG_SHARED)
     set(FG_LIB_TYPE SHARED)
@@ -51,6 +53,11 @@ if(FG_BUILD_EXAMPLES)
     endif()
 endif()
 
+# ---- the standard plugins: in bin/plugins, loaded by flow and flowstudio, and in the release packages ----
+if(FG_BUILD_PLUGINS)
+    add_subdirectory(Plugins/FileSystem)
+endif()
+
 # ---- editor: Qt 6 widgets + KDDockWidgets ---------------------------------
 if(FG_BUILD_EDITOR AND EXISTS ${CMAKE_SOURCE_DIR}/Editor/CMakeLists.txt)
     find_package(Qt6 REQUIRED COMPONENTS Widgets Svg SvgWidgets Test LinguistTools)
@@ -76,7 +83,6 @@ endif()
 # ---- install: cmake --install <build> --prefix <dir> --component FlowGraph ----
 # Headers, libraries, the applications and a package configuration, so that a host project finds FlowGraph with
 #   find_package(FlowGraph REQUIRED [COMPONENTS ScriptEditor])   ->   FlowGraph::Core, FlowGraph::ScriptEditor
-option(FG_INSTALL "Generate the install rules" ON)
 if(FG_INSTALL)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)

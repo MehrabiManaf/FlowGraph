@@ -1308,7 +1308,9 @@ TEST(plugin_path_lists_load_each_plugin_once) {
     rt.loadPluginsFromPathList(list, &errors);
     CHECK(errors.empty());
     CHECK(rt.registry().findType("Counter") != nullptr);
-    CHECK_EQ(rt.loadedPlugins().size(), size_t(1));
+    size_t libraries = 0;                   // ExamplePlugin, the standard plugins (FileSystem): each once
+    for (auto& e : std::filesystem::directory_iterator(dir)) libraries += e.path().extension() == kLibExt;
+    CHECK_EQ(rt.loadedPlugins().size(), libraries);
 }
 
 TEST(plugins_built_for_another_abi_are_refused) {
@@ -4155,6 +4157,430 @@ TEST(a_break_an_abort_and_a_reload_kill_the_program_of_for_each_output_line) {
         CHECK(pid > 0 && diesSoon(pid));
     }
     std::filesystem::remove(pidFile);
+}
+
+// ---- the FileSystem plugin (Plugins/FileSystem) ----------------------------------------------------------------
+namespace {
+struct FileSystemRuntime : TestRuntime {
+    bool loaded = false;
+    FileSystemRuntime() {
+        const std::string path = g_exeDir + "/plugins/FileSystem" + kLibExt;
+        if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
+        std::string err;
+        loaded = loadPlugin(path, &err);
+        if (!err.empty()) std::printf("  %s\n", err.c_str());
+        CHECK(loaded);
+    }
+};
+std::filesystem::path u8path(const std::string& s) { return std::filesystem::path(std::u8string(s.begin(), s.end())); }
+std::string u8text(const std::filesystem::path& p) {
+    const std::u8string s = p.u8string();
+    return std::string(s.begin(), s.end());
+}
+// A folder of its own for a test, removed at its end.
+struct TempFolder {
+    std::filesystem::path path;
+    explicit TempFolder(const char* name)
+        : path(std::filesystem::temp_directory_path() / (std::string("flowgraph_test_") + name + "_" + std::to_string(std::time(nullptr)))) {
+        std::filesystem::remove_all(path);
+        std::filesystem::create_directories(path);
+    }
+    ~TempFolder() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+    std::string operator[](const std::string& rel) const { return u8text((path / u8path(rel)).make_preferred()); }
+};
+std::string fileText(const std::string& path) {
+    std::ifstream in(u8path(path), std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+void writeRaw(const std::string& path, const std::string& text) { std::ofstream(u8path(path), std::ios::binary) << text; }
+std::vector<std::string> strings(const Value& v) {
+    std::vector<std::string> out;
+    if (auto* a = v.arrayPtr())
+        for (auto& item : a->items) out.push_back(item.toString());
+    return out;
+}
+Value fnCall(Runtime& rt, const std::string& id, std::vector<Value> args) {
+    const FunctionDesc* fd = rt.registry().findFunction(id);
+    CHECK(fd != nullptr);
+    return fd ? fd->invoke(args.data()) : Value();
+}
+
+// Go -> the node (defaults) -> Then: V0.. = its outputs, then prints "then"; Failed: prints "failed". `out` has the outputs and
+// Error; `way` is "then" or "failed"; `error` a script error.
+struct FsRun {
+    std::string way, error;
+    std::map<std::string, Value> out;
+};
+FsRun fsNode(Runtime& rt, const char* id, std::map<std::string, Value> defaults, std::vector<std::pair<std::string, std::string>> outputs = {}) {
+    GoGraph t;
+    NodeId n = t.node(id, std::move(defaults));
+    t.link(t.ev, "Then", n, "In");
+    outputs.emplace_back("Error", "string");
+    NodeId prev = n;
+    for (size_t i = 0; i < outputs.size(); ++i) {
+        const std::string v = "V" + std::to_string(i);
+        t.s.variables.push_back({v, outputs[i].second, Value(), "", ""});
+        NodeId set = t.var("var.set", v.c_str());
+        t.link(n, outputs[i].first, set, "Value");
+        t.link(prev, "Then", set, "In");
+        prev = set;
+    }
+    t.link(prev, "Then", t.say("then"), "In");
+    t.s.variables.push_back({"FailError", "string", Value(""), "", ""});
+    NodeId setError = t.var("var.set", "FailError");
+    t.link(n, "Failed", setError, "In");
+    t.link(n, "Error", setError, "Value");
+    t.link(setError, "Then", t.say("failed"), "In");
+    GoRun r(rt, t.s);
+    FsRun fr;
+    if (!r.prog->ok()) { fr.error = dumpDiagnostics(*r.prog); return fr; }
+    RunResult res = goToEnd(r);
+    if (!res.ok) { fr.error = res.error; return fr; }
+    for (auto& l : r.log) fr.way += l;
+    for (size_t i = 0; i < outputs.size(); ++i) fr.out[outputs[i].first] = r.inst->getVariable("V" + std::to_string(i));
+    if (fr.way == "failed") fr.out["Error"] = r.inst->getVariable("FailError");
+    return fr;
+}
+bool has(const std::string& text, const std::string& part) { return text.find(part) != std::string::npos; }
+} // namespace
+
+TEST(filesystem_paths_and_questions) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    namespace fs = std::filesystem;
+    CHECK_EQ(rt.registry().findNode("filesystem.open")->source, std::string("FileSystem"));
+    auto text = [&](const char* id, std::vector<Value> args) { return fnCall(rt, std::string("FileSystem.") + id, std::move(args)).toString(); };
+    CHECK_EQ(text("Join Path", {Value("notes"), Value("today.txt")}), (fs::path("notes") / "today.txt").string());
+    CHECK_EQ(text("Join Path", {Value(""), Value("today.txt")}), std::string("today.txt"));
+    CHECK_EQ(text("Parent Folder", {Value("notes/today.txt")}), std::string("notes"));
+    CHECK_EQ(text("Parent Folder", {Value("today.txt")}), std::string(""));
+    CHECK_EQ(text("File Name", {Value("notes/today.txt")}), std::string("today.txt"));
+    CHECK_EQ(text("Extension", {Value("notes/today.txt")}), std::string(".txt"));
+    CHECK_EQ(text("Extension", {Value("notes/README")}), std::string(""));
+    CHECK_EQ(text("Change Extension", {Value("notes/today.txt"), Value(".md")}), std::string("notes/today.md"));
+    CHECK_EQ(text("Change Extension", {Value("notes/today.txt"), Value("")}), std::string("notes/today"));
+    CHECK_EQ(text("Absolute Path", {Value("x/../y")}), (fs::current_path() / "y").string());
+    CHECK_EQ(text("Current Folder", {}), fs::current_path().string());
+    CHECK_EQ(text("Temp Folder", {}), fs::temp_directory_path().string());
+    CHECK(!text("Home Folder", {}).empty());
+
+    TempFolder dir("paths");
+    const std::string file = dir["h\xC3\xA9 \xD9\x81.txt"];         // a name with letters of other languages (UTF-8)
+    writeRaw(file, "hello");
+    auto ask = [&](const char* id, const std::string& path) { return fnCall(rt, std::string("FileSystem.") + id, {Value(path)}); };
+    CHECK(ask("Exists", file).toBool() && ask("Is File", file).toBool() && !ask("Is Folder", file).toBool());
+    CHECK(ask("Exists", u8text(dir.path)).toBool() && ask("Is Folder", u8text(dir.path)).toBool());
+    CHECK_EQ(ask("File Size", file).toInt(), int64_t(5));
+    const double changed = ask("Last Modified", file).toFloat();
+    CHECK(std::abs(changed - double(std::time(nullptr))) < 600);
+    const std::string missing = dir["missing.txt"];
+    CHECK(!ask("Exists", missing).toBool() && !ask("Is File", missing).toBool() && !ask("Exists", "").toBool());
+    CHECK_EQ(ask("File Size", missing).toInt(), int64_t(-1));
+    CHECK_EQ(ask("File Size", u8text(dir.path)).toInt(), int64_t(-1));      // a folder has no size
+    CHECK_EQ(ask("Last Modified", missing).toFloat(), -1.0);
+}
+
+TEST(filesystem_copies_moves_deletes_and_lists) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    namespace fs = std::filesystem;
+    TempFolder dir("files");
+    auto run = [&](const char* id, std::map<std::string, Value> defaults) { return fsNode(rt, id, std::move(defaults)).way; };
+    CHECK_EQ(run("filesystem.mkdir", {{"Path", Value(dir["a/b/c"])}}), std::string("then"));
+    CHECK(fs::is_directory(u8path(dir["a/b/c"])));
+    CHECK_EQ(run("filesystem.mkdir", {{"Path", Value(dir["a/b/c"])}}), std::string("then"));       // already there
+    writeRaw(dir["a/x.txt"], "x");
+    writeRaw(dir["a/b/y.md"], "y");
+    writeRaw(dir["a/b/c/z.txt"], "z");
+    CHECK_EQ(run("filesystem.mkdir", {{"Path", Value(dir["a/x.txt"])}}), std::string("failed"));    // a file is there
+
+    // copy: a folder with all it holds, a file; Overwrite
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["a"])}, {"To", Value(dir["copy"])}}), std::string("then"));
+    CHECK_EQ(fileText(dir["copy/b/c/z.txt"]), std::string("z"));
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["a"])}, {"To", Value(dir["copy"])}}), std::string("failed"));
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["a"])}, {"To", Value(dir["copy"])}, {"Overwrite", Value(true)}}), std::string("then"));
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["a/x.txt"])}, {"To", Value(dir["x2.txt"])}}), std::string("then"));
+    CHECK_EQ(fileText(dir["x2.txt"]), std::string("x"));
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["nothing"])}, {"To", Value(dir["x3.txt"])}}), std::string("failed"));
+
+    // move and rename
+    CHECK_EQ(run("filesystem.move", {{"From", Value(dir["x2.txt"])}, {"To", Value(dir["moved.txt"])}}), std::string("then"));
+    CHECK(!fs::exists(u8path(dir["x2.txt"])) && fileText(dir["moved.txt"]) == "x");
+    CHECK_EQ(run("filesystem.move", {{"From", Value(dir["copy/x.txt"])}, {"To", Value(dir["moved.txt"])}}), std::string("failed"));
+    CHECK_EQ(run("filesystem.move", {{"From", Value(dir["copy/x.txt"])}, {"To", Value(dir["moved.txt"])}, {"Overwrite", Value(true)}}),
+             std::string("then"));
+    CHECK_EQ(run("filesystem.move", {{"From", Value(dir["x2.txt"])}, {"To", Value(dir["x4.txt"])}}), std::string("failed"));
+
+    // list: folders and files apart, in name order; patterns; recursive
+    const std::vector<std::pair<std::string, std::string>> lists = {{"Files", "array<string>"}, {"Folders", "array<string>"}};
+    FsRun l = fsNode(rt, "filesystem.list", {{"Folder", Value(dir["a"])}}, lists);
+    CHECK_EQ(l.way, std::string("then"));
+    CHECK(strings(l.out["Files"]) == std::vector<std::string>({dir["a/x.txt"]}));
+    CHECK(strings(l.out["Folders"]) == std::vector<std::string>({dir["a/b"]}));
+    l = fsNode(rt, "filesystem.list", {{"Folder", Value(dir["a"])}, {"Pattern", Value("*.txt")}, {"Recursive", Value(true)}}, lists);
+    CHECK(strings(l.out["Files"]) == std::vector<std::string>({dir["a/b/c/z.txt"], dir["a/x.txt"]}));
+    CHECK(strings(l.out["Folders"]).empty());
+    l = fsNode(rt, "filesystem.list", {{"Folder", Value(dir["a"])}, {"Pattern", Value("*.md;?.TXT")}, {"Recursive", Value(true)}}, lists);
+#if defined(_WIN32)
+    CHECK_EQ(strings(l.out["Files"]).size(), size_t(3));           // letter case does not count on Windows
+#else
+    CHECK(strings(l.out["Files"]) == std::vector<std::string>({dir["a/b/y.md"]}));
+#endif
+    l = fsNode(rt, "filesystem.list", {{"Folder", Value(dir["nothing"])}}, lists);
+    CHECK(l.way == "failed" && has(l.out["Error"].toString(), "does not exist"));
+
+    // delete: a file, an empty folder; a full one only with Recursive
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["moved.txt"])}}), std::string("then"));
+    CHECK(!fs::exists(u8path(dir["moved.txt"])));
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["moved.txt"])}}), std::string("failed"));
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["copy"])}}), std::string("failed"));
+    CHECK(fs::exists(u8path(dir["copy/b/y.md"])));
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["copy"])}, {"Recursive", Value(true)}}), std::string("then"));
+    CHECK(!fs::exists(u8path(dir["copy"])));
+    CHECK_EQ(run("filesystem.mkdir", {{"Path", Value(dir["empty"])}}), std::string("then"));
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["empty"])}}), std::string("then"));
+}
+
+TEST(filesystem_for_each_file_runs_the_body_for_each_entry) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("foreach");
+    std::filesystem::create_directories(u8path(dir["b"]));
+    writeRaw(dir["a.txt"], "");
+    writeRaw(dir["b/inner.txt"], "");
+    writeRaw(dir["c.md"], "");
+    // Go -> For Each File(Folder) { Print(File Name(Path) [+ "/" when Is Folder]) [-> Break] } Completed: "done", Failed: "failed"
+    auto loop = [&](const std::string& folder, bool recursive, bool breakAtOnce) {
+        GoGraph t;
+        NodeId fe = t.node("filesystem.foreach", {{"Folder", Value(folder)}, {"Recursive", Value(recursive)}, {"Pattern", Value("*")}});
+        t.link(t.ev, "Then", fe, "In");
+        NodeId name = t.node("fn:FileSystem.File Name");
+        t.link(fe, "Path", name, "Path");
+        NodeId pr = t.node("util.print");
+        t.link(fe, "Loop Body", pr, "In");
+        t.link(name, "Name", pr, "String");
+        if (breakAtOnce) t.link(pr, "Then", t.node("flow.break"), "In");
+        t.link(fe, "Completed", t.say("done"), "In");
+        t.link(fe, "Failed", t.say("failed"), "In");
+        GoRun r(rt, t.s);
+        CHECK(r.prog->ok());
+        if (!r.prog->ok()) return dumpDiagnostics(*r.prog);
+        RunResult res = goToEnd(r);
+        if (!res.ok) return "error: " + res.error;
+        std::string out;
+        for (auto& l : r.log) out += l + ",";
+        return out;
+    };
+    CHECK_EQ(loop(u8text(dir.path), false, false), std::string("b,a.txt,c.md,done,"));     // folders first
+    CHECK_EQ(loop(u8text(dir.path), true, false), std::string("b,a.txt,inner.txt,c.md,done,"));
+    CHECK_EQ(loop(u8text(dir.path), true, true), std::string("b,done,"));                  // Break goes on with Completed
+    CHECK_EQ(loop(dir["nothing"], false, false), std::string("failed,"));
+    CHECK_EQ(loop(dir["a.txt"], false, false), std::string("failed,"));                    // not a folder
+}
+
+TEST(filesystem_a_stopped_copy_leaves_no_half_copied_file) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("stopped");
+    const std::string big = dir["big.txt"], copy = dir["copy.txt"];
+    writeRaw(big, std::string(48 << 20, 'x'));
+    GoGraph t;
+    NodeId c = t.node("filesystem.copy", {{"From", Value(big)}, {"To", Value(copy)}});
+    t.link(t.ev, "Then", c, "In");
+    t.link(c, "Then", t.say("then"), "In");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) return;
+    RunResult held = r.inst->callEvent("Go");
+    CHECK(held.waiting());                      // the work is on its own thread: the event comes back at once
+    r.inst->abortAll();
+    // the work stops at its next piece and removes what it copied: the copy is either all there or not at all
+    std::error_code ec;
+    bool settled = false;
+    for (int i = 0; i < 500 && !settled; ++i) {
+        const auto size = std::filesystem::file_size(u8path(copy), ec);
+        settled = ec || size == (48u << 20);
+        if (!settled) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(settled);
+    CHECK(r.log.empty());                       // the script did not go on
+}
+
+TEST(filesystem_small_operations_in_a_loop_are_quick) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    standard::registerStandardApp(rt.registry());
+    TempFolder dir("quick");
+    // Main -> For 0..200 { Copy(notes.txt, copy.txt, Overwrite) }: the way flow runs it (runMain sleeps until the next wake)
+    Script s;
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Main").id;
+    NodeId loop = g.addNode("flow.for").id;
+    g.findNode(loop)->defaults = {{"First", Value(0)}, {"Last", Value(200)}};
+    writeRaw(dir["notes.txt"], "x");
+    NodeId w = g.addNode("filesystem.copy").id;
+    g.findNode(w)->defaults = {{"From", Value(dir["notes.txt"])}, {"To", Value(dir["copy.txt"])}, {"Overwrite", Value(true)}};
+    link(g, ev, "Then", loop, "In");
+    link(g, loop, "Loop Body", w, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    if (!prog->ok()) return;
+    Instance inst(prog);
+    const auto start = std::chrono::steady_clock::now();
+    auto out = standard::runMain(inst, {});
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    CHECK(out.ok);
+    // quick work goes on at once, not at the next wake of runMain (a sleep of 1 ms takes 15 ms with the default timer of Windows)
+    CHECK(seconds < 2.0);
+}
+
+namespace {
+// Go -> Open File(path, mode) -> Then: the chain `steps` makes (it gets the Open File node and links its own nodes after it,
+// returning the last exec node); Failed: prints "failed: <Error>". Returns what was printed, or "error: <script error>".
+std::string withFile(Runtime& rt, const std::string& path, int mode, const std::function<NodeId(GoGraph&, NodeId open)>& steps,
+                     std::unique_ptr<GoRun>* keep = nullptr) {
+    GoGraph t;
+    NodeId open = t.node("filesystem.open", {{"Path", Value(path)}, {"Mode", Value(int64_t(mode))}});
+    t.link(t.ev, "Then", open, "In");
+    NodeId failed = t.node("fn:String.Concat", {{"A", Value("failed: ")}});
+    t.link(open, "Error", failed, "B");
+    NodeId sayFailed = t.node("util.print");
+    t.link(open, "Failed", sayFailed, "In");
+    t.link(failed, "Result", sayFailed, "String");
+    steps(t, open);
+    auto r = std::make_unique<GoRun>(rt, t.s);
+    if (!r->prog->ok()) return dumpDiagnostics(*r->prog);
+    RunResult res = goToEnd(*r);
+    std::string out;
+    for (auto& l : r->log) out += l + ",";
+    if (!res.ok) out += "error: " + res.error;
+    if (keep) *keep = std::move(r);
+    return out;
+}
+// a method of the file: In from `after` (its exec output `pin`), Target = the file of Open File
+NodeId method(GoGraph& t, NodeId open, NodeId after, const char* pin, const char* name, std::map<std::string, Value> defaults = {}) {
+    NodeId m = t.node(std::string("m:File.") + name, std::move(defaults));
+    t.link(open, "File", m, "Target");
+    t.link(after, pin, m, "In");
+    return m;
+}
+enum { kRead = 0, kWrite = 1, kAppend = 2 };
+} // namespace
+
+TEST(filesystem_file_writes_and_reads_a_piece_at_a_time) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("file");
+    const std::string notes = dir["notes.txt"];
+    // Write: it starts empty; Write Line, Write Text, Close
+    auto write = [&](int mode, const char* line, const char* text) {
+        return withFile(rt, notes, mode, [&](GoGraph& t, NodeId open) {
+            NodeId a = method(t, open, open, "Then", "Write Line", {{"Text", Value(line)}});
+            NodeId b = method(t, open, a, "Then", "Write Text", {{"Text", Value(text)}});
+            NodeId c = method(t, open, b, "Then", "Close");
+            NodeId again = method(t, open, c, "Then", "Close");           // closing a closed file does nothing
+            t.link(again, "Then", t.say("closed"), "In");
+            return again;
+        });
+    };
+    writeRaw(notes, "old");
+    CHECK_EQ(write(kWrite, "one", "two"), std::string("closed,"));
+    CHECK_EQ(fileText(notes), std::string("one\ntwo"));
+    CHECK_EQ(write(kAppend, "", "three"), std::string("closed,"));
+    CHECK_EQ(fileText(notes), std::string("one\ntwo\nthree"));
+    CHECK_EQ(write(kAppend, "x", "y"), std::string("closed,"));            // Append makes a file that is not there yet
+    const std::string fresh = dir["fresh.txt"];
+    CHECK_EQ(withFile(rt, fresh, kAppend, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Write Text", {{"Text", Value("new")}}); }),
+             std::string(""));
+    CHECK_EQ(fileText(fresh), std::string("new"));
+    const std::string named = dir["\xD9\x81\xD8\xA7\xDB\x8C\xD9\x84.txt"];        // a name with letters of another language (UTF-8)
+    CHECK_EQ(withFile(rt, named, kWrite, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Write Text", {{"Text", Value("h\xC3\xA9")}}); }),
+             std::string(""));
+    CHECK(std::filesystem::exists(u8path(named)) && fileText(named) == "h\xC3\xA9");
+
+    // Read: While not Is At End { Print(Read Line) }, then "end"; without the byte order mark and the \r of the lines
+    writeRaw(notes, "\xEF\xBB\xBF" "alpha\r\nbeta\n\ngamma");
+    auto lines = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId loop = t.node("flow.while");
+        t.link(open, "Then", loop, "In");
+        NodeId atEnd = t.node("m:File.Is At End");
+        t.link(open, "File", atEnd, "Target");
+        NodeId notEnd = t.node("logic.not");
+        t.link(atEnd, "At End", notEnd, "Value");
+        t.link(notEnd, "Result", loop, "Condition");
+        NodeId read = method(t, open, loop, "Loop Body", "Read Line");
+        NodeId pr = t.node("util.print");
+        t.link(read, "Then", pr, "In");
+        t.link(read, "Line", pr, "String");
+        t.link(loop, "Completed", t.say("end"), "In");
+        return loop;
+    });
+    CHECK_EQ(lines, std::string("alpha,beta,,gamma,end,"));
+    // Read Text: the rest, from where reading is; at the end Read Line gives ""
+    auto rest = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId line = method(t, open, open, "Then", "Read Line");
+        NodeId p1 = t.node("util.print");
+        t.link(line, "Then", p1, "In");
+        t.link(line, "Line", p1, "String");
+        NodeId text = method(t, open, p1, "Then", "Read Text");
+        NodeId p2 = t.node("util.print");
+        t.link(text, "Then", p2, "In");
+        t.link(text, "Text", p2, "String");
+        NodeId after = method(t, open, p2, "Then", "Read Line");
+        NodeId p3 = t.node("fn:String.Concat", {{"A", Value("[")}, {"B", Value("]")}});
+        NodeId p3b = t.node("fn:String.Concat");
+        t.link(p3, "Result", p3b, "A");
+        t.link(after, "Line", p3b, "B");
+        NodeId p4 = t.node("util.print");
+        t.link(after, "Then", p4, "In");
+        t.link(p3b, "Result", p4, "String");
+        return p4;
+    });
+    CHECK_EQ(rest, std::string("alpha,beta\n\ngamma,[],"));
+}
+
+TEST(filesystem_file_failures_and_mistakes) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("filefail");
+    const std::string notes = dir["notes.txt"];
+    writeRaw(notes, "text");
+    auto nothing = [](GoGraph&, NodeId open) { return open; };
+    // what cannot be opened goes to Failed, with the reason
+    std::string out = withFile(rt, dir["missing.txt"], kRead, nothing);
+    CHECK(has(out, "failed: cannot open") && has(out, "it does not exist"));
+    out = withFile(rt, dir["nowhere/notes.txt"], kWrite, nothing);
+    CHECK(has(out, "failed: ") && has(out, "does not exist"));
+    out = withFile(rt, u8text(dir.path), kRead, nothing);
+    CHECK(has(out, "it is a folder"));
+    // a mistake with an open file is a script error
+    out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Write Line", {{"Text", Value("x")}}); });
+    CHECK(has(out, "error: ") && has(out, "it is open for reading"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Read Line"); });
+    CHECK(has(out, "error: ") && has(out, "it is open for writing"));
+    out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
+        return method(t, open, method(t, open, open, "Then", "Close"), "Then", "Read Line");
+    });
+    CHECK(has(out, "error: ") && has(out, "the file is closed"));
+    CHECK_EQ(fileText(notes), std::string(""));                              // Write emptied it
+}
+
+TEST(filesystem_file_writes_are_in_the_file_before_it_is_closed) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("fileclose");
+    const std::string notes = dir["notes.txt"];
+    // no Close: the instance keeps the output of Open File (as flowstudio keeps the last run), the file stays open
+    std::unique_ptr<GoRun> run;
+    CHECK_EQ(withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Write Text", {{"Text", Value("kept")}}); }, &run),
+             std::string(""));
+    CHECK_EQ(fileText(notes), std::string("kept"));                         // written all the same
+    run.reset();                                                             // nothing refers to it any more: closed
+    std::error_code ec;
+    CHECK(std::filesystem::remove(u8path(notes), ec) && !ec);
 }
 
 int main(int argc, char** argv) {

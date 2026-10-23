@@ -7,6 +7,7 @@ FlowGraph is made of parts under two licenses. Each source file names its licens
 MIT (LICENSES/MIT.txt) - the runtime, usable in any application, closed source included:
   Core/                    FlowGraphCore: types, scripts, compiler, interpreter, built-in nodes
   Apps/Flow/               flow, the command line runner
+  Plugins/FileSystem/      the FileSystem plugin
   Plugins/ExamplePlugin/   the example plugin (copy it to start a plugin)
   Examples/MakeExamples.cpp, Examples/Scripts/
   Tests/ (except Tests/EditorTests.cpp), Tools/, cmake/, the build files
