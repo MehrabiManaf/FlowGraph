@@ -4643,6 +4643,133 @@ TEST(filesystem_file_writes_are_in_the_file_before_it_is_closed) {
     CHECK(std::filesystem::remove(u8path(notes), ec) && !ec);
 }
 
+TEST(filesystem_file_reads_a_big_text_in_the_background) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("bigread");
+    const std::string big = dir["big.txt"];
+    const size_t size = size_t(128) << 20;
+    writeRaw(big, std::string(size, 'x'));
+    // Go: F = Open File(big) -> T = Read Text(F) -> "read";  Other: Read Line(F) -> "line" or "why: <Error>"
+    GoGraph t;
+    t.s.variables.push_back({"F", "File", Value(), "", ""});
+    t.s.variables.push_back({"T", "string", Value(""), "", ""});
+    NodeId open = t.node("filesystem.open", {{"Path", Value(big)}});
+    t.link(t.ev, "Then", open, "In");
+    NodeId setF = t.var("var.set", "F");
+    t.link(open, "Then", setF, "In");
+    t.link(open, "File", setF, "Value");
+    NodeId read = t.node("filesystem.file.readtext");
+    t.link(setF, "Then", read, "In");
+    t.link(t.var("var.get", "F"), "Value", read, "Target");
+    NodeId setT = t.var("var.set", "T");
+    t.link(read, "Then", setT, "In");
+    t.link(read, "Text", setT, "Value");
+    t.link(setT, "Then", t.say("read"), "In");
+    NodeId other = t.g->addNode("event:Other").id;
+    NodeId line = t.node("filesystem.file.readline");
+    t.link(other, "Then", line, "In");
+    t.link(t.var("var.get", "F"), "Value", line, "Target");
+    t.link(line, "Then", t.say("line"), "In");
+    NodeId why = t.node("fn:String.Concat", {{"A", Value("why: ")}});
+    t.link(line, "Error", why, "B");
+    NodeId sayWhy = t.node("util.print");
+    t.link(line, "Failed", sayWhy, "In");
+    t.link(why, "Result", sayWhy, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) return;
+
+    // read in the background: the event comes back at once; meanwhile the file is busy for the other nodes
+    RunResult go = r.inst->callEvent("Go");
+    CHECK(go.waiting());
+    for (int i = 0; i < 5000 && r.inst->getVariable("F").isNull(); ++i) {     // Open File may wait too (a virus scanner...)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        r.inst->tick(0.001);
+    }
+    r.log.clear();
+    CHECK(r.inst->callEvent("Other").ok);
+    CHECK(r.log.size() == 1 && has(r.log[0], "why: ") && has(r.log[0], "Read Text is reading it"));
+    for (auto& l : r.log)
+        if (!has(l, "Read Text is reading it")) std::printf("  %s\n", l.c_str());
+    for (int i = 0; i < 5000 && go.task && !go.task->done(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        r.inst->tick(0.002);
+    }
+    CHECK(go.task && go.task->done() && go.task->result().ok);
+    CHECK_EQ(r.inst->getVariable("T").toString().size(), size);
+    CHECK(!r.log.empty() && r.log.back() == "read");
+
+    // Stop while it reads: the reading stops, and the file is not busy any more
+    go = r.inst->callEvent("Go");
+    CHECK(go.waiting());
+    r.inst->abortAll();
+    bool free = false;
+    for (int i = 0; i < 500 && !free; ++i) {
+        r.log.clear();
+        r.inst->callEvent("Other");
+        free = r.log.size() == 1 && r.log[0] == "line";
+        if (!free) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(free);
+}
+
+TEST(filesystem_file_writes_a_big_text_in_the_background) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("bigwrite");
+    const std::string out = dir["out.txt"];
+    const size_t size = size_t(128) << 20;
+    // Go: F = Open File(out, Write) -> Write Text(F, Big) -> "written";  Other: Write Line(F, "x") -> "line" or "why: <Error>"
+    GoGraph t;
+    t.s.variables.push_back({"F", "File", Value(), "", ""});
+    t.s.variables.push_back({"Big", "string", Value(""), "", ""});
+    NodeId open = t.node("filesystem.open", {{"Path", Value(out)}, {"Mode", Value(int64_t(1))}});
+    t.link(t.ev, "Then", open, "In");
+    NodeId setF = t.var("var.set", "F");
+    t.link(open, "Then", setF, "In");
+    t.link(open, "File", setF, "Value");
+    NodeId write = t.node("filesystem.file.writetext");
+    t.link(setF, "Then", write, "In");
+    t.link(t.var("var.get", "F"), "Value", write, "Target");
+    t.link(t.var("var.get", "Big"), "Value", write, "Text");
+    t.link(write, "Then", t.say("written"), "In");
+    NodeId other = t.g->addNode("event:Other").id;
+    NodeId line = t.node("filesystem.file.writeline", {{"Text", Value("x")}});
+    t.link(other, "Then", line, "In");
+    t.link(t.var("var.get", "F"), "Value", line, "Target");
+    t.link(line, "Then", t.say("line"), "In");
+    NodeId why = t.node("fn:String.Concat", {{"A", Value("why: ")}});
+    t.link(line, "Error", why, "B");
+    NodeId sayWhy = t.node("util.print");
+    t.link(line, "Failed", sayWhy, "In");
+    t.link(why, "Result", sayWhy, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) return;
+    r.inst->setVariable("Big", Value(std::string(size, 'y')));
+
+    RunResult go = r.inst->callEvent("Go");
+    CHECK(go.waiting());                        // written in the background
+    for (int i = 0; i < 5000 && r.inst->getVariable("F").isNull(); ++i) {     // Open File may wait too
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        r.inst->tick(0.001);
+    }
+    r.log.clear();
+    CHECK(r.inst->callEvent("Other").ok);
+    CHECK(r.log.size() == 1 && has(r.log[0], "Write Text is writing it"));
+    for (int i = 0; i < 10000 && go.task && !go.task->done(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        r.inst->tick(0.002);
+    }
+    CHECK(go.task && go.task->done() && go.task->result().ok);
+    r.log.clear();
+    CHECK(r.inst->callEvent("Other").ok);       // not busy any more: a small line is written at once
+    CHECK(r.log.size() == 1 && r.log[0] == "line");
+    std::error_code ec;
+    CHECK_EQ(std::filesystem::file_size(u8path(out), ec), uintmax_t(size + 2));
+}
+
 int main(int argc, char** argv) {
     g_exeDir = std::filesystem::path(argv[0]).parent_path().string();
     std::setvbuf(stdout, nullptr, _IONBF, 0);

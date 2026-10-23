@@ -116,6 +116,7 @@ struct Job {
     std::string error;                  // empty: the work was done
     std::vector<std::pair<std::string, bool>> entries;      // List Folder / For Each File: path, is a folder
     std::shared_ptr<void> file;                             // Open File: the OpenFile
+    std::string text;                                       // Read Text: what was read
 };
 
 // Kept by the node while it waits (NodeCtx::native). It goes when the node is done with it, or when the task stops waiting (Stop,
@@ -265,8 +266,8 @@ enum class FileMode { Read, Write, Append };
 // A file that Open File opened (the File type of scripts): read a line or the rest at a time, or written a piece at a time.
 // It is closed by Close, or when nothing refers to it any more - which can be long after the script has run: an Instance keeps
 // the outputs of its nodes (flowstudio keeps the instance of the last run to inspect it). So every write goes to the file at once
-// (a forgotten Close loses nothing), at a few microseconds a write. Reading goes through a buffer; both run on the thread of the
-// script. What cannot be done (writing a file opened for reading, a closed file, a failing disk) goes to Failed, as Open File.
+// (a forgotten Close loses nothing), at a few microseconds a write. Reading goes through a buffer. A line, or a small write, runs on
+// the thread of the script; Read Text and a big write (1 MiB or more) on a work thread (the file is busy meanwhile). What cannot be done (writing a file opened for reading, a closed file, a failing disk) goes to Failed, as Open File.
 class OpenFile {
 public:
     OpenFile(std::string path, FileMode mode) : path_(std::move(path)), mode_(mode) {}
@@ -318,21 +319,68 @@ public:
         if (!line.empty() && line.back() == '\r') line.pop_back();
         return true;
     }
-    bool readText(std::string& text, std::string& error) {
-        text.clear();
+    // Read Text reads the rest on a work thread: beginReadRest (on the thread of the script), readRest (on the work thread), then
+    // endReadRest. Meanwhile the file is busy: its other nodes go to Failed, At End says false.
+    bool beginReadRest(std::string& error) {
         if (!can(true, "read", error)) return false;
-        text.assign(std::istreambuf_iterator<char>(stream_), std::istreambuf_iterator<char>());
+        busy_ = "Read Text is reading it";
+        return true;
+    }
+    // The rest of the file in pieces (`cancelled` stops it after one). The memory for all of it is taken first: a file too big
+    // for it fails at once, with the reason, instead of after it has filled the memory.
+    bool readRest(std::string& text, std::string& error, const std::atomic<bool>& cancelled) {
+        text.clear();
+        std::error_code ec;
+        const auto at = stream_.tellg();
+        const auto size = fs::file_size(pathOf(path_), ec);
+        if (!ec && at >= 0 && size > static_cast<uintmax_t>(at)) {
+            const uintmax_t left = size - static_cast<uintmax_t>(at);
+            try {
+                if (left > text.max_size()) throw std::bad_alloc();
+                text.reserve(static_cast<size_t>(left));
+            } catch (const std::bad_alloc&) {
+                error = tooBig(left);
+                return false;
+            }
+        }
+        std::string chunk(kChunk, '\0');
+        try {
+            while (stream_ && !cancelled) {
+                stream_.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+                text.append(chunk.data(), static_cast<size_t>(stream_.gcount()));
+            }
+        } catch (const std::bad_alloc&) {          // the file grew while it was read
+            const uintmax_t read = text.size();
+            std::string().swap(text);
+            error = tooBig(read);
+            return false;
+        }
         return worked("read", error);
     }
-    bool atEnd() const { return !open_ || mode_ != FileMode::Read || stream_.peek() == std::char_traits<char>::eof(); }
-    bool writeText(const std::string& text, std::string& error) {
+    void endReadRest() { busy_ = nullptr; }
+    bool atEnd() const {
+        return !open_ || mode_ != FileMode::Read || (!busy_ && stream_.peek() == std::char_traits<char>::eof());
+    }
+    // Write Text / Write Line: `text`, and a line break after it with `line`. A big text is written on a work thread, like Read
+    // Text: beginWrite, write (`cancelled` stops it after a piece; what was written stays), endWrite.
+    bool canWrite(std::string& error) const { return can(false, "write", error); }
+    bool beginWrite(std::string& error) {
         if (!can(false, "write", error)) return false;
-        stream_.write(text.data(), static_cast<std::streamsize>(text.size()));
+        busy_ = "Write Text is writing it";
+        return true;
+    }
+    bool write(const std::string& text, bool line, std::string& error, const std::atomic<bool>* cancelled = nullptr) {
+        for (size_t at = 0; at < text.size(); at += kChunk) {
+            if (cancelled && *cancelled) break;
+            stream_.write(text.data() + at, static_cast<std::streamsize>(std::min(kChunk, text.size() - at)));
+        }
+        if (line && !(cancelled && *cancelled)) stream_.put('\n');
         stream_.flush();                         // in the file now, not when it is closed
         return worked("write", error);
     }
-    bool writeLine(const std::string& text, std::string& error) { return writeText(text + "\n", error); }
+    void endWrite() { busy_ = nullptr; }
     bool close(std::string& error) {             // closing a closed file is fine
+        if (busy_) return can(true, "close", error);
         if (!open_) return true;
         open_ = false;
         stream_.close();
@@ -345,7 +393,8 @@ public:
 
 private:
     bool can(bool reading, const char* what, std::string& error) const {
-        if (!open_) error = std::string("cannot ") + what + " '" + path_ + "': the file is closed";
+        if (const char* busy = busy_) error = std::string("cannot ") + what + " '" + path_ + "': " + busy;
+        else if (!open_) error = std::string("cannot ") + what + " '" + path_ + "': the file is closed";
         else if (reading != (mode_ == FileMode::Read))
             error = std::string("cannot ") + what + " '" + path_ + "': it is open for " + (reading ? "writing" : "reading");
         else return true;
@@ -363,10 +412,16 @@ private:
         return true;
     }
 
+    std::string tooBig(uintmax_t bytes) const {
+        return "cannot read '" + path_ + "': " + std::to_string(bytes / (1 << 20)) +
+               " MiB is too much to read at once; read it a line at a time (Read Line)";
+    }
+
     std::string path_;
     FileMode mode_;
     mutable std::fstream stream_;               // mutable: At End peeks
     bool open_ = false;
+    std::atomic<const char*> busy_{nullptr};    // what works on it on a work thread ("Read Text is reading it"), or null
 };
 
 // ------------------------------------------------------------------ nodes that wait
@@ -753,20 +808,77 @@ void registerOpenFiles(Registry& reg) {
                  c.out(0, Value(std::move(line)));
                  return ok;
              });
-    fileNode("filesystem.file.readtext", "Read Text", "file read rest all text content",
-             "Reads the rest of the file, from where reading is.", {},
-             {doc(dataOut("Text", "string"), "The text (empty when it failed)")}, [](NodeCtx& c, OpenFile& f, std::string& error) {
-                 std::string text;
-                 const bool ok = f.readText(text, error);
-                 c.out(0, Value(std::move(text)));
-                 return ok;
-             });
-    fileNode("filesystem.file.writeline", "Write Line", "file write line text append add",
-             "Writes the text (UTF-8) and a line break (\\n).", {dataIn("Text", "string", Value(""))}, {},
-             [](NodeCtx& c, OpenFile& f, std::string& error) { return f.writeLine(c.inString(1), error); });
-    fileNode("filesystem.file.writetext", "Write Text", "file write text append add",
-             "Writes the text (UTF-8) at the end of what was written.", {dataIn("Text", "string", Value(""))}, {},
-             [](NodeCtx& c, OpenFile& f, std::string& error) { return f.writeText(c.inString(1), error); });
+    {   // Read Text: the rest can be big - on a work thread, as Copy
+        NodeDef d = waitingNode("filesystem.file.readtext", "Read Text", "File", "file read rest all text content",
+                                "Reads the rest of the file, from where reading is. A big file is read in the background (Stop "
+                                "stops it); when it is too big for the memory, Read Line reads it a line at a time.",
+                                {doc(dataIn("Target", "File"), "The file Open File opened")},
+                                {doc(dataOut("Text", "string"), "The text (empty when it failed)")});
+        d.run = [](NodeCtx& c) {
+            auto fail = [&](std::string error) {
+                c.out(0, Value(std::string()));
+                c.out(1, Value(std::move(error)));
+                c.next(1);
+            };
+            if (!c.resumed()) {
+                std::string error;
+                auto f = c.registry().unwrap<OpenFile>(c.in(0));
+                if (!f) return fail("no file: connect the File of Open File to Target");
+                if (!f->beginReadRest(error)) return fail(std::move(error));
+                if (!startWork(c, [f](Job& job) {
+                        f->readRest(job.text, job.error, job.cancelled);
+                        f->endReadRest();
+                    }))
+                    return;
+            }
+            Job& job = *handleOf(c)->job;
+            if (!job.error.empty()) return fail(job.error);
+            c.out(0, Value(std::move(job.text)));
+            c.out(1, Value(std::string()));
+            c.next(0);
+        };
+        reg.addNode(std::move(d));
+    }
+    // Write Text / Write Line: written from the input's own string (no copy of it). A text of a piece (1 MiB) or more is written on a
+    // work thread, as Copy; a smaller one at once (a thread for each line of a loop would cost more than the line).
+    auto writeNode = [&reg](const char* id, const char* title, const char* keywords, std::string text, bool line) {
+        NodeDef d = waitingNode(id, title, "File", keywords, std::move(text),
+                                {doc(dataIn("Target", "File"), "The file Open File opened"), dataIn("Text", "string", Value(""))}, {});
+        d.run = [line](NodeCtx& c) {
+            auto fail = [&](std::string error) {
+                c.out(0, Value(std::move(error)));
+                c.next(1);
+            };
+            if (!c.resumed()) {
+                std::string error;
+                auto f = c.registry().unwrap<OpenFile>(c.in(0));
+                if (!f) return fail("no file: connect the File of Open File to Target");
+                const Value text = c.in(1).isString() ? c.in(1) : Value(c.inString(1));   // shares the string
+                if (text.str().size() < kChunk) {
+                    if (!f->canWrite(error) || !f->write(text.str(), line, error)) return fail(std::move(error));
+                    c.out(0, Value(std::string()));
+                    c.next(0);
+                    return;
+                }
+                if (!f->beginWrite(error)) return fail(std::move(error));
+                if (!startWork(c, [f, text, line](Job& job) {
+                        f->write(text.str(), line, job.error, &job.cancelled);
+                        f->endWrite();
+                    }))
+                    return;
+            }
+            Job& job = *handleOf(c)->job;
+            if (!job.error.empty()) return fail(job.error);
+            c.out(0, Value(std::string()));
+            c.next(0);
+        };
+        reg.addNode(std::move(d));
+    };
+    writeNode("filesystem.file.writeline", "Write Line", "file write line text append add",
+              "Writes the text (UTF-8) and a line break (\\n). A big text is written in the background (Stop stops it).", true);
+    writeNode("filesystem.file.writetext", "Write Text", "file write text append add",
+              "Writes the text (UTF-8) at the end of what was written. A big text is written in the background (Stop stops it).",
+              false);
     fileNode("filesystem.file.close", "Close", "file close end finish release",
              "Closes the file, so that other programs can delete or rename it. Closing a closed file does nothing.", {}, {},
              [](NodeCtx&, OpenFile& f, std::string& error) { return f.close(error); });
