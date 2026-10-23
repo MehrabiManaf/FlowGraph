@@ -8,9 +8,9 @@ project(FlowGraphConsumer LANGUAGES CXX)
 
 option(WITH_EDITOR "Also use FlowGraph::ScriptEditor" OFF)
 if(WITH_EDITOR)
-    find_package(FlowGraph 0.3 REQUIRED COMPONENTS ScriptEditor)
+    find_package(FlowGraph 0.4 REQUIRED COMPONENTS ScriptEditor)
 else()
-    find_package(FlowGraph 0.3 REQUIRED)
+    find_package(FlowGraph 0.4 REQUIRED)
 endif()
 
 add_executable(consumer main.cpp)

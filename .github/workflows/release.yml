@@ -242,6 +242,6 @@ jobs:
 
           EOF
           prerelease=""
-          case "$VERSION" in 0.*|*-*) prerelease="--prerelease" ;; esac
+          case "$VERSION" in *-*) prerelease="--prerelease" ;; esac           # 1.0.0-beta: a pre-release
           gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --verify-tag --draft $prerelease \
             --title "FlowGraph $VERSION" --notes-file ../notes.md --generate-notes
