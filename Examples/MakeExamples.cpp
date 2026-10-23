@@ -223,6 +223,72 @@ void fizzbuzz(const std::string& dir) {
     saveScript(s, dir + "/fizzbuzz.flow");
 }
 
+// Files (the FileSystem plugin): opens a text file in the temporary folder, writes a line into it for each .flow script in the
+// working directory and below it (its name and size), and closes it. Then / Failed show what was done and what could not be.
+void files(const std::string& dir) {
+    Script s;
+    s.name = "Files";
+    s.doc = "Lists the scripts (*.flow) in the working directory and its folders with their sizes, into flowgraph-files.txt in "
+            "the temporary folder (FileSystem plugin).";
+    Graph& g = s.addEventGraph();
+    NodeId ev = event(g, "Main");
+    // Open File(<temp>/flowgraph-files.txt, Write)
+    NodeId temp = add(g, "fn:FileSystem.Temp Folder", 0, 200);
+    NodeId target = add(g, "fn:FileSystem.Join Path", 180, 200);
+    g.findNode(target)->defaults["B"] = Value("flowgraph-files.txt");
+    link(g, temp, "Folder", target, "A");
+    NodeId open = add(g, "filesystem.open", 480, 0);
+    g.findNode(open)->defaults["Mode"] = Value(int64_t(1));     // Write: it starts empty
+    link(g, ev, "Then", open, "In");
+    link(g, target, "Path", open, "Path");
+    NodeId notOpened = print(g, 780, -160);              // the file could not be opened: why
+    link(g, open, "Failed", notOpened, "In");
+    link(g, open, "Error", notOpened, "String");
+
+    NodeId each = add(g, "filesystem.foreach", 780, 0);
+    g.findNode(each)->defaults = {{"Folder", Value(".")}, {"Pattern", Value("*.flow")}, {"Recursive", Value(true)}};
+    link(g, open, "Then", each, "In");
+    NodeId notRead = print(g, 1300, 40);                // the folder could not be read: why
+    link(g, each, "Failed", notRead, "In");
+    link(g, each, "Error", notRead, "String");
+
+    // Loop Body: "<name>: <size> bytes", written into the file and printed
+    NodeId name = add(g, "fn:FileSystem.File Name", 1100, 340);
+    NodeId size = add(g, "fn:FileSystem.File Size", 1100, 440);
+    link(g, each, "Path", name, "Path");
+    link(g, each, "Path", size, "Path");
+    NodeId label = add(g, "fn:String.Concat", 1300, 340);
+    g.findNode(label)->defaults["B"] = Value(": ");
+    NodeId bytes = add(g, "fn:String.Concat", 1300, 440);
+    g.findNode(bytes)->defaults["B"] = Value(" bytes");
+    NodeId line = add(g, "fn:String.Concat", 1520, 380);
+    link(g, name, "Name", label, "A");
+    link(g, size, "Bytes", bytes, "A");
+    link(g, label, "Result", line, "A");
+    link(g, bytes, "Result", line, "B");
+    NodeId writeLine = add(g, "filesystem.file.writeline", 1740, 250);
+    link(g, each, "Loop Body", writeLine, "In");
+    link(g, open, "File", writeLine, "Target");
+    link(g, line, "Result", writeLine, "Text");
+    NodeId pr = print(g, 1980, 250);
+    link(g, writeLine, "Then", pr, "In");
+    link(g, line, "Result", pr, "String");
+    g.addComment(1070, 220, 1100, 330).text = "Each script";
+
+    // Completed: Close, then where the list is
+    NodeId close = add(g, "filesystem.file.close", 1300, -140);
+    link(g, each, "Completed", close, "In");
+    link(g, open, "File", close, "Target");
+    NodeId path = add(g, "get:File.Path", 1100, -280);
+    link(g, open, "File", path, "Target");
+    NodeId written = concat(g, "Written to ", 1300, -280);
+    link(g, path, "Path", written, "B");
+    NodeId done = print(g, 1560, -160);
+    link(g, close, "Then", done, "In");
+    link(g, written, "Result", done, "String");
+    saveScript(s, dir + "/files.flow");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -235,6 +301,7 @@ int main(int argc, char** argv) {
     fibonacci(dir);
     inventory(dir);
     fizzbuzz(dir);
-    std::printf("wrote hello.flow, fibonacci.flow, inventory.flow, fizzbuzz.flow to %s\n", dir.c_str());
+    files(dir);
+    std::printf("wrote hello.flow, fibonacci.flow, inventory.flow, fizzbuzz.flow, files.flow to %s\n", dir.c_str());
     return 0;
 }

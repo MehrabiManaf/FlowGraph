@@ -141,6 +141,9 @@ struct NodeDef {
     bool customInputs = false;
     bool customOutputs = false;
     bool userCreatable = true;        // shown in the palette
+    // Its string inputs are for showing any value (Print String). Every value converts to a string, but the palette offers that
+    // conversion only for bool / int / float; for the other types (a class, an enum, a container) only on nodes with this flag.
+    bool printsAnything = false;
     bool generated = false;           // produced by the registry from types / functions
     // Const checking: the node modifies the object / container connected to its first data input
     // (so it may not be applied to a const parameter), or its first output aliases its first input.

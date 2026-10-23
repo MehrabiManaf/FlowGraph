@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 cmake_minimum_required(VERSION 3.21)
 
-project(FlowGraph VERSION 0.3.0 LANGUAGES CXX)
+project(FlowGraph VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,8 +13,10 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 option(FG_BUILD_EDITOR   "Build the Qt based editor and FlowGraph Studio" ON)
 option(FG_BUILD_TESTS    "Build the unit tests"                            ON)
-option(FG_BUILD_EXAMPLES "Build examples and sample plugins"               ON)
+option(FG_BUILD_EXAMPLES "Build the examples"                              ON)
 option(FG_SHARED         "Build FlowGraphCore and FlowGraphEditor as shared libraries" ON)
+option(FG_BUILD_PLUGINS  "Build the standard plugins (FileSystem)"         ON)
+option(FG_INSTALL        "Generate the install rules"                      ON)
 
 if(FG_SHARED)
     set(FG_LIB_TYPE SHARED)
@@ -46,9 +48,11 @@ if(FG_BUILD_EXAMPLES)
     if(EXISTS ${CMAKE_SOURCE_DIR}/Examples/CMakeLists.txt)
         add_subdirectory(Examples)
     endif()
-    if(EXISTS ${CMAKE_SOURCE_DIR}/Plugins/ExamplePlugin/CMakeLists.txt)
-        add_subdirectory(Plugins/ExamplePlugin)
-    endif()
+endif()
+
+# ---- the standard plugins: in bin/plugins, loaded by flow and flowstudio, and in the release packages ----
+if(FG_BUILD_PLUGINS)
+    add_subdirectory(Plugins/FileSystem)
 endif()
 
 # ---- editor: Qt 6 widgets + KDDockWidgets ---------------------------------
@@ -76,7 +80,6 @@ endif()
 # ---- install: cmake --install <build> --prefix <dir> --component FlowGraph ----
 # Headers, libraries, the applications and a package configuration, so that a host project finds FlowGraph with
 #   find_package(FlowGraph REQUIRED [COMPONENTS ScriptEditor])   ->   FlowGraph::Core, FlowGraph::ScriptEditor
-option(FG_INSTALL "Generate the install rules" ON)
 if(FG_INSTALL)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)

@@ -535,6 +535,7 @@ void registerFlow(Registry& r) {
     {
         NodeDef d = execNode("util.print", "Print String", "Utilities");
         d.keywords = "log debug output";
+        d.printsAnything = true;
         d.pins.push_back(dataIn("String", "string", Value("Hello")));
         d.run = [](NodeCtx& c) { c.log(LogLevel::Info, c.inString(0)); };
         r.addNode(std::move(d));

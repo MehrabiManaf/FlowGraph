@@ -25,7 +25,7 @@
 // translation, removed ones dropped, outdated ones reported); updateCatalog does it for any registry.
 //
 // A plugin's catalogs hold the texts of what it registers only (`flow --plugins DIR --only <Plugin> --translations <file>`) -
-// without the pin texts the application's catalog shares (In, Then...) - and are next to its library: <plugin folder>/translations/<Plugin>_<code>.json (plugins/translations/ExamplePlugin_fa.json). The
+// without the pin texts the application's catalog shares (In, Then...) - and are next to its library: <plugin folder>/translations/<Plugin>_<code>.json (plugins/translations/FileSystem_fa.json). The
 // editor loads the one of its language for every plugin the runtime loads.
 #include <FlowGraph/Export.hpp>
 #include <FlowGraph/NodeDef.hpp>

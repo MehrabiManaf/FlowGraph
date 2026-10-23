@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
@@ -750,6 +751,24 @@ TEST(palette_search_and_pin_filter) {
         }
     }
     CHECK(hasAdd);
+    // every value converts to a string: offered for the primary types; for the others (a class, an enum) only by Print String and
+    // the nodes that take any value
+    auto offers = [&](const TypeDesc* type, const char* id) {
+        PinFilter d;
+        d.kind = PinKind::Data; d.dir = PinDir::Out; d.type = type;
+        for (auto& t : filterPalette(rt.registry(), all, d))
+            if (t.defId == id) return true;
+        return false;
+    };
+    CHECK(offers(rt.registry().tInt(), "fn:String.To Upper") && offers(rt.registry().tInt(), "util.print"));
+    for (const char* type : {"Dog", "Weekday"}) {
+        const TypeDesc* td = rt.registry().findType(type);
+        CHECK(td != nullptr);
+        if (!td) continue;
+        CHECK(offers(td, "util.print"));
+        CHECK(offers(td, "fn:String.To String"));
+        CHECK(!offers(td, "fn:String.To Upper"));
+    }
     // dragging an exec output: only nodes with an exec input
     PinFilter e; e.kind = PinKind::Exec; e.dir = PinDir::Out;
     for (auto& t : filterPalette(rt.registry(), all, e)) CHECK(t.defId != "math.add");
@@ -805,35 +824,35 @@ TEST(inspect_values_and_frames) {
 }
 
 TEST(plugin_loading) {
-    std::string path = g_exeDir + "/plugins/ExamplePlugin" + kLibExt;
+    std::string path = g_exeDir + "/plugins/FileSystem" + kLibExt;
     if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
     TestRuntime rt;
     std::string err;
     CHECK(rt.loadPlugin(path, &err));
     if (!err.empty()) std::printf("  %s\n", err.c_str());
-    CHECK(rt.registry().findType("Counter") != nullptr);
-    CHECK(rt.registry().findNode("m:Counter.Increment") != nullptr);
-    CHECK_EQ(rt.registry().findNode("fn:Example.Greet")->source, std::string("ExamplePlugin"));
-    rt.registry().addEvent("OnGreeting", {{"Message", "string"}});      // the application's event (a plugin declares none)
+    CHECK(rt.registry().findType("File") != nullptr);
+    CHECK(rt.registry().findNode("m:File.Is At End") != nullptr);
+    CHECK_EQ(rt.registry().findNode("fn:FileSystem.File Name")->source, std::string("FileSystem"));
+    rt.registry().addEvent("OnPath", {{"Path", "string"}});      // the application's event (a plugin declares none)
     Script s;
-    s.variables.push_back({"Msg", "string", Value(""), "", ""});
+    s.variables.push_back({"Name", "string", Value(""), "", ""});
     Graph& g = s.addEventGraph();
-    NodeId ev = g.addNode("event:OnGreeting").id;
-    NodeId greet = g.addNode("fn:Example.Greet").id;
+    NodeId ev = g.addNode("event:OnPath").id;
+    NodeId name = g.addNode("fn:FileSystem.File Name").id;
     NodeId set = g.addNode("var.set").id;
-    g.findNode(set)->props = {{"name", "Msg"}, {"scope", "global"}};
+    g.findNode(set)->props = {{"name", "Name"}, {"scope", "global"}};
     link(g, ev, "Then", set, "In");
-    link(g, ev, "Message", greet, "Name");
-    link(g, greet, "Result", set, "Value");
+    link(g, ev, "Path", name, "Path");
+    link(g, name, "Name", set, "Value");
     auto prog = build(rt, s);
     CHECK(prog->ok());
     Instance inst(prog);
-    CHECK(inst.callEvent("OnGreeting", {Value("plugin")}).ok);
-    CHECK_EQ(inst.getVariable("Msg").toString(), std::string("Hello, plugin!"));
+    CHECK(inst.callEvent("OnPath", {Value("notes/today.txt")}).ok);
+    CHECK_EQ(inst.getVariable("Name").toString(), std::string("today.txt"));
 }
 
 TEST(plugin_translation_catalog) {
-    std::string path = g_exeDir + "/plugins/ExamplePlugin" + kLibExt;
+    std::string path = g_exeDir + "/plugins/FileSystem" + kLibExt;
     if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
     Runtime rt;                                 // the nodes the plugin's catalog is made with (flow --only)
     standard::registerStandardApp(rt.registry());
@@ -845,15 +864,15 @@ TEST(plugin_translation_catalog) {
             if (t.first == key) return true;
         return false;
     };
-    const auto texts = translatableTexts(rt.registry(), "ExamplePlugin");
-    CHECK(has(texts, "node:fn:Example.Greet"));
-    CHECK(has(texts, "node:m:Counter.Increment"));
-    CHECK(has(texts, "pin:m:Counter.Add/Amount"));
+    const auto texts = translatableTexts(rt.registry(), "FileSystem");
+    CHECK(has(texts, "node:fn:FileSystem.Join Path"));
+    CHECK(has(texts, "node:m:File.Is At End"));
+    CHECK(has(texts, "pin:filesystem.open/Mode"));
     CHECK(!has(texts, "node:flow.branch"));
     CHECK(!has(texts, "template:get-variable"));
-    CHECK(has(translatableTexts(rt.registry()), "node:fn:Example.Greet"));       // the whole registry has them too
+    CHECK(has(translatableTexts(rt.registry()), "node:fn:FileSystem.Join Path"));   // the whole registry has them too
     // its Persian catalog is next to the library (the build copies it there), up to date and translated
-    const std::string catalog = (std::filesystem::path(rt.loadedPluginFiles().front()).parent_path() / "translations" / "ExamplePlugin_fa.json").string();
+    const std::string catalog = (std::filesystem::path(rt.loadedPluginFiles().front()).parent_path() / "translations" / "FileSystem_fa.json").string();
     std::ifstream in(catalog, std::ios::binary);
     CHECK(bool(in));
     std::stringstream text;
@@ -861,12 +880,12 @@ TEST(plugin_translation_catalog) {
     std::string lf = text.str();                            // a Windows checkout may have made its line ends CRLF
     lf.erase(std::remove(lf.begin(), lf.end(), '\r'), lf.end());
     CatalogReport report;
-    CHECK(updateCatalog(rt.registry(), lf, "fa", &report, "ExamplePlugin") == lf);
+    CHECK(updateCatalog(rt.registry(), lf, "fa", &report, "FileSystem") == lf);
     CHECK(report.texts > 0 && report.translated == report.texts);
     Translations t;
     CHECK(t.loadFile(catalog));
-    CHECK(t.nodeTitle(rt.registry().findNode("fn:Example.Greet"), {}, "Greet") != "Greet");
-    CHECK(t.pin("m:Counter.Add", "Amount") != "Amount");
+    CHECK(t.nodeTitle(rt.registry().findNode("fn:FileSystem.Join Path"), {}, "Join Path") != "Join Path");
+    CHECK(t.pin("filesystem.open", "Mode") != "Mode");
 }
 
 // ---- Exit, Executor, AsyncExecutor -------------------------------------------------------------------
@@ -1307,8 +1326,10 @@ TEST(plugin_path_lists_load_each_plugin_once) {
     std::vector<std::string> errors;
     rt.loadPluginsFromPathList(list, &errors);
     CHECK(errors.empty());
-    CHECK(rt.registry().findType("Counter") != nullptr);
-    CHECK_EQ(rt.loadedPlugins().size(), size_t(1));
+    CHECK(rt.registry().findType("File") != nullptr);
+    size_t libraries = 0;                   // the standard plugins (FileSystem): each once
+    for (auto& e : std::filesystem::directory_iterator(dir)) libraries += e.path().extension() == kLibExt;
+    CHECK_EQ(rt.loadedPlugins().size(), libraries);
 }
 
 TEST(plugins_built_for_another_abi_are_refused) {
@@ -4155,6 +4176,598 @@ TEST(a_break_an_abort_and_a_reload_kill_the_program_of_for_each_output_line) {
         CHECK(pid > 0 && diesSoon(pid));
     }
     std::filesystem::remove(pidFile);
+}
+
+// ---- the FileSystem plugin (Plugins/FileSystem) ----------------------------------------------------------------
+namespace {
+struct FileSystemRuntime : TestRuntime {
+    bool loaded = false;
+    FileSystemRuntime() {
+        const std::string path = g_exeDir + "/plugins/FileSystem" + kLibExt;
+        if (!std::filesystem::exists(path)) { std::printf("  (skipped: %s not built)\n", path.c_str()); return; }
+        std::string err;
+        loaded = loadPlugin(path, &err);
+        if (!err.empty()) std::printf("  %s\n", err.c_str());
+        CHECK(loaded);
+    }
+};
+std::filesystem::path u8path(const std::string& s) { return std::filesystem::path(std::u8string(s.begin(), s.end())); }
+std::string u8text(const std::filesystem::path& p) {
+    const std::u8string s = p.u8string();
+    return std::string(s.begin(), s.end());
+}
+// A folder of its own for a test, removed at its end.
+struct TempFolder {
+    std::filesystem::path path;
+    explicit TempFolder(const char* name)
+        : path(std::filesystem::temp_directory_path() / (std::string("flowgraph_test_") + name + "_" + std::to_string(std::time(nullptr)))) {
+        std::filesystem::remove_all(path);
+        std::filesystem::create_directories(path);
+    }
+    ~TempFolder() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+    std::string operator[](const std::string& rel) const { return u8text((path / u8path(rel)).make_preferred()); }
+};
+std::string fileText(const std::string& path) {
+    std::ifstream in(u8path(path), std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+void writeRaw(const std::string& path, const std::string& text) { std::ofstream(u8path(path), std::ios::binary) << text; }
+std::vector<std::string> strings(const Value& v) {
+    std::vector<std::string> out;
+    if (auto* a = v.arrayPtr())
+        for (auto& item : a->items) out.push_back(item.toString());
+    return out;
+}
+Value fnCall(Runtime& rt, const std::string& id, std::vector<Value> args) {
+    const FunctionDesc* fd = rt.registry().findFunction(id);
+    CHECK(fd != nullptr);
+    return fd ? fd->invoke(args.data()) : Value();
+}
+
+// Go -> the node (defaults) -> Then: V0.. = its outputs, then prints "then"; Failed: prints "failed". `out` has the outputs and
+// Error; `way` is "then" or "failed"; `error` a script error.
+struct FsRun {
+    std::string way, error;
+    std::map<std::string, Value> out;
+};
+FsRun fsNode(Runtime& rt, const char* id, std::map<std::string, Value> defaults, std::vector<std::pair<std::string, std::string>> outputs = {}) {
+    GoGraph t;
+    NodeId n = t.node(id, std::move(defaults));
+    t.link(t.ev, "Then", n, "In");
+    outputs.emplace_back("Error", "string");
+    NodeId prev = n;
+    for (size_t i = 0; i < outputs.size(); ++i) {
+        const std::string v = "V" + std::to_string(i);
+        t.s.variables.push_back({v, outputs[i].second, Value(), "", ""});
+        NodeId set = t.var("var.set", v.c_str());
+        t.link(n, outputs[i].first, set, "Value");
+        t.link(prev, "Then", set, "In");
+        prev = set;
+    }
+    t.link(prev, "Then", t.say("then"), "In");
+    t.s.variables.push_back({"FailError", "string", Value(""), "", ""});
+    NodeId setError = t.var("var.set", "FailError");
+    t.link(n, "Failed", setError, "In");
+    t.link(n, "Error", setError, "Value");
+    t.link(setError, "Then", t.say("failed"), "In");
+    GoRun r(rt, t.s);
+    FsRun fr;
+    if (!r.prog->ok()) { fr.error = dumpDiagnostics(*r.prog); return fr; }
+    RunResult res = goToEnd(r);
+    if (!res.ok) { fr.error = res.error; return fr; }
+    for (auto& l : r.log) fr.way += l;
+    for (size_t i = 0; i < outputs.size(); ++i) fr.out[outputs[i].first] = r.inst->getVariable("V" + std::to_string(i));
+    if (fr.way == "failed") fr.out["Error"] = r.inst->getVariable("FailError");
+    return fr;
+}
+bool has(const std::string& text, const std::string& part) { return text.find(part) != std::string::npos; }
+} // namespace
+
+TEST(filesystem_paths_and_questions) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    namespace fs = std::filesystem;
+    CHECK_EQ(rt.registry().findNode("filesystem.open")->source, std::string("FileSystem"));
+    {   // dragging a File: its own nodes and Print String, not every string node
+        Script s;
+        Graph& g = s.addEventGraph();
+        NodeBuildCtx ctx{rt.registry(), &s, &g};
+        PinFilter f;
+        f.kind = PinKind::Data; f.dir = PinDir::Out; f.type = rt.registry().findType("File");
+        std::set<std::string> ids;
+        for (auto& t : filterPalette(rt.registry(), buildPalette(ctx), f)) ids.insert(t.defId);
+        CHECK(ids.count("filesystem.file.writeline") && ids.count("m:File.Is At End") && ids.count("util.print"));
+        CHECK(!ids.count("fn:String.To Upper") && !ids.count("fn:FileSystem.Join Path"));
+    }
+    auto text = [&](const char* id, std::vector<Value> args) { return fnCall(rt, std::string("FileSystem.") + id, std::move(args)).toString(); };
+    CHECK_EQ(text("Join Path", {Value("notes"), Value("today.txt")}), (fs::path("notes") / "today.txt").string());
+    CHECK_EQ(text("Join Path", {Value(""), Value("today.txt")}), std::string("today.txt"));
+    CHECK_EQ(text("Parent Folder", {Value("notes/today.txt")}), std::string("notes"));
+    CHECK_EQ(text("Parent Folder", {Value("today.txt")}), std::string(""));
+    CHECK_EQ(text("File Name", {Value("notes/today.txt")}), std::string("today.txt"));
+    CHECK_EQ(text("Extension", {Value("notes/today.txt")}), std::string(".txt"));
+    CHECK_EQ(text("Extension", {Value("notes/README")}), std::string(""));
+    CHECK_EQ(text("Change Extension", {Value("notes/today.txt"), Value(".md")}), std::string("notes/today.md"));
+    CHECK_EQ(text("Change Extension", {Value("notes/today.txt"), Value("")}), std::string("notes/today"));
+    CHECK_EQ(text("Absolute Path", {Value("x/../y")}), (fs::current_path() / "y").string());
+    CHECK_EQ(text("Current Folder", {}), fs::current_path().string());
+    CHECK_EQ(text("Temp Folder", {}), fs::temp_directory_path().string());
+    CHECK(!text("Home Folder", {}).empty());
+
+    TempFolder dir("paths");
+    const std::string file = dir["h\xC3\xA9 \xD9\x81.txt"];         // a name with letters of other languages (UTF-8)
+    writeRaw(file, "hello");
+    auto ask = [&](const char* id, const std::string& path) { return fnCall(rt, std::string("FileSystem.") + id, {Value(path)}); };
+    CHECK(ask("Exists", file).toBool() && ask("Is File", file).toBool() && !ask("Is Folder", file).toBool());
+    CHECK(ask("Exists", u8text(dir.path)).toBool() && ask("Is Folder", u8text(dir.path)).toBool());
+    CHECK_EQ(ask("File Size", file).toInt(), int64_t(5));
+    const double changed = ask("Last Modified", file).toFloat();
+    CHECK(std::abs(changed - double(std::time(nullptr))) < 600);
+    const std::string missing = dir["missing.txt"];
+    CHECK(!ask("Exists", missing).toBool() && !ask("Is File", missing).toBool() && !ask("Exists", "").toBool());
+    CHECK_EQ(ask("File Size", missing).toInt(), int64_t(-1));
+    CHECK_EQ(ask("File Size", u8text(dir.path)).toInt(), int64_t(-1));      // a folder has no size
+    CHECK_EQ(ask("Last Modified", missing).toFloat(), -1.0);
+}
+
+TEST(filesystem_copies_moves_deletes_and_lists) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    namespace fs = std::filesystem;
+    TempFolder dir("files");
+    auto run = [&](const char* id, std::map<std::string, Value> defaults) { return fsNode(rt, id, std::move(defaults)).way; };
+    CHECK_EQ(run("filesystem.mkdir", {{"Path", Value(dir["a/b/c"])}}), std::string("then"));
+    CHECK(fs::is_directory(u8path(dir["a/b/c"])));
+    CHECK_EQ(run("filesystem.mkdir", {{"Path", Value(dir["a/b/c"])}}), std::string("then"));       // already there
+    writeRaw(dir["a/x.txt"], "x");
+    writeRaw(dir["a/b/y.md"], "y");
+    writeRaw(dir["a/b/c/z.txt"], "z");
+    CHECK_EQ(run("filesystem.mkdir", {{"Path", Value(dir["a/x.txt"])}}), std::string("failed"));    // a file is there
+
+    // copy: a folder with all it holds, a file; Overwrite
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["a"])}, {"To", Value(dir["copy"])}}), std::string("then"));
+    CHECK_EQ(fileText(dir["copy/b/c/z.txt"]), std::string("z"));
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["a"])}, {"To", Value(dir["copy"])}}), std::string("failed"));
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["a"])}, {"To", Value(dir["copy"])}, {"Overwrite", Value(true)}}), std::string("then"));
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["a/x.txt"])}, {"To", Value(dir["x2.txt"])}}), std::string("then"));
+    CHECK_EQ(fileText(dir["x2.txt"]), std::string("x"));
+    CHECK_EQ(run("filesystem.copy", {{"From", Value(dir["nothing"])}, {"To", Value(dir["x3.txt"])}}), std::string("failed"));
+
+    // move and rename
+    CHECK_EQ(run("filesystem.move", {{"From", Value(dir["x2.txt"])}, {"To", Value(dir["moved.txt"])}}), std::string("then"));
+    CHECK(!fs::exists(u8path(dir["x2.txt"])) && fileText(dir["moved.txt"]) == "x");
+    CHECK_EQ(run("filesystem.move", {{"From", Value(dir["copy/x.txt"])}, {"To", Value(dir["moved.txt"])}}), std::string("failed"));
+    CHECK_EQ(run("filesystem.move", {{"From", Value(dir["copy/x.txt"])}, {"To", Value(dir["moved.txt"])}, {"Overwrite", Value(true)}}),
+             std::string("then"));
+    CHECK_EQ(run("filesystem.move", {{"From", Value(dir["x2.txt"])}, {"To", Value(dir["x4.txt"])}}), std::string("failed"));
+
+    // list: folders and files apart, in name order; patterns; recursive
+    const std::vector<std::pair<std::string, std::string>> lists = {{"Files", "array<string>"}, {"Folders", "array<string>"}};
+    FsRun l = fsNode(rt, "filesystem.list", {{"Folder", Value(dir["a"])}}, lists);
+    CHECK_EQ(l.way, std::string("then"));
+    CHECK(strings(l.out["Files"]) == std::vector<std::string>({dir["a/x.txt"]}));
+    CHECK(strings(l.out["Folders"]) == std::vector<std::string>({dir["a/b"]}));
+    l = fsNode(rt, "filesystem.list", {{"Folder", Value(dir["a"])}, {"Pattern", Value("*.txt")}, {"Recursive", Value(true)}}, lists);
+    CHECK(strings(l.out["Files"]) == std::vector<std::string>({dir["a/b/c/z.txt"], dir["a/x.txt"]}));
+    CHECK(strings(l.out["Folders"]).empty());
+    l = fsNode(rt, "filesystem.list", {{"Folder", Value(dir["a"])}, {"Pattern", Value("*.md;?.TXT")}, {"Recursive", Value(true)}}, lists);
+#if defined(_WIN32)
+    CHECK_EQ(strings(l.out["Files"]).size(), size_t(3));           // letter case does not count on Windows
+#else
+    CHECK(strings(l.out["Files"]) == std::vector<std::string>({dir["a/b/y.md"]}));
+#endif
+    l = fsNode(rt, "filesystem.list", {{"Folder", Value(dir["nothing"])}}, lists);
+    CHECK(l.way == "failed" && has(l.out["Error"].toString(), "does not exist"));
+
+    // delete: a file, an empty folder; a full one only with Recursive
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["moved.txt"])}}), std::string("then"));
+    CHECK(!fs::exists(u8path(dir["moved.txt"])));
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["moved.txt"])}}), std::string("failed"));
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["copy"])}}), std::string("failed"));
+    CHECK(fs::exists(u8path(dir["copy/b/y.md"])));
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["copy"])}, {"Recursive", Value(true)}}), std::string("then"));
+    CHECK(!fs::exists(u8path(dir["copy"])));
+    CHECK_EQ(run("filesystem.mkdir", {{"Path", Value(dir["empty"])}}), std::string("then"));
+    CHECK_EQ(run("filesystem.delete", {{"Path", Value(dir["empty"])}}), std::string("then"));
+}
+
+TEST(filesystem_for_each_file_runs_the_body_for_each_entry) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("foreach");
+    std::filesystem::create_directories(u8path(dir["b"]));
+    writeRaw(dir["a.txt"], "");
+    writeRaw(dir["b/inner.txt"], "");
+    writeRaw(dir["c.md"], "");
+    // Go -> For Each File(Folder) { Print(File Name(Path) [+ "/" when Is Folder]) [-> Break] } Completed: "done", Failed: "failed"
+    auto loop = [&](const std::string& folder, bool recursive, bool breakAtOnce) {
+        GoGraph t;
+        NodeId fe = t.node("filesystem.foreach", {{"Folder", Value(folder)}, {"Recursive", Value(recursive)}, {"Pattern", Value("*")}});
+        t.link(t.ev, "Then", fe, "In");
+        NodeId name = t.node("fn:FileSystem.File Name");
+        t.link(fe, "Path", name, "Path");
+        NodeId pr = t.node("util.print");
+        t.link(fe, "Loop Body", pr, "In");
+        t.link(name, "Name", pr, "String");
+        if (breakAtOnce) t.link(pr, "Then", t.node("flow.break"), "In");
+        t.link(fe, "Completed", t.say("done"), "In");
+        t.link(fe, "Failed", t.say("failed"), "In");
+        GoRun r(rt, t.s);
+        CHECK(r.prog->ok());
+        if (!r.prog->ok()) return dumpDiagnostics(*r.prog);
+        RunResult res = goToEnd(r);
+        if (!res.ok) return "error: " + res.error;
+        std::string out;
+        for (auto& l : r.log) out += l + ",";
+        return out;
+    };
+    CHECK_EQ(loop(u8text(dir.path), false, false), std::string("b,a.txt,c.md,done,"));     // folders first
+    CHECK_EQ(loop(u8text(dir.path), true, false), std::string("b,a.txt,inner.txt,c.md,done,"));
+    CHECK_EQ(loop(u8text(dir.path), true, true), std::string("b,done,"));                  // Break goes on with Completed
+    CHECK_EQ(loop(dir["nothing"], false, false), std::string("failed,"));
+    CHECK_EQ(loop(dir["a.txt"], false, false), std::string("failed,"));                    // not a folder
+}
+
+TEST(filesystem_a_stopped_copy_leaves_no_half_copied_file) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("stopped");
+    const std::string big = dir["big.txt"], copy = dir["copy.txt"];
+    writeRaw(big, std::string(48 << 20, 'x'));
+    GoGraph t;
+    NodeId c = t.node("filesystem.copy", {{"From", Value(big)}, {"To", Value(copy)}});
+    t.link(t.ev, "Then", c, "In");
+    t.link(c, "Then", t.say("then"), "In");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) return;
+    RunResult held = r.inst->callEvent("Go");
+    CHECK(held.waiting());                      // the work is on its own thread: the event comes back at once
+    r.inst->abortAll();
+    // the work stops at its next piece and removes what it copied: the copy is either all there or not at all
+    std::error_code ec;
+    bool settled = false;
+    for (int i = 0; i < 500 && !settled; ++i) {
+        const auto size = std::filesystem::file_size(u8path(copy), ec);
+        settled = ec || size == (48u << 20);
+        if (!settled) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(settled);
+    CHECK(r.log.empty());                       // the script did not go on
+}
+
+TEST(filesystem_small_operations_in_a_loop_are_quick) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    standard::registerStandardApp(rt.registry());
+    TempFolder dir("quick");
+    // Main -> For 0..200 { Copy(notes.txt, copy.txt, Overwrite) }: the way flow runs it (runMain sleeps until the next wake)
+    Script s;
+    Graph& g = s.addEventGraph();
+    NodeId ev = g.addNode("event:Main").id;
+    NodeId loop = g.addNode("flow.for").id;
+    g.findNode(loop)->defaults = {{"First", Value(0)}, {"Last", Value(200)}};
+    writeRaw(dir["notes.txt"], "x");
+    NodeId w = g.addNode("filesystem.copy").id;
+    g.findNode(w)->defaults = {{"From", Value(dir["notes.txt"])}, {"To", Value(dir["copy.txt"])}, {"Overwrite", Value(true)}};
+    link(g, ev, "Then", loop, "In");
+    link(g, loop, "Loop Body", w, "In");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    if (!prog->ok()) return;
+    Instance inst(prog);
+    const auto start = std::chrono::steady_clock::now();
+    auto out = standard::runMain(inst, {});
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    CHECK(out.ok);
+    // quick work goes on at once, not at the next wake of runMain (a sleep of 1 ms takes 15 ms with the default timer of Windows)
+    CHECK(seconds < 2.0);
+}
+
+namespace {
+// Go -> Open File(path, mode) -> Then: the chain `steps` makes (it gets the Open File node and links its own nodes after it,
+// returning the last exec node); Failed: prints "failed: <Error>". Returns what was printed, or "error: <script error>".
+std::string withFile(Runtime& rt, const std::string& path, int mode, const std::function<NodeId(GoGraph&, NodeId open)>& steps,
+                     std::unique_ptr<GoRun>* keep = nullptr) {
+    GoGraph t;
+    NodeId open = t.node("filesystem.open", {{"Path", Value(path)}, {"Mode", Value(int64_t(mode))}});
+    t.link(t.ev, "Then", open, "In");
+    NodeId failed = t.node("fn:String.Concat", {{"A", Value("failed: ")}});
+    t.link(open, "Error", failed, "B");
+    NodeId sayFailed = t.node("util.print");
+    t.link(open, "Failed", sayFailed, "In");
+    t.link(failed, "Result", sayFailed, "String");
+    steps(t, open);
+    auto r = std::make_unique<GoRun>(rt, t.s);
+    if (!r->prog->ok()) return dumpDiagnostics(*r->prog);
+    RunResult res = goToEnd(*r);
+    std::string out;
+    for (auto& l : r->log) out += l + ",";
+    if (!res.ok) out += "error: " + res.error;
+    if (keep) *keep = std::move(r);
+    return out;
+}
+// a method of the file: In from `after` (its exec output `pin`), Target = the file of Open File
+// a node of the file (Read Line -> filesystem.file.readline): In from `after` (its exec output `pin`), Target = the file of Open File
+NodeId method(GoGraph& t, NodeId open, NodeId after, const char* pin, const char* name, std::map<std::string, Value> defaults = {}) {
+    std::string id = "filesystem.file.";
+    for (const char* c = name; *c; ++c)
+        if (*c != ' ') id += char(std::tolower(static_cast<unsigned char>(*c)));
+    NodeId m = t.node(id, std::move(defaults));
+    t.link(open, "File", m, "Target");
+    t.link(after, pin, m, "In");
+    return m;
+}
+enum { kRead = 0, kWrite = 1, kAppend = 2 };
+} // namespace
+
+TEST(filesystem_file_writes_and_reads_a_piece_at_a_time) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("file");
+    const std::string notes = dir["notes.txt"];
+    // Write: it starts empty; Write Line, Write Text, Close
+    auto write = [&](int mode, const char* line, const char* text) {
+        return withFile(rt, notes, mode, [&](GoGraph& t, NodeId open) {
+            NodeId a = method(t, open, open, "Then", "Write Line", {{"Text", Value(line)}});
+            NodeId b = method(t, open, a, "Then", "Write Text", {{"Text", Value(text)}});
+            NodeId c = method(t, open, b, "Then", "Close");
+            NodeId again = method(t, open, c, "Then", "Close");           // closing a closed file does nothing
+            t.link(again, "Then", t.say("closed"), "In");
+            return again;
+        });
+    };
+    writeRaw(notes, "old");
+    CHECK_EQ(write(kWrite, "one", "two"), std::string("closed,"));
+    CHECK_EQ(fileText(notes), std::string("one\ntwo"));
+    CHECK_EQ(write(kAppend, "", "three"), std::string("closed,"));
+    CHECK_EQ(fileText(notes), std::string("one\ntwo\nthree"));
+    CHECK_EQ(write(kAppend, "x", "y"), std::string("closed,"));            // Append makes a file that is not there yet
+    const std::string fresh = dir["fresh.txt"];
+    CHECK_EQ(withFile(rt, fresh, kAppend, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Write Text", {{"Text", Value("new")}}); }),
+             std::string(""));
+    CHECK_EQ(fileText(fresh), std::string("new"));
+    const std::string named = dir["\xD9\x81\xD8\xA7\xDB\x8C\xD9\x84.txt"];        // a name with letters of another language (UTF-8)
+    CHECK_EQ(withFile(rt, named, kWrite, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Write Text", {{"Text", Value("h\xC3\xA9")}}); }),
+             std::string(""));
+    CHECK(std::filesystem::exists(u8path(named)) && fileText(named) == "h\xC3\xA9");
+
+    // Read: While not Is At End { Print(Read Line) }, then "end"; without the byte order mark and the \r of the lines
+    writeRaw(notes, "\xEF\xBB\xBF" "alpha\r\nbeta\n\ngamma");
+    auto lines = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId loop = t.node("flow.while");
+        t.link(open, "Then", loop, "In");
+        NodeId atEnd = t.node("m:File.Is At End");
+        t.link(open, "File", atEnd, "Target");
+        NodeId notEnd = t.node("logic.not");
+        t.link(atEnd, "At End", notEnd, "Value");
+        t.link(notEnd, "Result", loop, "Condition");
+        NodeId read = method(t, open, loop, "Loop Body", "Read Line");
+        NodeId pr = t.node("util.print");
+        t.link(read, "Then", pr, "In");
+        t.link(read, "Line", pr, "String");
+        t.link(loop, "Completed", t.say("end"), "In");
+        return loop;
+    });
+    CHECK_EQ(lines, std::string("alpha,beta,,gamma,end,"));
+    // Read Text: the rest, from where reading is; at the end Read Line gives ""
+    auto rest = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId line = method(t, open, open, "Then", "Read Line");
+        NodeId p1 = t.node("util.print");
+        t.link(line, "Then", p1, "In");
+        t.link(line, "Line", p1, "String");
+        NodeId text = method(t, open, p1, "Then", "Read Text");
+        NodeId p2 = t.node("util.print");
+        t.link(text, "Then", p2, "In");
+        t.link(text, "Text", p2, "String");
+        NodeId after = method(t, open, p2, "Then", "Read Line");
+        NodeId p3 = t.node("fn:String.Concat", {{"A", Value("[")}, {"B", Value("]")}});
+        NodeId p3b = t.node("fn:String.Concat");
+        t.link(p3, "Result", p3b, "A");
+        t.link(after, "Line", p3b, "B");
+        NodeId p4 = t.node("util.print");
+        t.link(after, "Then", p4, "In");
+        t.link(p3b, "Result", p4, "String");
+        return p4;
+    });
+    CHECK_EQ(rest, std::string("alpha,beta\n\ngamma,[],"));
+}
+
+TEST(filesystem_file_failures_and_mistakes) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("filefail");
+    const std::string notes = dir["notes.txt"];
+    writeRaw(notes, "text");
+    auto nothing = [](GoGraph&, NodeId open) { return open; };
+    // what cannot be opened goes to Failed, with the reason
+    std::string out = withFile(rt, dir["missing.txt"], kRead, nothing);
+    CHECK(has(out, "failed: cannot open") && has(out, "it does not exist"));
+    out = withFile(rt, dir["nowhere/notes.txt"], kWrite, nothing);
+    CHECK(has(out, "failed: ") && has(out, "does not exist"));
+    out = withFile(rt, u8text(dir.path), kRead, nothing);
+    CHECK(has(out, "it is a folder"));
+    // what cannot be done with an open file goes to Failed of that node, with the reason: "then," or "why: <Error>,"
+    auto outcome = [&](GoGraph& t, NodeId node) {
+        NodeId why = t.node("fn:String.Concat", {{"A", Value("why: ")}});
+        t.link(node, "Error", why, "B");
+        NodeId say = t.node("util.print");
+        t.link(node, "Failed", say, "In");
+        t.link(why, "Result", say, "String");
+        t.link(node, "Then", t.say("then"), "In");
+        return node;
+    };
+    out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) { return outcome(t, method(t, open, open, "Then", "Write Line", {{"Text", Value("x")}})); });
+    CHECK(has(out, "why: cannot write") && has(out, "it is open for reading") && !has(out, "error"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) { return outcome(t, method(t, open, open, "Then", "Read Line")); });
+    CHECK(has(out, "why: cannot read") && has(out, "it is open for writing"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) { return outcome(t, method(t, open, open, "Then", "Read Text")); });
+    CHECK(has(out, "it is open for writing"));
+    out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
+        return outcome(t, method(t, open, method(t, open, open, "Then", "Close"), "Then", "Read Line"));
+    });
+    CHECK(has(out, "why: ") && has(out, "the file is closed"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) {
+        return outcome(t, method(t, open, method(t, open, open, "Then", "Close"), "Then", "Write Text", {{"Text", Value("x")}}));
+    });
+    CHECK(has(out, "the file is closed"));
+    out = withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) {   // closing twice is fine
+        return outcome(t, method(t, open, method(t, open, open, "Then", "Close"), "Then", "Close"));
+    });
+    CHECK_EQ(out, std::string("then,"));
+    // nothing connected to Target
+    out = withFile(rt, notes, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId read = t.node("filesystem.file.readline");
+        t.link(open, "Then", read, "In");
+        return outcome(t, read);
+    });
+    CHECK(has(out, "why: no file"));
+    CHECK_EQ(fileText(notes), std::string(""));                              // Write emptied it
+}
+
+TEST(filesystem_file_writes_are_in_the_file_before_it_is_closed) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("fileclose");
+    const std::string notes = dir["notes.txt"];
+    // no Close: the instance keeps the output of Open File (as flowstudio keeps the last run), the file stays open
+    std::unique_ptr<GoRun> run;
+    CHECK_EQ(withFile(rt, notes, kWrite, [&](GoGraph& t, NodeId open) { return method(t, open, open, "Then", "Write Text", {{"Text", Value("kept")}}); }, &run),
+             std::string(""));
+    CHECK_EQ(fileText(notes), std::string("kept"));                         // written all the same
+    run.reset();                                                             // nothing refers to it any more: closed
+    std::error_code ec;
+    CHECK(std::filesystem::remove(u8path(notes), ec) && !ec);
+}
+
+TEST(filesystem_file_reads_a_big_text_in_the_background) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("bigread");
+    const std::string big = dir["big.txt"];
+    const size_t size = size_t(128) << 20;
+    writeRaw(big, std::string(size, 'x'));
+    // Go: F = Open File(big) -> T = Read Text(F) -> "read";  Other: Read Line(F) -> "line" or "why: <Error>"
+    GoGraph t;
+    t.s.variables.push_back({"F", "File", Value(), "", ""});
+    t.s.variables.push_back({"T", "string", Value(""), "", ""});
+    NodeId open = t.node("filesystem.open", {{"Path", Value(big)}});
+    t.link(t.ev, "Then", open, "In");
+    NodeId setF = t.var("var.set", "F");
+    t.link(open, "Then", setF, "In");
+    t.link(open, "File", setF, "Value");
+    NodeId read = t.node("filesystem.file.readtext");
+    t.link(setF, "Then", read, "In");
+    t.link(t.var("var.get", "F"), "Value", read, "Target");
+    NodeId setT = t.var("var.set", "T");
+    t.link(read, "Then", setT, "In");
+    t.link(read, "Text", setT, "Value");
+    t.link(setT, "Then", t.say("read"), "In");
+    NodeId other = t.g->addNode("event:Other").id;
+    NodeId line = t.node("filesystem.file.readline");
+    t.link(other, "Then", line, "In");
+    t.link(t.var("var.get", "F"), "Value", line, "Target");
+    t.link(line, "Then", t.say("line"), "In");
+    NodeId why = t.node("fn:String.Concat", {{"A", Value("why: ")}});
+    t.link(line, "Error", why, "B");
+    NodeId sayWhy = t.node("util.print");
+    t.link(line, "Failed", sayWhy, "In");
+    t.link(why, "Result", sayWhy, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) return;
+
+    // read in the background: the event comes back at once; meanwhile the file is busy for the other nodes
+    RunResult go = r.inst->callEvent("Go");
+    CHECK(go.waiting());
+    for (int i = 0; i < 5000 && r.inst->getVariable("F").isNull(); ++i) {     // Open File may wait too (a virus scanner...)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        r.inst->tick(0.001);
+    }
+    r.log.clear();
+    CHECK(r.inst->callEvent("Other").ok);
+    CHECK(r.log.size() == 1 && has(r.log[0], "why: ") && has(r.log[0], "Read Text is reading it"));
+    for (auto& l : r.log)
+        if (!has(l, "Read Text is reading it")) std::printf("  %s\n", l.c_str());
+    for (int i = 0; i < 5000 && go.task && !go.task->done(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        r.inst->tick(0.002);
+    }
+    CHECK(go.task && go.task->done() && go.task->result().ok);
+    CHECK_EQ(r.inst->getVariable("T").toString().size(), size);
+    CHECK(!r.log.empty() && r.log.back() == "read");
+
+    // Stop while it reads: the reading stops, and the file is not busy any more
+    go = r.inst->callEvent("Go");
+    CHECK(go.waiting());
+    r.inst->abortAll();
+    bool free = false;
+    for (int i = 0; i < 500 && !free; ++i) {
+        r.log.clear();
+        r.inst->callEvent("Other");
+        free = r.log.size() == 1 && r.log[0] == "line";
+        if (!free) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(free);
+}
+
+TEST(filesystem_file_writes_a_big_text_in_the_background) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("bigwrite");
+    const std::string out = dir["out.txt"];
+    const size_t size = size_t(128) << 20;
+    // Go: F = Open File(out, Write) -> Write Text(F, Big) -> "written";  Other: Write Line(F, "x") -> "line" or "why: <Error>"
+    GoGraph t;
+    t.s.variables.push_back({"F", "File", Value(), "", ""});
+    t.s.variables.push_back({"Big", "string", Value(""), "", ""});
+    NodeId open = t.node("filesystem.open", {{"Path", Value(out)}, {"Mode", Value(int64_t(1))}});
+    t.link(t.ev, "Then", open, "In");
+    NodeId setF = t.var("var.set", "F");
+    t.link(open, "Then", setF, "In");
+    t.link(open, "File", setF, "Value");
+    NodeId write = t.node("filesystem.file.writetext");
+    t.link(setF, "Then", write, "In");
+    t.link(t.var("var.get", "F"), "Value", write, "Target");
+    t.link(t.var("var.get", "Big"), "Value", write, "Text");
+    t.link(write, "Then", t.say("written"), "In");
+    NodeId other = t.g->addNode("event:Other").id;
+    NodeId line = t.node("filesystem.file.writeline", {{"Text", Value("x")}});
+    t.link(other, "Then", line, "In");
+    t.link(t.var("var.get", "F"), "Value", line, "Target");
+    t.link(line, "Then", t.say("line"), "In");
+    NodeId why = t.node("fn:String.Concat", {{"A", Value("why: ")}});
+    t.link(line, "Error", why, "B");
+    NodeId sayWhy = t.node("util.print");
+    t.link(line, "Failed", sayWhy, "In");
+    t.link(why, "Result", sayWhy, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) return;
+    r.inst->setVariable("Big", Value(std::string(size, 'y')));
+
+    RunResult go = r.inst->callEvent("Go");
+    CHECK(go.waiting());                        // written in the background
+    for (int i = 0; i < 5000 && r.inst->getVariable("F").isNull(); ++i) {     // Open File may wait too
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        r.inst->tick(0.001);
+    }
+    r.log.clear();
+    CHECK(r.inst->callEvent("Other").ok);
+    CHECK(r.log.size() == 1 && has(r.log[0], "Write Text is writing it"));
+    for (int i = 0; i < 10000 && go.task && !go.task->done(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        r.inst->tick(0.002);
+    }
+    CHECK(go.task && go.task->done() && go.task->result().ok);
+    r.log.clear();
+    CHECK(r.inst->callEvent("Other").ok);       // not busy any more: a small line is written at once
+    CHECK(r.log.size() == 1 && r.log[0] == "line");
+    std::error_code ec;
+    CHECK_EQ(std::filesystem::file_size(u8path(out), ec), uintmax_t(size + 2));
 }
 
 int main(int argc, char** argv) {

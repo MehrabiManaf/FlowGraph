@@ -532,10 +532,10 @@ public:
                 else return detail::Conv<std::remove_cv_t<M>>::to(*rp, self->*getter);
             };
             addProp(std::move(pd));
+            return *this;
         } else {
             return accessorImpl(name, makeCallable(std::move(getter)), nullptr);
         }
-        return *this;
     }
     // Getter / setter pair (member function pointers or lambdas taking T&).
     template <class G, class S> ClassBuilder& accessor(const std::string& name, G getter, S setter) {
