@@ -405,6 +405,7 @@ void GraphScene::beginLinkDrag(const PinRef& from, const QPointF& scenePos, bool
         breakPinLinks(from);
         return;
     }
+    cancelLinkDrag();                 // a drag that did not end must not leave its link behind
     drag_ = from;
     QColor color = from.kind == fg::PinKind::Exec ? qApp->palette().windowText().color() : (from.type ? rgb(registry().typeColor(from.type)) : QColor(160, 160, 168));
     dragLink_ = new LinkItem(this, fg::Connection{}, from.kind == fg::PinKind::Exec, color, true);
@@ -420,14 +421,18 @@ void GraphScene::updateLinkDrag(const QPointF& scenePos) {
     else dragLink_->setTemporaryEnds(scenePos, pinPos);
 }
 
-void GraphScene::finishLinkDrag(const QPointF& scenePos, const QPoint& screenPos) {
-    PinRef from = drag_;
+void GraphScene::cancelLinkDrag() {
     drag_ = PinRef();
     if (dragLink_) {
         removeItem(dragLink_);
         delete dragLink_;
         dragLink_ = nullptr;
     }
+}
+
+void GraphScene::finishLinkDrag(const QPointF& scenePos, const QPoint& screenPos) {
+    PinRef from = drag_;
+    cancelLinkDrag();
     std::optional<PinRef> target;
     bool overNode = false;
     for (QGraphicsItem* it : items(scenePos, Qt::IntersectsItemShape, Qt::DescendingOrder)) {

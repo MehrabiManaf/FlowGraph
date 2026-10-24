@@ -1068,6 +1068,68 @@ TEST(mouse_drag_between_pins_creates_link) {
     CHECK(linked);
 }
 
+// A right click while a link is dragged drops the link and opens no menu - whether the system sends the context menu event with
+// the press (X11, Wayland) or after the release (Windows). A menu that opened there took the left button's release away from the
+// drag, and its dashed link stayed in the view for good.
+TEST(right_button_drops_the_link_being_dragged) {
+    ViewFixture f;
+    auto links = [&] {
+        int n = 0;
+        for (QGraphicsItem* it : f.scene.items()) n += dynamic_cast<LinkItem*>(it) != nullptr;
+        return n;
+    };
+    const int before = links();
+    const size_t connections = f.doc.graph("EventGraph")->connections.size();
+    // A menu that opens is closed (and counted): the test does not wait in it. As on a desktop, the left button is released
+    // while the menu is open - over the menu, which has the mouse, not over the view.
+    int popups = 0;
+    bool releasedOverMenu = false;
+    QTimer closer;
+    closer.setInterval(20);
+    QObject::connect(&closer, &QTimer::timeout, [&] {
+        if (QWidget* w = QApplication::activePopupWidget()) {
+            ++popups;
+            if (f.scene.isLinkDragging()) {
+                QMouseEvent up(QEvent::MouseButtonRelease, QPointF(1, 1), w->mapToGlobal(QPointF(1, 1)), Qt::LeftButton, Qt::NoButton,
+                               Qt::NoModifier);
+                QApplication::sendEvent(w, &up);
+                releasedOverMenu = true;
+            }
+            w->close();
+        }
+    });
+    closer.start();
+    auto contextMenu = [&](QPoint p) {
+        QContextMenuEvent e(QContextMenuEvent::Mouse, p, f.view.viewport()->mapToGlobal(p));
+        QApplication::sendEvent(f.view.viewport(), &e);
+        QCoreApplication::processEvents();
+    };
+    const QPoint from = f.pinPoint(2, "Then", fg::PinDir::Out), empty = from + QPoint(160, 140);
+    for (bool menuOnPress : {true, false}) {
+        releasedOverMenu = false;
+        f.send(QEvent::MouseMove, from, Qt::NoButton, Qt::NoButton);
+        f.send(QEvent::MouseButtonPress, from, Qt::LeftButton, Qt::LeftButton);
+        f.send(QEvent::MouseMove, empty, Qt::NoButton, Qt::LeftButton);
+        CHECK(f.scene.isLinkDragging());
+        CHECK_EQ(links(), before + 1);                  // the dashed link
+        f.send(QEvent::MouseButtonPress, empty, Qt::RightButton, Qt::LeftButton | Qt::RightButton);
+        if (menuOnPress) contextMenu(empty);
+        f.send(QEvent::MouseButtonRelease, empty, Qt::RightButton, Qt::LeftButton);
+        if (!menuOnPress) contextMenu(empty);
+        if (!releasedOverMenu) f.send(QEvent::MouseButtonRelease, empty, Qt::LeftButton, Qt::NoButton);
+        spinUntil([] { return false; }, 150);
+        CHECK(!f.scene.isLinkDragging());
+        CHECK_EQ(links(), before);                      // no dashed link left
+        CHECK_EQ(popups, 0);
+        CHECK_EQ(f.doc.graph("EventGraph")->connections.size(), connections);
+    }
+    // the menus are back: a right click on empty space opens one (here the palette)
+    f.send(QEvent::MouseButtonPress, empty, Qt::RightButton, Qt::RightButton);
+    contextMenu(empty);
+    f.send(QEvent::MouseButtonRelease, empty, Qt::RightButton, Qt::NoButton);
+    CHECK(spinUntil([&] { return popups == 1; }, 2000));
+}
+
 TEST(mouse_drag_node_keeps_new_position) {
     ViewFixture f;
     NodeItem* n = f.scene.nodeItem(2);

@@ -467,7 +467,8 @@ void NodeItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget* widg
 
 // ------------------------------------------------------------------ interaction
 void NodeItem::mousePressEvent(QGraphicsSceneMouseEvent* e) {
-    if (!(e->buttons() & Qt::LeftButton)) return QGraphicsObject::mousePressEvent(e);
+    // the button pressed, not the buttons held: a right press while the left one drags a link is no new drag
+    if (e->button() != Qt::LeftButton) return QGraphicsObject::mousePressEvent(e);
     QPointF pos = e->pos();
     if (PinView* v = pinViewAt(pos)) {
         gscene_->beginLinkDrag(refFor(*v), mapToScene(pos), e->modifiers() & Qt::AltModifier);
@@ -495,12 +496,19 @@ void NodeItem::mouseMoveEvent(QGraphicsSceneMouseEvent* e) {
 }
 
 void NodeItem::mouseReleaseEvent(QGraphicsSceneMouseEvent* e) {
-    if (gscene_->isLinkDragging()) {
+    if (e->button() == Qt::LeftButton && gscene_->isLinkDragging()) {
         gscene_->finishLinkDrag(e->scenePos(), e->screenPos());
         e->accept();
         return;
     }
     QGraphicsObject::mouseReleaseEvent(e);
+}
+
+// The scene took the mouse away from this item (a menu, a popup) before the left button was released: that release will never
+// come here.
+bool NodeItem::sceneEvent(QEvent* e) {
+    if (e->type() == QEvent::UngrabMouse && gscene_->isLinkDragging()) gscene_->cancelLinkDrag();
+    return QGraphicsObject::sceneEvent(e);
 }
 
 void NodeItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* e) {

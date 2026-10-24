@@ -53,6 +53,7 @@ protected:
     void mousePressEvent(QGraphicsSceneMouseEvent* e) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent* e) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* e) override;
+    bool sceneEvent(QEvent* e) override;
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* e) override;
     void hoverEnterEvent(QGraphicsSceneHoverEvent* e) override;
     void hoverMoveEvent(QGraphicsSceneHoverEvent* e) override;
