@@ -20,6 +20,7 @@ public:
     LinkItem(GraphScene* scene, const fg::Connection& c, bool exec, QColor color, bool temporary = false);
 
     const fg::Connection& connection() const { return conn_; }
+    bool isTemporary() const { return temporary_; }     // the link being dragged: no connection of the script
     void setColor(const QColor& c) { color_ = c; update(); }
     void setExec(bool e) { exec_ = e; setZValue(e ? -2 : -3); update(); }
     // Recomputes the path from the current pin positions (or from `start`/`end` while temporary).

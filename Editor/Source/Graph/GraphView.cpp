@@ -119,6 +119,17 @@ void GraphView::showPalette(const PinRef& from, const QPointF& scenePos, const Q
 
 // ------------------------------------------------------------------ mouse
 void GraphView::mousePressEvent(QMouseEvent* e) {
+    if (e->button() == Qt::RightButton) {
+        suppressContext_ = false;            // a menu swallowed for an earlier press that never came
+        // the right button drops a link being dragged, and opens no menu: its context menu event comes with this press (X11,
+        // Wayland) or after the release (Windows). Otherwise that menu would take the left button's release away from the drag.
+        if (GraphScene* sc = graphScene(); sc && sc->isLinkDragging()) {
+            sc->cancelLinkDrag();
+            suppressContext_ = true;
+            e->accept();
+            return;
+        }
+    }
     if (e->button() == Qt::MiddleButton || e->button() == Qt::RightButton) {
         QGraphicsItem* under = itemAt(e->pos());
         if (e->button() == Qt::MiddleButton || !under || dynamic_cast<LinkItem*>(under)) {
@@ -142,6 +153,8 @@ void GraphView::mouseMoveEvent(QMouseEvent* e) {
         pendingContext_ = false;
         unsetCursor();
     }
+    // the same for a link being dragged: without the left button its drag is over
+    if (GraphScene* sc = graphScene(); sc && sc->isLinkDragging() && !(e->buttons() & Qt::LeftButton)) sc->cancelLinkDrag();
     if (panning_) {
         QPoint d = e->pos() - panLast_;
         if (!panMoved_ && (e->pos() - panLast_).manhattanLength() < 4 && panButton_ == Qt::RightButton) return;
@@ -179,6 +192,7 @@ void GraphView::mouseReleaseEvent(QMouseEvent* e) {
 
 void GraphView::contextMenuEvent(QContextMenuEvent* e) {
     if (suppressContext_) { suppressContext_ = false; return; }
+    if (GraphScene* sc = graphScene(); sc && sc->isLinkDragging()) { e->accept(); return; }   // (the menu key) no menu mid-drag
     // platforms that send the context menu on press: wait for the release so a right-drag can pan
     // and the popup doesn't swallow the release (which would leave the view stuck panning)
     if (panning_ && panButton_ == Qt::RightButton && e->reason() == QContextMenuEvent::Mouse) {
@@ -189,8 +203,11 @@ void GraphView::contextMenuEvent(QContextMenuEvent* e) {
     GraphScene* sc = graphScene();
     QPointF sp = mapToScene(e->pos());
     QGraphicsItem* under = nullptr;
-    for (QGraphicsItem* it : items(e->pos()))
-        if (dynamic_cast<NodeItem*>(it) || dynamic_cast<LinkItem*>(it)) { under = it; break; }
+    for (QGraphicsItem* it : items(e->pos())) {
+        auto* link = dynamic_cast<LinkItem*>(it);
+        if (link && link->isTemporary()) continue;      // the dashed link of a drag has no menu ("Add reroute node" on nothing)
+        if (dynamic_cast<NodeItem*>(it) || link) { under = it; break; }
+    }
 
     if (auto* node = dynamic_cast<NodeItem*>(under)) {
         if (auto pin = node->pinAt(sp)) {

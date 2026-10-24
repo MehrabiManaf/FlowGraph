@@ -105,6 +105,7 @@ void LinkItem::paint(QPainter* p, const QStyleOptionGraphicsItem*, QWidget*) {
 }
 
 void LinkItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* e) {
+    if (temporary_) return QGraphicsObject::mouseDoubleClickEvent(e);
     gscene_->insertReroute(conn_, e->scenePos());
     e->accept();
 }

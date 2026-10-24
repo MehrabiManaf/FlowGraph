@@ -54,6 +54,7 @@ public:
     bool isLinkDragging() const { return drag_.valid(); }
     void updateLinkDrag(const QPointF& scenePos);
     void finishLinkDrag(const QPointF& scenePos, const QPoint& screenPos);
+    void cancelLinkDrag();            // drops the link being dragged, if any (the right button, a release that was lost)
     void setPinDefault(fg::NodeId node, const std::string& pin, const fg::Value& v);
     void startInplaceEdit(NodeItem* item, const std::string& pin, const QPointF& scenePos, double width, const QString& text, const fg::TypeDesc* type);
     bool isInplaceEditing() const { return editNode_ != 0; }
