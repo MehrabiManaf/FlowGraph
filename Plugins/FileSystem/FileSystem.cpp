@@ -295,23 +295,18 @@ public:
                 error = failure("open", path_, std::make_error_code(std::errc::permission_denied));
             return false;
         }
-        if (mode_ == FileMode::Read) {          // a UTF-8 byte order mark is not part of the text
-            char mark[3] = {};
-            stream_.read(mark, 3);
-            if (!(stream_.gcount() == 3 && mark[0] == '\xEF' && mark[1] == '\xBB' && mark[2] == '\xBF')) {
-                stream_.clear();
-                stream_.seekg(0);
-            }
-        }
+        markChecked_ = mode_ != FileMode::Read;
         open_ = true;
         return true;
     }
 
     // Each of these is false, with the reason in `error`, when it cannot be done: the file is closed, it is open the other way,
     // or the disk fails. The end of the file is not a failure: Read Line gives "" there (At End says it).
+    bool canRead(std::string& error) const { return can(true, "read", error); }
     bool readLine(std::string& line, std::string& error) {
         line.clear();
         if (!can(true, "read", error)) return false;
+        skipMark();
         if (!std::getline(stream_, line)) {
             line.clear();                       // at the end
             return worked("read", error);
@@ -319,57 +314,62 @@ public:
         if (!line.empty() && line.back() == '\r') line.pop_back();
         return true;
     }
-    // Read Text reads the rest on a work thread: beginReadRest (on the thread of the script), readRest (on the work thread), then
-    // endReadRest. Meanwhile the file is busy: its other nodes go to Failed, At End says false.
-    bool beginReadRest(std::string& error) {
+    // Read Text and Read Bytes read on a work thread: beginRead (on the thread of the script; `who`: "Read Text is reading it"),
+    // read (on the work thread), then endRead. Meanwhile the file is busy: its other nodes go to Failed, At End says false.
+    bool beginRead(std::string& error, const char* who) {
         if (!can(true, "read", error)) return false;
-        busy_ = "Read Text is reading it";
+        busy_ = who;
         return true;
     }
-    // The rest of the file in pieces (`cancelled` stops it after one). The memory for all of it is taken first: a file too big
-    // for it fails at once, with the reason, instead of after it has filled the memory.
-    bool readRest(std::string& text, std::string& error, const std::atomic<bool>& cancelled) {
-        text.clear();
+    // At most `limit` bytes, in pieces (`cancelled` stops it after one): the text from where reading is (`text`), or the bytes. The
+    // memory for all of it is taken first: a file too big for it fails at once, with the reason, instead of after it has filled
+    // the memory.
+    static constexpr uintmax_t kAll = UINTMAX_MAX;
+    bool read(std::string& out, std::string& error, const std::atomic<bool>& cancelled, uintmax_t limit, bool text) {
+        out.clear();
+        if (text) skipMark();
+        else markChecked_ = true;                // a binary read takes the bytes as they are
         std::error_code ec;
         const auto at = stream_.tellg();
         const auto size = fs::file_size(pathOf(path_), ec);
         if (!ec && at >= 0 && size > static_cast<uintmax_t>(at)) {
-            const uintmax_t left = size - static_cast<uintmax_t>(at);
+            const uintmax_t left = std::min(size - static_cast<uintmax_t>(at), limit);
             try {
-                if (left > text.max_size()) throw std::bad_alloc();
-                text.reserve(static_cast<size_t>(left));
+                if (left > out.max_size()) throw std::bad_alloc();
+                out.reserve(static_cast<size_t>(left));
             } catch (const std::bad_alloc&) {
                 error = tooBig(left);
                 return false;
             }
         }
-        std::string chunk(kChunk, '\0');
+        std::string chunk(static_cast<size_t>(std::min<uintmax_t>(kChunk, limit)), '\0');
         try {
-            while (stream_ && !cancelled) {
-                stream_.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
-                text.append(chunk.data(), static_cast<size_t>(stream_.gcount()));
+            while (stream_ && !cancelled && out.size() < limit) {
+                const auto want = static_cast<std::streamsize>(std::min<uintmax_t>(chunk.size(), limit - out.size()));
+                stream_.read(chunk.data(), want);
+                out.append(chunk.data(), static_cast<size_t>(stream_.gcount()));
             }
         } catch (const std::bad_alloc&) {          // the file grew while it was read
-            const uintmax_t read = text.size();
-            std::string().swap(text);
-            error = tooBig(read);
+            const uintmax_t got = out.size();
+            std::string().swap(out);
+            error = tooBig(got);
             return false;
         }
         return worked("read", error);
     }
-    void endReadRest() { busy_ = nullptr; }
+    void endRead() { busy_ = nullptr; }
     bool atEnd() const {
         return !open_ || mode_ != FileMode::Read || (!busy_ && stream_.peek() == std::char_traits<char>::eof());
     }
-    // Write Text / Write Line: `text`, and a line break after it with `line`. A big text is written on a work thread, like Read
-    // Text: beginWrite, write (`cancelled` stops it after a piece; what was written stays), endWrite.
+    // Write Text / Write Line / Write Bytes: `text` (or the bytes), and a line break after it with `line`. A big one is written on
+    // a work thread, like Read Text: beginWrite, write (`cancelled` stops it after a piece; what was written stays), endWrite.
     bool canWrite(std::string& error) const { return can(false, "write", error); }
-    bool beginWrite(std::string& error) {
+    bool beginWrite(std::string& error, const char* who) {
         if (!can(false, "write", error)) return false;
-        busy_ = "Write Text is writing it";
+        busy_ = who;
         return true;
     }
-    bool write(const std::string& text, bool line, std::string& error, const std::atomic<bool>* cancelled = nullptr) {
+    bool write(std::string_view text, bool line, std::string& error, const std::atomic<bool>* cancelled = nullptr) {
         for (size_t at = 0; at < text.size(); at += kChunk) {
             if (cancelled && *cancelled) break;
             stream_.write(text.data() + at, static_cast<std::streamsize>(std::min(kChunk, text.size() - at)));
@@ -392,6 +392,19 @@ public:
     bool isOpen() const { return open_; }
 
 private:
+    // A UTF-8 byte order mark is not part of the text: the first text read at the start of the file skips it. A binary read does
+    // not (the 3 bytes may be data), and after one the mark is not looked for any more.
+    void skipMark() {
+        if (markChecked_) return;
+        markChecked_ = true;
+        if (stream_.tellg() != 0) return;
+        char mark[3] = {};
+        stream_.read(mark, 3);
+        if (!(stream_.gcount() == 3 && mark[0] == '\xEF' && mark[1] == '\xBB' && mark[2] == '\xBF')) {
+            stream_.clear();
+            stream_.seekg(0);
+        }
+    }
     bool can(bool reading, const char* what, std::string& error) const {
         if (const char* busy = busy_) error = std::string("cannot ") + what + " '" + path_ + "': " + busy;
         else if (!open_) error = std::string("cannot ") + what + " '" + path_ + "': the file is closed";
@@ -421,6 +434,7 @@ private:
     FileMode mode_;
     mutable std::fstream stream_;               // mutable: At End peeks
     bool open_ = false;
+    bool markChecked_ = true;                   // Read: false until the first read (skipMark)
     std::atomic<const char*> busy_{nullptr};    // what works on it on a work thread ("Read Text is reading it"), or null
 };
 
@@ -808,43 +822,68 @@ void registerOpenFiles(Registry& reg) {
                  c.out(0, Value(std::move(line)));
                  return ok;
              });
-    {   // Read Text: the rest can be big - on a work thread, as Copy
-        NodeDef d = waitingNode("filesystem.file.readtext", "Read Text", "File", "file read rest all text content",
-                                "Reads the rest of the file, from where reading is. A big file is read in the background (Stop "
-                                "stops it); when it is too big for the memory, Read Line reads it a line at a time.",
-                                {doc(dataIn("Target", "File"), "The file Open File opened")},
-                                {doc(dataOut("Text", "string"), "The text (empty when it failed)")});
-        d.run = [](NodeCtx& c) {
+    // Read Text / Read Bytes: the rest (or Count bytes) can be big - on a work thread, as Copy. A small count is read at once (a
+    // thread for each read of a loop would cost more than the read).
+    auto readNode = [&reg](const char* id, const char* title, const char* keywords, std::string text, bool binary) {
+        std::vector<PinDef> inputs = {doc(dataIn("Target", "File"), "The file Open File opened")};
+        if (binary) inputs.push_back(doc(dataIn("Count", "int", Value(int64_t(-1))), "How many bytes at most; -1: all the rest"));
+        NodeDef d = waitingNode(id, title, "File", keywords, std::move(text), std::move(inputs),
+                                {binary ? doc(dataOut("Bytes", "bytes"), "The bytes (fewer at the end of the file; empty when it failed)")
+                                        : doc(dataOut("Text", "string"), "The text (empty when it failed)")});
+        const char* who = binary ? "Read Bytes is reading it" : "Read Text is reading it";
+        d.run = [binary, who](NodeCtx& c) {
+            auto result = [&](std::string data) { return binary ? Value(Bytes(std::move(data))) : Value(std::move(data)); };
             auto fail = [&](std::string error) {
-                c.out(0, Value(std::string()));
+                c.out(0, result(std::string()));
                 c.out(1, Value(std::move(error)));
                 c.next(1);
+            };
+            auto done = [&](std::string data) {
+                c.out(0, result(std::move(data)));
+                c.out(1, Value(std::string()));
+                c.next(0);
             };
             if (!c.resumed()) {
                 std::string error;
                 auto f = c.registry().unwrap<OpenFile>(c.in(0));
                 if (!f) return fail("no file: connect the File of Open File to Target");
-                if (!f->beginReadRest(error)) return fail(std::move(error));
-                if (!startWork(c, [f](Job& job) {
-                        f->readRest(job.text, job.error, job.cancelled);
-                        f->endReadRest();
+                const int64_t count = binary ? c.inInt(1) : -1;
+                const uintmax_t limit = count < 0 ? OpenFile::kAll : static_cast<uintmax_t>(count);
+                if (limit < kChunk) {
+                    static const std::atomic<bool> notCancelled{false};
+                    std::string data;
+                    if (!f->canRead(error) || !f->read(data, error, notCancelled, limit, !binary)) return fail(std::move(error));
+                    return done(std::move(data));
+                }
+                if (!f->beginRead(error, who)) return fail(std::move(error));
+                if (!startWork(c, [f, limit, binary](Job& job) {
+                        f->read(job.text, job.error, job.cancelled, limit, !binary);
+                        f->endRead();
                     }))
                     return;
             }
             Job& job = *handleOf(c)->job;
             if (!job.error.empty()) return fail(job.error);
-            c.out(0, Value(std::move(job.text)));
-            c.out(1, Value(std::string()));
-            c.next(0);
+            done(std::move(job.text));
         };
         reg.addNode(std::move(d));
-    }
-    // Write Text / Write Line: written from the input's own string (no copy of it). A text of a piece (1 MiB) or more is written on a
-    // work thread, as Copy; a smaller one at once (a thread for each line of a loop would cost more than the line).
-    auto writeNode = [&reg](const char* id, const char* title, const char* keywords, std::string text, bool line) {
+    };
+    readNode("filesystem.file.readtext", "Read Text", "file read rest all text content",
+             "Reads the rest of the file, from where reading is. A big file is read in the background (Stop stops it); when it is "
+             "too big for the memory, Read Line reads it a line at a time.", false);
+    readNode("filesystem.file.readbytes", "Read Bytes", "file read binary bytes data raw chunk",
+             "Reads up to Count bytes (Count -1: all the rest) from where reading is, as they are: for files that are not text "
+             "(images, archives, binary formats). Fewer at the end of the file, none after it (Is At End says when). A big read "
+             "is done in the background (Stop stops it).", true);
+
+    // Write Text / Write Line / Write Bytes: written from the input's own string or bytes (no copy). One of a piece (1 MiB) or more
+    // is written on a work thread, as Copy; a smaller one at once (a thread for each line of a loop would cost more than the line).
+    auto writeNode = [&reg](const char* id, const char* title, const char* keywords, std::string text, bool line, bool binary) {
         NodeDef d = waitingNode(id, title, "File", keywords, std::move(text),
-                                {doc(dataIn("Target", "File"), "The file Open File opened"), dataIn("Text", "string", Value(""))}, {});
-        d.run = [line](NodeCtx& c) {
+                                {doc(dataIn("Target", "File"), "The file Open File opened"),
+                                 binary ? dataIn("Bytes", "bytes") : dataIn("Text", "string", Value(""))}, {});
+        const char* who = binary ? "Write Bytes is writing it" : "Write Text is writing it";
+        d.run = [line, binary, who](NodeCtx& c) {
             auto fail = [&](std::string error) {
                 c.out(0, Value(std::move(error)));
                 c.next(1);
@@ -853,16 +892,19 @@ void registerOpenFiles(Registry& reg) {
                 std::string error;
                 auto f = c.registry().unwrap<OpenFile>(c.in(0));
                 if (!f) return fail("no file: connect the File of Open File to Target");
-                const Value text = c.in(1).isString() ? c.in(1) : Value(c.inString(1));   // shares the string
-                if (text.str().size() < kChunk) {
-                    if (!f->canWrite(error) || !f->write(text.str(), line, error)) return fail(std::move(error));
+                // shares the string or the bytes
+                const Value data = binary ? (c.in(1).isBytes() ? c.in(1) : Value(Bytes()))
+                                          : (c.in(1).isString() ? c.in(1) : Value(c.inString(1)));
+                const std::string_view view = binary ? data.bytesView() : std::string_view(data.str());
+                if (view.size() < kChunk) {
+                    if (!f->canWrite(error) || !f->write(view, line, error)) return fail(std::move(error));
                     c.out(0, Value(std::string()));
                     c.next(0);
                     return;
                 }
-                if (!f->beginWrite(error)) return fail(std::move(error));
-                if (!startWork(c, [f, text, line](Job& job) {
-                        f->write(text.str(), line, job.error, &job.cancelled);
+                if (!f->beginWrite(error, who)) return fail(std::move(error));
+                if (!startWork(c, [f, data, line, binary](Job& job) {
+                        f->write(binary ? data.bytesView() : std::string_view(data.str()), line, job.error, &job.cancelled);
                         f->endWrite();
                     }))
                     return;
@@ -875,10 +917,13 @@ void registerOpenFiles(Registry& reg) {
         reg.addNode(std::move(d));
     };
     writeNode("filesystem.file.writeline", "Write Line", "file write line text append add",
-              "Writes the text (UTF-8) and a line break (\\n). A big text is written in the background (Stop stops it).", true);
+              "Writes the text (UTF-8) and a line break (\\n). A big text is written in the background (Stop stops it).", true, false);
     writeNode("filesystem.file.writetext", "Write Text", "file write text append add",
               "Writes the text (UTF-8) at the end of what was written. A big text is written in the background (Stop stops it).",
-              false);
+              false, false);
+    writeNode("filesystem.file.writebytes", "Write Bytes", "file write binary bytes data raw append add",
+              "Writes the bytes as they are at the end of what was written: for files that are not text. Big bytes are written in "
+              "the background (Stop stops it).", false, true);
     fileNode("filesystem.file.close", "Close", "file close end finish release",
              "Closes the file, so that other programs can delete or rename it. Closing a closed file does nothing.", {}, {},
              [](NodeCtx&, OpenFile& f, std::string& error) { return f.close(error); });

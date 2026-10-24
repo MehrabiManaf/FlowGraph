@@ -4577,6 +4577,92 @@ TEST(filesystem_file_writes_and_reads_a_piece_at_a_time) {
     CHECK_EQ(rest, std::string("alpha,beta\n\ngamma,[],"));
 }
 
+TEST(filesystem_file_reads_and_writes_bytes) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("binary");
+    const std::string path = dir["data.bin"];
+    std::string all;
+    for (int c = 0; c < 256; ++c) all += static_cast<char>(c);
+    const std::string mark = "\xEF\xBB\xBF";
+    // Write Bytes: as they are, also a byte order mark at the start
+    CHECK_EQ(withFile(rt, path, kWrite, [&](GoGraph& t, NodeId open) {
+        NodeId a = method(t, open, open, "Then", "Write Bytes", {{"Bytes", Value(Bytes(mark + "text"))}});
+        return method(t, open, a, "Then", "Write Bytes", {{"Bytes", Value(Bytes(all))}});
+    }), std::string(""));
+    CHECK_EQ(fileText(path), mark + "text" + all);
+
+    // Read Bytes: Count bytes, or all the rest; the mark is data here. Then Read Text goes on from there.
+    auto readParts = [&](GoGraph& t, NodeId open) {
+        NodeId a = method(t, open, open, "Then", "Read Bytes", {{"Count", Value(3)}});
+        NodeId b = method(t, open, a, "Then", "Read Bytes", {{"Count", Value(4)}});
+        NodeId c = method(t, open, b, "Then", "Read Bytes");             // Count -1: the rest
+        NodeId d = method(t, open, c, "Then", "Read Bytes", {{"Count", Value(10)}});      // at the end: none
+        t.s.variables.push_back({"A", "bytes", Value(), "", ""});
+        t.s.variables.push_back({"B", "bytes", Value(), "", ""});
+        t.s.variables.push_back({"C", "bytes", Value(), "", ""});
+        t.s.variables.push_back({"D", "bytes", Value(), "", ""});
+        NodeId prev = d;
+        const std::pair<NodeId, const char*> outs[] = {{a, "A"}, {b, "B"}, {c, "C"}, {d, "D"}};
+        for (auto& [node, var] : outs) {
+            NodeId set = t.var("var.set", var);
+            t.link(prev, "Then", set, "In");
+            t.link(node, "Bytes", set, "Value");
+            prev = set;
+        }
+        return prev;
+    };
+    std::unique_ptr<GoRun> run;
+    CHECK_EQ(withFile(rt, path, kRead, readParts, &run), std::string(""));
+    if (run) {
+        CHECK(run->inst->getVariable("A") == Value(Bytes(mark)));
+        CHECK(run->inst->getVariable("B") == Value(Bytes(std::string("text"))));
+        CHECK(run->inst->getVariable("C") == Value(Bytes(all)));
+        CHECK(run->inst->getVariable("D") == Value(Bytes()));
+    }
+    run.reset();
+    // a text read at the start still skips the mark
+    auto text = withFile(rt, path, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId line = method(t, open, open, "Then", "Read Text");
+        NodeId len = t.node("fn:String.Byte Length");
+        t.link(line, "Text", len, "String");
+        NodeId p = t.node("util.print");
+        t.link(line, "Then", p, "In");
+        t.link(len, "Result", p, "String");
+        return p;
+    });
+    CHECK_EQ(text, std::to_string(4 + 256) + ",");
+
+    // big bytes go through the background, both ways
+    const std::string big(3 << 20, '\x5A');
+    CHECK_EQ(withFile(rt, path, kWrite, [&](GoGraph& t, NodeId open) {
+        return method(t, open, open, "Then", "Write Bytes", {{"Bytes", Value(Bytes(big + all))}});
+    }), std::string(""));
+    CHECK_EQ(fileText(path).size(), big.size() + 256);
+    CHECK_EQ(withFile(rt, path, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId r = method(t, open, open, "Then", "Read Bytes");
+        t.s.variables.push_back({"All", "bytes", Value(), "", ""});
+        NodeId set = t.var("var.set", "All");
+        t.link(r, "Then", set, "In");
+        t.link(r, "Bytes", set, "Value");
+        return set;
+    }, &run), std::string(""));
+    if (run) CHECK(run->inst->getVariable("All") == Value(Bytes(big + all)));
+    run.reset();
+
+    // the other way round is Failed, as for text
+    auto wrong = withFile(rt, path, kWrite, [&](GoGraph& t, NodeId open) {
+        NodeId r = method(t, open, open, "Then", "Read Bytes", {{"Count", Value(1)}});
+        NodeId why = t.node("fn:String.Concat", {{"A", Value("why: ")}});
+        t.link(r, "Error", why, "B");
+        NodeId p = t.node("util.print");
+        t.link(r, "Failed", p, "In");
+        t.link(why, "Result", p, "String");
+        return r;
+    });
+    CHECK(has(wrong, "why: cannot read") && has(wrong, "it is open for writing"));
+}
+
 TEST(filesystem_file_failures_and_mistakes) {
     FileSystemRuntime rt;
     if (!rt.loaded) return;

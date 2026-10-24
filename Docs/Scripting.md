@@ -93,7 +93,9 @@ flow [options] script.flow [arguments...]
 It comes with `flow` and `flowstudio` (category *File System*):
 
 * **File:** Open File (Read, Write or Append) gives a `File` to read a line at a time (Read Line, Read Text, Is At End) or to
-  write a piece at a time (Write Line, Write Text); each write is in the file at once. Close it when it is done.
+  write a piece at a time (Write Line, Write Text); each write is in the file at once. Close it when it is done. Files that are
+  not text (images, archives, binary formats) are read with Read Bytes (Count bytes, or all the rest) and written with Write
+  Bytes, as `bytes`; a text read at the start of a file skips its UTF-8 byte order mark, a bytes read does not.
 * **Files and Folders:** Copy, Move, Delete, Create Folder, List Folder, For Each File (patterns like `*.txt;*.md`, Recursive).
 * **Paths** and **Information** (pure): Join Path, Parent Folder, File Name, Extension, Change Extension, Absolute Path,
   Current / Temp / Home Folder; Exists, Is File, Is Folder, File Size, Last Modified.
