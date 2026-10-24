@@ -132,7 +132,9 @@ void NodeItem::layout() {
             case fg::TypeKind::Bool: v.editor = Editor::Check; break;
             case fg::TypeKind::Int:
             case fg::TypeKind::Float:
-            case fg::TypeKind::String: v.editor = Editor::Line; break;
+            case fg::TypeKind::String:
+            case fg::TypeKind::Byte:
+            case fg::TypeKind::Bytes: v.editor = Editor::Line; break;      // bytes as hex: 48 65 6C
             case fg::TypeKind::Enum: v.editor = Editor::Choice; break;
             default: break;
             }

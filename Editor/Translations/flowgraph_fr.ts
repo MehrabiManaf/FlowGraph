@@ -407,6 +407,10 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <source>%1 nodes selected</source>
         <translation type="unfinished">%1 nœuds sélectionnés</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation type="unfinished">Hexa, p. ex. 48 65 6C 6C 6F</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

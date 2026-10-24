@@ -407,6 +407,10 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <source>%1 nodes selected</source>
         <translation type="unfinished">%1 nodos seleccionados</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation type="unfinished">Hex, p. ej. 48 65 6C 6C 6F</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

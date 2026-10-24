@@ -997,6 +997,7 @@ void registerContainers(Registry& r) {
 } // namespace
 
 void registerTimeNodes(Registry& reg);     // BuiltinsTime.cpp
+void registerBytesNodes(Registry& reg);    // BuiltinsBytes.cpp
 
 void registerBuiltins(Registry& reg) {
     reg.beginSource("core");
@@ -1006,6 +1007,7 @@ void registerBuiltins(Registry& reg) {
     registerStrings(reg);
     registerContainers(reg);
     registerTimeNodes(reg);
+    registerBytesNodes(reg);
     reg.endSource();
 }
 

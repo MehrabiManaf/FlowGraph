@@ -346,7 +346,7 @@ public:
     // CompileOptions::allowNode (which nodes a script may use at all) they keep a script from taking the host down.
     struct Limits {
         size_t maxContainerSize = 0;    // elements of one array or map (checked where containers grow and on node results)
-        size_t maxStringLength = 0;     // bytes of one string a node produces
+        size_t maxStringLength = 0;     // bytes of one string (or of one bytes value) a node produces
         double maxTaskSeconds = 0;      // time one task may spend executing nodes, over all its slices (waits do not count); a
                                         // native function that blocks is not interrupted, the task fails soon after it
     };

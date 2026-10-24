@@ -407,6 +407,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>%1 nodes selected</source>
         <translation type="unfinished">노드 %1개 선택됨</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation type="unfinished">16진수, 예: 48 65 6C 6C 6F</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

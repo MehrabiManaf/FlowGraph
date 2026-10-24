@@ -366,7 +366,10 @@ void DetailsPanel::buildVariable() {
             connect(cb, &QCheckBox::toggled, this, [=, this](bool on) { mutate([&](fg::VariableDecl& d) { d.def = fg::Value(on); }, tr("Edit default value"), "vardef:" + name_); });
             form_->addRow(tr("Default"), cb);
         } else {
-            auto* le = new QLineEdit(t->isEnum() ? qs(t->enumName(cp.def.toInt())) : qs(cp.def.toString() == "null" ? "" : (cp.def.isString() ? cp.def.str() : cp.def.toString())));
+            auto* le = new QLineEdit(t->isEnum() ? qs(t->enumName(cp.def.toInt()))
+                                     : t->kind == fg::TypeKind::Bytes ? defaultText(cp)       // bytes as hex: 48 65 6C
+                                     : qs(cp.def.toString() == "null" ? "" : (cp.def.isString() ? cp.def.str() : cp.def.toString())));
+            if (t->kind == fg::TypeKind::Bytes) le->setPlaceholderText(tr("Hex, e.g. 48 65 6C 6C 6F"));
             connect(le, &QLineEdit::editingFinished, this, [=, this] {
                 fg::Value nv = RunController::parseArgument(doc_->registry(), t, le->text());
                 mutate([&](fg::VariableDecl& d) { d.def = nv; }, tr("Edit default value"), "vardef:" + name_);

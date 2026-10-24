@@ -101,6 +101,8 @@ void Instance::containerTooBig(size_t size) const {
 void Instance::checkLimits(const Value& v) const {
     if (limits_.maxStringLength && v.isString() && v.str().size() > limits_.maxStringLength)
         throw ScriptError("a string of " + std::to_string(v.str().size()) + " bytes; this application allows " + std::to_string(limits_.maxStringLength));
+    if (limits_.maxStringLength && v.isBytes() && v.bytesView().size() > limits_.maxStringLength)
+        throw ScriptError("bytes of " + std::to_string(v.bytesView().size()) + " bytes; this application allows " + std::to_string(limits_.maxStringLength));
     if (limits_.maxContainerSize) {
         if (auto* a = v.arrayPtr()) checkContainerSize(a->items.size());
         else if (auto* m = v.mapPtr()) checkContainerSize(m->items.size());

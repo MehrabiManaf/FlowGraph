@@ -70,6 +70,12 @@ flow [options] script.flow [arguments...]
   Find and Character At count characters, not bytes (`Length("سلام")` is 4); Byte Length gives the size in bytes. For Each
   Character goes through a text once: faster than Character At in a loop. **Format** (`"{Name} is {Age}"`) gets an input per
   placeholder in *Details > Inputs*; `{{` and `}}` are literal braces.
+* **Bytes** are data, not text: the content of a file, a BLOB, a network message. A `bytes` value is one shared buffer, cheap to
+  pass along whatever its size; a `byte` is a number from 0 to 255 that works where an int does (a value out of range wraps around:
+  300 becomes 44). *From Text* / *To Text* convert between text and bytes (UTF-8; *To Text* says in *Valid* whether the bytes were
+  UTF-8), *To Base64* / *From Base64* and *To Hex* / *From Hex* write and read them as text, *To Array* / *Make Bytes* turn them
+  into an `array<byte>` and back for the array nodes. Print String shows a preview (`bytes(5): 48 65 6C 6C 6F`); a bytes default
+  is typed as hex.
 * **Time:** a timestamp is seconds since 1970-01-01 00:00 UTC, as a float. *Now* and *Seconds Since Start* read the clock once
   per run. *Break Date Time* / *Make Date Time* convert to and from year, month, day... in local time or UTC (out of range values
   carry over: month 13 is January); *Format Date Time* writes `%Y-%m-%d %H:%M:%S` style text, *Parse Date Time* reads ISO 8601

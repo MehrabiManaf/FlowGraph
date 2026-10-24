@@ -13,7 +13,6 @@
     "node:get:Message.Line": ["Get Line", "خواندن سطر"],
     "pin:get:Message.Line/Line": ["Line", "سطر"],
     "node:get:Message.Text": ["Get Text", "خواندن متن"],
-    "pin:get:Message.Text/Text": ["Text", "متن"],
     "node:table.addrow": ["Add Row", "افزودن سطر"],
     "node:table.addrow#doc": ["Adds a row to the table. Every input pin is a column of the table: the name of the pin is the name of the column.", "یک سطر به جدول می‌افزاید. هر پایهٔ ورودی یک ستون جدول است: نام پایه نام ستون است."],
     "category:Casting": ["Casting", "تبدیل نوع"],

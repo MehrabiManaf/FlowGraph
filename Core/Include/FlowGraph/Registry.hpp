@@ -42,6 +42,8 @@ public:
     const TypeDesc* tFloat() const { return float_; }
     const TypeDesc* tString() const { return string_; }
     const TypeDesc* tAny() const { return any_; }
+    const TypeDesc* tByte() const { return byte_; }
+    const TypeDesc* tBytes() const { return bytes_; }
 
     // ---- containers: array<T>, map<K,V> (nesting is allowed) --------------------------------
     const TypeDesc* arrayOf(const TypeDesc* elem) const;
@@ -122,6 +124,7 @@ private:
     void registerBuiltinTypes();
 
     const TypeDesc *void_ = nullptr, *bool_ = nullptr, *int_ = nullptr, *float_ = nullptr, *string_ = nullptr, *any_ = nullptr;
+    const TypeDesc *byte_ = nullptr, *bytes_ = nullptr;
     mutable std::deque<TypeDesc> types_;
     mutable std::unordered_map<std::string, TypeDesc*> byName_;
     std::unordered_map<std::type_index, TypeDesc*> byCpp_;

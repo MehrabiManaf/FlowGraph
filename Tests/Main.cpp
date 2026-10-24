@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: MIT
 // Minimal test runner: TEST(name) { CHECK(cond); }
+#include <FlowGraph/Encoding.hpp>
 #include <FlowGraph/Runtime.hpp>
 
 #include <algorithm>
@@ -4768,6 +4769,264 @@ TEST(filesystem_file_writes_a_big_text_in_the_background) {
     CHECK(r.log.size() == 1 && r.log[0] == "line");
     std::error_code ec;
     CHECK_EQ(std::filesystem::file_size(u8path(out), ec), uintmax_t(size + 2));
+}
+
+// ---- byte and bytes -----------------------------------------------------------------------------------------------
+TEST(bytes_values_are_shared_and_compare_by_content) {
+    TestRuntime rt;
+    const Registry& reg = rt.registry();
+    const Value a(Bytes(std::string("Hello")));
+    const Value b = a;                                       // a copy shares the buffer
+    CHECK(a.isBytes() && a.kind() == Value::Kind::Bytes);
+    CHECK(a.identity() == b.identity());
+    CHECK(a.deepCopy().identity() == a.identity());          // immutable: nothing to copy
+    CHECK(a == Value(Bytes(std::string("Hello"))));          // by content
+    CHECK(a != Value(Bytes(std::string("Hellp"))));
+    CHECK(a != Value(std::string("Hello")));                 // text is not bytes
+    CHECK(ValueLess()(Value(Bytes(std::string("A"))), Value(Bytes(std::string("B")))));
+    CHECK(ValueLess()(Value(std::string("zz")), a));         // strings come before bytes
+    CHECK_EQ(a.toString(), std::string("bytes(5): 48 65 6C 6C 6F"));
+    CHECK_EQ(Value(Bytes()).toString(), std::string("bytes(0)"));
+    CHECK_EQ(Value(Bytes(std::string(20, 'A'))).toString(),
+             std::string("bytes(20): 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 ..."));
+    CHECK(a.toBool() && !Value(Bytes()).toBool());
+    CHECK_EQ(a.bytes().size(), size_t(5));
+    CHECK(Value(std::string("x")).bytes().empty());          // not bytes: empty
+    const uint8_t raw[] = {0, 255, 10};
+    CHECK_EQ(Bytes(raw, 3).size(), size_t(3));
+    CHECK_EQ(Bytes(std::vector<uint8_t>{1, 2})[1], uint8_t(2));
+
+    // the types and their rules; editors list them in this order
+    CHECK(reg.findType("byte") == reg.tByte() && reg.findType("bytes") == reg.tBytes());
+    std::vector<std::string> first;
+    for (const TypeDesc* t : reg.types())
+        if (first.size() < 7) first.push_back(t->name);
+    CHECK(first == std::vector<std::string>({"bool", "byte", "int", "float", "string", "bytes", "any"}));
+    CHECK(reg.findType("array<byte>") != nullptr);
+    CHECK(reg.canConnect(reg.tByte(), reg.tInt()) && reg.canConnect(reg.tInt(), reg.tByte()));
+    CHECK(reg.canConnect(reg.tByte(), reg.tFloat()));
+    CHECK(reg.canConnect(reg.tBytes(), reg.tString()));      // to print it
+    CHECK(!reg.canConnect(reg.tString(), reg.tBytes()));     // text becomes bytes with From Text
+    CHECK(!reg.canConnect(reg.tInt(), reg.tBytes()));
+    CHECK(!reg.canConnect(reg.arrayOf(reg.tByte()), reg.tBytes()));
+    CHECK(reg.defaultValue(reg.tBytes()).isBytes() && reg.defaultValue(reg.tBytes()).bytes().empty());
+    CHECK_EQ(reg.defaultValue(reg.tByte()).toInt(), int64_t(0));
+    CHECK(reg.convert(Value(), reg.tBytes()).isBytes());
+    bool refused = false;
+    try {
+        reg.convert(Value(std::string("text")), reg.tBytes());
+    } catch (const ScriptError&) {
+        refused = true;
+    }
+    CHECK(refused);
+
+    // a byte wraps around, like int overflow
+    CHECK_EQ(reg.convert(Value(300), reg.tByte()).toInt(), int64_t(44));
+    CHECK_EQ(reg.convert(Value(-1), reg.tByte()).toInt(), int64_t(255));
+    CHECK_EQ(reg.convert(Value(256), reg.tByte()).toInt(), int64_t(0));
+    CHECK_EQ(reg.convert(Value(200), reg.tByte()).toInt(), int64_t(200));
+    CHECK_EQ(reg.convert(Value(65.9), reg.tByte()).toInt(), int64_t(65));
+
+    // in a .flow file: Base64
+    const Json j = valueToJson(a);
+    CHECK(j.find("$bytes") && j.find("$bytes")->asString() == "SGVsbG8=");
+    CHECK(jsonToValue(j) == a);
+    CHECK(jsonToValue(valueToJson(Value(Bytes()))) == Value(Bytes()));
+    bool bad = false;
+    try {
+        Json broken = Json::object();
+        broken.set("$bytes", "not base64!");
+        jsonToValue(broken);
+    } catch (const JsonError&) {
+        bad = true;
+    }
+    CHECK(bad);
+}
+
+TEST(utf8_base64_and_hex_conversions) {
+    const std::string R = "\xEF\xBF\xBD";                    // U+FFFD
+    bool valid = false;
+    CHECK(bytesToText("h\xC3\xA9llo \xD8\xB3\xD9\x84\xD8\xA7\xD9\x85", &valid) == "h\xC3\xA9llo \xD8\xB3\xD9\x84\xD8\xA7\xD9\x85" && valid);
+    CHECK(bytesToText("\xF0\x9F\x98\x80", &valid) == "\xF0\x9F\x98\x80" && valid);      // 4 byte sequence
+    CHECK(bytesToText("a\xC3(b", &valid) == "a" + R + "(b" && !valid);                   // a lead without its continuation
+    CHECK_EQ(bytesToText("\xC0\xAF"), R + R);                                            // overlong: never UTF-8
+    CHECK_EQ(bytesToText("\xED\xA0\x80"), R + R + R);                                    // a surrogate
+    CHECK_EQ(bytesToText("x\xE2\x82"), "x" + R);                                         // cut at the end: one
+    CHECK_EQ(bytesToText("\xF4\x90\x80\x80"), R + R + R + R);                            // beyond U+10FFFF
+    CHECK_EQ(bytesToText(std::string_view("a\0b", 3)), std::string("a\0b", 3));          // a zero byte is text too
+
+    const char* plain[] = {"", "f", "fo", "foo", "foob", "fooba", "foobar"};
+    const char* coded[] = {"", "Zg==", "Zm8=", "Zm9v", "Zm9vYg==", "Zm9vYmE=", "Zm9vYmFy"};
+    for (int i = 0; i < 7; ++i) {
+        CHECK_EQ(base64Encode(plain[i]), std::string(coded[i]));
+        std::string back;
+        CHECK(base64Decode(coded[i], back) && back == plain[i]);
+    }
+    std::string out;
+    CHECK(base64Decode("Zm9vYg", out) && out == "foob");                                 // no padding
+    CHECK(base64Decode(" Zm9v\nYmFy ", out) && out == "foobar");                         // white space
+    CHECK(base64Decode("-_8=", out) && out == "\xFB\xFF");                               // URL alphabet
+    CHECK(!base64Decode("Zm9v!", out) && out.empty());
+    CHECK(!base64Decode("Z", out));                                                      // a lone digit
+    CHECK(!base64Decode("Zg==Zg", out));                                                 // a digit after the padding
+    std::string all;
+    for (int c = 0; c < 256; ++c) all += static_cast<char>(c);
+    CHECK(base64Decode(base64Encode(all), out) && out == all);
+
+    CHECK_EQ(hexEncode("Hello"), std::string("48656C6C6F"));
+    CHECK_EQ(hexEncode("Hello", true), std::string("48 65 6C 6C 6F"));
+    CHECK_EQ(hexEncode(""), std::string(""));
+    CHECK(hexDecode("48656c6C6F", out) && out == "Hello");
+    CHECK(hexDecode("48 65:6C-6C\n6F", out) && out == "Hello");
+    CHECK(!hexDecode("486", out) && out.empty());                                        // odd
+    CHECK(!hexDecode("4 8", out));                                                       // a separator inside a pair
+    CHECK(!hexDecode("4G", out));
+    CHECK(hexDecode(hexEncode(all), out) && out == all);
+}
+
+namespace {
+// Go -> V0.. = the outputs of a pure node with these input defaults; the values, or "error: ..." in the first.
+std::vector<Value> pureOutputs(Runtime& rt, const std::string& def, std::map<std::string, Value> defaults,
+                               const std::vector<std::pair<std::string, std::string>>& outputs, std::string* error = nullptr) {
+    GoGraph t;
+    NodeId n = t.node(def, std::move(defaults));
+    NodeId prev = t.ev;
+    for (size_t i = 0; i < outputs.size(); ++i) {
+        const std::string v = "V" + std::to_string(i);
+        t.s.variables.push_back({v, outputs[i].second, Value(), "", ""});
+        NodeId set = t.var("var.set", v.c_str());
+        t.link(n, outputs[i].first, set, "Value");
+        t.link(prev, "Then", set, "In");
+        prev = set;
+    }
+    GoRun r(rt, t.s);
+    std::vector<Value> out;
+    if (!r.prog->ok()) {
+        if (error) *error = dumpDiagnostics(*r.prog);
+        return out;
+    }
+    RunResult res = r.inst->callEvent("Go");
+    if (!res.ok) {
+        if (error) *error = res.error;
+        return out;
+    }
+    for (size_t i = 0; i < outputs.size(); ++i) out.push_back(r.inst->getVariable("V" + std::to_string(i)));
+    return out;
+}
+Value bytesOf(const std::string& s) { return Value(Bytes(s)); }
+} // namespace
+
+TEST(bytes_nodes) {
+    TestRuntime rt;
+    auto one = [&](const std::string& def, std::map<std::string, Value> in, const char* out, const char* type) {
+        auto v = pureOutputs(rt, def, std::move(in), {{out, type}});
+        return v.empty() ? Value(std::string("<failed>")) : v[0];
+    };
+    const Value hello = bytesOf("Hello");
+    CHECK_EQ(one("fn:Bytes.Length", {{"Bytes", hello}}, "Length", "int").toInt(), int64_t(5));
+    CHECK_EQ(one("fn:Bytes.Byte At", {{"Bytes", hello}, {"Index", Value(1)}}, "Byte", "byte").toInt(), int64_t('e'));
+    std::string error;
+    CHECK(pureOutputs(rt, "fn:Bytes.Byte At", {{"Bytes", hello}, {"Index", Value(5)}}, {{"Byte", "byte"}}, &error).empty());
+    CHECK(has(error, "index 5 is out of range (size 5)"));
+    CHECK(one("fn:Bytes.Slice", {{"Bytes", hello}, {"Start", Value(1)}, {"Length", Value(3)}}, "Result", "bytes") == bytesOf("ell"));
+    CHECK(one("fn:Bytes.Slice", {{"Bytes", hello}, {"Start", Value(3)}}, "Result", "bytes") == bytesOf("lo"));          // to the end
+    CHECK(one("fn:Bytes.Slice", {{"Bytes", hello}, {"Start", Value(9)}}, "Result", "bytes") == bytesOf(""));
+    CHECK(one("fn:Bytes.Slice", {{"Bytes", hello}, {"Start", Value(-2)}, {"Length", Value(2)}}, "Result", "bytes") == bytesOf("He"));
+    CHECK(one("fn:Bytes.Concat", {{"A", hello}, {"B", bytesOf("!")}}, "Result", "bytes") == bytesOf("Hello!"));
+    CHECK_EQ(one("fn:Bytes.Find", {{"Bytes", hello}, {"What", bytesOf("l")}, {"Start", Value(3)}}, "Index", "int").toInt(), int64_t(3));
+    CHECK_EQ(one("fn:Bytes.Find", {{"Bytes", hello}, {"What", bytesOf("z")}, {"Start", Value(0)}}, "Index", "int").toInt(), int64_t(-1));
+    CHECK(one("fn:Bytes.Starts With", {{"Bytes", hello}, {"Prefix", bytesOf("He")}}, "Result", "bool").toBool());
+    CHECK(!one("fn:Bytes.Ends With", {{"Bytes", hello}, {"Suffix", bytesOf("He")}}, "Result", "bool").toBool());
+    CHECK(one("fn:Bytes.Ends With", {{"Bytes", hello}, {"Suffix", bytesOf("lo")}}, "Result", "bool").toBool());
+
+    // text: UTF-8 both ways, and what is not UTF-8
+    CHECK(one("fn:Bytes.From Text", {{"Text", Value("h\xC3\xA9")}}, "Bytes", "bytes") == bytesOf("h\xC3\xA9"));
+    auto text = pureOutputs(rt, "bytes.totext", {{"Bytes", bytesOf("h\xC3\xA9")}}, {{"Text", "string"}, {"Valid", "bool"}});
+    CHECK(text.size() == 2 && text[0].str() == "h\xC3\xA9" && text[1].toBool());
+    text = pureOutputs(rt, "bytes.totext", {{"Bytes", bytesOf("a\xFF")}}, {{"Text", "string"}, {"Valid", "bool"}});
+    CHECK(text.size() == 2 && text[0].str() == "a\xEF\xBF\xBD" && !text[1].toBool());
+
+    // Base64 and hex
+    CHECK_EQ(one("fn:Bytes.To Base64", {{"Bytes", hello}}, "Text", "string").str(), std::string("SGVsbG8="));
+    auto dec = pureOutputs(rt, "bytes.frombase64", {{"Text", Value("SGVsbG8=")}}, {{"Bytes", "bytes"}, {"Valid", "bool"}});
+    CHECK(dec.size() == 2 && dec[0] == hello && dec[1].toBool());
+    dec = pureOutputs(rt, "bytes.frombase64", {{"Text", Value("??")}}, {{"Bytes", "bytes"}, {"Valid", "bool"}});
+    CHECK(dec.size() == 2 && dec[0] == bytesOf("") && !dec[1].toBool());
+    CHECK_EQ(one("fn:Bytes.To Hex", {{"Bytes", hello}, {"Spaced", Value(true)}}, "Text", "string").str(), std::string("48 65 6C 6C 6F"));
+    dec = pureOutputs(rt, "bytes.fromhex", {{"Text", Value("48656c6c6f")}}, {{"Bytes", "bytes"}, {"Valid", "bool"}});
+    CHECK(dec.size() == 2 && dec[0] == hello && dec[1].toBool());
+
+    // array<byte> and back
+    const Value arr = one("fn:Bytes.To Array", {{"Bytes", bytesOf("A\xFF")}}, "Array", "array<byte>");
+    CHECK(arr.arrayPtr() && arr.arrayPtr()->items.size() == 2 && arr.arrayPtr()->elem == rt.registry().tByte());
+    if (arr.arrayPtr() && arr.arrayPtr()->items.size() == 2)
+        CHECK(arr.arrayPtr()->items[0].toInt() == 65 && arr.arrayPtr()->items[1].toInt() == 255);
+    CHECK(one("fn:Bytes.Make Bytes", {{"Array", arr}}, "Bytes", "bytes") == bytesOf("A\xFF"));
+
+    // bytes are compared by Equal, printed as a preview
+    CHECK(one("cmp.eq", {{"A", hello}, {"B", bytesOf("Hello")}}, "Result", "bool").toBool());
+    GoGraph t;
+    NodeId pr = t.node("util.print", {});
+    t.link(t.ev, "Then", pr, "In");
+    NodeId from = t.node("fn:Bytes.From Text", {{"Text", Value("Hi")}});
+    t.link(from, "Bytes", pr, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    CHECK_EQ(r.go(), std::string("bytes(2): 48 69,"));
+}
+
+TEST(bytes_and_byte_from_cpp_and_in_limits) {
+    TestRuntime rt;
+    Registry& reg = rt.registry();
+    // fg::Bytes is bytes, std::byte is byte (uint8_t stays an int)
+    reg.addFunction("Test.Reverse", [](const Bytes& b) {
+        std::string s(b.view());
+        std::reverse(s.begin(), s.end());
+        return Bytes(std::move(s));
+    }, {"Bytes"}).makePure();
+    reg.addFunction("Test.First", [](const Bytes& b) { return b.empty() ? std::byte{0} : static_cast<std::byte>(b[0]); }, {"Bytes"}).makePure();
+    reg.addFunction("Test.Small", [](uint8_t x) { return x; }, {"X"}).makePure();
+    const FunctionDesc* rev = reg.findFunction("Test.Reverse");
+    CHECK(rev && rev->params[0].type == reg.tBytes() && rev->ret == reg.tBytes());
+    CHECK(reg.findFunction("Test.First")->ret == reg.tByte());
+    CHECK(reg.findFunction("Test.Small")->ret == reg.tInt());
+    Value arg = bytesOf("abc");
+    CHECK(rev->invoke(&arg) == bytesOf("cba"));
+
+    // Limits: a string length limit is a limit for bytes too
+    auto out = pureOutputs(rt, "fn:Bytes.Concat", {{"A", bytesOf(std::string(600, 'x'))}, {"B", bytesOf(std::string(600, 'y'))}},
+                           {{"Result", "bytes"}});
+    CHECK(out.size() == 1 && out[0].bytes().size() == 1200);
+    GoGraph t;
+    t.s.variables.push_back({"B", "bytes", Value(), "", ""});
+    NodeId cat = t.node("fn:Bytes.Concat", {{"A", bytesOf(std::string(600, 'x'))}, {"B", bytesOf(std::string(600, 'y'))}});
+    NodeId set = t.var("var.set", "B");
+    t.link(t.ev, "Then", set, "In");
+    t.link(cat, "Result", set, "Value");
+    GoRun r(rt, t.s);
+    Instance::Limits lim;
+    lim.maxStringLength = 1000;
+    r.inst->setLimits(lim);
+    RunResult res = r.inst->callEvent("Go");
+    CHECK(!res.ok && has(res.error, "bytes of 1200 bytes"));
+
+    // the debugger: a byte variable is a byte, bytes show their preview
+    Script s;
+    s.variables.push_back({"One", "byte", Value(7), "", ""});
+    s.variables.push_back({"Data", "bytes", bytesOf("Hi"), "", ""});
+    s.addEventGraph().addNode("event:Go");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    auto globals = inspectGlobals(inst);
+    CHECK_EQ(globals.size(), size_t(2));
+    if (globals.size() == 2) {
+        CHECK(globals[0].value.type == "byte" && globals[0].value.text == "7");
+        CHECK(globals[1].value.type == "bytes" && globals[1].value.text == "bytes(2): 48 69");
+    }
+    // a script with both round-trips through its file
+    Script back = Script::parse(s.toText());
+    CHECK(back.variables.size() == 2 && back.variables[1].def == bytesOf("Hi") && back.variables[0].type == "byte");
 }
 
 int main(int argc, char** argv) {

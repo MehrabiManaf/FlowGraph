@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: MIT
 #include <FlowGraph/Script.hpp>
+#include <FlowGraph/Encoding.hpp>
 
 #include <algorithm>
 #include <fstream>
@@ -211,6 +212,11 @@ Json valueToJson(const Value& v) {
         o.set("$map", std::move(pairs));
         return o;
     }
+    case Value::Kind::Bytes: {                       // {"$bytes": "SGVsbG8="}: JSON has no bytes, Base64 is text
+        Json o = Json::object();
+        o.set("$bytes", base64Encode(v.bytesView()));
+        return o;
+    }
     }
     return Json();
 }
@@ -228,6 +234,11 @@ Value jsonToValue(const Json& j) {
         return Value(std::move(a));
     }
     case Json::Type::Object: {
+        if (auto* b = j.find("$bytes")) {
+            std::string data;
+            if (!b->isString() || !base64Decode(b->asString(), data)) throw JsonError("\"$bytes\" is not Base64 text");
+            return Value(Bytes(std::move(data)));
+        }
         auto m = std::make_shared<MapData>();
         if (auto* pairs = j.find("$map"))
             for (auto& p : pairs->items()) m->items.emplace(jsonToValue(p[size_t(0)]), jsonToValue(p[1]));

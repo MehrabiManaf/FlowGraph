@@ -4,13 +4,14 @@
 // fg::Value - the dynamically typed value that flows through script pins and variables.
 //
 // Layout: kind tag + 8 byte payload (bool / int / float) + one shared_ptr for the reference kinds
-// (string, object, array, map). Copying a number never touches a reference count.
+// (string, bytes, object, array, map). Copying a number never touches a reference count.
 #include <FlowGraph/Export.hpp>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -52,9 +53,35 @@ public:
     AbortError() : ScriptError("Execution aborted") {}
 };
 
+// Raw bytes: the content of a file, a BLOB, a network message - data, not text (a string is UTF-8 text and counts characters).
+// Immutable and shared like a string: copying one copies a pointer, and threads may share it. The script type `bytes`; plugins
+// take and return it (Bind.hpp). A single byte is the script type `byte`: an int from 0 to 255.
+class FG_CORE_EXPORT Bytes {
+public:
+    Bytes();                                        // empty
+    explicit Bytes(std::string data);               // takes the buffer as it is (no copy)
+    Bytes(const void* data, size_t size);
+    explicit Bytes(const std::vector<uint8_t>& data);
+
+    size_t size() const { return data_->size(); }
+    bool empty() const { return data_->empty(); }
+    const uint8_t* data() const { return reinterpret_cast<const uint8_t*>(data_->data()); }
+    uint8_t operator[](size_t i) const { return static_cast<uint8_t>((*data_)[i]); }
+    std::string_view view() const { return *data_; }        // the bytes as chars (not text)
+    const std::string& str() const { return *data_; }
+
+    friend bool operator==(const Bytes& a, const Bytes& b) { return a.data_ == b.data_ || *a.data_ == *b.data_; }
+    friend bool operator!=(const Bytes& a, const Bytes& b) { return !(a == b); }
+
+private:
+    friend class Value;
+    explicit Bytes(std::shared_ptr<const std::string> d) : data_(std::move(d)) {}
+    std::shared_ptr<const std::string> data_;
+};
+
 class FG_CORE_EXPORT Value {
 public:
-    enum class Kind : uint8_t { Null, Bool, Int, Float, String, Object, Array, Map };
+    enum class Kind : uint8_t { Null, Bool, Int, Float, String, Object, Array, Map, Bytes };
 
     Value() = default;
     Value(const Value&) = default;
@@ -81,6 +108,7 @@ public:
     Value(ObjectRef o) : kind_(o ? Kind::Object : Kind::Null), ref_(std::move(o)) {}
     Value(ArrayRef a) : kind_(a ? Kind::Array : Kind::Null), ref_(std::move(a)) {}
     Value(MapRef m) : kind_(m ? Kind::Map : Kind::Null), ref_(std::move(m)) {}
+    Value(Bytes b) : kind_(Kind::Bytes), ref_(std::const_pointer_cast<std::string>(std::move(b.data_))) {}
 
     Kind kind() const { return kind_; }
     bool isNull() const { return kind_ == Kind::Null; }
@@ -92,6 +120,7 @@ public:
     bool isObject() const { return kind_ == Kind::Object; }
     bool isArray() const { return kind_ == Kind::Array; }
     bool isMap() const { return kind_ == Kind::Map; }
+    bool isBytes() const { return kind_ == Kind::Bytes; }
 
     // Conversions. The "slow" paths throw ScriptError when the conversion makes no sense.
     bool toBool() const { return kind_ == Kind::Bool ? u_.i != 0 : toBoolSlow(); }
@@ -101,8 +130,9 @@ public:
     }
     std::string toString() const;          // human readable form (used by Print String / To String)
 
-    // Raw accessors, valid only for the matching kind() (no reference counting).
+    // Raw accessors, valid only for the matching kind() (no reference counting). str(): String; bytesView(): Bytes.
     const std::string& str() const { return *static_cast<const std::string*>(ref_.get()); }
+    std::string_view bytesView() const { return *static_cast<const std::string*>(ref_.get()); }
     const ObjectHandle* objectPtr() const { return kind_ == Kind::Object ? static_cast<const ObjectHandle*>(ref_.get()) : nullptr; }
     ArrayData* arrayPtr() const { return kind_ == Kind::Array ? static_cast<ArrayData*>(ref_.get()) : nullptr; }
     MapData* mapPtr() const { return kind_ == Kind::Map ? static_cast<MapData*>(ref_.get()) : nullptr; }
@@ -110,6 +140,7 @@ public:
     ObjectRef object() const { return kind_ == Kind::Object ? std::static_pointer_cast<ObjectHandle>(ref_) : ObjectRef{}; }
     ArrayRef array() const { return kind_ == Kind::Array ? std::static_pointer_cast<ArrayData>(ref_) : ArrayRef{}; }
     MapRef map() const { return kind_ == Kind::Map ? std::static_pointer_cast<MapData>(ref_) : MapRef{}; }
+    Bytes bytes() const { return kind_ == Kind::Bytes ? Bytes(std::static_pointer_cast<const std::string>(ref_)) : Bytes(); }
 
     // In place assignment of a plain value (no temporary, no reference count traffic for the common case).
     FG_FORCEINLINE void setBool(bool b) { if (ref_) ref_.reset(); kind_ = Kind::Bool; u_.i = b ? 1 : 0; }
@@ -152,7 +183,7 @@ private:
     std::shared_ptr<void> ref_;
 };
 
-// Total order used for map keys (null < bool < numbers < strings < objects).
+// Total order used for map keys (null < bool < numbers < strings < bytes < objects).
 struct FG_CORE_EXPORT ValueLess {
     bool operator()(const Value& a, const Value& b) const {
         if (a.isInt() && b.isInt()) return a.rawInt() < b.rawInt();

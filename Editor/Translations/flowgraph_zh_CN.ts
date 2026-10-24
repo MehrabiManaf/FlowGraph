@@ -407,6 +407,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>%1 nodes selected</source>
         <translation type="unfinished">已选择 %1 个节点</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation type="unfinished">十六进制，例如 48 65 6C 6C 6F</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

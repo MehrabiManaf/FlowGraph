@@ -64,7 +64,9 @@ static bool pinAccepts(const Registry& reg, const NodeDef* def, const PinDef& p,
     TypeExpr e = TypeExpr::parse(p.type);
     auto paramOf = [&](const TypeExpr& x) { return def ? def->typeParam(x.name) : nullptr; };
     auto allowedFor = [&](const TypeParam* tp, const TypeDesc* t) {
-        return tp->allowed.empty() || std::find(tp->allowed.begin(), tp->allowed.end(), t->name) != tp->allowed.end();
+        auto allows = [&](const std::string& name) { return std::find(tp->allowed.begin(), tp->allowed.end(), name) != tp->allowed.end(); };
+        // a byte is an int (Add of two bytes gives an int): where an int fits, a byte does
+        return tp->allowed.empty() || allows(t->name) || (t->kind == TypeKind::Byte && allows("int"));
     };
     if (e.isPlain()) {
         if (const TypeParam* tp = paramOf(e)) return allowedFor(tp, f.type) || f.type->kind == TypeKind::Any;

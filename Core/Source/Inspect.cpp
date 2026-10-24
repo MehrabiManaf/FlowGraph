@@ -30,6 +30,7 @@ const TypeDesc* dynamicType(const Registry& reg, const Value& v) {
     case Value::Kind::Int: return reg.tInt();
     case Value::Kind::Float: return reg.tFloat();
     case Value::Kind::String: return reg.tString();
+    case Value::Kind::Bytes: return reg.tBytes();
     case Value::Kind::Object: return v.objectPtr()->type;
     case Value::Kind::Array: return reg.arrayOf(v.arrayPtr()->elem);
     case Value::Kind::Map: return reg.mapOf(v.mapPtr()->key, v.mapPtr()->val);
@@ -104,7 +105,7 @@ void fillChildren(const Registry& reg, ValueView& out, const Value& v, const Ins
 
 void fill(const Registry& reg, ValueView& out, const Value& v, const TypeDesc* declared, const InspectOptions& opt, int depth, const std::string& path) {
     const TypeDesc* t = dynamicType(reg, v);
-    if (!t) t = declared;
+    if (!t || (declared && declared->kind == TypeKind::Byte && v.isInt())) t = declared;   // a byte is held as an int
     out.type = t ? t->name : (declared ? declared->name : "null");
     out.path = path;
     switch (v.kind()) {

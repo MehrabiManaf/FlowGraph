@@ -344,6 +344,8 @@ void GraphScene::startInplaceEdit(NodeItem* item, const std::string& pin, const 
     onInplaceFinished();
     if (type && type->kind == fg::TypeKind::Int) editor_->setValidator(new QRegularExpressionValidator(QRegularExpression("-?\\d{0,18}"), editor_));
     else if (type && type->kind == fg::TypeKind::Float) editor_->setValidator(new QRegularExpressionValidator(QRegularExpression("-?\\d*\\.?\\d*([eE][-+]?\\d*)?"), editor_));
+    else if (type && type->kind == fg::TypeKind::Byte) editor_->setValidator(new QRegularExpressionValidator(QRegularExpression("\\d{0,3}"), editor_));
+    else if (type && type->kind == fg::TypeKind::Bytes) editor_->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9A-Fa-f :\\-]*"), editor_));
     else editor_->setValidator(nullptr);
     editNode_ = item->nodeId();
     editPin_ = pin;

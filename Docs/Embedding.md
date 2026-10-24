@@ -45,6 +45,9 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
   `fg::checkCompatibility` list everything this application lacks: events it never raises, events whose arguments changed
   (the script records the signature of the host events it handles), classes / functions / enums of missing plugins and
   unknown types. Runtime-only applications refuse such a script; the editor opens it anyway so that it can be repaired.
+* **Types of C++ arguments and results:** `bool`, the integers (`int64_t`...), `double` / `float`, `std::string` (text),
+  `fg::Value` (`any`), `std::vector<T>` (`array<T>`), `std::map<K, V>` (`map<K, V>`), registered classes and enums, `fg::Bytes`
+  (`bytes`: data, shared without a copy) and `std::byte` (`byte`, 0 to 255; `uint8_t` stays an int).
 * Classes, enums, methods, properties, constructors, free functions and events become nodes automatically
   (`fn:`, `m:`, `get:`/`set:`, `new:`, `cast:`, `enum:`, `event:` node ids). Inheritance (also multiple) is honoured. Enum
   values print by name and may be given by name in scripts (`"default": "Sad"`).
@@ -80,7 +83,7 @@ auto program = rt.compile(script, opts);                       // a refused node
 
 fg::Instance::Limits lim;
 lim.maxContainerSize = 100'000;                                // elements of one array / map
-lim.maxStringLength = 1 << 20;                                 // bytes of one string
+lim.maxStringLength = 1 << 20;                                 // bytes of one string (or of one bytes value)
 lim.maxTaskSeconds = 0.5;                                      // time one task may spend executing nodes
 instance.setLimits(lim);
 instance.setStepLimit(10'000'000);                             // nodes per run (default 50 million)

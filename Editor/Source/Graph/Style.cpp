@@ -3,6 +3,8 @@
 #include "Style.hpp"
 #include "../Common/NodeTexts.hpp"
 
+#include <FlowGraph/Encoding.hpp>
+
 namespace fged {
 
 namespace {
@@ -63,8 +65,16 @@ QString defaultText(const fg::CompiledPin& p) {
     case fg::TypeKind::Float: return QString::number(p.def.toFloat(), 'g', 10);
     case fg::TypeKind::String: return p.def.isString() ? qs(p.def.str()) : QString();
     case fg::TypeKind::Enum: return enumValueText(p.type, p.def.toInt());       // its name in the language of the editor
+    case fg::TypeKind::Byte: return QString::number(p.def.toInt());
+    case fg::TypeKind::Bytes: return p.def.isBytes() ? qs(fg::hexEncode(p.def.bytesView(), true)) : QString();   // 48 65 6C
     default: return {};
     }
+}
+
+fg::Value bytesFromHex(const QString& text) {
+    std::string data;
+    fg::hexDecode(ss(text), data);              // what is not hex (an odd digit while typing) gives no bytes
+    return fg::Value(fg::Bytes(std::move(data)));
 }
 
 fg::Value parseDefault(const fg::CompiledPin& p, const QString& text) {
@@ -77,6 +87,8 @@ fg::Value parseDefault(const fg::CompiledPin& p, const QString& text) {
         for (auto& e : p.type->enumValues)
             if (qs(e.name) == text) return fg::Value(e.value);
         return fg::Value(static_cast<int64_t>(text.toLongLong()));
+    case fg::TypeKind::Byte: return fg::Value(static_cast<int64_t>(static_cast<uint8_t>(text.toLongLong())));
+    case fg::TypeKind::Bytes: return bytesFromHex(text);
     default: return fg::Value();
     }
 }

@@ -65,5 +65,7 @@ void drawPinGlyph(QPainter* p, const QPointF& center, const PinGlyph& g);
 QString defaultText(const fg::CompiledPin& p);
 // Parses editor text into a value of the pin's type.
 fg::Value parseDefault(const fg::CompiledPin& p, const QString& text);
+// Bytes typed as hex ("48 65 6C"); text that is not hex gives empty bytes.
+fg::Value bytesFromHex(const QString& text);
 
 } // namespace fged

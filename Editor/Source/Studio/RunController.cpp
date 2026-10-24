@@ -35,6 +35,8 @@ fg::Value RunController::parseArgument(const fg::Registry& reg, const fg::TypeDe
         for (auto& e : type->enumValues)
             if (qs(e.name) == text) return fg::Value(e.value);
         return fg::Value(int64_t(text.toLongLong()));
+    case fg::TypeKind::Byte: return reg.convert(fg::Value(int64_t(text.toLongLong())), type);     // wraps around: 300 -> 44
+    case fg::TypeKind::Bytes: return bytesFromHex(text);
     default: return reg.defaultValue(type);
     }
 }

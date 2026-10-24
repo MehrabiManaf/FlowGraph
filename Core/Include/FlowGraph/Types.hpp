@@ -14,7 +14,8 @@
 
 namespace fg {
 
-enum class TypeKind : uint8_t { Void, Bool, Int, Float, String, Any, Class, Enum, Array, Map };
+// Byte: an int from 0 to 255 (a Value of Kind::Int; a value out of range wraps around, like int overflow). Bytes: raw data (fg::Bytes).
+enum class TypeKind : uint8_t { Void, Bool, Int, Float, String, Any, Class, Enum, Array, Map, Byte, Bytes };
 
 struct ParamDesc {
     std::string name;
@@ -105,8 +106,13 @@ struct FG_CORE_EXPORT TypeDesc {
     bool isClass() const { return kind == TypeKind::Class; }
     bool isEnum() const { return kind == TypeKind::Enum; }
     bool isContainer() const { return kind == TypeKind::Array || kind == TypeKind::Map; }
-    bool isPrimitive() const { return kind == TypeKind::Bool || kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::String; }
-    bool isNumeric() const { return kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::Enum || kind == TypeKind::Bool; }
+    bool isPrimitive() const {
+        return kind == TypeKind::Bool || kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::String ||
+               kind == TypeKind::Byte || kind == TypeKind::Bytes;
+    }
+    bool isNumeric() const {
+        return kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::Enum || kind == TypeKind::Bool || kind == TypeKind::Byte;
+    }
 
     // Whether `v` is one of the values of this enum.
     bool hasEnumValue(int64_t v) const {

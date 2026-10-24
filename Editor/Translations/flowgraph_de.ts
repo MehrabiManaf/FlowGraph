@@ -407,6 +407,10 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <source>%1 nodes selected</source>
         <translation type="unfinished">%1 Knoten ausgewählt</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation type="unfinished">Hex, z. B. 48 65 6C 6C 6F</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>

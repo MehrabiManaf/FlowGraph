@@ -1068,6 +1068,25 @@ TEST(mouse_drag_between_pins_creates_link) {
     CHECK(linked);
 }
 
+// Bytes are shown and typed as hex on the pins and in Details; a byte is a number that wraps around.
+TEST(byte_and_bytes_defaults_are_edited_as_numbers_and_hex) {
+    fg::Registry reg;
+    fg::CompiledPin bytes;
+    bytes.type = reg.tBytes();
+    bytes.def = fg::Value(fg::Bytes(std::string("Hello")));
+    CHECK_EQ(defaultText(bytes), QString("48 65 6C 6C 6F"));
+    CHECK(parseDefault(bytes, "48 65 6c 6C 6F") == bytes.def);
+    CHECK(parseDefault(bytes, "4865:6C").bytes().size() == 3);
+    CHECK(parseDefault(bytes, "486").bytes().empty());        // half a byte while typing: nothing yet
+    fg::CompiledPin one;
+    one.type = reg.tByte();
+    one.def = fg::Value(200);
+    CHECK_EQ(defaultText(one), QString("200"));
+    CHECK_EQ(parseDefault(one, "300").toInt(), int64_t(44));
+    CHECK_EQ(RunController::parseArgument(reg, reg.tByte(), "256").toInt(), int64_t(0));
+    CHECK(RunController::parseArgument(reg, reg.tBytes(), "FF 00") == fg::Value(fg::Bytes(std::string("\xFF\x00", 2))));
+}
+
 // A right click while a link is dragged drops the link and opens no menu - whether the system sends the context menu event with
 // the press (X11, Wayland) or after the release (Windows). A menu that opened there took the left button's release away from the
 // drag, and its dashed link stayed in the view for good.

@@ -407,6 +407,10 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
         <source>%1 nodes selected</source>
         <translation type="unfinished">%1 nós selecionados</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation type="unfinished">Hex, ex.: 48 65 6C 6C 6F</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
