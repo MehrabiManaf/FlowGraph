@@ -25,6 +25,7 @@
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QStyleOptionButton>
+#include <QStyleOptionComboBox>
 #include <QStyledItemDelegate>
 #include <QHBoxLayout>
 #include <set>
@@ -435,8 +436,8 @@ QString tip(const char* text) { return QCoreApplication::translate("fged::Detail
 QString columnTip(int col, const QString& value) {
     switch (col) {
     case ColName: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Name")) + "</b>: " + value.toHtmlEscaped();
-    case ColType: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Type")) + "</b>: " + value.toHtmlEscaped() + "<br><i>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Double-click to change it.")) + "</i>";
-    case ColContainer: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Container")) + "</b>: " + value + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "A single value, an array of it, or a map from a key type to it.")) + "<br><i>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Double-click to change it.")) + "</i>";
+    case ColType: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Type")) + "</b>: " + value.toHtmlEscaped() + "<br><i>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Click to change it.")) + "</i>";
+    case ColContainer: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Container")) + "</b>: " + value + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "A single value, an array of it, or a map from a key type to it.")) + "<br><i>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Click to change it.")) + "</i>";
     case ColKey: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Key")) + "</b>: " + (value.isEmpty() ? tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "(none)")) : value.toHtmlEscaped()) + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "The key type of a map; only used when the container is a Map."));
     case ColRef: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Ref")) + "</b>: " + value + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Passed by reference: the function reads and writes the caller's variable."));
     default: return "<b>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "Const")) + "</b>: " + value + "<br>" + tip(QT_TRANSLATE_NOOP("fged::DetailsPanel", "The function may not modify the parameter (a const reference needs no variable and makes no copy)."));
@@ -480,8 +481,8 @@ private:
     QElapsedTimer shown_;
 };
 
-// Edits the cells of a parameter table. Nothing but text is in the cells until the user asks to edit one: then a combo box (types,
-// containers) or a line edit (names) appears, and the check columns toggle on a click.
+// Edits the cells of a parameter table. The cells that are chosen from a list (type, container, key) are drawn as combo boxes
+// and open theirs on a click; a name is edited by double-click (a line edit); the check columns toggle on a click.
 class ParamDelegate : public QStyledItemDelegate {
 public:
     ParamDelegate(std::shared_ptr<const fg::TypeScope> types, QObject* parent) : QStyledItemDelegate(parent), types_(std::move(types)) {}
@@ -535,6 +536,7 @@ public:
     }
 
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        if (isChoice(option, index)) return paintChoice(painter, option, index);
         if (index.column() < ColRef) return QStyledItemDelegate::paint(painter, option, index);
         // a check box centered in its cell
         QStyleOptionViewItem o = option;
@@ -579,10 +581,20 @@ public:
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         QSize s = QStyledItemDelegate::sizeHint(option, index);
         if (index.column() == ColType || index.column() == ColKey) s.setWidth(std::max(s.width() + 8, 64));
+        if (index.column() == ColType || index.column() == ColContainer || index.column() == ColKey) s.setWidth(s.width() + kArrowWidth);
         return s;
     }
 
     bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index) override {
+        // a click on a combo box cell opens its list (no double-click needed)
+        if (isChoice(option, index) && event->type() == QEvent::MouseButtonRelease) {
+            auto* e = static_cast<QMouseEvent*>(event);
+            if (e->button() == Qt::LeftButton && option.rect.contains(e->pos()))
+                if (auto* view = qobject_cast<QAbstractItemView*>(const_cast<QWidget*>(option.widget))) {
+                    view->edit(index);
+                    return true;
+                }
+        }
         if (index.column() < ColRef || !(index.flags() & Qt::ItemIsUserCheckable) || !(index.flags() & Qt::ItemIsEnabled))
             return QStyledItemDelegate::editorEvent(event, model, option, index);
         bool toggle = false;
@@ -594,6 +606,37 @@ public:
     }
 
 private:
+    static constexpr int kArrowWidth = 30;           // the drop-down arrow of a combo box cell, and its frame
+
+    // A cell chosen from a list, in a table that can be edited (the pins of a node's definition are shown, not edited).
+    static bool isChoice(const QStyleOptionViewItem& option, const QModelIndex& index) {
+        const int c = index.column();
+        if (c != ColType && c != ColContainer && c != ColKey) return false;
+        if (!(index.flags() & Qt::ItemIsEditable)) return false;               // the key of what is not a map
+        auto* view = qobject_cast<const QAbstractItemView*>(option.widget);
+        return view && view->editTriggers() != QAbstractItemView::NoEditTriggers;
+    }
+
+    // The row as usual (selection, alternating colours), with a combo box of the style on it: it says "choose from a list".
+    void paintChoice(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
+        QStyleOptionViewItem o = option;
+        initStyleOption(&o, index);
+        const QString text = o.text;
+        o.text.clear();
+        QStyle* style = o.widget ? o.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &o, painter, o.widget);
+        QStyleOptionComboBox box;
+        box.rect = o.rect.adjusted(1, 1, -1, -1);
+        box.palette = o.palette;
+        box.state = (o.state & (QStyle::State_Enabled | QStyle::State_MouseOver)) | QStyle::State_Active;
+        box.currentText = text;
+        box.editable = false;
+        box.frame = true;
+        box.subControls = QStyle::SC_All;
+        style->drawComplexControl(QStyle::CC_ComboBox, &box, painter, o.widget);
+        style->drawControl(QStyle::CE_ComboBoxLabel, &box, painter, o.widget);
+    }
+
     PopupCombo* typeEditor(QWidget* parent) const {
         auto* box = new PopupCombo(parent);
         box->setEditable(true);

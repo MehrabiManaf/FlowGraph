@@ -646,6 +646,56 @@ TEST(debugger_panel_pages_big_arrays_and_evaluates_watches) {
 
 // The inputs / outputs tables of a function have no header (the tooltips name the columns) and no widgets in their cells: a combo box
 // appears only while the user edits a cell.
+// The cells chosen from a list (type, container, the key of a map) look like combo boxes and open theirs on one click; a name
+// still needs a double-click, and the pins of a node's definition (shown, not edited) open nothing.
+TEST(details_parameter_type_cells_open_on_a_click) {
+    Fixture f;
+    f.doc.edit("Function", [&](fg::Script& s) { s.addFunction("Add", {{"A", "int", false, false, fg::Value()}}, {}); });
+    DetailsPanel details(&f.doc);
+    details.showGraph("Add");
+    details.resize(420, 600);
+    details.show();
+    QCoreApplication::processEvents();
+    auto tables = details.findChildren<QTableWidget*>();
+    CHECK(!tables.isEmpty());
+    if (tables.isEmpty()) return;
+    QTableWidget* in = tables[0];
+    auto click = [&](QTableWidget* t, int row, int col) {
+        const QPoint p = t->visualItemRect(t->item(row, col)).center();
+        for (QEvent::Type type : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease}) {
+            QMouseEvent e(type, QPointF(p), QPointF(t->viewport()->mapToGlobal(p)), Qt::LeftButton,
+                          type == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(t->viewport(), &e);
+            QCoreApplication::processEvents();
+        }
+    };
+    auto settle = [] {
+        QCoreApplication::processEvents();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QCoreApplication::processEvents();
+    };
+    CHECK(in->item(0, 1)->toolTip().contains("Click to change it."));
+    click(in, 0, 0);                                            // the name: a click only selects
+    CHECK(details.findChildren<QComboBox*>().isEmpty() && details.findChildren<QLineEdit*>().size() == 3);   // search, name, description
+    click(in, 0, 1);                                            // the type: its list
+    CHECK_EQ(details.findChildren<QComboBox*>().size(), 1);
+    if (auto* box = details.findChild<QComboBox*>()) box->hidePopup();
+    in->setCurrentCell(0, 0);                                   // the editor closes when the cell is left
+    settle();
+    in->closePersistentEditor(in->item(0, 1));
+    settle();
+
+    // a node's own pins are shown, not edited: no combo box look, nothing opens
+    const fg::NodeId add = f.graph().nodes.back().id;
+    details.showNodes("EventGraph", {int(add)});
+    QCoreApplication::processEvents();
+    for (auto* t : details.findChildren<QTableWidget*>()) {
+        if (t->editTriggers() != QAbstractItemView::NoEditTriggers || t->rowCount() == 0 || t->columnCount() < 2) continue;
+        click(t, 0, 1);
+        CHECK(details.findChildren<QComboBox*>().isEmpty());
+    }
+}
+
 TEST(details_parameter_tables_edit_through_a_delegate) {
     Fixture f;
     f.doc.edit("Function", [&](fg::Script& s) {

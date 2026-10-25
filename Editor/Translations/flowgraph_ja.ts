@@ -224,10 +224,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">マップ</translation>
     </message>
     <message>
-        <source>Double-click to change it.</source>
-        <translation type="unfinished">ダブルクリックで変更します。</translation>
-    </message>
-    <message>
         <source>A single value, an array of it, or a map from a key type to it.</source>
         <translation type="unfinished">単一の値、その配列、またはキーの型からそれへのマップ。</translation>
     </message>
@@ -466,6 +462,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>Field</source>
         <translation type="unfinished">フィールド</translation>
+    </message>
+    <message>
+        <source>Click to change it.</source>
+        <translation type="unfinished">クリックで変更します。</translation>
     </message>
 </context>
 <context>

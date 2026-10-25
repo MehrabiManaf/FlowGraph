@@ -224,10 +224,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">映射</translation>
     </message>
     <message>
-        <source>Double-click to change it.</source>
-        <translation type="unfinished">双击以更改。</translation>
-    </message>
-    <message>
         <source>A single value, an array of it, or a map from a key type to it.</source>
         <translation type="unfinished">单个值、它的数组，或从某个键类型到它的映射。</translation>
     </message>
@@ -466,6 +462,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>Field</source>
         <translation type="unfinished">字段</translation>
+    </message>
+    <message>
+        <source>Click to change it.</source>
+        <translation type="unfinished">单击以更改。</translation>
     </message>
 </context>
 <context>

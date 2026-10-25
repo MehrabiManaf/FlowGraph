@@ -224,10 +224,6 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <translation type="unfinished">Mapa</translation>
     </message>
     <message>
-        <source>Double-click to change it.</source>
-        <translation type="unfinished">Doble clic para cambiarlo.</translation>
-    </message>
-    <message>
         <source>A single value, an array of it, or a map from a key type to it.</source>
         <translation type="unfinished">Un valor único, un array de él o un mapa de un tipo de clave a él.</translation>
     </message>
@@ -466,6 +462,10 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
     <message>
         <source>Field</source>
         <translation type="unfinished">Campo</translation>
+    </message>
+    <message>
+        <source>Click to change it.</source>
+        <translation type="unfinished">Haga clic para cambiarlo.</translation>
     </message>
 </context>
 <context>

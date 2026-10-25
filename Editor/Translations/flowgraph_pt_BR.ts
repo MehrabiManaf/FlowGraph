@@ -224,10 +224,6 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
         <translation type="unfinished">Mapa</translation>
     </message>
     <message>
-        <source>Double-click to change it.</source>
-        <translation type="unfinished">Clique duas vezes para alterar.</translation>
-    </message>
-    <message>
         <source>A single value, an array of it, or a map from a key type to it.</source>
         <translation type="unfinished">Um valor único, um array dele ou um mapa de um tipo de chave para ele.</translation>
     </message>
@@ -466,6 +462,10 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
     <message>
         <source>Field</source>
         <translation type="unfinished">Campo</translation>
+    </message>
+    <message>
+        <source>Click to change it.</source>
+        <translation type="unfinished">Clique para alterar.</translation>
     </message>
 </context>
 <context>

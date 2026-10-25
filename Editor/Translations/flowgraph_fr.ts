@@ -224,10 +224,6 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <translation type="unfinished">Map</translation>
     </message>
     <message>
-        <source>Double-click to change it.</source>
-        <translation type="unfinished">Double-cliquez pour le modifier.</translation>
-    </message>
-    <message>
         <source>A single value, an array of it, or a map from a key type to it.</source>
         <translation type="unfinished">Une valeur simple, un tableau de celle-ci, ou une map d&apos;un type de clé vers elle.</translation>
     </message>
@@ -466,6 +462,10 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
     <message>
         <source>Field</source>
         <translation type="unfinished">Champ</translation>
+    </message>
+    <message>
+        <source>Click to change it.</source>
+        <translation type="unfinished">Cliquez pour le modifier.</translation>
     </message>
 </context>
 <context>

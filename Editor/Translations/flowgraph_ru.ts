@@ -224,10 +224,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">Словарь</translation>
     </message>
     <message>
-        <source>Double-click to change it.</source>
-        <translation type="unfinished">Дважды щёлкните, чтобы изменить.</translation>
-    </message>
-    <message>
         <source>A single value, an array of it, or a map from a key type to it.</source>
         <translation type="unfinished">Одиночное значение, массив таких значений или словарь из типа ключа в него.</translation>
     </message>
@@ -466,6 +462,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>Field</source>
         <translation type="unfinished">Поле</translation>
+    </message>
+    <message>
+        <source>Click to change it.</source>
+        <translation type="unfinished">Щёлкните, чтобы изменить.</translation>
     </message>
 </context>
 <context>

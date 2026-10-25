@@ -224,10 +224,6 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <translation type="unfinished">Map</translation>
     </message>
     <message>
-        <source>Double-click to change it.</source>
-        <translation type="unfinished">Doppelklick zum Ändern.</translation>
-    </message>
-    <message>
         <source>A single value, an array of it, or a map from a key type to it.</source>
         <translation type="unfinished">Ein einzelner Wert, ein Array davon oder eine Map von einem Schlüsseltyp darauf.</translation>
     </message>
@@ -466,6 +462,10 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
     <message>
         <source>Field</source>
         <translation type="unfinished">Feld</translation>
+    </message>
+    <message>
+        <source>Click to change it.</source>
+        <translation type="unfinished">Klicken zum Ändern.</translation>
     </message>
 </context>
 <context>
