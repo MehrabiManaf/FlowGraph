@@ -31,6 +31,7 @@ private:
     enum class Mode { None, Variable, Graph, Struct, Nodes };
 
     void rebuild();
+    bool shownExists() const;  // the variable / function / struct shown is still in the script
     void applyFilter();         // hides the rows that do not contain the search text
     void clearForm();
     void edit(const QString& label, const std::function<void(fg::Script&)>& fn, const QString& key = QString(), bool rebuildAfter = false);

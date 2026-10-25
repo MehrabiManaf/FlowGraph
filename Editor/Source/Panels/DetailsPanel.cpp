@@ -180,6 +180,14 @@ DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), do
     outer->addStretch(1);
     connect(doc_, &Document::scriptReplaced, this, [this] { rebuild(); });
     connect(&ThemeNotifier::instance(), &ThemeNotifier::changed, this, [this] { rebuild(); });     // the colours of its messages
+    // the variable, function or struct shown was deleted (by My Script, an undo...): nothing is shown any more. Checked once the
+    // edit is over: a rename in My Script shows the item again under its new name meanwhile.
+    connect(doc_, &Document::changed, this, [this] {
+        if (selfEdit_ || mode_ == Mode::None || mode_ == Mode::Nodes) return;
+        QTimer::singleShot(0, this, [this] {
+            if (mode_ != Mode::None && mode_ != Mode::Nodes && !shownExists()) showNothing();
+        });
+    });
     connect(doc_, &Document::compiled, this, [this] {
         if (selfEdit_ || rebuildQueued_ || mode_ != Mode::Nodes) return;
         rebuildQueued_ = true;
@@ -216,7 +224,22 @@ void DetailsPanel::clearForm() {
     while (form_->rowCount() > 0) form_->removeRow(0);
 }
 
+bool DetailsPanel::shownExists() const {
+    const fg::Script& s = doc_->script();
+    switch (mode_) {
+    case Mode::Variable: {
+        if (owner_.isEmpty()) return s.findVariable(ss(name_)) != nullptr;
+        const fg::Graph* g = s.findGraph(ss(owner_));
+        return g && g->findLocal(ss(name_));
+    }
+    case Mode::Graph: return s.findGraph(ss(name_)) != nullptr;
+    case Mode::Struct: return s.findStruct(ss(name_)) != nullptr;
+    default: return true;
+    }
+}
+
 void DetailsPanel::rebuild() {
+    if (!shownExists()) mode_ = Mode::None;          // another script, an undo: what was shown is not there any more
     clearForm();
     switch (mode_) {
     case Mode::None: form_->addRow(dim(tr("Select a variable, function, struct or node to see its properties."))); break;

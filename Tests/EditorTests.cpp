@@ -2140,6 +2140,49 @@ TEST(structs_are_made_in_my_script_and_edited_in_details) {
     CHECK_EQ(f.graph().findNode(id)->prop("field"), std::string("X"));
 }
 
+// What Details shows goes away with it: a deleted variable, local variable, function or struct is not shown any more.
+TEST(details_forget_what_was_deleted) {
+    Fixture f;
+    f.doc.edit("Add", [](fg::Script& s) {
+        s.variables.push_back({"Counter", "int", fg::Value(int64_t(0)), "", ""});
+        s.addFunction("Compute").locals.push_back({"Local", "int", fg::Value(int64_t(0)), "", ""});
+        s.structs.push_back({"Point", "", "", {{"X", "int", fg::Value(), ""}}});
+    });
+    DetailsPanel details(&f.doc);
+    details.show();
+    auto showsNothing = [&] {
+        for (auto* l : details.findChildren<QLabel*>())
+            if (l->isVisibleTo(&details) && l->text().startsWith("Select a variable")) return true;
+        return false;
+    };
+    auto check = [&](const std::function<void()>& show, const std::function<void(fg::Script&)>& remove) {
+        show();
+        QCoreApplication::processEvents();
+        CHECK(!showsNothing());
+        f.doc.edit("Delete", remove);
+        QCoreApplication::processEvents();
+        CHECK(showsNothing());
+    };
+    check([&] { details.showVariable("", "Counter"); }, [](fg::Script& s) { s.variables.clear(); });
+    check([&] { details.showVariable("Compute", "Local"); }, [](fg::Script& s) { s.findGraph("Compute")->locals.clear(); });
+    check([&] { details.showStruct("Point"); }, [](fg::Script& s) { s.structs.clear(); });
+    check([&] { details.showGraph("Compute"); }, [](fg::Script& s) { s.removeGraph("Compute"); });
+    // an undo that takes it away too
+    f.doc.edit("Add again", [](fg::Script& s) { s.variables.push_back({"Again", "int", fg::Value(int64_t(0)), "", ""}); });
+    details.showVariable("", "Again");
+    QCoreApplication::processEvents();
+    CHECK(!showsNothing());
+    f.doc.undo();
+    QCoreApplication::processEvents();
+    CHECK(showsNothing());
+    // what is still there stays: an edit of something else does not clear it
+    f.doc.edit("Add", [](fg::Script& s) { s.variables.push_back({"Kept", "int", fg::Value(int64_t(0)), "", ""}); });
+    details.showVariable("", "Kept");
+    f.doc.edit("Other", [](fg::Script& s) { s.variables.push_back({"Other", "int", fg::Value(int64_t(0)), "", ""}); });
+    QCoreApplication::processEvents();
+    CHECK(!showsNothing());
+}
+
 TEST(details_search_shows_only_the_matching_properties) {
     Fixture f;
     f.doc.edit("Add", [](fg::Script& sc) { sc.variables.push_back({"Counter", "int", fg::Value(int64_t(0)), "", ""}); });
