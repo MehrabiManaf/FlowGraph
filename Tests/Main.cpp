@@ -3677,7 +3677,7 @@ TEST(limits_stop_scripts_that_grow_too_big_or_run_too_long) {
         mcopy.intrinsic = Intrinsic::None;
         rt.registry().addNode(std::move(mcopy));
     }
-    // For 0..100: Add(A, Index) / Set Entry(M, Index, Index)
+    // For 0..100: Add(A, Index) / Add(M, Index, Index)
     auto growing = [&](const char* def, const char* type) {
         GoGraph t;
         t.s.variables.push_back({"C", type, Value(), "", ""});
@@ -5116,6 +5116,38 @@ TEST(bytes_and_byte_from_cpp_and_in_limits) {
     // a script with both round-trips through its file
     Script back = Script::parse(s.toText());
     CHECK(back.variables.size() == 2 && back.variables[1].def == bytesOf("Hi") && back.variables[0].type == "byte");
+}
+
+// Add of a map adds the key or changes its value (titled like the array nodes; the ids stay those of Set Entry / Get Entry).
+TEST(map_add_adds_a_key_or_changes_its_value) {
+    TestRuntime rt;
+    const NodeDef* add = rt.registry().findNode("map.set");
+    const NodeDef* get = rt.registry().findNode("map.get");
+    CHECK(add && add->title == "Add" && add->keywords.find("insert") != std::string::npos && add->keywords.find("set entry") != std::string::npos);
+    CHECK(get && get->title == "Get Item" && get->keywords.find("get entry") != std::string::npos);
+    GoGraph t;
+    t.s.variables.push_back({"M", "map<string,int>", Value(), "", ""});
+    NodeId prev = t.ev;
+    const char* prevPin = "Then";
+    for (auto [key, value] : std::vector<std::pair<const char*, int>>{{"a", 1}, {"a", 2}, {"b", 3}}) {
+        NodeId n = t.node("map.set", {{"Key", Value(key)}, {"Value", Value(value)}});
+        t.link(prev, prevPin, n, "In");
+        t.link(t.var("var.get", "M"), "Value", n, "Map");
+        prev = n;
+    }
+    NodeId len = t.node("map.length");
+    t.link(t.var("var.get", "M"), "Value", len, "Map");
+    NodeId item = t.node("map.get", {{"Key", Value("a")}});
+    t.link(t.var("var.get", "M"), "Value", item, "Map");
+    NodeId p1 = t.node("util.print");
+    t.link(prev, prevPin, p1, "In");
+    t.link(len, "Length", p1, "String");
+    NodeId p2 = t.node("util.print");
+    t.link(p1, "Then", p2, "In");
+    t.link(item, "Value", p2, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    CHECK_EQ(r.go(), std::string("2,2,"));
 }
 
 // ---- structs ------------------------------------------------------------------------------------------------------

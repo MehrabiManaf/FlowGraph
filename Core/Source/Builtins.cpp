@@ -949,7 +949,8 @@ void registerContainers(Registry& r) {
         r.addNode(std::move(d));
     }
 
-    auto mapNode = [&](const char* id, Intrinsic fast, const char* title, bool pure, bool mutates, std::vector<PinDef> pins, std::function<void(NodeCtx&)> run) {
+    auto mapNode = [&](const char* id, Intrinsic fast, const char* title, bool pure, bool mutates, std::vector<PinDef> pins, std::function<void(NodeCtx&)> run,
+                       const std::string& keywords = {}, const std::string& doc = {}) {
         NodeDef d = pure ? pureNode(id, title, "Containers|Map") : execNode(id, title, "Containers|Map");
         d.intrinsic = fast;
         d.typeParams.push_back({"K", {}, "string"});
@@ -957,25 +958,27 @@ void registerContainers(Registry& r) {
         for (auto& p : pins) d.pins.push_back(std::move(p));
         d.mutatesFirstInput = mutates;
         markContainerAccess(d, mutates);
-        d.keywords = "map dictionary table";
+        d.keywords = "map dictionary table" + (keywords.empty() ? std::string() : " " + keywords);
+        d.doc = doc;
         d.run = std::move(run);
         r.addNode(std::move(d));
     };
-    mapNode("map.set", Intrinsic::MapSet, "Set Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataIn("Value", "V")},
+    // titled like the array nodes; the ids are those of "Set Entry" / "Get Entry", the names they had
+    mapNode("map.set", Intrinsic::MapSet, "Add", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K"), dataIn("Value", "V")},
             [](NodeCtx& c) {
         auto& m = mapArg(c, 0);
         const size_t limit = c.instance().limits().maxContainerSize;
         if (limit && m.items.size() >= limit && !m.items.count(c.in(1))) c.instance().checkContainerSize(m.items.size() + 1);
         m.items[c.in(1)] = c.in(2).deepCopy();
-    });
+    }, "set entry insert put update", "Adds the entry; when the map has the key already, its value is changed.");
     mapNode("map.remove", Intrinsic::None, "Remove Entry", false, true, {dataIn("Map", "map<K,V>"), dataIn("Key", "K")}, [](NodeCtx& c) { mapArg(c, 0).items.erase(c.in(1)); });
     mapNode("map.clear", Intrinsic::None, "Clear", false, true, {dataIn("Map", "map<K,V>")}, [](NodeCtx& c) { mapArg(c, 0).items.clear(); });
-    mapNode("map.get", Intrinsic::MapGet, "Get Entry", true, false, {dataIn("Map", "map<K,V>"), reads(dataIn("Key", "K")), aliases(dataOut("Value", "V")), dataOut("Found", "bool")}, [](NodeCtx& c) {
+    mapNode("map.get", Intrinsic::MapGet, "Get Item", true, false, {dataIn("Map", "map<K,V>"), reads(dataIn("Key", "K")), aliases(dataOut("Value", "V")), dataOut("Found", "bool")}, [](NodeCtx& c) {
         auto& m = mapArg(c, 0);
         auto it = m.items.find(c.in(1));
         c.out(0, it == m.items.end() ? c.registry().defaultValue(m.val) : it->second);
         c.out(1, Value(it != m.items.end()));
-    });
+    }, "get entry find lookup value", "The value of the key; when the map does not have it, Found is off and Value is the default of the type.");
     mapNode("map.contains", Intrinsic::MapContains, "Contains Key", true, false, {dataIn("Map", "map<K,V>"), reads(dataIn("Key", "K")), dataOut("Contains", "bool")},
             [](NodeCtx& c) { c.out(0, Value(mapArg(c, 0).items.count(c.in(1)) > 0)); });
     mapNode("map.length", Intrinsic::MapLength, "Length", true, false, {dataIn("Map", "map<K,V>"), dataOut("Length", "int")},

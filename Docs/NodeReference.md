@@ -405,6 +405,22 @@ Type parameters: `T` any type (from what is connected)
 
 ## Containers / Map
 
+### Add
+
+`map.set` · exec
+
+Adds the entry; when the map has the key already, its value is changed.
+
+Type parameters: `K` any type; `V` any type (from what is connected)
+
+| | Pin | Type | Default | |
+|-|-|-|-|-|
+| in | In | exec |  |  |
+| out | Then | exec |  |  |
+| in | Map | `map<K,V>` (changed in place) |  |  |
+| in | Key | `K` |  |  |
+| in | Value | `V` |  |  |
+
 ### Clear
 
 `map.clear` · exec
@@ -429,9 +445,11 @@ Type parameters: `K` any type; `V` any type (from what is connected)
 | in | Key | `K` (read) |  |  |
 | out | Contains | `bool` |  |  |
 
-### Get Entry
+### Get Item
 
 `map.get` · pure
+
+The value of the key; when the map does not have it, Found is off and Value is the default of the type.
 
 Type parameters: `K` any type; `V` any type (from what is connected)
 
@@ -476,20 +494,6 @@ Type parameters: `K` any type; `V` any type (from what is connected)
 | out | Then | exec |  |  |
 | in | Map | `map<K,V>` (changed in place) |  |  |
 | in | Key | `K` |  |  |
-
-### Set Entry
-
-`map.set` · exec
-
-Type parameters: `K` any type; `V` any type (from what is connected)
-
-| | Pin | Type | Default | |
-|-|-|-|-|-|
-| in | In | exec |  |  |
-| out | Then | exec |  |  |
-| in | Map | `map<K,V>` (changed in place) |  |  |
-| in | Key | `K` |  |  |
-| in | Value | `V` |  |  |
 
 ### Values
 
