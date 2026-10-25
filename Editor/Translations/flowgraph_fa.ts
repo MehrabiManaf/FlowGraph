@@ -1348,6 +1348,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>De&amp;lete</source>
         <translation>حذف(&amp;L)</translation>
     </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation>تمام‌صفحه(&amp;U)</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

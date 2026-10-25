@@ -78,6 +78,8 @@ protected:
     void closeEvent(QCloseEvent* e) override;
     void showEvent(QShowEvent* e) override;
     void resizeEvent(QResizeEvent* e) override;
+    void changeEvent(QEvent* e) override;
+    void toggleFullScreen();             // View > Full Screen: back to maximized or normal, as the window was before
     void afterLayoutRestored();          // the docks the saved layout did not know, the collapsed tab bars
     void restoreMaximizedLayout();       // the saved layout again, once the window has its maximized size
 
@@ -167,6 +169,8 @@ private:
     QAction* actAbout_;
     QAction *actFind_ = nullptr, *actFindRefs_ = nullptr, *actCollapse_ = nullptr;
     QAction* actSnap_ = nullptr;
+    QAction* actFullScreen_ = nullptr;
+    bool maximizedBeforeFullScreen_ = false;
     QActionGroup* speedGroup_ = nullptr;
     QActionGroup* snapSizeGroup_ = nullptr;
     QActionGroup* themeGroup_ = nullptr;       // View > Theme (only when the host offers the choice)

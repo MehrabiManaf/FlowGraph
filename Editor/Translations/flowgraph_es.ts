@@ -1348,6 +1348,10 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <source>Nothing to run: add an event to a graph (this application offers: %1 entries).</source>
         <translation type="unfinished">Nada que ejecutar: añada un evento a un grafo (esta aplicación ofrece: %1 entradas).</translation>
     </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation type="unfinished">&amp;Pantalla completa</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

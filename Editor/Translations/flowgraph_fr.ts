@@ -1348,6 +1348,10 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <source>Nothing to run: add an event to a graph (this application offers: %1 entries).</source>
         <translation type="unfinished">Rien à exécuter : ajoutez un événement à un graphe (cette application propose : %1 entrées).</translation>
     </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation type="unfinished">&amp;Plein écran</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

@@ -1348,6 +1348,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Nothing to run: add an event to a graph (this application offers: %1 entries).</source>
         <translation type="unfinished">Нечего запускать: добавьте событие в граф (это приложение предлагает точек входа: %1).</translation>
     </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation type="unfinished">Во весь &amp;экран</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

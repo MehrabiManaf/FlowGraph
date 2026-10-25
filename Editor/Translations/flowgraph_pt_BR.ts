@@ -1348,6 +1348,10 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
         <source>Nothing to run: add an event to a graph (this application offers: %1 entries).</source>
         <translation type="unfinished">Nada para executar: adicione um evento a um grafo (este aplicativo oferece: %1 entradas).</translation>
     </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation type="unfinished">Tela c&amp;heia</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

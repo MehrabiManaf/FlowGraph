@@ -16,7 +16,7 @@ defaults, is in [NodeReference.md](NodeReference.md).
 | Find | Ctrl+F finds nodes by title, comment or value in every graph; Shift+F12 (or right-click > *Find References*) lists the nodes that use the selected variable or function; double-click a result to go there |
 | Run | F5 (or F6) runs the launch configuration chosen in the toolbar; the same button pauses the running script and continues a paused one; Shift+F5 stop |
 | Debug | F9 toggles a breakpoint, F10 / F11 / Shift+F11 step over / into / out; hover pins while paused to see values; *Run > Execution speed* slows execution so the animated links are visible |
-| View | *View > Theme*: Dark, Light or System; *View > Language*. *File > Open Recent* lists the last 10 scripts |
+| View | Shift+Alt+Enter (*View > Full Screen*) switches full screen on and off; *View > Theme*: Dark, Light or System; *View > Language*. *File > Open Recent* lists the last 10 scripts |
 
 ## Launch configurations
 

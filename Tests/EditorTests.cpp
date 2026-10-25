@@ -2183,6 +2183,42 @@ TEST(details_forget_what_was_deleted) {
     CHECK(!showsNothing());
 }
 
+// View > Full Screen (Shift+Alt+Enter: F11 is Step Into) and back to the state the window had: normal or maximized.
+TEST(view_full_screen_goes_back_to_the_state_before) {
+    StudioFixture f;
+    QAction* full = nullptr;
+    for (auto* menu : f.win.menuBar()->findChildren<QMenu*>())
+        if (menu->objectName() == "View")
+            for (auto* a : menu->actions()) if (a->text() == "F&ull Screen") full = a;
+    CHECK(full != nullptr);
+    if (!full) return;
+    CHECK(full->isCheckable() && full->shortcut() == QKeySequence("Shift+Alt+Return"));
+    f.win.showNormal();
+    QCoreApplication::processEvents();
+    full->trigger();
+    QCoreApplication::processEvents();
+    CHECK(f.win.isFullScreen() && full->isChecked());
+    full->trigger();
+    QCoreApplication::processEvents();
+    CHECK(!f.win.isFullScreen() && !f.win.isMaximized() && !full->isChecked());
+    // maximized before: maximized after
+    f.win.showMaximized();
+    QCoreApplication::processEvents();
+    full->trigger();
+    QCoreApplication::processEvents();
+    CHECK(f.win.isFullScreen());
+    full->trigger();
+    QCoreApplication::processEvents();
+    CHECK(f.win.isMaximized() && !f.win.isFullScreen());
+    // the check mark follows the window, whatever changes it
+    f.win.showFullScreen();
+    QCoreApplication::processEvents();
+    CHECK(full->isChecked());
+    f.win.showNormal();
+    QCoreApplication::processEvents();
+    CHECK(!full->isChecked());
+}
+
 TEST(details_search_shows_only_the_matching_properties) {
     Fixture f;
     f.doc.edit("Add", [](fg::Script& sc) { sc.variables.push_back({"Counter", "int", fg::Value(int64_t(0)), "", ""}); });

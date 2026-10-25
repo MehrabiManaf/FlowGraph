@@ -1348,6 +1348,10 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <source>Nothing to run: add an event to a graph (this application offers: %1 entries).</source>
         <translation type="unfinished">Nichts auszuführen: Fügen Sie einem Graphen ein Ereignis hinzu (diese Anwendung bietet: %1 Einstiegspunkte).</translation>
     </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation type="unfinished">&amp;Vollbild</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

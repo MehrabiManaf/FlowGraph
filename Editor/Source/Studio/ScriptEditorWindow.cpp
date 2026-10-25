@@ -301,6 +301,9 @@ void ScriptEditorWindow::createActions() {
     actSelectAll_->setIcon(themedIcon(":/Icons/select-all.svg"));
     actComment_->setIcon(themedIcon(":/Icons/comment.svg"));
     actFrame_ = act(tr("&Frame All") + "\tHome");
+    // not F11 (Step Into, as in Visual Studio): the key of Visual Studio's full screen
+    actFullScreen_ = act(tr("F&ull Screen"), QKeySequence("Shift+Alt+Return"));
+    actFullScreen_->setCheckable(true);
     {
         QSettings settings = editorSettings();
         snapToGrid_ = settings.value("editor/snapToGrid", true).toBool();
@@ -369,6 +372,7 @@ void ScriptEditorWindow::createActions() {
         if (auto* v = currentView()) v->graphScene()->addComment(v->mapToScene(v->viewport()->rect().center()));
     });
     connect(actFrame_, &QAction::triggered, this, [this] { if (auto* v = currentView()) v->frameAll(); });
+    connect(actFullScreen_, &QAction::triggered, this, [this] { toggleFullScreen(); });
     connect(actSnap_, &QAction::toggled, this, [this](bool on) {
         snapToGrid_ = on;
         editorSettings().setValue("editor/snapToGrid", on);
@@ -432,6 +436,7 @@ void ScriptEditorWindow::createMenus() {
     QMenu* view = menuBar()->addMenu(tr("&View"));
     view->setObjectName("View");                // its English name: menuNamed() finds it in any language
     view->addAction(actFrame_);
+    view->addAction(actFullScreen_);
     view->addSeparator();
     view->addAction(actSnap_);
     QMenu* gridSize = view->addMenu(tr("Grid Snap Si&ze"));
@@ -1134,6 +1139,23 @@ void ScriptEditorWindow::restoreMaximizedLayout() {
         const QByteArray saved = std::exchange(maximizedLayout_, QByteArray());
         if (KDDockWidgets::LayoutSaver(KDDockWidgets::RestoreOption_RelativeToMainWindow).restoreLayout(saved)) afterLayoutRestored();
     });
+}
+
+void ScriptEditorWindow::toggleFullScreen() {
+    if (!isFullScreen()) {
+        maximizedBeforeFullScreen_ = isMaximized();
+        showFullScreen();
+    } else if (maximizedBeforeFullScreen_) {
+        showMaximized();
+    } else {
+        showNormal();
+    }
+}
+
+// The check mark follows the window, whatever made it full screen or not (the saved layout, the window manager...).
+void ScriptEditorWindow::changeEvent(QEvent* e) {
+    KDDockWidgets::QtWidgets::MainWindow::changeEvent(e);
+    if (e->type() == QEvent::WindowStateChange && actFullScreen_) actFullScreen_->setChecked(isFullScreen());
 }
 
 void ScriptEditorWindow::resizeEvent(QResizeEvent* e) {
