@@ -679,6 +679,11 @@ TEST(details_parameter_type_cells_open_on_a_click) {
     CHECK(details.findChildren<QComboBox*>().isEmpty() && details.findChildren<QLineEdit*>().size() == 3);   // search, name, description
     click(in, 0, 1);                                            // the type: its list
     CHECK_EQ(details.findChildren<QComboBox*>().size(), 1);
+    if (auto* box = details.findChild<QComboBox*>()) {          // as wide as its longest type, though the cell is narrow
+        int longest = 0;
+        for (int i = 0; i < box->count(); ++i) longest = std::max(longest, box->view()->fontMetrics().horizontalAdvance(box->itemText(i)));
+        CHECK(box->view()->minimumWidth() > longest);
+    }
     if (auto* box = details.findChild<QComboBox*>()) box->hidePopup();
     in->setCurrentCell(0, 0);                                   // the editor closes when the cell is left
     settle();
@@ -736,6 +741,7 @@ TEST(details_parameter_tables_edit_through_a_delegate) {
     CHECK(in->item(0, 3)->text().isEmpty());                                                   // ... and empty, as it is for an array
     CHECK(in->item(1, 3)->text().isEmpty());
     CHECK_EQ(out->item(0, 3)->text(), QString("string"));                                      // only a map has a key type
+    CHECK(in->isColumnHidden(3) && !out->isColumnHidden(3));                                  // and the Key column is only there with one
 
     auto param = [&](bool inputs, size_t i) {
         const fg::Graph* g = f.doc.graph("Add");

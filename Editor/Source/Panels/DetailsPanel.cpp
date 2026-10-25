@@ -13,6 +13,7 @@
 #include "TypeSpec.hpp"
 
 #include <QAbstractButton>
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QCheckBox>
 #include <QCompleter>
@@ -25,7 +26,6 @@
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QStyleOptionButton>
-#include <QStyleOptionComboBox>
 #include <QStyledItemDelegate>
 #include <QHBoxLayout>
 #include <set>
@@ -38,6 +38,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTimer>
@@ -481,8 +482,8 @@ private:
     QElapsedTimer shown_;
 };
 
-// Edits the cells of a parameter table. The cells that are chosen from a list (type, container, key) are drawn as combo boxes
-// and open theirs on a click; a name is edited by double-click (a line edit); the check columns toggle on a click.
+// Edits the cells of a parameter table. The cells that are chosen from a list (type, container, key) show a small arrow after
+// their text and open their list on a click; a name is edited by double-click (a line edit); the check columns toggle on a click.
 class ParamDelegate : public QStyledItemDelegate {
 public:
     ParamDelegate(std::shared_ptr<const fg::TypeScope> types, QObject* parent) : QStyledItemDelegate(parent), types_(std::move(types)) {}
@@ -580,8 +581,10 @@ public:
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         QSize s = QStyledItemDelegate::sizeHint(option, index);
-        if (index.column() == ColType || index.column() == ColKey) s.setWidth(std::max(s.width() + 8, 64));
-        if (index.column() == ColType || index.column() == ColContainer || index.column() == ColKey) s.setWidth(s.width() + kArrowWidth);
+        // the key of what is not a map is empty: it takes no room (and the column is hidden when there is no map at all)
+        const bool emptyKey = index.column() == ColKey && index.data(Qt::DisplayRole).toString().isEmpty();
+        if ((index.column() == ColType || index.column() == ColContainer || index.column() == ColKey) && !emptyKey) s.setWidth(s.width() + kArrowWidth);
+        if ((index.column() == ColType || index.column() == ColKey) && !emptyKey) s.setWidth(std::max(s.width(), 64));
         return s;
     }
 
@@ -606,7 +609,7 @@ public:
     }
 
 private:
-    static constexpr int kArrowWidth = 30;           // the drop-down arrow of a combo box cell, and its frame
+    static constexpr int kArrowWidth = 16;           // the arrow after the text of a cell chosen from a list
 
     // A cell chosen from a list, in a table that can be edited (the pins of a node's definition are shown, not edited).
     static bool isChoice(const QStyleOptionViewItem& option, const QModelIndex& index) {
@@ -617,7 +620,8 @@ private:
         return view && view->editTriggers() != QAbstractItemView::NoEditTriggers;
     }
 
-    // The row as usual (selection, alternating colours), with a combo box of the style on it: it says "choose from a list".
+    // The cell as any other (the row's selection and colours), its text followed by a small arrow that says "choose from a list";
+    // under the mouse a light rounded background, like a flat button: it can be clicked.
     void paintChoice(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
         QStyleOptionViewItem o = option;
         initStyleOption(&o, index);
@@ -625,16 +629,29 @@ private:
         o.text.clear();
         QStyle* style = o.widget ? o.widget->style() : QApplication::style();
         style->drawControl(QStyle::CE_ItemViewItem, &o, painter, o.widget);
-        QStyleOptionComboBox box;
-        box.rect = o.rect.adjusted(1, 1, -1, -1);
-        box.palette = o.palette;
-        box.state = (o.state & (QStyle::State_Enabled | QStyle::State_MouseOver)) | QStyle::State_Active;
-        box.currentText = text;
-        box.editable = false;
-        box.frame = true;
-        box.subControls = QStyle::SC_All;
-        style->drawComplexControl(QStyle::CC_ComboBox, &box, painter, o.widget);
-        style->drawControl(QStyle::CE_ComboBoxLabel, &box, painter, o.widget);
+        const bool selected = o.state & QStyle::State_Selected, hovered = o.state & QStyle::State_MouseOver;
+        const QColor ink = o.palette.color(selected ? QPalette::HighlightedText : QPalette::Text);
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing);
+        if (hovered) {
+            QColor under = ink;
+            under.setAlpha(34);
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(under);
+            painter->drawRoundedRect(QRectF(o.rect).adjusted(1.5, 3.5, -1.5, -3.5), 3, 3);
+        }
+        const int margin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, &o, o.widget) + 1;      // where the other cells' text starts
+        const QRect textRect = o.rect.adjusted(margin, 0, -kArrowWidth, 0);
+        painter->setPen(ink);
+        painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, o.fontMetrics.elidedText(text, Qt::ElideRight, textRect.width()));
+        QColor arrow = ink;
+        arrow.setAlpha(selected || hovered ? 235 : 140);
+        painter->setPen(QPen(arrow, 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter->setBrush(Qt::NoBrush);
+        const QPointF c(o.rect.right() - kArrowWidth / 2.0, o.rect.center().y() + 1.0);
+        const QPointF chevron[] = {c + QPointF(-3.5, -2.0), c + QPointF(0, 1.5), c + QPointF(3.5, -2.0)};
+        painter->drawPolyline(chevron, 3);
+        painter->restore();
     }
 
     PopupCombo* typeEditor(QWidget* parent) const {
@@ -643,6 +660,9 @@ private:
         box->setInsertPolicy(QComboBox::NoInsert);
         for (auto* t : types_->types()) box->addItem(qs(t->name));
         if (box->completer()) box->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+        // the cell is narrow, its list need not be: as wide as the longest type (not "Dict...")
+        const int widest = box->view()->sizeHintForColumn(0) + box->view()->verticalScrollBar()->sizeHint().width() + 2 * box->view()->frameWidth() + 8;
+        box->view()->setMinimumWidth(widest);
         QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { if (!box->justOpened()) finish(box); });
         // A choice or Return ends the edit; so does moving the focus to another widget - but not while the list is open, and not
         // into the list itself (opening it takes the focus away from the line edit too).
@@ -685,6 +705,11 @@ void styleParamRow(QTableWidget* table, int r) {
     QTableWidgetItem* key = table->item(r, ColKey);
     key->setFlags(isMap ? (key->flags() | Qt::ItemIsEditable) : (key->flags() & ~Qt::ItemIsEditable));
     key->setForeground(isMap ? table->palette().color(QPalette::Text) : dimColor);
+    // the Key column only while a parameter is a map: for every other one it would be an empty space
+    bool anyMap = false;
+    for (int i = 0; i < table->rowCount(); ++i)
+        if (QTableWidgetItem* c = table->item(i, ColContainer)) anyMap |= c->text() == containerName(2);
+    table->setColumnHidden(ColKey, !anyMap);
 }
 
 } // namespace
@@ -694,6 +719,8 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
     const int columns = inputs ? ColCount : ColRef;
     auto* table = new QTableWidget(int(params.size()), columns);
     table->setItemDelegate(new ParamDelegate(doc_->types(), table));
+    table->setMouseTracking(true);                      // the cells chosen from a list light up under the mouse
+    table->viewport()->setAttribute(Qt::WA_Hover);
     table->horizontalHeader()->hide();                  // the column names are in the tooltips of the cells
     table->verticalHeader()->hide();
     table->verticalHeader()->setDefaultSectionSize(kRowHeight);
