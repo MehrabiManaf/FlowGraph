@@ -5397,6 +5397,48 @@ TEST(structs_survive_a_reload_field_by_field) {
     CHECK(has(evaluateExpression(inst, nullptr, 0, "P.Nope").error, "has no field 'Nope'"));
 }
 
+TEST(find_references_of_a_struct) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.structs.push_back(pointStruct());
+    t.s.structs.push_back({"Line", "", "", {{"From", "Point", Value(), ""}, {"Name", "string", Value(), ""}}});
+    t.s.variables.push_back({"P", "Point", Value(), "", ""});
+    t.s.variables.push_back({"N", "int", Value(), "", ""});
+    t.s.variables.push_back({"All", "map<string,Point>", Value(), "", ""});
+    Graph& f = t.s.addFunction("Move", {{"From", "Point", false, false, Value()}}, {{"To", "array<Point>", false, false, Value()}});
+    f.locals.push_back({"Tmp", "Point", Value(), "", ""});
+    NodeId mk = makePoint(t);
+    NodeId br = breakPoint(t);
+    NodeId st = setField(t, "Y", Value(2));
+    NodeId arr = t.node("array.make");
+    t.g->findNode(arr)->typeArgs["T"] = "Point";
+    NodeId other = t.node("struct.make", {}, {{"struct", "Line"}});
+    (void)other;
+    auto prog = build(rt, t.s);
+    const RefTarget target{RefTarget::Kind::Struct, "Point", ""};
+    CHECK_EQ(target.describe(), std::string("struct Point"));
+    auto refs = findReferences(t.s, prog.get(), target);
+    std::vector<std::string> got;
+    for (auto& r : refs) got.push_back(r.graph + "|" + r.title + "|" + r.detail + "|" + std::to_string(int(r.declaration)));
+    using D = ScriptRef::Declaration;
+    auto row = [](std::string graph, std::string title, std::string detail, D d) { return graph + "|" + title + "|" + detail + "|" + std::to_string(int(d)); };
+    const std::vector<std::string> want = {
+        row("", "P", "variable: Point", D::Variable), row("", "All", "variable: map<string,Point>", D::Variable),
+        row("", "Line.From", "field: Point", D::Field), row("Move", "From", "input: Point", D::Input),
+        row("Move", "To", "output: array<Point>", D::Output), row("Move", "Tmp", "local variable: Point", D::Local),
+        row("EventGraph", "Make Point", "Make", D::None), row("EventGraph", "Break Point", "Break", D::None),
+        row("EventGraph", "Set Point.Y", "Set Y", D::None), row("EventGraph", prog->findGraph("EventGraph")->findNode(arr)->title, "T = Point", D::None),
+    };
+    CHECK(got == want);
+    if (got != want)
+        for (auto& g : got) std::printf("  %s\n", g.c_str());
+    // Find References on one of its nodes looks for the struct
+    for (NodeId id : {mk, br, st}) {
+        RefTarget of = referenceTargetOf(t.s, "EventGraph", *t.g->findNode(id));
+        CHECK(of.kind == RefTarget::Kind::Struct && of.name == "Point");
+    }
+}
+
 TEST(structs_are_renamed_everywhere_and_offered_in_the_palette) {
     TestRuntime rt;
     GoGraph t;

@@ -560,16 +560,16 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">%1 の参照</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">入力して検索するか、ノード、変数、関数に対して「参照を検索」を使います。</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">見つかりません</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">%1 件見つかりました</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">入力して検索するか、ノード、変数、関数、構造体に対して「参照を検索」を使います。</translation>
     </message>
 </context>
 <context>
@@ -1197,10 +1197,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">%2 の参照 %1 件</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">参照を検索するには、ノード、またはマイスクリプトの変数か関数を選択してください</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">%1 テーマ</translation>
     </message>
@@ -1351,6 +1347,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>F&amp;ull Screen</source>
         <translation type="unfinished">全画面表示(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">参照を検索するには、ノード、またはマイスクリプトの変数、関数、構造体を選択してください</translation>
     </message>
 </context>
 <context>

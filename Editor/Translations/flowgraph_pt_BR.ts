@@ -560,16 +560,16 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
         <translation type="unfinished">Referências de %1</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">Digite para pesquisar ou use Localizar referências em um nó, variável ou função.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">nada encontrado</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">%1 encontrado(s)</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">Digite para pesquisar ou use Localizar referências em um nó, variável, função ou estrutura.</translation>
     </message>
 </context>
 <context>
@@ -1197,10 +1197,6 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
         <translation type="unfinished">%1 referência(s) de %2</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">Selecione um nó, ou uma variável ou função em Meu script, para localizar suas referências</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">Tema %1</translation>
     </message>
@@ -1351,6 +1347,10 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
     <message>
         <source>F&amp;ull Screen</source>
         <translation type="unfinished">Tela c&amp;heia</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">Selecione um nó, ou uma variável, função ou estrutura em Meu script, para localizar suas referências</translation>
     </message>
 </context>
 <context>

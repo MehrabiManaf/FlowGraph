@@ -45,6 +45,9 @@ public:
     int resultCount() const;
 signals:
     void activated(const QString& graph, int node);
+    // a declaration that uses a struct (fg::ScriptRef::Declaration): `graph` is the function of a local variable / input / output,
+    // `name` the variable / parameter, or Struct.Field
+    void declarationActivated(int declaration, const QString& graph, const QString& name);
 private:
     void refresh();
     Document* doc_;

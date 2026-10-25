@@ -560,16 +560,16 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation>ارجاع‌های %1</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation>برای جستجو تایپ کنید، یا «یافتن ارجاع‌ها» را روی یک گره، متغیر یا تابع به کار ببرید.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation>چیزی پیدا نشد</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation>%1 مورد پیدا شد</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation>برای جستجو تایپ کنید، یا «یافتن ارجاع‌ها» را روی یک گره، متغیر، تابع یا ساختار به کار ببرید.</translation>
     </message>
 </context>
 <context>
@@ -1173,10 +1173,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation>%1 ارجاع به %2</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation>برای یافتن ارجاع‌ها، یک گره، یا یک متغیر یا تابع در «اسکریپت من» را انتخاب کنید</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation>پوستهٔ %1</translation>
     </message>
@@ -1351,6 +1347,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>F&amp;ull Screen</source>
         <translation>تمام‌صفحه(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation>برای یافتن ارجاع‌ها، یک گره، یا یک متغیر، تابع یا ساختار در «اسکریپت من» را انتخاب کنید</translation>
     </message>
 </context>
 <context>

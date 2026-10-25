@@ -560,16 +560,16 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <translation type="unfinished">Références de %1</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">Tapez pour rechercher, ou utilisez Rechercher les références sur un nœud, une variable ou une fonction.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">rien trouvé</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">%1 trouvé(s)</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">Tapez pour rechercher, ou utilisez Rechercher les références sur un nœud, une variable, une fonction ou une structure.</translation>
     </message>
 </context>
 <context>
@@ -1197,10 +1197,6 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <translation type="unfinished">%1 référence(s) de %2</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">Sélectionnez un nœud, ou une variable ou une fonction dans Mon script, pour rechercher ses références</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">Thème %1</translation>
     </message>
@@ -1351,6 +1347,10 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
     <message>
         <source>F&amp;ull Screen</source>
         <translation type="unfinished">&amp;Plein écran</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">Sélectionnez un nœud, ou une variable, une fonction ou une structure dans Mon script, pour rechercher ses références</translation>
     </message>
 </context>
 <context>

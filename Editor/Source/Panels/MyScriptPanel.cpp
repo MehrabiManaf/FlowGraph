@@ -445,6 +445,7 @@ MyScriptPanel::Kind MyScriptPanel::selected(QString* owner, QString* name) const
     if (pick(functions_, Kind::Function, QString())) return Kind::Function;
     if (pick(vars_, Kind::Variable, QString())) return Kind::Variable;
     if (pick(locals_, Kind::Local, localsGraph_)) return Kind::Local;
+    if (pick(structs_, Kind::Struct, QString())) return Kind::Struct;
     return Kind::None;
 }
 
@@ -569,16 +570,14 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
         rename = m.addAction(themedIcon(":/Icons/rename.svg"), tr("Rename"));
         if (tree == functions_) dup = m.addAction(themedIcon(":/Icons/duplicate.svg"), tr("Duplicate"));
         del = m.addAction(themedIcon(":/Icons/delete.svg"), tr("Delete"));
-        if (tree != structs_) {
-            m.addSeparator();
-            refs = m.addAction(themedIcon(":/Icons/find-references.svg"), tr("Find References"));
-            refs->setShortcut(QKeySequence("Shift+F12"));
-        }
+        m.addSeparator();
+        refs = m.addAction(themedIcon(":/Icons/find-references.svg"), tr("Find References"));
+        refs->setShortcut(QKeySequence("Shift+F12"));
     }
     QAction* a = m.exec(tree->viewport()->mapToGlobal(pos));
     if (!a) return;
     if (a == refs) {
-        const Kind kind = tree == functions_ ? Kind::Function : tree == vars_ ? Kind::Variable : Kind::Local;
+        const Kind kind = tree == functions_ ? Kind::Function : tree == vars_ ? Kind::Variable : tree == structs_ ? Kind::Struct : Kind::Local;
         emit referencesRequested(int(kind), kind == Kind::Local ? localsGraph_ : QString(), name);
         return;
     }

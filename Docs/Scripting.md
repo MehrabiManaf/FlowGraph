@@ -82,7 +82,8 @@ flow [options] script.flow [arguments...]
   changes the struct it is connected to (a variable, an element of an array...). Fields can be of any type, other structs too;
   a struct holds itself only through an array or a map (`Children: array<Tree>`). Variables, function parameters and containers
   can be of a struct type; the application's events and functions cannot (they do not know the script's structs). Renaming a
-  struct or a field updates every type and node that uses it; a running script that is changed keeps its values field by field.
+  struct or a field updates every type and node that uses it, and *Find References* lists them; a running script that is
+  changed keeps its values field by field.
 * **Time:** a timestamp is seconds since 1970-01-01 00:00 UTC, as a float. *Now* and *Seconds Since Start* read the clock once
   per run. *Break Date Time* / *Make Date Time* convert to and from year, month, day... in local time or UTC (out of range values
   carry over: month 13 is January); *Format Date Time* writes `%Y-%m-%d %H:%M:%S` style text, *Parse Date Time* reads ISO 8601

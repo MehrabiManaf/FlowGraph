@@ -2219,6 +2219,35 @@ TEST(view_full_screen_goes_back_to_the_state_before) {
     CHECK(!full->isChecked());
 }
 
+// Find References of a struct lists what is of its type and its nodes; a declaration found says what it is, to be shown.
+TEST(find_results_of_a_struct_show_its_declarations) {
+    Fixture f;
+    f.doc.edit("Add", [](fg::Script& s) {
+        s.structs.push_back({"Point", "", "", {{"X", "int", fg::Value(), ""}}});
+        s.variables.push_back({"P", "Point", fg::Value(), "", ""});
+        s.addFunction("Move").locals.push_back({"Tmp", "array<Point>", fg::Value(), "", ""});
+        fg::Node& n = s.findGraph("EventGraph")->addNode("struct.make", 300, 300);
+        n.props["struct"] = "Point";
+    });
+    FindPanel find(&f.doc);
+    find.findReferences({fg::RefTarget::Kind::Struct, "Point", ""});
+    CHECK_EQ(find.resultCount(), 3);                       // P, Move.Tmp, Make Point
+    auto* tree = find.findChild<QTreeWidget*>();
+    if (!tree || tree->topLevelItemCount() != 3) return;
+    CHECK(tree->topLevelItem(2)->text(1) == "Make Point");
+    std::vector<std::tuple<int, QString, QString>> declared;
+    std::vector<int> nodes;
+    QObject::connect(&find, &FindPanel::declarationActivated, [&](int d, const QString& g, const QString& n) { declared.emplace_back(d, g, n); });
+    QObject::connect(&find, &FindPanel::activated, [&](const QString&, int node) { nodes.push_back(node); });
+    for (int i = 0; i < 3; ++i) emit tree->itemActivated(tree->topLevelItem(i), 0);
+    CHECK_EQ(declared.size(), size_t(2));
+    if (declared.size() == 2) {
+        CHECK(declared[0] == std::make_tuple(int(fg::ScriptRef::Declaration::Variable), QString(), QString("P")));
+        CHECK(declared[1] == std::make_tuple(int(fg::ScriptRef::Declaration::Local), QString("Move"), QString("Tmp")));
+    }
+    CHECK(nodes.size() == 1 && nodes[0] > 0);
+}
+
 TEST(details_search_shows_only_the_matching_properties) {
     Fixture f;
     f.doc.edit("Add", [](fg::Script& sc) { sc.variables.push_back({"Counter", "int", fg::Value(int64_t(0)), "", ""}); });

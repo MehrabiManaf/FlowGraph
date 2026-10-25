@@ -184,6 +184,17 @@ ScriptEditorWindow::~ScriptEditorWindow() {
     for (auto* dw : docks_) delete dw;
 }
 
+namespace {
+// what Find References looks for, for an item of My Script
+fg::RefTarget::Kind refKind(MyScriptPanel::Kind kind) {
+    switch (kind) {
+    case MyScriptPanel::Kind::Function: return fg::RefTarget::Kind::Function;
+    case MyScriptPanel::Kind::Struct: return fg::RefTarget::Kind::Struct;
+    default: return fg::RefTarget::Kind::Variable;
+    }
+}
+} // namespace
+
 // ------------------------------------------------------------------ construction
 void ScriptEditorWindow::createDocks() {
     KDDockWidgets::DockWidgetOptions opts = KDDockWidgets::DockWidgetOption_None;
@@ -256,9 +267,21 @@ void ScriptEditorWindow::createDocks() {
         if (n) focusNode(g, n);
         else openGraph(g);                // a comment box: show its graph
     });
+    connect(find_, &FindPanel::declarationActivated, this, [this](int declaration, const QString& g, const QString& name) {
+        using D = fg::ScriptRef::Declaration;
+        switch (D(declaration)) {
+        case D::Variable: details_->showVariable("", name); break;
+        case D::Local: openGraph(g); details_->showVariable(g, name); break;
+        case D::Input:
+        case D::Output: openGraph(g); details_->showGraph(g); break;
+        case D::Field: details_->showStruct(name.section('.', 0, 0)); break;
+        default: return;
+        }
+        if (dDetails_) dDetails_->setAsCurrentTab();
+    });
     connect(myScript_, &MyScriptPanel::referencesRequested, this, [this](int kind, const QString& owner, const QString& name) {
         fg::RefTarget t;
-        t.kind = MyScriptPanel::Kind(kind) == MyScriptPanel::Kind::Function ? fg::RefTarget::Kind::Function : fg::RefTarget::Kind::Variable;
+        t.kind = refKind(MyScriptPanel::Kind(kind));
         t.name = ss(name);
         t.graph = ss(owner);
         showReferences(t);
@@ -681,7 +704,7 @@ void ScriptEditorWindow::findReferencesOfSelection() {
     const MyScriptPanel::Kind kind = myScript_->selected(&owner, &name);
     if (kind != MyScriptPanel::Kind::None && focus && myScript_->isAncestorOf(focus)) {
         fg::RefTarget t;
-        t.kind = kind == MyScriptPanel::Kind::Function ? fg::RefTarget::Kind::Function : fg::RefTarget::Kind::Variable;
+        t.kind = refKind(kind);
         t.name = ss(name);
         t.graph = ss(owner);
         showReferences(t);
@@ -692,7 +715,7 @@ void ScriptEditorWindow::findReferencesOfSelection() {
     const fg::Graph* g = s ? doc_.graph(s->graphName()) : nullptr;
     const fg::Node* n = g && ids.size() == 1 ? g->findNode(ids.front()) : nullptr;
     if (!n) {
-        statusBar()->showMessage(tr("Select a node, or a variable or function in My Script, to find its references"), 4000);
+        statusBar()->showMessage(tr("Select a node, or a variable, function or struct in My Script, to find its references"), 4000);
         return;
     }
     showReferences(fg::referenceTargetOf(doc_.script(), ss(s->graphName()), *n));

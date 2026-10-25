@@ -560,16 +560,16 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <translation type="unfinished">Referencias de %1</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">Escriba para buscar, o use Buscar referencias en un nodo, una variable o una función.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">no se encontró nada</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">%1 encontrado(s)</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">Escriba para buscar, o use Buscar referencias en un nodo, una variable, una función o una estructura.</translation>
     </message>
 </context>
 <context>
@@ -1197,10 +1197,6 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <translation type="unfinished">%1 referencia(s) de %2</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">Seleccione un nodo, o una variable o función en Mi script, para buscar sus referencias</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">Tema %1</translation>
     </message>
@@ -1351,6 +1347,10 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
     <message>
         <source>F&amp;ull Screen</source>
         <translation type="unfinished">&amp;Pantalla completa</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">Seleccione un nodo, o una variable, función o estructura en Mi script, para buscar sus referencias</translation>
     </message>
 </context>
 <context>

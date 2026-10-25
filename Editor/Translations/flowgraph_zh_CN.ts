@@ -560,16 +560,16 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">%1 的引用</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">输入内容以搜索，或对节点、变量或函数使用“查找引用”。</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">未找到任何内容</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">找到 %1 项</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">输入内容以搜索，或对节点、变量、函数或结构体使用“查找引用”。</translation>
     </message>
 </context>
 <context>
@@ -1197,10 +1197,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">%2 的 %1 个引用</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">选择一个节点，或“我的脚本”中的变量或函数，以查找其引用</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">%1主题</translation>
     </message>
@@ -1351,6 +1347,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>F&amp;ull Screen</source>
         <translation type="unfinished">全屏(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">选择一个节点，或“我的脚本”中的变量、函数或结构体，以查找其引用</translation>
     </message>
 </context>
 <context>

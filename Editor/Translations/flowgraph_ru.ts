@@ -560,16 +560,16 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">Ссылки на %1</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">Введите текст для поиска или используйте «Найти ссылки» на узле, переменной или функции.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">ничего не найдено</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">Найдено: %1</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">Введите текст для поиска или используйте «Найти ссылки» на узле, переменной, функции или структуре.</translation>
     </message>
 </context>
 <context>
@@ -1197,10 +1197,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">Ссылок на %2: %1</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">Выберите узел или переменную либо функцию в «Мой скрипт», чтобы найти ссылки на них</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">Тема: %1</translation>
     </message>
@@ -1351,6 +1347,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>F&amp;ull Screen</source>
         <translation type="unfinished">Во весь &amp;экран</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">Выберите узел или переменную, функцию либо структуру в «Мой скрипт», чтобы найти ссылки на них</translation>
     </message>
 </context>
 <context>

@@ -560,16 +560,16 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">%1의 참조</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">입력하여 검색하거나, 노드, 변수 또는 함수에서 참조 찾기를 사용하세요.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">찾은 항목 없음</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">%1개 찾음</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">입력하여 검색하거나, 노드, 변수, 함수 또는 구조체에서 참조 찾기를 사용하세요.</translation>
     </message>
 </context>
 <context>
@@ -1197,10 +1197,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">%2의 참조 %1개</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">참조를 찾으려면 노드, 또는 내 스크립트의 변수나 함수를 선택하세요</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">%1 테마</translation>
     </message>
@@ -1351,6 +1347,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>F&amp;ull Screen</source>
         <translation type="unfinished">전체 화면(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">참조를 찾으려면 노드, 또는 내 스크립트의 변수, 함수나 구조체를 선택하세요</translation>
     </message>
 </context>
 <context>

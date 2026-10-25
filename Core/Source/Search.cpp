@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: MIT
 #include <FlowGraph/Search.hpp>
+#include <FlowGraph/TypeExpr.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -36,6 +37,43 @@ std::string resolvedScope(const Graph& g, const Node& n) {
     return "global";
 }
 
+// A type expression that names the struct: "Point", "array<Point>", "map<string,Point>".
+bool mentions(const std::string& type, const std::string& structName) { return TypeExpr::parse(type).mentions(structName); }
+
+// The declarations of the script that are of the struct's type, in the order My Script lists them.
+void structDeclarations(const Script& script, const std::string& name, std::vector<ScriptRef>& out) {
+    using D = ScriptRef::Declaration;
+    for (auto& v : script.variables)
+        if (mentions(v.type, name)) out.push_back({"", 0, v.name, "variable: " + v.type, D::Variable});
+    for (auto& s : script.structs)
+        for (auto& f : s.fields)
+            if (mentions(f.type, name)) out.push_back({"", 0, s.name + "." + f.name, "field: " + f.type, D::Field});
+    for (auto& g : script.graphs) {
+        if (g.kind != GraphKind::Function) continue;
+        for (auto& p : g.inputs)
+            if (mentions(p.type, name)) out.push_back({g.name, 0, p.name, "input: " + p.type, D::Input});
+        for (auto& p : g.outputs)
+            if (mentions(p.type, name)) out.push_back({g.name, 0, p.name, "output: " + p.type, D::Output});
+        for (auto& v : g.locals)
+            if (mentions(v.type, name)) out.push_back({g.name, 0, v.name, "local variable: " + v.type, D::Local});
+    }
+}
+
+// How a node uses the struct ("" when it does not): one of its nodes, or a type of the node that names it.
+std::string structUse(const Node& n, const std::string& name) {
+    if (n.prop("struct") == name) {
+        if (n.def == "struct.make") return "Make";
+        if (n.def == "struct.break") return "Break";
+        if (n.def == "struct.set") return "Set " + n.prop("field");
+    }
+    for (auto& [param, type] : n.typeArgs)
+        if (mentions(type, name)) return param + " = " + type;
+    for (auto* pins : {&n.inputs, &n.outputs})
+        for (auto& p : *pins)
+            if (mentions(p.type, name)) return "pin " + p.name + ": " + p.type;
+    return {};
+}
+
 } // namespace
 
 std::string RefTarget::describe() const {
@@ -43,6 +81,7 @@ std::string RefTarget::describe() const {
     case Kind::Variable: return (graph.empty() ? "variable " : "local variable " + graph + ".") + name;
     case Kind::Function: return "function " + name;
     case Kind::Definition: return (name.rfind("fn:", 0) == 0 || name.rfind("m:", 0) == 0 ? name.substr(name.find(':') + 1) : name) + " nodes";
+    case Kind::Struct: return "struct " + name;
     }
     return name;
 }
@@ -57,6 +96,9 @@ RefTarget referenceTargetOf(const Script& script, const std::string& graph, cons
     } else if (node.def == "func.call") {
         t.kind = RefTarget::Kind::Function;
         t.name = node.prop("function");
+    } else if (node.def.rfind("struct.", 0) == 0 && !node.prop("struct").empty()) {
+        t.kind = RefTarget::Kind::Struct;
+        t.name = node.prop("struct");
     } else {
         t.kind = RefTarget::Kind::Definition;
         t.name = node.def;
@@ -66,6 +108,7 @@ RefTarget referenceTargetOf(const Script& script, const std::string& graph, cons
 
 std::vector<ScriptRef> findReferences(const Script& script, const Program* program, const RefTarget& target) {
     std::vector<ScriptRef> out;
+    if (target.kind == RefTarget::Kind::Struct) structDeclarations(script, target.name, out);      // first what is of its type
     for (const Graph& g : script.graphs) {
         if (target.kind == RefTarget::Kind::Variable && !target.graph.empty() && g.name != target.graph) continue;
         for (const Node& n : g.nodes) {
@@ -82,6 +125,10 @@ std::vector<ScriptRef> findReferences(const Script& script, const Program* progr
                 break;
             case RefTarget::Kind::Definition:
                 if (n.def != target.name) continue;
+                break;
+            case RefTarget::Kind::Struct:
+                detail = structUse(n, target.name);
+                if (detail.empty()) continue;
                 break;
             }
             out.push_back({g.name, n.id, titleOf(program, g.name, n), detail});

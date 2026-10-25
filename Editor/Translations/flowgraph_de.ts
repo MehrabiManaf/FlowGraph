@@ -560,16 +560,16 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <translation type="unfinished">Verweise auf %1</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">Tippen, um zu suchen, oder Verweise suchen auf einen Knoten, eine Variable oder eine Funktion anwenden.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">nichts gefunden</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">%1 gefunden</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">Tippen, um zu suchen, oder Verweise suchen auf einen Knoten, eine Variable, eine Funktion oder eine Struktur anwenden.</translation>
     </message>
 </context>
 <context>
@@ -1197,10 +1197,6 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <translation type="unfinished">%1 Verweis(e) auf %2</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">Wählen Sie einen Knoten oder eine Variable bzw. Funktion in Mein Skript, um ihre Verweise zu finden</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">Design %1</translation>
     </message>
@@ -1351,6 +1347,10 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
     <message>
         <source>F&amp;ull Screen</source>
         <translation type="unfinished">&amp;Vollbild</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">Wählen Sie einen Knoten oder eine Variable, Funktion bzw. Struktur in Mein Skript, um ihre Verweise zu finden</translation>
     </message>
 </context>
 <context>
