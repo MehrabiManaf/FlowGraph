@@ -40,8 +40,10 @@ using ObjectRef = std::shared_ptr<ObjectHandle>;
 // place); variable assignment, function arguments and results copy them.
 struct ArrayData;
 struct MapData;
+struct StructData;
 using ArrayRef = std::shared_ptr<ArrayData>;
 using MapRef = std::shared_ptr<MapData>;
+using StructRef = std::shared_ptr<StructData>;      // a struct of a script (TypeKind::Struct): copied like the containers
 
 class FG_CORE_EXPORT ScriptError : public std::runtime_error {
 public:
@@ -81,7 +83,7 @@ private:
 
 class FG_CORE_EXPORT Value {
 public:
-    enum class Kind : uint8_t { Null, Bool, Int, Float, String, Object, Array, Map, Bytes };
+    enum class Kind : uint8_t { Null, Bool, Int, Float, String, Object, Array, Map, Bytes, Struct };
 
     Value() = default;
     Value(const Value&) = default;
@@ -109,6 +111,7 @@ public:
     Value(ArrayRef a) : kind_(a ? Kind::Array : Kind::Null), ref_(std::move(a)) {}
     Value(MapRef m) : kind_(m ? Kind::Map : Kind::Null), ref_(std::move(m)) {}
     Value(Bytes b) : kind_(Kind::Bytes), ref_(std::const_pointer_cast<std::string>(std::move(b.data_))) {}
+    Value(StructRef s) : kind_(s ? Kind::Struct : Kind::Null), ref_(std::move(s)) {}
 
     Kind kind() const { return kind_; }
     bool isNull() const { return kind_ == Kind::Null; }
@@ -121,6 +124,7 @@ public:
     bool isArray() const { return kind_ == Kind::Array; }
     bool isMap() const { return kind_ == Kind::Map; }
     bool isBytes() const { return kind_ == Kind::Bytes; }
+    bool isStruct() const { return kind_ == Kind::Struct; }
 
     // Conversions. The "slow" paths throw ScriptError when the conversion makes no sense.
     bool toBool() const { return kind_ == Kind::Bool ? u_.i != 0 : toBoolSlow(); }
@@ -136,6 +140,7 @@ public:
     const ObjectHandle* objectPtr() const { return kind_ == Kind::Object ? static_cast<const ObjectHandle*>(ref_.get()) : nullptr; }
     ArrayData* arrayPtr() const { return kind_ == Kind::Array ? static_cast<ArrayData*>(ref_.get()) : nullptr; }
     MapData* mapPtr() const { return kind_ == Kind::Map ? static_cast<MapData*>(ref_.get()) : nullptr; }
+    StructData* structPtr() const { return kind_ == Kind::Struct ? static_cast<StructData*>(ref_.get()) : nullptr; }
     // Shared accessors.
     ObjectRef object() const { return kind_ == Kind::Object ? std::static_pointer_cast<ObjectHandle>(ref_) : ObjectRef{}; }
     ArrayRef array() const { return kind_ == Kind::Array ? std::static_pointer_cast<ArrayData>(ref_) : ArrayRef{}; }
@@ -146,16 +151,16 @@ public:
     FG_FORCEINLINE void setBool(bool b) { if (ref_) ref_.reset(); kind_ = Kind::Bool; u_.i = b ? 1 : 0; }
     FG_FORCEINLINE void setInt(int64_t i) { if (ref_) ref_.reset(); kind_ = Kind::Int; u_.i = i; }
     FG_FORCEINLINE void setFloat(double d) { if (ref_) ref_.reset(); kind_ = Kind::Float; u_.d = d; }
-    // Arrays and maps have reference semantics (see deepCopy).
-    bool isContainer() const { return kind_ == Kind::Array || kind_ == Kind::Map; }
+    // Arrays, maps and structs have reference semantics inside a graph; they are copied when they are assigned (see deepCopy).
+    bool isContainer() const { return kind_ == Kind::Array || kind_ == Kind::Map || kind_ == Kind::Struct; }
     // Valid for Kind::Int / Kind::Bool only.
     int64_t rawInt() const { return u_.i; }
 
     // Containers nested deeper than this cannot be copied (ScriptError).
     static constexpr int kMaxContainerDepth = 256;
 
-    // Copies containers (recursively); every other kind is returned as is.
-    Value deepCopy() const { return (kind_ == Kind::Array || kind_ == Kind::Map) ? deepCopySlow() : *this; }
+    // Copies containers and structs (recursively); every other kind is returned as is.
+    Value deepCopy() const { return isContainer() ? deepCopySlow() : *this; }
 
     // Identity of the referenced storage (used to detect aliasing); null for plain values.
     const void* identity() const { return ref_.get(); }
@@ -221,6 +226,10 @@ struct MapData {
     const TypeDesc* key = nullptr;
     const TypeDesc* val = nullptr;
     std::map<Value, Value, ValueLess> items;
+};
+struct StructData {
+    std::shared_ptr<const TypeDesc> type;   // keeps the types of the program alive (TypeDesc::owner)
+    std::vector<Value> fields;              // in the order of type->fields
 };
 
 } // namespace fg

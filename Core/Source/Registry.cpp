@@ -256,6 +256,13 @@ Value Registry::defaultValue(const TypeDesc* t) const {
     case TypeKind::String: return Value(std::string());
     case TypeKind::Byte: return Value(int64_t(0));
     case TypeKind::Bytes: return Value(Bytes());
+    case TypeKind::Struct: {                                    // each field with its default
+        auto s = std::make_shared<StructData>();
+        s->type = std::shared_ptr<const TypeDesc>(t->owner.lock(), t);
+        s->fields.reserve(t->fields.size());
+        for (auto& f : t->fields) s->fields.push_back(f.def.isNull() ? defaultValue(f.type) : f.def.deepCopy());
+        return Value(std::move(s));
+    }
     case TypeKind::Array: return makeArray(t->elem);
     case TypeKind::Map: return makeMap(t->keyType, t->elem);
     default: return Value();
@@ -285,6 +292,32 @@ Value Registry::convert(const Value& v, const TypeDesc* to) const {
         if (v.isBytes()) return v;
         if (v.isNull()) return Value(Bytes());
         throw ScriptError("cannot convert " + v.toString() + " to bytes (From Text turns a text into bytes)");
+    case TypeKind::Struct: {
+        if (v.isNull()) return defaultValue(to);
+        const StructData* s = v.structPtr();
+        if (s && s->type.get() == to) return v;
+        // the same struct of another program (a hot reload), or a map of its fields (a default in a file): field by field, by
+        // name; a field that is not there, or whose value does not fit any more, gets its default
+        const MapData* m = v.mapPtr();
+        if ((s && s->type && s->type->name == to->name) || (m && (!m->key || m->key->kind == TypeKind::String))) {
+            Value out = defaultValue(to);
+            StructData* d = out.structPtr();
+            for (size_t i = 0; i < to->fields.size(); ++i) {
+                const FieldDesc& f = to->fields[i];
+                try {
+                    if (s) {
+                        const int old = s->type->fieldIndex(f.name);
+                        if (old >= 0) d->fields[i] = convertFrom(s->fields[static_cast<size_t>(old)], s->type->fields[static_cast<size_t>(old)].type, f.type);
+                    } else if (auto it = m->items.find(Value(f.name)); it != m->items.end()) {
+                        d->fields[i] = convert(it->second, f.type);
+                    }
+                } catch (const ScriptError&) {
+                }
+            }
+            return out;
+        }
+        throw ScriptError("cannot convert " + v.toString() + " to " + to->name);
+    }
     case TypeKind::Class: {
         if (v.isNull()) return v;
         auto* h = v.objectPtr();

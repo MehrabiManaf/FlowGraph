@@ -5,6 +5,7 @@ add_library(FlowGraphCore ${FG_LIB_TYPE}
     Source/TypeExpr.cpp
     Source/Value.cpp
     Source/Types.cpp
+    Source/TypeScope.cpp
     Source/Registry.cpp
     Source/Script.cpp
     Source/Compiler.cpp
@@ -15,6 +16,7 @@ add_library(FlowGraphCore ${FG_LIB_TYPE}
     Source/Builtins.cpp
     Source/BuiltinsTime.cpp
     Source/BuiltinsBytes.cpp
+    Source/BuiltinsStructs.cpp
     Source/Encoding.cpp
     Source/BuiltinsSystem.cpp
     Source/Process.cpp

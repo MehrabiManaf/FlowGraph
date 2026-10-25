@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: MIT
 #include <FlowGraph/Intellisense.hpp>
+#include <FlowGraph/TypeScope.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -55,7 +56,7 @@ std::vector<NodeTemplate> buildPalette(const NodeBuildCtx& ctx) {
     return out;
 }
 
-static bool pinAccepts(const Registry& reg, const NodeDef* def, const PinDef& p, const PinFilter& f) {
+static bool pinAccepts(const Registry& reg, const NodeDef* def, const PinDef& p, const PinFilter& f, const TypeScope* types) {
     if (p.kind != f.kind) return false;
     // the template pin must be the opposite end of the dragged one
     if (p.dir == f.dir) return false;
@@ -78,7 +79,7 @@ static bool pinAccepts(const Registry& reg, const NodeDef* def, const PinDef& p,
     } else if (e.isMap()) {
         return f.type->kind == TypeKind::Map || f.type->kind == TypeKind::Any;
     }
-    const TypeDesc* t = reg.findType(p.type);
+    const TypeDesc* t = types ? types->findType(p.type) : reg.findType(p.type);
     if (!t) return false;
     const TypeDesc* from = f.dir == PinDir::Out ? f.type : t;
     const TypeDesc* to = f.dir == PinDir::Out ? t : f.type;
@@ -92,11 +93,11 @@ static bool pinAccepts(const Registry& reg, const NodeDef* def, const PinDef& p,
     return reg.canConnect(from, to);
 }
 
-bool templateAccepts(const Registry& reg, const NodeTemplate& t, const PinFilter& f, std::string* pinName) {
+bool templateAccepts(const Registry& reg, const NodeTemplate& t, const PinFilter& f, std::string* pinName, const TypeScope* types) {
     const NodeDef* def = reg.findNode(t.defId);
     for (auto& p : t.pins) {
         if (p.hidden) continue;
-        if (pinAccepts(reg, def, p, f)) {
+        if (pinAccepts(reg, def, p, f, types)) {
             if (pinName) *pinName = p.name;
             return true;
         }
@@ -104,10 +105,10 @@ bool templateAccepts(const Registry& reg, const NodeTemplate& t, const PinFilter
     return false;
 }
 
-std::vector<NodeTemplate> filterPalette(const Registry& reg, const std::vector<NodeTemplate>& all, const PinFilter& f) {
+std::vector<NodeTemplate> filterPalette(const Registry& reg, const std::vector<NodeTemplate>& all, const PinFilter& f, const TypeScope* types) {
     std::vector<NodeTemplate> out;
     for (auto& t : all)
-        if (templateAccepts(reg, t, f)) out.push_back(t);
+        if (templateAccepts(reg, t, f, nullptr, types)) out.push_back(t);
     return out;
 }
 

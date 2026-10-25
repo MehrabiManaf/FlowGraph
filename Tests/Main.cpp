@@ -492,7 +492,10 @@ TEST(files_of_a_newer_version_are_refused) {
     Script s;
     s.addEventGraph();
     Json j = s.toJson();
-    CHECK_EQ(j["version"].asInt(), int64_t(Script::kFileVersion));
+    CHECK_EQ(j["version"].asInt(), int64_t(1));                     // without structs: version 1, which older FlowGraph versions read
+    Script withStruct = s;
+    withStruct.structs.push_back({"Point", "", "", {{"X", "int", Value(), ""}}});
+    CHECK_EQ(withStruct.toJson()["version"].asInt(), int64_t(Script::kFileVersion));
     j.set("version", Script::kFileVersion + 1);
     CHECK(refused(j.dump(), "newer FlowGraph"));
     j.set("version", 0);
@@ -5113,6 +5116,301 @@ TEST(bytes_and_byte_from_cpp_and_in_limits) {
     // a script with both round-trips through its file
     Script back = Script::parse(s.toText());
     CHECK(back.variables.size() == 2 && back.variables[1].def == bytesOf("Hi") && back.variables[0].type == "byte");
+}
+
+// ---- structs ------------------------------------------------------------------------------------------------------
+namespace {
+StructDecl pointStruct() { return {"Point", "A position", "", {{"X", "int", Value(1), "across"}, {"Y", "int", Value(), "down"}}}; }
+NodeId makePoint(GoGraph& t, std::map<std::string, Value> fields = {}) { return t.node("struct.make", std::move(fields), {{"struct", "Point"}}); }
+NodeId breakPoint(GoGraph& t) { return t.node("struct.break", {}, {{"struct", "Point"}}); }
+NodeId setField(GoGraph& t, const char* field, Value v) { return t.node("struct.set", {{"Value", v}}, {{"struct", "Point"}, {"field", field}}); }
+std::vector<std::string> structErrors(const Registry& reg, const Script& s) {
+    std::vector<std::string> errors;
+    TypeScope::forScript(reg, s, &errors);
+    return errors;
+}
+bool anyHas(const std::vector<std::string>& v, const std::string& part) {
+    for (auto& s : v)
+        if (s.find(part) != std::string::npos) return true;
+    return false;
+}
+} // namespace
+
+TEST(structs_are_types_of_their_script) {
+    TestRuntime rt;
+    const Registry& reg = rt.registry();
+    Script s;
+    s.structs.push_back(pointStruct());
+    s.structs.push_back({"Line", "", "", {{"From", "Point", Value(), ""}, {"To", "Point", Value(), ""}, {"Tags", "array<string>", Value(), ""}}});
+    s.structs.push_back({"Tree", "", "", {{"Name", "string", Value(""), ""}, {"Children", "array<Tree>", Value(), ""}}});    // through an array: fine
+    CHECK(structErrors(reg, s).empty());
+    auto scope = TypeScope::forScript(reg, s);
+    const TypeDesc* point = scope->findType("Point");
+    CHECK(point && point->isStruct() && point->fields.size() == 2 && point->fields[0].type == reg.tInt());
+    CHECK(scope->findType("int") == reg.tInt());                                   // the registry's types too
+    CHECK(!reg.findType("Point"));                                                 // the registry does not know it
+    const TypeDesc* points = scope->findType("array<Point>");
+    CHECK(points && points->kind == TypeKind::Array && points->elem == point);
+    CHECK(scope->findType("array<int>") == reg.arrayOf(reg.tInt()));              // a registry type stays the registry's
+    CHECK(scope->findType("map<string,Line>") && scope->findType("map<string,Line>")->elem == scope->findType("Line"));
+    CHECK_EQ(scope->structs().size(), size_t(3));
+    // another script has its own Point
+    auto other = TypeScope::forScript(reg, s);
+    CHECK(other->findType("Point") != point);
+
+    // the default: each field with its default; nested structs too
+    Value p = reg.defaultValue(point);
+    CHECK(p.isStruct() && p.toString() == "Point{X: 1, Y: 0}");
+    Value line = reg.defaultValue(scope->findType("Line"));
+    CHECK_EQ(line.toString(), std::string("Line{From: Point{X: 1, Y: 0}, To: Point{X: 1, Y: 0}, Tags: []}"));
+    CHECK(p == reg.defaultValue(point) && p != line);
+    Value copy = p.deepCopy();                                                     // a value: a copy is another struct
+    CHECK(copy.identity() != p.identity() && copy == p);
+    copy.structPtr()->fields[0] = Value(5);
+    CHECK(p.structPtr()->fields[0].toInt() == 1);
+    // a struct keeps its types alive
+    Value kept;
+    {
+        auto gone = TypeScope::forScript(reg, s);
+        kept = reg.defaultValue(gone->findType("Point"));
+    }
+    CHECK_EQ(kept.toString(), std::string("Point{X: 1, Y: 0}"));
+
+    // what is not allowed
+    Script bad;
+    bad.structs.push_back({"Self", "", "", {{"Me", "Self", Value(), ""}}});
+    bad.structs.push_back({"A", "", "", {{"B", "B", Value(), ""}}});
+    bad.structs.push_back({"B", "", "", {{"A", "A", Value(), ""}}});
+    bad.structs.push_back({"Odd", "", "", {{"X", "Nope", Value(), ""}, {"X", "int", Value(), ""}, {"N", "int", Value("seven"), ""}}});
+    bad.structs.push_back({"Odd", "", "", {}});
+    bad.structs.push_back({"int", "", "", {}});
+    const auto errors = structErrors(reg, bad);
+    CHECK(anyHas(errors, "The struct 'Self' contains itself"));
+    CHECK(anyHas(errors, "The struct 'A' contains itself"));
+    CHECK(anyHas(errors, "Unknown type 'Nope' of the field 'Odd.X'"));
+    CHECK(anyHas(errors, "Duplicate field 'X'"));
+    CHECK(anyHas(errors, "The default of the field 'Odd.N'"));
+    CHECK(anyHas(errors, "Duplicate struct 'Odd'"));
+    CHECK(anyHas(errors, "has the name of a type of this application"));
+    auto badScope = TypeScope::forScript(reg, bad);
+    CHECK(reg.defaultValue(badScope->findType("Self")).isStruct());                // made all the same, and not infinite
+    // and they are compile errors
+    GoGraph t;
+    t.s.structs = bad.structs;
+    auto prog = build(rt, t.s);
+    CHECK(!prog->ok() && has(dumpDiagnostics(*prog), "contains itself"));
+}
+
+TEST(structs_are_copied_like_arrays_and_changed_in_place_by_set_field) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.structs.push_back(pointStruct());
+    t.s.variables.push_back({"A", "Point", Value(), "", ""});
+    t.s.variables.push_back({"B", "Point", Value(), "", ""});
+    t.s.variables.push_back({"List", "array<Point>", Value(), "", ""});
+    // A = Make Point(3, 4); B = A; A.X = 9; List.Add(A); List[0].Y = 7 (through Get Item: in place)
+    NodeId setA = t.var("var.set", "A");
+    t.link(t.ev, "Then", setA, "In");
+    t.link(makePoint(t, {{"X", Value(3)}, {"Y", Value(4)}}), "Struct", setA, "Value");
+    NodeId setB = t.var("var.set", "B");
+    t.link(setA, "Then", setB, "In");
+    t.link(t.var("var.get", "A"), "Value", setB, "Value");
+    NodeId ax = setField(t, "X", Value(9));
+    t.link(setB, "Then", ax, "In");
+    t.link(t.var("var.get", "A"), "Value", ax, "Struct");
+    NodeId add = t.node("array.add");
+    t.link(ax, "Then", add, "In");
+    t.link(t.var("var.get", "List"), "Value", add, "Array");
+    t.link(t.var("var.get", "A"), "Value", add, "Item");
+    NodeId item = t.node("array.get", {{"Index", Value(0)}});
+    t.link(t.var("var.get", "List"), "Value", item, "Array");
+    NodeId y = setField(t, "Y", Value(7));
+    t.link(add, "Then", y, "In");
+    t.link(item, "Item", y, "Struct");
+    // print A, B and List; Break the first of the list
+    NodeId pa = t.node("util.print");
+    t.link(y, "Then", pa, "In");
+    t.link(t.var("var.get", "A"), "Value", pa, "String");
+    NodeId pb = t.node("util.print");
+    t.link(pa, "Then", pb, "In");
+    t.link(t.var("var.get", "B"), "Value", pb, "String");
+    NodeId pl = t.node("util.print");
+    t.link(pb, "Then", pl, "In");
+    t.link(t.var("var.get", "List"), "Value", pl, "String");
+    NodeId br = breakPoint(t);
+    t.link(item, "Item", br, "Struct");
+    NodeId px = t.node("util.print");
+    t.link(pl, "Then", px, "In");
+    t.link(br, "Y", px, "String");
+    // Equal compares the fields
+    NodeId eq = t.node("cmp.eq");
+    t.link(t.var("var.get", "A"), "Value", eq, "A");
+    t.link(makePoint(t, {{"X", Value(9)}, {"Y", Value(4)}}), "Struct", eq, "B");
+    NodeId pe = t.node("util.print");
+    t.link(px, "Then", pe, "In");
+    t.link(eq, "Result", pe, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) { std::printf("%s", dumpDiagnostics(*r.prog).c_str()); return; }
+    CHECK_EQ(r.go(), std::string("Point{X: 9, Y: 4},Point{X: 3, Y: 4},[Point{X: 9, Y: 7}],7,true,"));
+    // the variable starts with the defaults of the fields; a default in the file is a map of fields
+    CHECK_EQ(r.prog->variables[0].def.toString(), std::string("Point{X: 1, Y: 0}"));
+    t.s.variables[1].def = jsonToValue(Json::parse(R"({"$struct": "Point", "fields": {"Y": 5, "Gone": 1}})"));
+    GoRun r2(rt, t.s);
+    CHECK_EQ(r2.prog->variables[1].def.toString(), std::string("Point{X: 1, Y: 5}"));
+}
+
+TEST(structs_in_functions_and_files) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.structs.push_back(pointStruct());
+    // Twice(P: Point) -> Point: X and Y doubled; Set Field on its parameter does not change the caller's struct (a copy)
+    Graph& f = t.s.addFunction("Twice", {{"P", "Point", false, false, Value()}}, {{"Out", "Point", false, false, Value()}});
+    f.connections.clear();
+    NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
+    NodeId fb = f.addNode("struct.break").id;
+    f.findNode(fb)->props["struct"] = "Point";
+    NodeId fx = f.addNode("math.mul").id, fy = f.addNode("math.mul").id;
+    f.findNode(fx)->defaults["B"] = Value(2);
+    f.findNode(fy)->defaults["B"] = Value(2);
+    NodeId fm = f.addNode("struct.make").id;
+    f.findNode(fm)->props["struct"] = "Point";
+    NodeId fs = f.addNode("struct.set").id;
+    f.findNode(fs)->props = {{"struct", "Point"}, {"field", "X"}};
+    f.findNode(fs)->defaults["Value"] = Value(-100);
+    auto fl = [&](NodeId a, const char* ap, NodeId b, const char* bp) { f.connections.push_back({a, ap, b, bp}); };
+    fl(entry, "P", fb, "Struct");
+    fl(fb, "X", fx, "A");
+    fl(fb, "Y", fy, "A");
+    fl(fx, "Result", fm, "X");
+    fl(fy, "Result", fm, "Y");
+    fl(entry, "Then", fs, "In");
+    fl(entry, "P", fs, "Struct");
+    fl(fs, "Then", ret, "In");
+    fl(fm, "Struct", ret, "Out");
+    t.s.variables.push_back({"P", "Point", Value(), "", ""});
+    NodeId call = t.node("func.call", {}, {{"function", "Twice"}});
+    t.link(t.ev, "Then", call, "In");
+    t.link(t.var("var.get", "P"), "Value", call, "P");
+    NodeId p1 = t.node("util.print");
+    t.link(call, "Then", p1, "In");
+    t.link(call, "Out", p1, "String");
+    NodeId p2 = t.node("util.print");
+    t.link(p1, "Then", p2, "In");
+    t.link(t.var("var.get", "P"), "Value", p2, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) { std::printf("%s", dumpDiagnostics(*r.prog).c_str()); return; }
+    // the pure nodes run when Return asks for Out, after Set Field: the function sees its own change, the caller's P does not
+    CHECK_EQ(r.go(), std::string("Point{X: -200, Y: 0},Point{X: 1, Y: 0},"));
+
+    // in a file: version 2, the structs and their fields kept
+    const std::string text = t.s.toText();
+    CHECK(has(text, "\"version\": 2") && has(text, "\"structs\""));
+    Script back = Script::parse(text);
+    CHECK(back.structs.size() == 1 && back.structs[0].fields.size() == 2 && back.structs[0].fields[0].def == Value(1));
+    CHECK(back.structs[0].doc == "A position" && back.structs[0].fields[1].doc == "down");
+    CHECK(build(rt, back)->ok());
+    // a value of a struct type, in a file: written with its fields
+    CHECK(has(valueToJson(r.prog->variables[0].def).dump(), "\"$struct\""));
+
+    // what the compiler refuses
+    GoGraph bad;
+    bad.s.structs.push_back(pointStruct());
+    NodeId unknown = bad.node("struct.make", {}, {{"struct", "Nope"}});
+    NodeId wrongField = bad.node("struct.set", {}, {{"struct", "Point"}, {"field", "Z"}});
+    (void)unknown;
+    (void)wrongField;
+    auto prog = build(rt, bad.s);
+    CHECK(!prog->ok());
+    CHECK(has(dumpDiagnostics(*prog), "Unknown struct 'Nope'") && has(dumpDiagnostics(*prog), "has no field 'Z'"));
+}
+
+TEST(structs_survive_a_reload_field_by_field) {
+    TestRuntime rt;
+    Script s;
+    s.structs.push_back(pointStruct());
+    s.variables.push_back({"P", "Point", Value(), "", ""});
+    s.variables.push_back({"List", "array<Point>", Value(), "", ""});
+    s.addEventGraph().addNode("event:Go");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    const Registry& reg = rt.registry();
+    Value p = reg.defaultValue(prog->types->findType("Point"));
+    p.structPtr()->fields = {Value(7), Value(8)};
+    inst.setVariable("P", p);
+    auto list = std::make_shared<ArrayData>();
+    list->elem = prog->types->findType("Point");
+    list->items.push_back(p.deepCopy());
+    inst.setVariable("List", Value(list));
+    // the struct changes: Y goes, X becomes a float, Z comes
+    Script s2 = s;
+    s2.structs[0].fields = {{"X", "float", Value(), ""}, {"Z", "string", Value("new"), ""}};
+    auto prog2 = build(rt, s2);
+    CHECK(prog2->ok());
+    auto rep = inst.reload(prog2);
+    CHECK(rep.ok());
+    CHECK_EQ(inst.getVariable("P").toString(), std::string("Point{X: 7.0, Z: \"new\"}"));
+    CHECK_EQ(inst.getVariable("List").toString(), std::string("[Point{X: 7.0, Z: \"new\"}]"));
+    CHECK(inst.getVariable("P").structPtr()->type.get() == prog2->types->findType("Point"));
+
+    // the debugger shows the fields; a watch reaches one
+    auto globals = inspectGlobals(inst);
+    CHECK(globals.size() == 2 && globals[0].value.type == "Point" && globals[0].value.children.size() == 2);
+    if (globals.size() == 2 && globals[0].value.children.size() == 2)
+        CHECK(globals[0].value.children[0].name == "X" && globals[0].value.children[0].text == "7.0" && globals[0].value.children[0].path == "P.X");
+    auto watch = evaluateExpression(inst, nullptr, 0, "List[0].Z");
+    CHECK(watch.ok && watch.view.text == "\"new\"");
+    CHECK(has(evaluateExpression(inst, nullptr, 0, "P.Nope").error, "has no field 'Nope'"));
+}
+
+TEST(structs_are_renamed_everywhere_and_offered_in_the_palette) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.structs.push_back(pointStruct());
+    t.s.structs.push_back({"Line", "", "", {{"From", "Point", Value(), ""}, {"All", "array<Point>", Value(), ""}}});
+    t.s.variables.push_back({"P", "map<string,Point>", Value(), "", ""});
+    NodeId mk = makePoint(t, {{"X", Value(5)}});
+    NodeId br = breakPoint(t);
+    NodeId st = setField(t, "X", Value(1));
+    t.link(mk, "Struct", br, "Struct");
+    NodeId pr = t.node("util.print");
+    t.link(br, "X", pr, "String");
+    t.s.renameStruct("Point", "Spot");
+    t.s.renameField("Spot", "X", "Across");
+    CHECK(t.s.findStruct("Spot") && !t.s.findStruct("Point"));
+    CHECK_EQ(t.s.structs[1].fields[0].type, std::string("Spot"));
+    CHECK_EQ(t.s.structs[1].fields[1].type, std::string("array<Spot>"));
+    CHECK_EQ(t.s.variables[0].type, std::string("map<string,Spot>"));
+    CHECK(t.g->findNode(mk)->prop("struct") == "Spot" && t.g->findNode(mk)->defaults.count("Across"));
+    CHECK(t.g->findNode(st)->prop("field") == "Across");
+    bool linked = false;
+    for (auto& c : t.g->connections) linked |= c.fromNode == br && c.fromPin == "Across";
+    CHECK(linked);
+    CHECK(build(rt, t.s)->ok());
+
+    // the palette: Make, Break and a Set for each field, for each struct of the script
+    NodeBuildCtx ctx{rt.registry(), &t.s, t.g};
+    auto all = buildPalette(ctx);
+    std::set<std::string> titles;
+    for (auto& tp : all)
+        if (tp.defId.rfind("struct.", 0) == 0) titles.insert(tp.title);
+    CHECK(titles == std::set<std::string>({"Make Spot", "Break Spot", "Set Spot.Across", "Set Spot.Y", "Make Line", "Break Line",
+                                           "Set Line.From", "Set Line.All"}));
+    // dragging a Spot: its Break and Set nodes fit, a Line's do not
+    auto prog = build(rt, t.s);
+    PinFilter f;
+    f.kind = PinKind::Data; f.dir = PinDir::Out; f.type = prog->types->findType("Spot");
+    std::set<std::string> fits;
+    for (auto& tp : filterPalette(rt.registry(), all, f, prog->types.get()))
+        if (tp.defId.rfind("struct.", 0) == 0) fits.insert(tp.title);
+    CHECK(fits.count("Break Spot") && fits.count("Set Spot.Y") && fits.count("Make Line") && !fits.count("Break Line"));
+
+    // the application does not need to know the structs; a type it does not know in a field is reported
+    CHECK(checkCompatibility(t.s, rt.registry()).ok());
+    t.s.structs[1].fields.push_back({"Gone", "MissingClass", Value(), ""});
+    CHECK(!checkCompatibility(t.s, rt.registry()).ok());
 }
 
 int main(int argc, char** argv) {

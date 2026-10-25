@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: MIT
 #include <FlowGraph/Compatibility.hpp>
+#include <FlowGraph/TypeScope.hpp>
 
 #include <map>
 #include <set>
@@ -68,9 +69,12 @@ CompatibilityReport checkCompatibility(const Script& script, const Registry& reg
     auto add = [&](CompatibilityIssue::Kind k, const std::string& graph, NodeId node, const std::string& subject, const std::string& msg) {
         rep.issues.push_back({k, graph, node, subject, msg});
     };
+    const auto types = TypeScope::forScript(reg, script);           // the structs of the script are its own types
     auto checkType = [&](const std::string& graph, const std::string& what, const std::string& type) {
-        if (!reg.findType(type)) add(CompatibilityIssue::Kind::UnknownType, graph, 0, type, "the type '" + type + "' of " + what + " is not registered");
+        if (!types->findType(type)) add(CompatibilityIssue::Kind::UnknownType, graph, 0, type, "the type '" + type + "' of " + what + " is not registered");
     };
+    for (auto& s : script.structs)
+        for (auto& f : s.fields) checkType("", "the field '" + s.name + "." + f.name + "'", f.type);
     for (auto& v : script.variables) checkType("", "variable '" + v.name + "'", v.type);
     for (auto& g : script.graphs) {
         for (auto& p : g.inputs) checkType(g.name, "parameter '" + p.name + "'", p.type);
@@ -79,7 +83,7 @@ CompatibilityReport checkCompatibility(const Script& script, const Registry& reg
         for (auto& n : g.nodes) {
             for (auto* pins : {&n.inputs, &n.outputs})
                 for (auto& p : *pins)
-                    if (!reg.findType(p.type))
+                    if (!types->findType(p.type))
                         add(CompatibilityIssue::Kind::UnknownType, g.name, n.id, p.type, "the type '" + p.type + "' of the pin '" + p.name + "' is not registered");
             const NodeDef* def = reg.findNode(n.def);
             if (!def) {

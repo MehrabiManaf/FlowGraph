@@ -69,6 +69,7 @@ struct TypeParam {
 class Registry;
 class NodeCtx;
 class Script;
+class TypeScope;
 class Graph;
 class Node;
 struct NodeTemplate;
@@ -79,6 +80,7 @@ struct NodeBuildCtx {
     const Registry& reg;
     const Script* script = nullptr;   // may be null (e.g. palette preview)
     const Graph* graph = nullptr;     // may be null
+    const TypeScope* types = nullptr; // the types of the script with its structs (null: the registry's only)
 };
 
 enum class NodeStyle : uint8_t { Function, Pure, Event, Flow, Variable, Macro, Custom, Reroute };

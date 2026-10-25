@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include <FlowGraph/Script.hpp>
 #include <FlowGraph/Encoding.hpp>
+#include <FlowGraph/TypeExpr.hpp>
 
 #include <algorithm>
 #include <fstream>
@@ -130,6 +131,111 @@ std::string Script::uniqueGraphName(const std::string& base) const {
 std::string Script::uniqueVariableName(const std::string& base) const {
     return uniqueName(base, [&](const std::string& n) { return variableIndex(n) >= 0; });
 }
+std::string Script::uniqueStructName(const std::string& base) const {
+    return uniqueName(base, [&](const std::string& n) { return findStruct(n) != nullptr; });
+}
+
+FieldDecl* StructDecl::findField(const std::string& n) {
+    for (auto& f : fields)
+        if (f.name == n) return &f;
+    return nullptr;
+}
+const FieldDecl* StructDecl::findField(const std::string& n) const {
+    for (auto& f : fields)
+        if (f.name == n) return &f;
+    return nullptr;
+}
+StructDecl* Script::findStruct(const std::string& n) {
+    for (auto& s : structs)
+        if (s.name == n) return &s;
+    return nullptr;
+}
+const StructDecl* Script::findStruct(const std::string& n) const {
+    for (auto& s : structs)
+        if (s.name == n) return &s;
+    return nullptr;
+}
+
+void Script::renameStruct(const std::string& from, const std::string& to) {
+    if (from == to) return;
+    if (auto* s = findStruct(from)) s->name = to;
+    const std::map<std::string, std::string> subst{{from, to}};
+    auto retype = [&](std::string& type) {
+        TypeExpr e = TypeExpr::parse(type);
+        if (e.valid && e.mentions(from)) type = e.substitute(subst).str();
+    };
+    for (auto& s : structs)
+        for (auto& f : s.fields) retype(f.type);
+    for (auto& v : variables) retype(v.type);
+    for (auto& g : graphs) {
+        for (auto& p : g.inputs) retype(p.type);
+        for (auto& p : g.outputs) retype(p.type);
+        for (auto& v : g.locals) retype(v.type);
+        for (auto& n : g.nodes) {
+            if (n.def.rfind("struct.", 0) == 0 && n.prop("struct") == from) n.props["struct"] = to;
+            for (auto& [param, type] : n.typeArgs) retype(type);
+            for (auto& p : n.inputs) retype(p.type);
+            for (auto& p : n.outputs) retype(p.type);
+        }
+    }
+}
+
+void Script::renameField(const std::string& structName, const std::string& from, const std::string& to) {
+    if (from == to) return;
+    StructDecl* s = findStruct(structName);
+    if (!s) return;
+    if (auto* f = s->findField(from)) f->name = to;
+    for (auto& g : graphs) {
+        for (auto& n : g.nodes) {
+            if (n.prop("struct") != structName) continue;
+            if (n.def == "struct.make") {                   // its inputs are the fields
+                auto d = n.defaults.find(from);
+                if (d != n.defaults.end()) {
+                    n.defaults[to] = d->second;
+                    n.defaults.erase(from);
+                }
+                for (auto& c : g.connections)
+                    if (c.toNode == n.id && c.toPin == from) c.toPin = to;
+            } else if (n.def == "struct.break") {           // its outputs
+                for (auto& c : g.connections)
+                    if (c.fromNode == n.id && c.fromPin == from) c.fromPin = to;
+            } else if (n.def == "struct.set" && n.prop("field") == from) {
+                n.props["field"] = to;
+            }
+        }
+    }
+}
+
+void Script::removeField(const std::string& structName, const std::string& field) {
+    StructDecl* s = findStruct(structName);
+    if (!s) return;
+    s->fields.erase(std::remove_if(s->fields.begin(), s->fields.end(), [&](const FieldDecl& f) { return f.name == field; }), s->fields.end());
+    for (auto& g : graphs)
+        for (auto& n : g.nodes) {
+            if (n.prop("struct") != structName) continue;
+            const bool make = n.def == "struct.make", brk = n.def == "struct.break";
+            if (!make && !brk) continue;
+            if (make) n.defaults.erase(field);
+            auto& v = g.connections;
+            v.erase(std::remove_if(v.begin(), v.end(), [&](const Connection& c) {
+                return make ? (c.toNode == n.id && c.toPin == field) : (c.fromNode == n.id && c.fromPin == field);
+            }), v.end());
+        }
+}
+
+void Script::retypeField(const std::string& structName, const std::string& field, const std::string& type) {
+    StructDecl* s = findStruct(structName);
+    FieldDecl* f = s ? s->findField(field) : nullptr;
+    if (!f || f->type == type) return;
+    f->type = type;
+    f->def = Value();
+    for (auto& g : graphs)
+        for (auto& n : g.nodes) {
+            if (n.prop("struct") != structName) continue;
+            if (n.def == "struct.make") n.defaults.erase(field);
+            else if (n.def == "struct.set" && n.prop("field") == field) n.defaults.erase("Value");
+        }
+}
 
 void Script::renameVariable(const std::string& from, const std::string& to) {
     if (from == to) return;
@@ -217,6 +323,16 @@ Json valueToJson(const Value& v) {
         o.set("$bytes", base64Encode(v.bytesView()));
         return o;
     }
+    case Value::Kind::Struct: {                      // {"$struct": "Point", "fields": {"X": 1, "Y": 2}}
+        const StructData* d = v.structPtr();
+        Json fields = Json::object();
+        for (size_t i = 0; i < d->fields.size(); ++i)
+            if (d->type && i < d->type->fields.size()) fields.set(d->type->fields[i].name, valueToJson(d->fields[i]));
+        Json o = Json::object();
+        o.set("$struct", d->type ? d->type->name : std::string());
+        o.set("fields", std::move(fields));
+        return o;
+    }
     }
     return Json();
 }
@@ -240,6 +356,10 @@ Value jsonToValue(const Json& j) {
             return Value(Bytes(std::move(data)));
         }
         auto m = std::make_shared<MapData>();
+        if (j.find("$struct")) {                     // without its type here: a map of the fields, which becomes the struct where
+            for (auto& [k, f] : j["fields"].members()) m->items.emplace(Value(k), jsonToValue(f));   // it is used (convert)
+            return Value(std::move(m));
+        }
         if (auto* pairs = j.find("$map"))
             for (auto& p : pairs->items()) m->items.emplace(jsonToValue(p[size_t(0)]), jsonToValue(p[1]));
         return Value(std::move(m));
@@ -286,6 +406,39 @@ VariableDecl variableFromJson(const Json& j) {
     v.doc = j["doc"].asString();
     return v;
 }
+Json structToJson(const StructDecl& s) {
+    Json j = Json::object();
+    j.set("name", s.name);
+    if (!s.doc.empty()) j.set("doc", s.doc);
+    if (!s.category.empty()) j.set("category", s.category);
+    Json fields = Json::array();
+    for (auto& f : s.fields) {
+        Json fj = Json::object();
+        fj.set("name", f.name);
+        fj.set("type", f.type);
+        if (!f.def.isNull()) fj.set("default", valueToJson(f.def));
+        if (!f.doc.empty()) fj.set("doc", f.doc);
+        fields.push(std::move(fj));
+    }
+    j.set("fields", std::move(fields));
+    return j;
+}
+StructDecl structFromJson(const Json& j) {
+    StructDecl s;
+    s.name = j["name"].asString();
+    s.doc = j["doc"].asString();
+    s.category = j["category"].asString();
+    for (auto& fj : j["fields"].items()) {
+        FieldDecl f;
+        f.name = fj["name"].asString();
+        f.type = fj["type"].asString("any");
+        if (auto* d = fj.find("default")) f.def = jsonToValue(*d);
+        f.doc = fj["doc"].asString();
+        s.fields.push_back(std::move(f));
+    }
+    return s;
+}
+
 Json stringMapToJson(const std::map<std::string, std::string>& m) {
     Json o = Json::object();
     for (auto& [k, v] : m) o.set(k, v);
@@ -417,9 +570,14 @@ Graph graphFromJson(const Json& j) {
 Json Script::toJson() const {
     Json j = Json::object();
     j.set("format", "flowgraph");
-    j.set("version", kFileVersion);
+    j.set("version", structs.empty() ? 1 : kFileVersion);       // version 1 when nothing of version 2 is used
     j.set("name", name);
     if (!doc.empty()) j.set("doc", doc);
+    if (!structs.empty()) {
+        Json ss = Json::array();
+        for (auto& s : structs) ss.push(structToJson(s));
+        j.set("structs", std::move(ss));
+    }
     Json vars = Json::array();
     for (auto& v : variables) vars.push(variableToJson(v));
     j.set("variables", std::move(vars));
@@ -441,6 +599,7 @@ Script Script::fromJson(const Json& j) {
     Script s;
     s.name = j["name"].asString("Script");
     s.doc = j["doc"].asString();
+    for (auto& st : j["structs"].items()) s.structs.push_back(structFromJson(st));
     for (auto& v : j["variables"].items()) s.variables.push_back(variableFromJson(v));
     for (auto& g : j["graphs"].items()) s.graphs.push_back(graphFromJson(g));
     return s;

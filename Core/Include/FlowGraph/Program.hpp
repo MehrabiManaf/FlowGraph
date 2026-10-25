@@ -4,6 +4,7 @@
 // The compiled form of a Script: resolved node definitions, pins with concrete types, data links
 // with frame slots, exec targets. Editors read it to draw nodes; the interpreter executes it.
 #include <FlowGraph/Script.hpp>
+#include <FlowGraph/TypeScope.hpp>
 
 #include <memory>
 #include <unordered_map>
@@ -123,6 +124,7 @@ struct CompiledGraph {
 class Program {
 public:
     const Registry* registry = nullptr;
+    std::shared_ptr<const TypeScope> types;      // the registry's types and the structs of the script
     std::string name;
     std::vector<CompiledVariable> variables;
     std::vector<CompiledGraph> graphs;

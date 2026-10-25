@@ -33,9 +33,12 @@ int rank(const Value& v) {
     case Value::Kind::Object: return 5;
     case Value::Kind::Array: return 6;
     case Value::Kind::Map: return 7;
+    case Value::Kind::Struct: return 8;
     }
     return 0;
 }
+
+std::string quotedIfText(const Value& v) { return v.isString() ? "\"" + v.str() + "\"" : v.toString(); }
 
 const std::shared_ptr<const std::string>& emptyBytes() {
     static const std::shared_ptr<const std::string> e = std::make_shared<const std::string>();
@@ -98,6 +101,16 @@ std::string Value::toString() const {
             if (!first) s += ", ";
             first = false;
             s += (k.isString() ? "\"" + k.str() + "\"" : k.toString()) + ": " + (v.isString() ? "\"" + v.str() + "\"" : v.toString());
+        }
+        return s + "}";
+    }
+    case Kind::Struct: {                                     // Point{X: 1, Y: 2}
+        const StructData* d = structPtr();
+        std::string s = (d->type ? d->type->name : std::string("struct")) + "{";
+        for (size_t i = 0; i < d->fields.size(); ++i) {
+            if (i) s += ", ";
+            const bool named = d->type && i < d->type->fields.size();
+            s += (named ? d->type->fields[i].name + ": " : std::string()) + quotedIfText(d->fields[i]);
         }
         return s + "}";
     }
@@ -172,6 +185,14 @@ Value Value::deepCopyAt(int depth) const {
         for (auto& e : src->items) dst->items.push_back(e.deepCopyAt(depth + 1));
         return Value(std::move(dst));
     }
+    if (kind_ == Kind::Struct) {
+        auto src = structPtr();
+        auto dst = std::make_shared<StructData>();
+        dst->type = src->type;
+        dst->fields.reserve(src->fields.size());
+        for (auto& f : src->fields) dst->fields.push_back(f.deepCopyAt(depth + 1));
+        return Value(std::move(dst));
+    }
     auto src = mapPtr();
     auto dst = std::make_shared<MapData>();
     dst->key = src->key;
@@ -216,6 +237,16 @@ bool Value::equalsSlow(const Value& a, const Value& b) {
             if (i->first != j->first || i->second != j->second) return false;
         return true;
     }
+    case Value::Kind::Struct: {                              // the same struct (by name: a reload makes new types) and the same fields
+        auto* x = a.structPtr();
+        auto* y = b.structPtr();
+        if (x == y) return true;
+        if (x->type != y->type && (!x->type || !y->type || x->type->name != y->type->name)) return false;
+        if (x->fields.size() != y->fields.size()) return false;
+        for (size_t i = 0; i < x->fields.size(); ++i)
+            if (x->fields[i] != y->fields[i]) return false;
+        return true;
+    }
     default: return false;
     }
 }
@@ -237,7 +268,8 @@ bool ValueLess::slow(const Value& a, const Value& b) {
         return std::less<const void*>()(x->ptr.get(), y->ptr.get());
     }
     case Value::Kind::Array:
-    case Value::Kind::Map: return std::less<const void*>()(a.identity(), b.identity());
+    case Value::Kind::Map:
+    case Value::Kind::Struct: return std::less<const void*>()(a.identity(), b.identity());
     default: return false;
     }
 }

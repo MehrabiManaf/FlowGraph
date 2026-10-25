@@ -939,8 +939,10 @@ void registerContainers(Registry& r) {
         };
         d.run = [](NodeCtx& c) {
             auto a = std::make_shared<ArrayData>();
-            auto it = c.node().typeArgs.find("T");
-            a->elem = c.registry().typeOrAny(it == c.node().typeArgs.end() ? "any" : it->second);
+            // the element type of the output (array<T>, as the compiler resolved it: also a struct of the script)
+            const CompiledNode& n = c.node();
+            const TypeDesc* t = n.dataOut.empty() ? nullptr : n.pins[static_cast<size_t>(n.dataOut[0])].type;
+            a->elem = t && t->kind == TypeKind::Array ? t->elem : c.registry().tAny();
             for (size_t i = 0; i < c.inputCount(); ++i) a->items.push_back(c.in(i).deepCopy());
             c.out(0, Value(std::move(a)));
         };
@@ -998,6 +1000,7 @@ void registerContainers(Registry& r) {
 
 void registerTimeNodes(Registry& reg);     // BuiltinsTime.cpp
 void registerBytesNodes(Registry& reg);    // BuiltinsBytes.cpp
+void registerStructNodes(Registry& reg);   // BuiltinsStructs.cpp
 
 void registerBuiltins(Registry& reg) {
     reg.beginSource("core");
@@ -1008,6 +1011,7 @@ void registerBuiltins(Registry& reg) {
     registerContainers(reg);
     registerTimeNodes(reg);
     registerBytesNodes(reg);
+    registerStructNodes(reg);
     reg.endSource();
 }
 
