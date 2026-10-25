@@ -38,7 +38,12 @@
 #include <algorithm>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QResizeEvent>
 #include <QTimer>
+#include <QWindow>
 #include <set>
 #include "../Common/Settings.hpp"
 #include <QSettings>
@@ -1063,6 +1068,10 @@ bool ScriptEditorWindow::fileSaveAs() {
 // side docks are brought to a sensible width.
 void ScriptEditorWindow::showEvent(QShowEvent* e) {
     KDDockWidgets::QtWidgets::MainWindow::showEvent(e);
+    restoreMaximizedLayout();
+    // a window that was not maximized meanwhile (the window manager did not) keeps the layout it has: restoring it later, when the
+    // user maximizes the window, would undo what they did since
+    if (!maximizedLayout_.isEmpty()) QTimer::singleShot(2000, this, [this] { maximizedLayout_.clear(); });
     if (sizesApplied_) return;
     sizesApplied_ = true;
     QTimer::singleShot(0, this, [this] { applyInitialSizes(); });
@@ -1105,6 +1114,34 @@ void ScriptEditorWindow::restoreSavedLayout() {
         sizesApplied_ = false;
         return;
     }
+    afterLayoutRestored();
+    // KDDockWidgets restores a maximized window at its normal size and maximizes it afterwards: docks that do not fit the normal
+    // size at their saved shares are squeezed to their minimum sizes, and the window grows from that. Once the window is
+    // maximized the layout is restored again, relative to the window's real size: the docks get the sizes they were saved with.
+    // (the window's state is the saved one: KDDockWidgets set it on the native window, which QWidget::windowState() may not
+    // know yet while the window is hidden)
+    const QJsonArray windows = QJsonDocument::fromJson(saved).object().value("mainWindows").toArray();
+    if (!windows.isEmpty() && windows.first().toObject().value("windowState").toInt() != 0) maximizedLayout_ = saved;
+}
+
+void ScriptEditorWindow::restoreMaximizedLayout() {
+    // (the state of the native window: KDDockWidgets maximizes that one, the widget's windowState() follows later)
+    const Qt::WindowStates state = windowHandle() ? windowHandle()->windowStates() : windowState();
+    if (maximizedLayout_.isEmpty() || !isVisible() || !(state & (Qt::WindowMaximized | Qt::WindowFullScreen))) return;
+    // the next turn of the event loop: the size of the maximized window has arrived by then (a resize comes in several steps)
+    QTimer::singleShot(0, this, [this] {
+        if (maximizedLayout_.isEmpty()) return;
+        const QByteArray saved = std::exchange(maximizedLayout_, QByteArray());
+        if (KDDockWidgets::LayoutSaver(KDDockWidgets::RestoreOption_RelativeToMainWindow).restoreLayout(saved)) afterLayoutRestored();
+    });
+}
+
+void ScriptEditorWindow::resizeEvent(QResizeEvent* e) {
+    KDDockWidgets::QtWidgets::MainWindow::resizeEvent(e);
+    restoreMaximizedLayout();
+}
+
+void ScriptEditorWindow::afterLayoutRestored() {
     // A dock that is newer than the saved layout would stay closed: put it where it goes by default. (A layout saved before this list
     // was kept knows the docks the editor had then.) Docks the layout knows keep whatever the user did with them, closed or not.
     QStringList known = editorSettings().value(appKey("layoutDocks")).toStringList();
@@ -1246,6 +1283,11 @@ void ScriptEditorWindow::devProbe(const QString& file, bool coordinates) {
         for (auto& c : g->connections) completed += c.fromNode == 1 && c.toNode == 3;
         out << "completedLinks " << completed << "\n";
     }
+}
+
+void ScriptEditorWindow::devLayout(const QString& file) {
+    QFile f(file);
+    if (f.open(QIODevice::WriteOnly)) f.write(KDDockWidgets::LayoutSaver().serializeLayout());
 }
 
 void ScriptEditorWindow::devSceneShot(const QString& file) {

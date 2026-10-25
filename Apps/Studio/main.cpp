@@ -60,6 +60,11 @@ int main(int argc, char** argv) {
             app.quit();
         });
     }
+    // Developer aid: FG_STUDIO_LAYOUT=<file> writes the layout of the docks after 2.5 s (as closing would save it), then exits.
+    if (qEnvironmentVariableIsSet("FG_STUDIO_LAYOUT")) {
+        const QString file = qEnvironmentVariable("FG_STUDIO_LAYOUT");
+        QTimer::singleShot(2500, &app, [ed, file, &app] { ed->devLayout(file); app.quit(); });
+    }
     // Developer aid: FG_STUDIO_SIZE=<width>x<height> sizes the window. FG_STUDIO_RECORD=<folder> saves a picture of the window
     // every FG_STUDIO_RECORD_MS (100) ms from 1 s after the start, FG_STUDIO_RECORD_COUNT (50) of them, then exits: the frames of
     // a recording (the GIF of the README).
