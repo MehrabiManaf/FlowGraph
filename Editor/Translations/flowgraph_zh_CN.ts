@@ -136,10 +136,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">没有匹配的结果。</translation>
     </message>
     <message>
-        <source>Select a variable, function or node to see its properties.</source>
-        <translation type="unfinished">选择一个变量、函数或节点以查看其属性。</translation>
-    </message>
-    <message>
         <source>The variable no longer exists.</source>
         <translation type="unfinished">该变量已不存在。</translation>
     </message>
@@ -411,6 +407,66 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Hex, e.g. 48 65 6C 6C 6F</source>
         <translation type="unfinished">十六进制，例如 48 65 6C 6C 6F</translation>
     </message>
+    <message>
+        <source>Select a variable, function, struct or node to see its properties.</source>
+        <translation type="unfinished">选择一个变量、函数、结构体或节点以查看其属性。</translation>
+    </message>
+    <message>
+        <source>Each field starts with the default of the struct.</source>
+        <translation type="unfinished">每个字段以结构体中的默认值开始。</translation>
+    </message>
+    <message>
+        <source>The struct no longer exists.</source>
+        <translation type="unfinished">该结构体已不存在。</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">结构体</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">重命名结构体</translation>
+    </message>
+    <message>
+        <source>Fields</source>
+        <translation type="unfinished">字段</translation>
+    </message>
+    <message>
+        <source>Field names must be unique and not empty.</source>
+        <translation type="unfinished">字段名称必须唯一且不能为空。</translation>
+    </message>
+    <message>
+        <source>Edit fields</source>
+        <translation type="unfinished">编辑字段</translation>
+    </message>
+    <message>
+        <source>Add field</source>
+        <translation type="unfinished">添加字段</translation>
+    </message>
+    <message>
+        <source>Remove field</source>
+        <translation type="unfinished">移除字段</translation>
+    </message>
+    <message>
+        <source>Move field</source>
+        <translation type="unfinished">移动字段</translation>
+    </message>
+    <message>
+        <source>Add a field with the + of Fields.</source>
+        <translation type="unfinished">用“字段”的 + 添加字段。</translation>
+    </message>
+    <message>
+        <source>Field: %1</source>
+        <translation type="unfinished">字段：%1</translation>
+    </message>
+    <message>
+        <source>Change field</source>
+        <translation type="unfinished">更改字段</translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation type="unfinished">字段</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
@@ -444,6 +500,18 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>EventGraph</source>
         <translation type="unfinished">事件图</translation>
+    </message>
+    <message>
+        <source>A struct name is one word, without spaces or &lt; &gt; ,</source>
+        <translation type="unfinished">结构体名称是一个词，不含空格和 &lt; &gt; ,</translation>
+    </message>
+    <message>
+        <source>A struct with that name exists.</source>
+        <translation type="unfinished">已存在同名的结构体。</translation>
+    </message>
+    <message>
+        <source>A type of this application has that name.</source>
+        <translation type="unfinished">此应用程序的某个类型已使用该名称。</translation>
     </message>
 </context>
 <context>
@@ -720,14 +788,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">搜索</translation>
     </message>
     <message>
-        <source>Shows only the events, functions and variables whose name contains this text</source>
-        <translation type="unfinished">仅显示名称包含此文本的事件、函数和变量</translation>
-    </message>
-    <message>
-        <source>Add a function or a variable</source>
-        <translation type="unfinished">添加函数或变量</translation>
-    </message>
-    <message>
         <source>Event Graphs</source>
         <translation type="unfinished">事件图</translation>
     </message>
@@ -826,6 +886,30 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>Add local variable</source>
         <translation type="unfinished">添加局部变量</translation>
+    </message>
+    <message>
+        <source>Shows only the events, functions, variables and structs whose name contains this text</source>
+        <translation type="unfinished">仅显示名称包含此文本的事件、函数、变量和结构体</translation>
+    </message>
+    <message>
+        <source>Add a function, a variable or a struct</source>
+        <translation type="unfinished">添加函数、变量或结构体</translation>
+    </message>
+    <message>
+        <source>Structs</source>
+        <translation type="unfinished">结构体</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">结构体</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">重命名结构体</translation>
+    </message>
+    <message>
+        <source>Add struct</source>
+        <translation type="unfinished">添加结构体</translation>
     </message>
 </context>
 <context>

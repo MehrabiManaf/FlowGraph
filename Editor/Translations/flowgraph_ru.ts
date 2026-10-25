@@ -136,10 +136,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">Ничего не найдено.</translation>
     </message>
     <message>
-        <source>Select a variable, function or node to see its properties.</source>
-        <translation type="unfinished">Выберите переменную, функцию или узел, чтобы увидеть их свойства.</translation>
-    </message>
-    <message>
         <source>The variable no longer exists.</source>
         <translation type="unfinished">Переменная больше не существует.</translation>
     </message>
@@ -411,6 +407,66 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Hex, e.g. 48 65 6C 6C 6F</source>
         <translation type="unfinished">Hex, например 48 65 6C 6C 6F</translation>
     </message>
+    <message>
+        <source>Select a variable, function, struct or node to see its properties.</source>
+        <translation type="unfinished">Выберите переменную, функцию, структуру или узел, чтобы увидеть их свойства.</translation>
+    </message>
+    <message>
+        <source>Each field starts with the default of the struct.</source>
+        <translation type="unfinished">Каждое поле начинается со значения по умолчанию из структуры.</translation>
+    </message>
+    <message>
+        <source>The struct no longer exists.</source>
+        <translation type="unfinished">Структура больше не существует.</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">Структура</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">Переименовать структуру</translation>
+    </message>
+    <message>
+        <source>Fields</source>
+        <translation type="unfinished">Поля</translation>
+    </message>
+    <message>
+        <source>Field names must be unique and not empty.</source>
+        <translation type="unfinished">Имена полей должны быть уникальными и непустыми.</translation>
+    </message>
+    <message>
+        <source>Edit fields</source>
+        <translation type="unfinished">Изменить поля</translation>
+    </message>
+    <message>
+        <source>Add field</source>
+        <translation type="unfinished">Добавить поле</translation>
+    </message>
+    <message>
+        <source>Remove field</source>
+        <translation type="unfinished">Удалить поле</translation>
+    </message>
+    <message>
+        <source>Move field</source>
+        <translation type="unfinished">Переместить поле</translation>
+    </message>
+    <message>
+        <source>Add a field with the + of Fields.</source>
+        <translation type="unfinished">Добавьте поле кнопкой + в разделе «Поля».</translation>
+    </message>
+    <message>
+        <source>Field: %1</source>
+        <translation type="unfinished">Поле: %1</translation>
+    </message>
+    <message>
+        <source>Change field</source>
+        <translation type="unfinished">Изменить поле</translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation type="unfinished">Поле</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
@@ -444,6 +500,18 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>EventGraph</source>
         <translation type="unfinished">Граф событий</translation>
+    </message>
+    <message>
+        <source>A struct name is one word, without spaces or &lt; &gt; ,</source>
+        <translation type="unfinished">Имя структуры — одно слово, без пробелов и символов &lt; &gt; ,</translation>
+    </message>
+    <message>
+        <source>A struct with that name exists.</source>
+        <translation type="unfinished">Структура с таким именем уже существует.</translation>
+    </message>
+    <message>
+        <source>A type of this application has that name.</source>
+        <translation type="unfinished">Тип этого приложения уже носит это имя.</translation>
     </message>
 </context>
 <context>
@@ -720,14 +788,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">Поиск</translation>
     </message>
     <message>
-        <source>Shows only the events, functions and variables whose name contains this text</source>
-        <translation type="unfinished">Показывает только события, функции и переменные, имя которых содержит этот текст</translation>
-    </message>
-    <message>
-        <source>Add a function or a variable</source>
-        <translation type="unfinished">Добавить функцию или переменную</translation>
-    </message>
-    <message>
         <source>Event Graphs</source>
         <translation type="unfinished">Графы событий</translation>
     </message>
@@ -826,6 +886,30 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>Add local variable</source>
         <translation type="unfinished">Добавить локальную переменную</translation>
+    </message>
+    <message>
+        <source>Shows only the events, functions, variables and structs whose name contains this text</source>
+        <translation type="unfinished">Показывает только события, функции, переменные и структуры, имя которых содержит этот текст</translation>
+    </message>
+    <message>
+        <source>Add a function, a variable or a struct</source>
+        <translation type="unfinished">Добавить функцию, переменную или структуру</translation>
+    </message>
+    <message>
+        <source>Structs</source>
+        <translation type="unfinished">Структуры</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">Структура</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">Переименовать структуру</translation>
+    </message>
+    <message>
+        <source>Add struct</source>
+        <translation type="unfinished">Добавить структуру</translation>
     </message>
 </context>
 <context>

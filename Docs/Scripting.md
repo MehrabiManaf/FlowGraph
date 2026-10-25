@@ -76,6 +76,13 @@ flow [options] script.flow [arguments...]
   UTF-8), *To Base64* / *From Base64* and *To Hex* / *From Hex* write and read them as text, *To Array* / *Make Bytes* turn them
   into an `array<byte>` and back for the array nodes. Print String shows a preview (`bytes(5): 48 65 6C 6C 6F`); a bytes default
   is typed as hex.
+* **Structs** are record types a script declares (*My Script > Structs*, then the fields in *Details*: name, type, default,
+  description). *Make Point* builds one from its fields, *Break Point* gives its fields, *Set Point.X* changes one field in place.
+  A struct is a value, like an array: setting a variable or passing it to a function by value makes a copy, while Set Field
+  changes the struct it is connected to (a variable, an element of an array...). Fields can be of any type, other structs too;
+  a struct holds itself only through an array or a map (`Children: array<Tree>`). Variables, function parameters and containers
+  can be of a struct type; the application's events and functions cannot (they do not know the script's structs). Renaming a
+  struct or a field updates every type and node that uses it; a running script that is changed keeps its values field by field.
 * **Time:** a timestamp is seconds since 1970-01-01 00:00 UTC, as a float. *Now* and *Seconds Since Start* read the clock once
   per run. *Break Date Time* / *Make Date Time* convert to and from year, month, day... in local time or UTC (out of range values
   carry over: month 13 is January); *Format Date Time* writes `%Y-%m-%d %H:%M:%S` style text, *Parse Date Time* reads ISO 8601

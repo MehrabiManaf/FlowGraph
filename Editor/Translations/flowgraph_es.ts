@@ -136,10 +136,6 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <translation type="unfinished">Nada coincide con la búsqueda.</translation>
     </message>
     <message>
-        <source>Select a variable, function or node to see its properties.</source>
-        <translation type="unfinished">Seleccione una variable, una función o un nodo para ver sus propiedades.</translation>
-    </message>
-    <message>
         <source>The variable no longer exists.</source>
         <translation type="unfinished">La variable ya no existe.</translation>
     </message>
@@ -411,6 +407,66 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <source>Hex, e.g. 48 65 6C 6C 6F</source>
         <translation type="unfinished">Hex, p. ej. 48 65 6C 6C 6F</translation>
     </message>
+    <message>
+        <source>Select a variable, function, struct or node to see its properties.</source>
+        <translation type="unfinished">Seleccione una variable, una función, una estructura o un nodo para ver sus propiedades.</translation>
+    </message>
+    <message>
+        <source>Each field starts with the default of the struct.</source>
+        <translation type="unfinished">Cada campo empieza con el valor predeterminado de la estructura.</translation>
+    </message>
+    <message>
+        <source>The struct no longer exists.</source>
+        <translation type="unfinished">La estructura ya no existe.</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">Estructura</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">Cambiar nombre de la estructura</translation>
+    </message>
+    <message>
+        <source>Fields</source>
+        <translation type="unfinished">Campos</translation>
+    </message>
+    <message>
+        <source>Field names must be unique and not empty.</source>
+        <translation type="unfinished">Los nombres de los campos deben ser únicos y no estar vacíos.</translation>
+    </message>
+    <message>
+        <source>Edit fields</source>
+        <translation type="unfinished">Editar campos</translation>
+    </message>
+    <message>
+        <source>Add field</source>
+        <translation type="unfinished">Añadir campo</translation>
+    </message>
+    <message>
+        <source>Remove field</source>
+        <translation type="unfinished">Quitar campo</translation>
+    </message>
+    <message>
+        <source>Move field</source>
+        <translation type="unfinished">Mover campo</translation>
+    </message>
+    <message>
+        <source>Add a field with the + of Fields.</source>
+        <translation type="unfinished">Añada un campo con el + de Campos.</translation>
+    </message>
+    <message>
+        <source>Field: %1</source>
+        <translation type="unfinished">Campo: %1</translation>
+    </message>
+    <message>
+        <source>Change field</source>
+        <translation type="unfinished">Cambiar campo</translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation type="unfinished">Campo</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
@@ -444,6 +500,18 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
     <message>
         <source>EventGraph</source>
         <translation type="unfinished">Grafo de eventos</translation>
+    </message>
+    <message>
+        <source>A struct name is one word, without spaces or &lt; &gt; ,</source>
+        <translation type="unfinished">El nombre de una estructura es una sola palabra, sin espacios ni &lt; &gt; ,</translation>
+    </message>
+    <message>
+        <source>A struct with that name exists.</source>
+        <translation type="unfinished">Ya existe una estructura con ese nombre.</translation>
+    </message>
+    <message>
+        <source>A type of this application has that name.</source>
+        <translation type="unfinished">Un tipo de esta aplicación tiene ese nombre.</translation>
     </message>
 </context>
 <context>
@@ -720,14 +788,6 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <translation type="unfinished">Buscar</translation>
     </message>
     <message>
-        <source>Shows only the events, functions and variables whose name contains this text</source>
-        <translation type="unfinished">Muestra solo los eventos, funciones y variables cuyo nombre contiene este texto</translation>
-    </message>
-    <message>
-        <source>Add a function or a variable</source>
-        <translation type="unfinished">Añadir una función o una variable</translation>
-    </message>
-    <message>
         <source>Event Graphs</source>
         <translation type="unfinished">Grafos de eventos</translation>
     </message>
@@ -826,6 +886,30 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
     <message>
         <source>Add local variable</source>
         <translation type="unfinished">Añadir variable local</translation>
+    </message>
+    <message>
+        <source>Shows only the events, functions, variables and structs whose name contains this text</source>
+        <translation type="unfinished">Muestra solo los eventos, funciones, variables y estructuras cuyo nombre contiene este texto</translation>
+    </message>
+    <message>
+        <source>Add a function, a variable or a struct</source>
+        <translation type="unfinished">Añadir una función, una variable o una estructura</translation>
+    </message>
+    <message>
+        <source>Structs</source>
+        <translation type="unfinished">Estructuras</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">Estructura</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">Cambiar nombre de la estructura</translation>
+    </message>
+    <message>
+        <source>Add struct</source>
+        <translation type="unfinished">Añadir estructura</translation>
     </message>
 </context>
 <context>

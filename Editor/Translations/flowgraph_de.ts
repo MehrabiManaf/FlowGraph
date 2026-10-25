@@ -136,10 +136,6 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <translation type="unfinished">Keine Treffer für die Suche.</translation>
     </message>
     <message>
-        <source>Select a variable, function or node to see its properties.</source>
-        <translation type="unfinished">Wählen Sie eine Variable, eine Funktion oder einen Knoten, um seine Eigenschaften zu sehen.</translation>
-    </message>
-    <message>
         <source>The variable no longer exists.</source>
         <translation type="unfinished">Die Variable existiert nicht mehr.</translation>
     </message>
@@ -411,6 +407,66 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <source>Hex, e.g. 48 65 6C 6C 6F</source>
         <translation type="unfinished">Hex, z. B. 48 65 6C 6C 6F</translation>
     </message>
+    <message>
+        <source>Select a variable, function, struct or node to see its properties.</source>
+        <translation type="unfinished">Wählen Sie eine Variable, eine Funktion, eine Struktur oder einen Knoten, um seine Eigenschaften zu sehen.</translation>
+    </message>
+    <message>
+        <source>Each field starts with the default of the struct.</source>
+        <translation type="unfinished">Jedes Feld beginnt mit dem Standardwert der Struktur.</translation>
+    </message>
+    <message>
+        <source>The struct no longer exists.</source>
+        <translation type="unfinished">Die Struktur existiert nicht mehr.</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">Struktur</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">Struktur umbenennen</translation>
+    </message>
+    <message>
+        <source>Fields</source>
+        <translation type="unfinished">Felder</translation>
+    </message>
+    <message>
+        <source>Field names must be unique and not empty.</source>
+        <translation type="unfinished">Feldnamen müssen eindeutig und nicht leer sein.</translation>
+    </message>
+    <message>
+        <source>Edit fields</source>
+        <translation type="unfinished">Felder bearbeiten</translation>
+    </message>
+    <message>
+        <source>Add field</source>
+        <translation type="unfinished">Feld hinzufügen</translation>
+    </message>
+    <message>
+        <source>Remove field</source>
+        <translation type="unfinished">Feld entfernen</translation>
+    </message>
+    <message>
+        <source>Move field</source>
+        <translation type="unfinished">Feld verschieben</translation>
+    </message>
+    <message>
+        <source>Add a field with the + of Fields.</source>
+        <translation type="unfinished">Fügen Sie mit dem + von „Felder“ ein Feld hinzu.</translation>
+    </message>
+    <message>
+        <source>Field: %1</source>
+        <translation type="unfinished">Feld: %1</translation>
+    </message>
+    <message>
+        <source>Change field</source>
+        <translation type="unfinished">Feld ändern</translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation type="unfinished">Feld</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
@@ -444,6 +500,18 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
     <message>
         <source>EventGraph</source>
         <translation type="unfinished">Ereignisgraph</translation>
+    </message>
+    <message>
+        <source>A struct name is one word, without spaces or &lt; &gt; ,</source>
+        <translation type="unfinished">Ein Strukturname ist ein Wort, ohne Leerzeichen und ohne &lt; &gt; ,</translation>
+    </message>
+    <message>
+        <source>A struct with that name exists.</source>
+        <translation type="unfinished">Eine Struktur mit diesem Namen existiert bereits.</translation>
+    </message>
+    <message>
+        <source>A type of this application has that name.</source>
+        <translation type="unfinished">Ein Typ dieser Anwendung hat diesen Namen.</translation>
     </message>
 </context>
 <context>
@@ -720,14 +788,6 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <translation type="unfinished">Suchen</translation>
     </message>
     <message>
-        <source>Shows only the events, functions and variables whose name contains this text</source>
-        <translation type="unfinished">Zeigt nur die Ereignisse, Funktionen und Variablen, deren Name diesen Text enthält</translation>
-    </message>
-    <message>
-        <source>Add a function or a variable</source>
-        <translation type="unfinished">Eine Funktion oder eine Variable hinzufügen</translation>
-    </message>
-    <message>
         <source>Event Graphs</source>
         <translation type="unfinished">Ereignisgraphen</translation>
     </message>
@@ -826,6 +886,30 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
     <message>
         <source>Add local variable</source>
         <translation type="unfinished">Lokale Variable hinzufügen</translation>
+    </message>
+    <message>
+        <source>Shows only the events, functions, variables and structs whose name contains this text</source>
+        <translation type="unfinished">Zeigt nur die Ereignisse, Funktionen, Variablen und Strukturen, deren Name diesen Text enthält</translation>
+    </message>
+    <message>
+        <source>Add a function, a variable or a struct</source>
+        <translation type="unfinished">Eine Funktion, eine Variable oder eine Struktur hinzufügen</translation>
+    </message>
+    <message>
+        <source>Structs</source>
+        <translation type="unfinished">Strukturen</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">Struktur</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">Struktur umbenennen</translation>
+    </message>
+    <message>
+        <source>Add struct</source>
+        <translation type="unfinished">Struktur hinzufügen</translation>
     </message>
 </context>
 <context>

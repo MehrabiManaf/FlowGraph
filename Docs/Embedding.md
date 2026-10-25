@@ -48,6 +48,9 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
 * **Types of C++ arguments and results:** `bool`, the integers (`int64_t`...), `double` / `float`, `std::string` (text),
   `fg::Value` (`any`), `std::vector<T>` (`array<T>`), `std::map<K, V>` (`map<K, V>`), registered classes and enums, `fg::Bytes`
   (`bytes`: data, shared without a copy) and `std::byte` (`byte`, 0 to 255; `uint8_t` stays an int).
+* **Structs** are types of the script, not of the registry: each compiled program has its own (`Program::types`). An application
+  reads a struct value it gets from a script (a variable, the result of a function) with `Value::isStruct()` and
+  `structPtr()`: `fields[i]` is the value of the field named `type->fields[i].name`.
 * Classes, enums, methods, properties, constructors, free functions and events become nodes automatically
   (`fn:`, `m:`, `get:`/`set:`, `new:`, `cast:`, `enum:`, `event:` node ids). Inheritance (also multiple) is honoured. Enum
   values print by name and may be given by name in scripts (`"default": "Sad"`).
