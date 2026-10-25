@@ -48,8 +48,6 @@ flow [options] script.flow [arguments...]
 * The script is checked before it is run: a script that needs an event or a plugin `flow` does not provide is refused.
 * Exit code: the code given to the **Exit** node, `0` when the script ends normally, `1` when it fails at run time,
   `2` when it cannot be loaded or has compile errors. Ctrl+C aborts the script.
-* After the script has run, `flow` prints `Execution Time: <n> ms` on **stderr**, so redirecting or piping the script's output
-  is not affected.
 
 ## How the nodes behave
 
