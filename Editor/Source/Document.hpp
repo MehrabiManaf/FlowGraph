@@ -27,6 +27,11 @@ public:
     const fg::Script& script() const { return script_; }
     // Read access for the views; every modification must go through edit().
     std::shared_ptr<const fg::Program> program() const { return program_; }
+    // The types the script can use: the registry's and its structs (as of the last compile). Never null.
+    std::shared_ptr<const fg::TypeScope> types() const;
+    // Why `name` cannot be the name of a struct (another struct or a type of the application has it, it is not a name...); empty
+    // when it can. `current` is the struct being renamed.
+    QString structNameProblem(const QString& name, const QString& current = QString()) const;
     fg::Debugger& debugger() { return debugger_; }
 
     const QString& path() const { return path_; }

@@ -136,10 +136,6 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <translation type="unfinished">Rien ne correspond à la recherche.</translation>
     </message>
     <message>
-        <source>Select a variable, function or node to see its properties.</source>
-        <translation type="unfinished">Sélectionnez une variable, une fonction ou un nœud pour voir ses propriétés.</translation>
-    </message>
-    <message>
         <source>The variable no longer exists.</source>
         <translation type="unfinished">La variable n&apos;existe plus.</translation>
     </message>
@@ -407,6 +403,70 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <source>%1 nodes selected</source>
         <translation type="unfinished">%1 nœuds sélectionnés</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation type="unfinished">Hexa, p. ex. 48 65 6C 6C 6F</translation>
+    </message>
+    <message>
+        <source>Select a variable, function, struct or node to see its properties.</source>
+        <translation type="unfinished">Sélectionnez une variable, une fonction, une structure ou un nœud pour voir ses propriétés.</translation>
+    </message>
+    <message>
+        <source>Each field starts with the default of the struct.</source>
+        <translation type="unfinished">Chaque champ commence avec la valeur par défaut de la structure.</translation>
+    </message>
+    <message>
+        <source>The struct no longer exists.</source>
+        <translation type="unfinished">La structure n&apos;existe plus.</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">Structure</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">Renommer la structure</translation>
+    </message>
+    <message>
+        <source>Fields</source>
+        <translation type="unfinished">Champs</translation>
+    </message>
+    <message>
+        <source>Field names must be unique and not empty.</source>
+        <translation type="unfinished">Les noms des champs doivent être uniques et non vides.</translation>
+    </message>
+    <message>
+        <source>Edit fields</source>
+        <translation type="unfinished">Modifier les champs</translation>
+    </message>
+    <message>
+        <source>Add field</source>
+        <translation type="unfinished">Ajouter un champ</translation>
+    </message>
+    <message>
+        <source>Remove field</source>
+        <translation type="unfinished">Supprimer le champ</translation>
+    </message>
+    <message>
+        <source>Move field</source>
+        <translation type="unfinished">Déplacer le champ</translation>
+    </message>
+    <message>
+        <source>Add a field with the + of Fields.</source>
+        <translation type="unfinished">Ajoutez un champ avec le + de Champs.</translation>
+    </message>
+    <message>
+        <source>Field: %1</source>
+        <translation type="unfinished">Champ : %1</translation>
+    </message>
+    <message>
+        <source>Change field</source>
+        <translation type="unfinished">Changer le champ</translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation type="unfinished">Champ</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
@@ -440,6 +500,18 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
     <message>
         <source>EventGraph</source>
         <translation type="unfinished">Graphe d&apos;événements</translation>
+    </message>
+    <message>
+        <source>A struct name is one word, without spaces or &lt; &gt; ,</source>
+        <translation type="unfinished">Un nom de structure est un seul mot, sans espaces ni &lt; &gt; ,</translation>
+    </message>
+    <message>
+        <source>A struct with that name exists.</source>
+        <translation type="unfinished">Une structure portant ce nom existe déjà.</translation>
+    </message>
+    <message>
+        <source>A type of this application has that name.</source>
+        <translation type="unfinished">Un type de cette application porte ce nom.</translation>
     </message>
 </context>
 <context>
@@ -488,16 +560,16 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <translation type="unfinished">Références de %1</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">Tapez pour rechercher, ou utilisez Rechercher les références sur un nœud, une variable ou une fonction.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">rien trouvé</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">%1 trouvé(s)</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">Tapez pour rechercher, ou utilisez Rechercher les références sur un nœud, une variable, une fonction ou une structure.</translation>
     </message>
 </context>
 <context>
@@ -716,14 +788,6 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <translation type="unfinished">Rechercher</translation>
     </message>
     <message>
-        <source>Shows only the events, functions and variables whose name contains this text</source>
-        <translation type="unfinished">N&apos;affiche que les événements, fonctions et variables dont le nom contient ce texte</translation>
-    </message>
-    <message>
-        <source>Add a function or a variable</source>
-        <translation type="unfinished">Ajouter une fonction ou une variable</translation>
-    </message>
-    <message>
         <source>Event Graphs</source>
         <translation type="unfinished">Graphes d&apos;événements</translation>
     </message>
@@ -822,6 +886,30 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
     <message>
         <source>Add local variable</source>
         <translation type="unfinished">Ajouter une variable locale</translation>
+    </message>
+    <message>
+        <source>Shows only the events, functions, variables and structs whose name contains this text</source>
+        <translation type="unfinished">N&apos;affiche que les événements, fonctions, variables et structures dont le nom contient ce texte</translation>
+    </message>
+    <message>
+        <source>Add a function, a variable or a struct</source>
+        <translation type="unfinished">Ajouter une fonction, une variable ou une structure</translation>
+    </message>
+    <message>
+        <source>Structs</source>
+        <translation type="unfinished">Structures</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">Structure</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">Renommer la structure</translation>
+    </message>
+    <message>
+        <source>Add struct</source>
+        <translation type="unfinished">Ajouter une structure</translation>
     </message>
 </context>
 <context>
@@ -1109,10 +1197,6 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <translation type="unfinished">%1 référence(s) de %2</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">Sélectionnez un nœud, ou une variable ou une fonction dans Mon script, pour rechercher ses références</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">Thème %1</translation>
     </message>
@@ -1259,6 +1343,14 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
     <message>
         <source>Nothing to run: add an event to a graph (this application offers: %1 entries).</source>
         <translation type="unfinished">Rien à exécuter : ajoutez un événement à un graphe (cette application propose : %1 entrées).</translation>
+    </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation type="unfinished">&amp;Plein écran</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">Sélectionnez un nœud, ou une variable, une fonction ou une structure dans Mon script, pour rechercher ses références</translation>
     </message>
 </context>
 <context>

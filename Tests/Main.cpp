@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: MIT
 // Minimal test runner: TEST(name) { CHECK(cond); }
+#include <FlowGraph/Encoding.hpp>
 #include <FlowGraph/Runtime.hpp>
 
 #include <algorithm>
@@ -491,7 +492,10 @@ TEST(files_of_a_newer_version_are_refused) {
     Script s;
     s.addEventGraph();
     Json j = s.toJson();
-    CHECK_EQ(j["version"].asInt(), int64_t(Script::kFileVersion));
+    CHECK_EQ(j["version"].asInt(), int64_t(1));                     // without structs: version 1, which older FlowGraph versions read
+    Script withStruct = s;
+    withStruct.structs.push_back({"Point", "", "", {{"X", "int", Value(), ""}}});
+    CHECK_EQ(withStruct.toJson()["version"].asInt(), int64_t(Script::kFileVersion));
     j.set("version", Script::kFileVersion + 1);
     CHECK(refused(j.dump(), "newer FlowGraph"));
     j.set("version", 0);
@@ -3673,7 +3677,7 @@ TEST(limits_stop_scripts_that_grow_too_big_or_run_too_long) {
         mcopy.intrinsic = Intrinsic::None;
         rt.registry().addNode(std::move(mcopy));
     }
-    // For 0..100: Add(A, Index) / Set Entry(M, Index, Index)
+    // For 0..100: Add(A, Index) / Add(M, Index, Index)
     auto growing = [&](const char* def, const char* type) {
         GoGraph t;
         t.s.variables.push_back({"C", type, Value(), "", ""});
@@ -4576,6 +4580,92 @@ TEST(filesystem_file_writes_and_reads_a_piece_at_a_time) {
     CHECK_EQ(rest, std::string("alpha,beta\n\ngamma,[],"));
 }
 
+TEST(filesystem_file_reads_and_writes_bytes) {
+    FileSystemRuntime rt;
+    if (!rt.loaded) return;
+    TempFolder dir("binary");
+    const std::string path = dir["data.bin"];
+    std::string all;
+    for (int c = 0; c < 256; ++c) all += static_cast<char>(c);
+    const std::string mark = "\xEF\xBB\xBF";
+    // Write Bytes: as they are, also a byte order mark at the start
+    CHECK_EQ(withFile(rt, path, kWrite, [&](GoGraph& t, NodeId open) {
+        NodeId a = method(t, open, open, "Then", "Write Bytes", {{"Bytes", Value(Bytes(mark + "text"))}});
+        return method(t, open, a, "Then", "Write Bytes", {{"Bytes", Value(Bytes(all))}});
+    }), std::string(""));
+    CHECK_EQ(fileText(path), mark + "text" + all);
+
+    // Read Bytes: Count bytes, or all the rest; the mark is data here. Then Read Text goes on from there.
+    auto readParts = [&](GoGraph& t, NodeId open) {
+        NodeId a = method(t, open, open, "Then", "Read Bytes", {{"Count", Value(3)}});
+        NodeId b = method(t, open, a, "Then", "Read Bytes", {{"Count", Value(4)}});
+        NodeId c = method(t, open, b, "Then", "Read Bytes");             // Count -1: the rest
+        NodeId d = method(t, open, c, "Then", "Read Bytes", {{"Count", Value(10)}});      // at the end: none
+        t.s.variables.push_back({"A", "bytes", Value(), "", ""});
+        t.s.variables.push_back({"B", "bytes", Value(), "", ""});
+        t.s.variables.push_back({"C", "bytes", Value(), "", ""});
+        t.s.variables.push_back({"D", "bytes", Value(), "", ""});
+        NodeId prev = d;
+        const std::pair<NodeId, const char*> outs[] = {{a, "A"}, {b, "B"}, {c, "C"}, {d, "D"}};
+        for (auto& [node, var] : outs) {
+            NodeId set = t.var("var.set", var);
+            t.link(prev, "Then", set, "In");
+            t.link(node, "Bytes", set, "Value");
+            prev = set;
+        }
+        return prev;
+    };
+    std::unique_ptr<GoRun> run;
+    CHECK_EQ(withFile(rt, path, kRead, readParts, &run), std::string(""));
+    if (run) {
+        CHECK(run->inst->getVariable("A") == Value(Bytes(mark)));
+        CHECK(run->inst->getVariable("B") == Value(Bytes(std::string("text"))));
+        CHECK(run->inst->getVariable("C") == Value(Bytes(all)));
+        CHECK(run->inst->getVariable("D") == Value(Bytes()));
+    }
+    run.reset();
+    // a text read at the start still skips the mark
+    auto text = withFile(rt, path, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId line = method(t, open, open, "Then", "Read Text");
+        NodeId len = t.node("fn:String.Byte Length");
+        t.link(line, "Text", len, "String");
+        NodeId p = t.node("util.print");
+        t.link(line, "Then", p, "In");
+        t.link(len, "Result", p, "String");
+        return p;
+    });
+    CHECK_EQ(text, std::to_string(4 + 256) + ",");
+
+    // big bytes go through the background, both ways
+    const std::string big(3 << 20, '\x5A');
+    CHECK_EQ(withFile(rt, path, kWrite, [&](GoGraph& t, NodeId open) {
+        return method(t, open, open, "Then", "Write Bytes", {{"Bytes", Value(Bytes(big + all))}});
+    }), std::string(""));
+    CHECK_EQ(fileText(path).size(), big.size() + 256);
+    CHECK_EQ(withFile(rt, path, kRead, [&](GoGraph& t, NodeId open) {
+        NodeId r = method(t, open, open, "Then", "Read Bytes");
+        t.s.variables.push_back({"All", "bytes", Value(), "", ""});
+        NodeId set = t.var("var.set", "All");
+        t.link(r, "Then", set, "In");
+        t.link(r, "Bytes", set, "Value");
+        return set;
+    }, &run), std::string(""));
+    if (run) CHECK(run->inst->getVariable("All") == Value(Bytes(big + all)));
+    run.reset();
+
+    // the other way round is Failed, as for text
+    auto wrong = withFile(rt, path, kWrite, [&](GoGraph& t, NodeId open) {
+        NodeId r = method(t, open, open, "Then", "Read Bytes", {{"Count", Value(1)}});
+        NodeId why = t.node("fn:String.Concat", {{"A", Value("why: ")}});
+        t.link(r, "Error", why, "B");
+        NodeId p = t.node("util.print");
+        t.link(r, "Failed", p, "In");
+        t.link(why, "Result", p, "String");
+        return r;
+    });
+    CHECK(has(wrong, "why: cannot read") && has(wrong, "it is open for writing"));
+}
+
 TEST(filesystem_file_failures_and_mistakes) {
     FileSystemRuntime rt;
     if (!rt.loaded) return;
@@ -4768,6 +4858,633 @@ TEST(filesystem_file_writes_a_big_text_in_the_background) {
     CHECK(r.log.size() == 1 && r.log[0] == "line");
     std::error_code ec;
     CHECK_EQ(std::filesystem::file_size(u8path(out), ec), uintmax_t(size + 2));
+}
+
+// ---- byte and bytes -----------------------------------------------------------------------------------------------
+TEST(bytes_values_are_shared_and_compare_by_content) {
+    TestRuntime rt;
+    const Registry& reg = rt.registry();
+    const Value a(Bytes(std::string("Hello")));
+    const Value b = a;                                       // a copy shares the buffer
+    CHECK(a.isBytes() && a.kind() == Value::Kind::Bytes);
+    CHECK(a.identity() == b.identity());
+    CHECK(a.deepCopy().identity() == a.identity());          // immutable: nothing to copy
+    CHECK(a == Value(Bytes(std::string("Hello"))));          // by content
+    CHECK(a != Value(Bytes(std::string("Hellp"))));
+    CHECK(a != Value(std::string("Hello")));                 // text is not bytes
+    CHECK(ValueLess()(Value(Bytes(std::string("A"))), Value(Bytes(std::string("B")))));
+    CHECK(ValueLess()(Value(std::string("zz")), a));         // strings come before bytes
+    CHECK_EQ(a.toString(), std::string("bytes(5): 48 65 6C 6C 6F"));
+    CHECK_EQ(Value(Bytes()).toString(), std::string("bytes(0)"));
+    CHECK_EQ(Value(Bytes(std::string(20, 'A'))).toString(),
+             std::string("bytes(20): 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 41 ..."));
+    CHECK(a.toBool() && !Value(Bytes()).toBool());
+    CHECK_EQ(a.bytes().size(), size_t(5));
+    CHECK(Value(std::string("x")).bytes().empty());          // not bytes: empty
+    const uint8_t raw[] = {0, 255, 10};
+    CHECK_EQ(Bytes(raw, 3).size(), size_t(3));
+    CHECK_EQ(Bytes(std::vector<uint8_t>{1, 2})[1], uint8_t(2));
+
+    // the types and their rules; editors list them in this order
+    CHECK(reg.findType("byte") == reg.tByte() && reg.findType("bytes") == reg.tBytes());
+    std::vector<std::string> first;
+    for (const TypeDesc* t : reg.types())
+        if (first.size() < 7) first.push_back(t->name);
+    CHECK(first == std::vector<std::string>({"bool", "byte", "int", "float", "string", "bytes", "any"}));
+    CHECK(reg.findType("array<byte>") != nullptr);
+    CHECK(reg.canConnect(reg.tByte(), reg.tInt()) && reg.canConnect(reg.tInt(), reg.tByte()));
+    CHECK(reg.canConnect(reg.tByte(), reg.tFloat()));
+    CHECK(reg.canConnect(reg.tBytes(), reg.tString()));      // to print it
+    CHECK(!reg.canConnect(reg.tString(), reg.tBytes()));     // text becomes bytes with From Text
+    CHECK(!reg.canConnect(reg.tInt(), reg.tBytes()));
+    CHECK(!reg.canConnect(reg.arrayOf(reg.tByte()), reg.tBytes()));
+    CHECK(reg.defaultValue(reg.tBytes()).isBytes() && reg.defaultValue(reg.tBytes()).bytes().empty());
+    CHECK_EQ(reg.defaultValue(reg.tByte()).toInt(), int64_t(0));
+    CHECK(reg.convert(Value(), reg.tBytes()).isBytes());
+    bool refused = false;
+    try {
+        reg.convert(Value(std::string("text")), reg.tBytes());
+    } catch (const ScriptError&) {
+        refused = true;
+    }
+    CHECK(refused);
+
+    // a byte wraps around, like int overflow
+    CHECK_EQ(reg.convert(Value(300), reg.tByte()).toInt(), int64_t(44));
+    CHECK_EQ(reg.convert(Value(-1), reg.tByte()).toInt(), int64_t(255));
+    CHECK_EQ(reg.convert(Value(256), reg.tByte()).toInt(), int64_t(0));
+    CHECK_EQ(reg.convert(Value(200), reg.tByte()).toInt(), int64_t(200));
+    CHECK_EQ(reg.convert(Value(65.9), reg.tByte()).toInt(), int64_t(65));
+
+    // in a .flow file: Base64
+    const Json j = valueToJson(a);
+    CHECK(j.find("$bytes") && j.find("$bytes")->asString() == "SGVsbG8=");
+    CHECK(jsonToValue(j) == a);
+    CHECK(jsonToValue(valueToJson(Value(Bytes()))) == Value(Bytes()));
+    bool bad = false;
+    try {
+        Json broken = Json::object();
+        broken.set("$bytes", "not base64!");
+        jsonToValue(broken);
+    } catch (const JsonError&) {
+        bad = true;
+    }
+    CHECK(bad);
+}
+
+TEST(utf8_base64_and_hex_conversions) {
+    const std::string R = "\xEF\xBF\xBD";                    // U+FFFD
+    bool valid = false;
+    CHECK(bytesToText("h\xC3\xA9llo \xD8\xB3\xD9\x84\xD8\xA7\xD9\x85", &valid) == "h\xC3\xA9llo \xD8\xB3\xD9\x84\xD8\xA7\xD9\x85" && valid);
+    CHECK(bytesToText("\xF0\x9F\x98\x80", &valid) == "\xF0\x9F\x98\x80" && valid);      // 4 byte sequence
+    CHECK(bytesToText("a\xC3(b", &valid) == "a" + R + "(b" && !valid);                   // a lead without its continuation
+    CHECK_EQ(bytesToText("\xC0\xAF"), R + R);                                            // overlong: never UTF-8
+    CHECK_EQ(bytesToText("\xED\xA0\x80"), R + R + R);                                    // a surrogate
+    CHECK_EQ(bytesToText("x\xE2\x82"), "x" + R);                                         // cut at the end: one
+    CHECK_EQ(bytesToText("\xF4\x90\x80\x80"), R + R + R + R);                            // beyond U+10FFFF
+    CHECK_EQ(bytesToText(std::string_view("a\0b", 3)), std::string("a\0b", 3));          // a zero byte is text too
+
+    const char* plain[] = {"", "f", "fo", "foo", "foob", "fooba", "foobar"};
+    const char* coded[] = {"", "Zg==", "Zm8=", "Zm9v", "Zm9vYg==", "Zm9vYmE=", "Zm9vYmFy"};
+    for (int i = 0; i < 7; ++i) {
+        CHECK_EQ(base64Encode(plain[i]), std::string(coded[i]));
+        std::string back;
+        CHECK(base64Decode(coded[i], back) && back == plain[i]);
+    }
+    std::string out;
+    CHECK(base64Decode("Zm9vYg", out) && out == "foob");                                 // no padding
+    CHECK(base64Decode(" Zm9v\nYmFy ", out) && out == "foobar");                         // white space
+    CHECK(base64Decode("-_8=", out) && out == "\xFB\xFF");                               // URL alphabet
+    CHECK(!base64Decode("Zm9v!", out) && out.empty());
+    CHECK(!base64Decode("Z", out));                                                      // a lone digit
+    CHECK(!base64Decode("Zg==Zg", out));                                                 // a digit after the padding
+    std::string all;
+    for (int c = 0; c < 256; ++c) all += static_cast<char>(c);
+    CHECK(base64Decode(base64Encode(all), out) && out == all);
+
+    CHECK_EQ(hexEncode("Hello"), std::string("48656C6C6F"));
+    CHECK_EQ(hexEncode("Hello", true), std::string("48 65 6C 6C 6F"));
+    CHECK_EQ(hexEncode(""), std::string(""));
+    CHECK(hexDecode("48656c6C6F", out) && out == "Hello");
+    CHECK(hexDecode("48 65:6C-6C\n6F", out) && out == "Hello");
+    CHECK(!hexDecode("486", out) && out.empty());                                        // odd
+    CHECK(!hexDecode("4 8", out));                                                       // a separator inside a pair
+    CHECK(!hexDecode("4G", out));
+    CHECK(hexDecode(hexEncode(all), out) && out == all);
+}
+
+namespace {
+// Go -> V0.. = the outputs of a pure node with these input defaults; the values, or "error: ..." in the first.
+std::vector<Value> pureOutputs(Runtime& rt, const std::string& def, std::map<std::string, Value> defaults,
+                               const std::vector<std::pair<std::string, std::string>>& outputs, std::string* error = nullptr) {
+    GoGraph t;
+    NodeId n = t.node(def, std::move(defaults));
+    NodeId prev = t.ev;
+    for (size_t i = 0; i < outputs.size(); ++i) {
+        const std::string v = "V" + std::to_string(i);
+        t.s.variables.push_back({v, outputs[i].second, Value(), "", ""});
+        NodeId set = t.var("var.set", v.c_str());
+        t.link(n, outputs[i].first, set, "Value");
+        t.link(prev, "Then", set, "In");
+        prev = set;
+    }
+    GoRun r(rt, t.s);
+    std::vector<Value> out;
+    if (!r.prog->ok()) {
+        if (error) *error = dumpDiagnostics(*r.prog);
+        return out;
+    }
+    RunResult res = r.inst->callEvent("Go");
+    if (!res.ok) {
+        if (error) *error = res.error;
+        return out;
+    }
+    for (size_t i = 0; i < outputs.size(); ++i) out.push_back(r.inst->getVariable("V" + std::to_string(i)));
+    return out;
+}
+Value bytesOf(const std::string& s) { return Value(Bytes(s)); }
+} // namespace
+
+TEST(bytes_nodes) {
+    TestRuntime rt;
+    auto one = [&](const std::string& def, std::map<std::string, Value> in, const char* out, const char* type) {
+        auto v = pureOutputs(rt, def, std::move(in), {{out, type}});
+        return v.empty() ? Value(std::string("<failed>")) : v[0];
+    };
+    const Value hello = bytesOf("Hello");
+    CHECK_EQ(one("fn:Bytes.Length", {{"Bytes", hello}}, "Length", "int").toInt(), int64_t(5));
+    CHECK_EQ(one("fn:Bytes.Byte At", {{"Bytes", hello}, {"Index", Value(1)}}, "Byte", "byte").toInt(), int64_t('e'));
+    std::string error;
+    CHECK(pureOutputs(rt, "fn:Bytes.Byte At", {{"Bytes", hello}, {"Index", Value(5)}}, {{"Byte", "byte"}}, &error).empty());
+    CHECK(has(error, "index 5 is out of range (size 5)"));
+    CHECK(one("fn:Bytes.Slice", {{"Bytes", hello}, {"Start", Value(1)}, {"Length", Value(3)}}, "Result", "bytes") == bytesOf("ell"));
+    CHECK(one("fn:Bytes.Slice", {{"Bytes", hello}, {"Start", Value(3)}}, "Result", "bytes") == bytesOf("lo"));          // to the end
+    CHECK(one("fn:Bytes.Slice", {{"Bytes", hello}, {"Start", Value(9)}}, "Result", "bytes") == bytesOf(""));
+    CHECK(one("fn:Bytes.Slice", {{"Bytes", hello}, {"Start", Value(-2)}, {"Length", Value(2)}}, "Result", "bytes") == bytesOf("He"));
+    CHECK(one("fn:Bytes.Concat", {{"A", hello}, {"B", bytesOf("!")}}, "Result", "bytes") == bytesOf("Hello!"));
+    CHECK_EQ(one("fn:Bytes.Find", {{"Bytes", hello}, {"What", bytesOf("l")}, {"Start", Value(3)}}, "Index", "int").toInt(), int64_t(3));
+    CHECK_EQ(one("fn:Bytes.Find", {{"Bytes", hello}, {"What", bytesOf("z")}, {"Start", Value(0)}}, "Index", "int").toInt(), int64_t(-1));
+    CHECK(one("fn:Bytes.Starts With", {{"Bytes", hello}, {"Prefix", bytesOf("He")}}, "Result", "bool").toBool());
+    CHECK(!one("fn:Bytes.Ends With", {{"Bytes", hello}, {"Suffix", bytesOf("He")}}, "Result", "bool").toBool());
+    CHECK(one("fn:Bytes.Ends With", {{"Bytes", hello}, {"Suffix", bytesOf("lo")}}, "Result", "bool").toBool());
+
+    // text: UTF-8 both ways, and what is not UTF-8
+    CHECK(one("fn:Bytes.From Text", {{"Text", Value("h\xC3\xA9")}}, "Bytes", "bytes") == bytesOf("h\xC3\xA9"));
+    auto text = pureOutputs(rt, "bytes.totext", {{"Bytes", bytesOf("h\xC3\xA9")}}, {{"Text", "string"}, {"Valid", "bool"}});
+    CHECK(text.size() == 2 && text[0].str() == "h\xC3\xA9" && text[1].toBool());
+    text = pureOutputs(rt, "bytes.totext", {{"Bytes", bytesOf("a\xFF")}}, {{"Text", "string"}, {"Valid", "bool"}});
+    CHECK(text.size() == 2 && text[0].str() == "a\xEF\xBF\xBD" && !text[1].toBool());
+
+    // Base64 and hex
+    CHECK_EQ(one("fn:Bytes.To Base64", {{"Bytes", hello}}, "Text", "string").str(), std::string("SGVsbG8="));
+    auto dec = pureOutputs(rt, "bytes.frombase64", {{"Text", Value("SGVsbG8=")}}, {{"Bytes", "bytes"}, {"Valid", "bool"}});
+    CHECK(dec.size() == 2 && dec[0] == hello && dec[1].toBool());
+    dec = pureOutputs(rt, "bytes.frombase64", {{"Text", Value("??")}}, {{"Bytes", "bytes"}, {"Valid", "bool"}});
+    CHECK(dec.size() == 2 && dec[0] == bytesOf("") && !dec[1].toBool());
+    CHECK_EQ(one("fn:Bytes.To Hex", {{"Bytes", hello}, {"Spaced", Value(true)}}, "Text", "string").str(), std::string("48 65 6C 6C 6F"));
+    dec = pureOutputs(rt, "bytes.fromhex", {{"Text", Value("48656c6c6f")}}, {{"Bytes", "bytes"}, {"Valid", "bool"}});
+    CHECK(dec.size() == 2 && dec[0] == hello && dec[1].toBool());
+
+    // array<byte> and back
+    const Value arr = one("fn:Bytes.To Array", {{"Bytes", bytesOf("A\xFF")}}, "Array", "array<byte>");
+    CHECK(arr.arrayPtr() && arr.arrayPtr()->items.size() == 2 && arr.arrayPtr()->elem == rt.registry().tByte());
+    if (arr.arrayPtr() && arr.arrayPtr()->items.size() == 2)
+        CHECK(arr.arrayPtr()->items[0].toInt() == 65 && arr.arrayPtr()->items[1].toInt() == 255);
+    CHECK(one("fn:Bytes.Make Bytes", {{"Array", arr}}, "Bytes", "bytes") == bytesOf("A\xFF"));
+
+    // bytes are compared by Equal, printed as a preview
+    CHECK(one("cmp.eq", {{"A", hello}, {"B", bytesOf("Hello")}}, "Result", "bool").toBool());
+    GoGraph t;
+    NodeId pr = t.node("util.print", {});
+    t.link(t.ev, "Then", pr, "In");
+    NodeId from = t.node("fn:Bytes.From Text", {{"Text", Value("Hi")}});
+    t.link(from, "Bytes", pr, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    CHECK_EQ(r.go(), std::string("bytes(2): 48 69,"));
+}
+
+TEST(bytes_and_byte_from_cpp_and_in_limits) {
+    TestRuntime rt;
+    Registry& reg = rt.registry();
+    // fg::Bytes is bytes, std::byte is byte (uint8_t stays an int)
+    reg.addFunction("Test.Reverse", [](const Bytes& b) {
+        std::string s(b.view());
+        std::reverse(s.begin(), s.end());
+        return Bytes(std::move(s));
+    }, {"Bytes"}).makePure();
+    reg.addFunction("Test.First", [](const Bytes& b) { return b.empty() ? std::byte{0} : static_cast<std::byte>(b[0]); }, {"Bytes"}).makePure();
+    reg.addFunction("Test.Small", [](uint8_t x) { return x; }, {"X"}).makePure();
+    const FunctionDesc* rev = reg.findFunction("Test.Reverse");
+    CHECK(rev && rev->params[0].type == reg.tBytes() && rev->ret == reg.tBytes());
+    CHECK(reg.findFunction("Test.First")->ret == reg.tByte());
+    CHECK(reg.findFunction("Test.Small")->ret == reg.tInt());
+    Value arg = bytesOf("abc");
+    CHECK(rev->invoke(&arg) == bytesOf("cba"));
+
+    // Limits: a string length limit is a limit for bytes too
+    auto out = pureOutputs(rt, "fn:Bytes.Concat", {{"A", bytesOf(std::string(600, 'x'))}, {"B", bytesOf(std::string(600, 'y'))}},
+                           {{"Result", "bytes"}});
+    CHECK(out.size() == 1 && out[0].bytes().size() == 1200);
+    GoGraph t;
+    t.s.variables.push_back({"B", "bytes", Value(), "", ""});
+    NodeId cat = t.node("fn:Bytes.Concat", {{"A", bytesOf(std::string(600, 'x'))}, {"B", bytesOf(std::string(600, 'y'))}});
+    NodeId set = t.var("var.set", "B");
+    t.link(t.ev, "Then", set, "In");
+    t.link(cat, "Result", set, "Value");
+    GoRun r(rt, t.s);
+    Instance::Limits lim;
+    lim.maxStringLength = 1000;
+    r.inst->setLimits(lim);
+    RunResult res = r.inst->callEvent("Go");
+    CHECK(!res.ok && has(res.error, "bytes of 1200 bytes"));
+
+    // the debugger: a byte variable is a byte, bytes show their preview
+    Script s;
+    s.variables.push_back({"One", "byte", Value(7), "", ""});
+    s.variables.push_back({"Data", "bytes", bytesOf("Hi"), "", ""});
+    s.addEventGraph().addNode("event:Go");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    auto globals = inspectGlobals(inst);
+    CHECK_EQ(globals.size(), size_t(2));
+    if (globals.size() == 2) {
+        CHECK(globals[0].value.type == "byte" && globals[0].value.text == "7");
+        CHECK(globals[1].value.type == "bytes" && globals[1].value.text == "bytes(2): 48 69");
+    }
+    // a script with both round-trips through its file
+    Script back = Script::parse(s.toText());
+    CHECK(back.variables.size() == 2 && back.variables[1].def == bytesOf("Hi") && back.variables[0].type == "byte");
+}
+
+// Add of a map adds the key or changes its value (titled like the array nodes; the ids stay those of Set Entry / Get Entry).
+TEST(map_add_adds_a_key_or_changes_its_value) {
+    TestRuntime rt;
+    const NodeDef* add = rt.registry().findNode("map.set");
+    const NodeDef* get = rt.registry().findNode("map.get");
+    CHECK(add && add->title == "Add" && add->keywords.find("insert") != std::string::npos && add->keywords.find("set entry") != std::string::npos);
+    CHECK(get && get->title == "Get Item" && get->keywords.find("get entry") != std::string::npos);
+    GoGraph t;
+    t.s.variables.push_back({"M", "map<string,int>", Value(), "", ""});
+    NodeId prev = t.ev;
+    const char* prevPin = "Then";
+    for (auto [key, value] : std::vector<std::pair<const char*, int>>{{"a", 1}, {"a", 2}, {"b", 3}}) {
+        NodeId n = t.node("map.set", {{"Key", Value(key)}, {"Value", Value(value)}});
+        t.link(prev, prevPin, n, "In");
+        t.link(t.var("var.get", "M"), "Value", n, "Map");
+        prev = n;
+    }
+    NodeId len = t.node("map.length");
+    t.link(t.var("var.get", "M"), "Value", len, "Map");
+    NodeId item = t.node("map.get", {{"Key", Value("a")}});
+    t.link(t.var("var.get", "M"), "Value", item, "Map");
+    NodeId p1 = t.node("util.print");
+    t.link(prev, prevPin, p1, "In");
+    t.link(len, "Length", p1, "String");
+    NodeId p2 = t.node("util.print");
+    t.link(p1, "Then", p2, "In");
+    t.link(item, "Value", p2, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    CHECK_EQ(r.go(), std::string("2,2,"));
+}
+
+// ---- structs ------------------------------------------------------------------------------------------------------
+namespace {
+StructDecl pointStruct() { return {"Point", "A position", "", {{"X", "int", Value(1), "across"}, {"Y", "int", Value(), "down"}}}; }
+NodeId makePoint(GoGraph& t, std::map<std::string, Value> fields = {}) { return t.node("struct.make", std::move(fields), {{"struct", "Point"}}); }
+NodeId breakPoint(GoGraph& t) { return t.node("struct.break", {}, {{"struct", "Point"}}); }
+NodeId setField(GoGraph& t, const char* field, Value v) { return t.node("struct.set", {{"Value", v}}, {{"struct", "Point"}, {"field", field}}); }
+std::vector<std::string> structErrors(const Registry& reg, const Script& s) {
+    std::vector<std::string> errors;
+    TypeScope::forScript(reg, s, &errors);
+    return errors;
+}
+bool anyHas(const std::vector<std::string>& v, const std::string& part) {
+    for (auto& s : v)
+        if (s.find(part) != std::string::npos) return true;
+    return false;
+}
+} // namespace
+
+TEST(structs_are_types_of_their_script) {
+    TestRuntime rt;
+    const Registry& reg = rt.registry();
+    Script s;
+    s.structs.push_back(pointStruct());
+    s.structs.push_back({"Line", "", "", {{"From", "Point", Value(), ""}, {"To", "Point", Value(), ""}, {"Tags", "array<string>", Value(), ""}}});
+    s.structs.push_back({"Tree", "", "", {{"Name", "string", Value(""), ""}, {"Children", "array<Tree>", Value(), ""}}});    // through an array: fine
+    CHECK(structErrors(reg, s).empty());
+    auto scope = TypeScope::forScript(reg, s);
+    const TypeDesc* point = scope->findType("Point");
+    CHECK(point && point->isStruct() && point->fields.size() == 2 && point->fields[0].type == reg.tInt());
+    CHECK(scope->findType("int") == reg.tInt());                                   // the registry's types too
+    CHECK(!reg.findType("Point"));                                                 // the registry does not know it
+    const TypeDesc* points = scope->findType("array<Point>");
+    CHECK(points && points->kind == TypeKind::Array && points->elem == point);
+    CHECK(scope->findType("array<int>") == reg.arrayOf(reg.tInt()));              // a registry type stays the registry's
+    CHECK(scope->findType("map<string,Line>") && scope->findType("map<string,Line>")->elem == scope->findType("Line"));
+    CHECK_EQ(scope->structs().size(), size_t(3));
+    // another script has its own Point
+    auto other = TypeScope::forScript(reg, s);
+    CHECK(other->findType("Point") != point);
+
+    // the default: each field with its default; nested structs too
+    Value p = reg.defaultValue(point);
+    CHECK(p.isStruct() && p.toString() == "Point{X: 1, Y: 0}");
+    Value line = reg.defaultValue(scope->findType("Line"));
+    CHECK_EQ(line.toString(), std::string("Line{From: Point{X: 1, Y: 0}, To: Point{X: 1, Y: 0}, Tags: []}"));
+    CHECK(p == reg.defaultValue(point) && p != line);
+    Value copy = p.deepCopy();                                                     // a value: a copy is another struct
+    CHECK(copy.identity() != p.identity() && copy == p);
+    copy.structPtr()->fields[0] = Value(5);
+    CHECK(p.structPtr()->fields[0].toInt() == 1);
+    // a struct keeps its types alive
+    Value kept;
+    {
+        auto gone = TypeScope::forScript(reg, s);
+        kept = reg.defaultValue(gone->findType("Point"));
+    }
+    CHECK_EQ(kept.toString(), std::string("Point{X: 1, Y: 0}"));
+
+    // what is not allowed
+    Script bad;
+    bad.structs.push_back({"Self", "", "", {{"Me", "Self", Value(), ""}}});
+    bad.structs.push_back({"A", "", "", {{"B", "B", Value(), ""}}});
+    bad.structs.push_back({"B", "", "", {{"A", "A", Value(), ""}}});
+    bad.structs.push_back({"Odd", "", "", {{"X", "Nope", Value(), ""}, {"X", "int", Value(), ""}, {"N", "int", Value("seven"), ""}}});
+    bad.structs.push_back({"Odd", "", "", {}});
+    bad.structs.push_back({"int", "", "", {}});
+    const auto errors = structErrors(reg, bad);
+    CHECK(anyHas(errors, "The struct 'Self' contains itself"));
+    CHECK(anyHas(errors, "The struct 'A' contains itself"));
+    CHECK(anyHas(errors, "Unknown type 'Nope' of the field 'Odd.X'"));
+    CHECK(anyHas(errors, "Duplicate field 'X'"));
+    CHECK(anyHas(errors, "The default of the field 'Odd.N'"));
+    CHECK(anyHas(errors, "Duplicate struct 'Odd'"));
+    CHECK(anyHas(errors, "has the name of a type of this application"));
+    auto badScope = TypeScope::forScript(reg, bad);
+    CHECK(reg.defaultValue(badScope->findType("Self")).isStruct());                // made all the same, and not infinite
+    // and they are compile errors
+    GoGraph t;
+    t.s.structs = bad.structs;
+    auto prog = build(rt, t.s);
+    CHECK(!prog->ok() && has(dumpDiagnostics(*prog), "contains itself"));
+}
+
+TEST(structs_are_copied_like_arrays_and_changed_in_place_by_set_field) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.structs.push_back(pointStruct());
+    t.s.variables.push_back({"A", "Point", Value(), "", ""});
+    t.s.variables.push_back({"B", "Point", Value(), "", ""});
+    t.s.variables.push_back({"List", "array<Point>", Value(), "", ""});
+    // A = Make Point(3, 4); B = A; A.X = 9; List.Add(A); List[0].Y = 7 (through Get Item: in place)
+    NodeId setA = t.var("var.set", "A");
+    t.link(t.ev, "Then", setA, "In");
+    t.link(makePoint(t, {{"X", Value(3)}, {"Y", Value(4)}}), "Struct", setA, "Value");
+    NodeId setB = t.var("var.set", "B");
+    t.link(setA, "Then", setB, "In");
+    t.link(t.var("var.get", "A"), "Value", setB, "Value");
+    NodeId ax = setField(t, "X", Value(9));
+    t.link(setB, "Then", ax, "In");
+    t.link(t.var("var.get", "A"), "Value", ax, "Struct");
+    NodeId add = t.node("array.add");
+    t.link(ax, "Then", add, "In");
+    t.link(t.var("var.get", "List"), "Value", add, "Array");
+    t.link(t.var("var.get", "A"), "Value", add, "Item");
+    NodeId item = t.node("array.get", {{"Index", Value(0)}});
+    t.link(t.var("var.get", "List"), "Value", item, "Array");
+    NodeId y = setField(t, "Y", Value(7));
+    t.link(add, "Then", y, "In");
+    t.link(item, "Item", y, "Struct");
+    // print A, B and List; Break the first of the list
+    NodeId pa = t.node("util.print");
+    t.link(y, "Then", pa, "In");
+    t.link(t.var("var.get", "A"), "Value", pa, "String");
+    NodeId pb = t.node("util.print");
+    t.link(pa, "Then", pb, "In");
+    t.link(t.var("var.get", "B"), "Value", pb, "String");
+    NodeId pl = t.node("util.print");
+    t.link(pb, "Then", pl, "In");
+    t.link(t.var("var.get", "List"), "Value", pl, "String");
+    NodeId br = breakPoint(t);
+    t.link(item, "Item", br, "Struct");
+    NodeId px = t.node("util.print");
+    t.link(pl, "Then", px, "In");
+    t.link(br, "Y", px, "String");
+    // Equal compares the fields
+    NodeId eq = t.node("cmp.eq");
+    t.link(t.var("var.get", "A"), "Value", eq, "A");
+    t.link(makePoint(t, {{"X", Value(9)}, {"Y", Value(4)}}), "Struct", eq, "B");
+    NodeId pe = t.node("util.print");
+    t.link(px, "Then", pe, "In");
+    t.link(eq, "Result", pe, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) { std::printf("%s", dumpDiagnostics(*r.prog).c_str()); return; }
+    CHECK_EQ(r.go(), std::string("Point{X: 9, Y: 4},Point{X: 3, Y: 4},[Point{X: 9, Y: 7}],7,true,"));
+    // the variable starts with the defaults of the fields; a default in the file is a map of fields
+    CHECK_EQ(r.prog->variables[0].def.toString(), std::string("Point{X: 1, Y: 0}"));
+    t.s.variables[1].def = jsonToValue(Json::parse(R"({"$struct": "Point", "fields": {"Y": 5, "Gone": 1}})"));
+    GoRun r2(rt, t.s);
+    CHECK_EQ(r2.prog->variables[1].def.toString(), std::string("Point{X: 1, Y: 5}"));
+}
+
+TEST(structs_in_functions_and_files) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.structs.push_back(pointStruct());
+    // Twice(P: Point) -> Point: X and Y doubled; Set Field on its parameter does not change the caller's struct (a copy)
+    Graph& f = t.s.addFunction("Twice", {{"P", "Point", false, false, Value()}}, {{"Out", "Point", false, false, Value()}});
+    f.connections.clear();
+    NodeId entry = f.nodes[0].id, ret = f.nodes[1].id;
+    NodeId fb = f.addNode("struct.break").id;
+    f.findNode(fb)->props["struct"] = "Point";
+    NodeId fx = f.addNode("math.mul").id, fy = f.addNode("math.mul").id;
+    f.findNode(fx)->defaults["B"] = Value(2);
+    f.findNode(fy)->defaults["B"] = Value(2);
+    NodeId fm = f.addNode("struct.make").id;
+    f.findNode(fm)->props["struct"] = "Point";
+    NodeId fs = f.addNode("struct.set").id;
+    f.findNode(fs)->props = {{"struct", "Point"}, {"field", "X"}};
+    f.findNode(fs)->defaults["Value"] = Value(-100);
+    auto fl = [&](NodeId a, const char* ap, NodeId b, const char* bp) { f.connections.push_back({a, ap, b, bp}); };
+    fl(entry, "P", fb, "Struct");
+    fl(fb, "X", fx, "A");
+    fl(fb, "Y", fy, "A");
+    fl(fx, "Result", fm, "X");
+    fl(fy, "Result", fm, "Y");
+    fl(entry, "Then", fs, "In");
+    fl(entry, "P", fs, "Struct");
+    fl(fs, "Then", ret, "In");
+    fl(fm, "Struct", ret, "Out");
+    t.s.variables.push_back({"P", "Point", Value(), "", ""});
+    NodeId call = t.node("func.call", {}, {{"function", "Twice"}});
+    t.link(t.ev, "Then", call, "In");
+    t.link(t.var("var.get", "P"), "Value", call, "P");
+    NodeId p1 = t.node("util.print");
+    t.link(call, "Then", p1, "In");
+    t.link(call, "Out", p1, "String");
+    NodeId p2 = t.node("util.print");
+    t.link(p1, "Then", p2, "In");
+    t.link(t.var("var.get", "P"), "Value", p2, "String");
+    GoRun r(rt, t.s);
+    CHECK(r.prog->ok());
+    if (!r.prog->ok()) { std::printf("%s", dumpDiagnostics(*r.prog).c_str()); return; }
+    // the pure nodes run when Return asks for Out, after Set Field: the function sees its own change, the caller's P does not
+    CHECK_EQ(r.go(), std::string("Point{X: -200, Y: 0},Point{X: 1, Y: 0},"));
+
+    // in a file: version 2, the structs and their fields kept
+    const std::string text = t.s.toText();
+    CHECK(has(text, "\"version\": 2") && has(text, "\"structs\""));
+    Script back = Script::parse(text);
+    CHECK(back.structs.size() == 1 && back.structs[0].fields.size() == 2 && back.structs[0].fields[0].def == Value(1));
+    CHECK(back.structs[0].doc == "A position" && back.structs[0].fields[1].doc == "down");
+    CHECK(build(rt, back)->ok());
+    // a value of a struct type, in a file: written with its fields
+    CHECK(has(valueToJson(r.prog->variables[0].def).dump(), "\"$struct\""));
+
+    // what the compiler refuses
+    GoGraph bad;
+    bad.s.structs.push_back(pointStruct());
+    NodeId unknown = bad.node("struct.make", {}, {{"struct", "Nope"}});
+    NodeId wrongField = bad.node("struct.set", {}, {{"struct", "Point"}, {"field", "Z"}});
+    (void)unknown;
+    (void)wrongField;
+    auto prog = build(rt, bad.s);
+    CHECK(!prog->ok());
+    CHECK(has(dumpDiagnostics(*prog), "Unknown struct 'Nope'") && has(dumpDiagnostics(*prog), "has no field 'Z'"));
+}
+
+TEST(structs_survive_a_reload_field_by_field) {
+    TestRuntime rt;
+    Script s;
+    s.structs.push_back(pointStruct());
+    s.variables.push_back({"P", "Point", Value(), "", ""});
+    s.variables.push_back({"List", "array<Point>", Value(), "", ""});
+    s.addEventGraph().addNode("event:Go");
+    auto prog = build(rt, s);
+    CHECK(prog->ok());
+    Instance inst(prog);
+    const Registry& reg = rt.registry();
+    Value p = reg.defaultValue(prog->types->findType("Point"));
+    p.structPtr()->fields = {Value(7), Value(8)};
+    inst.setVariable("P", p);
+    auto list = std::make_shared<ArrayData>();
+    list->elem = prog->types->findType("Point");
+    list->items.push_back(p.deepCopy());
+    inst.setVariable("List", Value(list));
+    // the struct changes: Y goes, X becomes a float, Z comes
+    Script s2 = s;
+    s2.structs[0].fields = {{"X", "float", Value(), ""}, {"Z", "string", Value("new"), ""}};
+    auto prog2 = build(rt, s2);
+    CHECK(prog2->ok());
+    auto rep = inst.reload(prog2);
+    CHECK(rep.ok());
+    CHECK_EQ(inst.getVariable("P").toString(), std::string("Point{X: 7.0, Z: \"new\"}"));
+    CHECK_EQ(inst.getVariable("List").toString(), std::string("[Point{X: 7.0, Z: \"new\"}]"));
+    CHECK(inst.getVariable("P").structPtr()->type.get() == prog2->types->findType("Point"));
+
+    // the debugger shows the fields; a watch reaches one
+    auto globals = inspectGlobals(inst);
+    CHECK(globals.size() == 2 && globals[0].value.type == "Point" && globals[0].value.children.size() == 2);
+    if (globals.size() == 2 && globals[0].value.children.size() == 2)
+        CHECK(globals[0].value.children[0].name == "X" && globals[0].value.children[0].text == "7.0" && globals[0].value.children[0].path == "P.X");
+    auto watch = evaluateExpression(inst, nullptr, 0, "List[0].Z");
+    CHECK(watch.ok && watch.view.text == "\"new\"");
+    CHECK(has(evaluateExpression(inst, nullptr, 0, "P.Nope").error, "has no field 'Nope'"));
+}
+
+TEST(find_references_of_a_struct) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.structs.push_back(pointStruct());
+    t.s.structs.push_back({"Line", "", "", {{"From", "Point", Value(), ""}, {"Name", "string", Value(), ""}}});
+    t.s.variables.push_back({"P", "Point", Value(), "", ""});
+    t.s.variables.push_back({"N", "int", Value(), "", ""});
+    t.s.variables.push_back({"All", "map<string,Point>", Value(), "", ""});
+    Graph& f = t.s.addFunction("Move", {{"From", "Point", false, false, Value()}}, {{"To", "array<Point>", false, false, Value()}});
+    f.locals.push_back({"Tmp", "Point", Value(), "", ""});
+    NodeId mk = makePoint(t);
+    NodeId br = breakPoint(t);
+    NodeId st = setField(t, "Y", Value(2));
+    NodeId arr = t.node("array.make");
+    t.g->findNode(arr)->typeArgs["T"] = "Point";
+    NodeId other = t.node("struct.make", {}, {{"struct", "Line"}});
+    (void)other;
+    auto prog = build(rt, t.s);
+    const RefTarget target{RefTarget::Kind::Struct, "Point", ""};
+    CHECK_EQ(target.describe(), std::string("struct Point"));
+    auto refs = findReferences(t.s, prog.get(), target);
+    std::vector<std::string> got;
+    for (auto& r : refs) got.push_back(r.graph + "|" + r.title + "|" + r.detail + "|" + std::to_string(int(r.declaration)));
+    using D = ScriptRef::Declaration;
+    auto row = [](std::string graph, std::string title, std::string detail, D d) { return graph + "|" + title + "|" + detail + "|" + std::to_string(int(d)); };
+    const std::vector<std::string> want = {
+        row("", "P", "variable: Point", D::Variable), row("", "All", "variable: map<string,Point>", D::Variable),
+        row("", "Line.From", "field: Point", D::Field), row("Move", "From", "input: Point", D::Input),
+        row("Move", "To", "output: array<Point>", D::Output), row("Move", "Tmp", "local variable: Point", D::Local),
+        row("EventGraph", "Make Point", "Make", D::None), row("EventGraph", "Break Point", "Break", D::None),
+        row("EventGraph", "Set Point.Y", "Set Y", D::None), row("EventGraph", prog->findGraph("EventGraph")->findNode(arr)->title, "T = Point", D::None),
+    };
+    CHECK(got == want);
+    if (got != want)
+        for (auto& g : got) std::printf("  %s\n", g.c_str());
+    // Find References on one of its nodes looks for the struct
+    for (NodeId id : {mk, br, st}) {
+        RefTarget of = referenceTargetOf(t.s, "EventGraph", *t.g->findNode(id));
+        CHECK(of.kind == RefTarget::Kind::Struct && of.name == "Point");
+    }
+}
+
+TEST(structs_are_renamed_everywhere_and_offered_in_the_palette) {
+    TestRuntime rt;
+    GoGraph t;
+    t.s.structs.push_back(pointStruct());
+    t.s.structs.push_back({"Line", "", "", {{"From", "Point", Value(), ""}, {"All", "array<Point>", Value(), ""}}});
+    t.s.variables.push_back({"P", "map<string,Point>", Value(), "", ""});
+    NodeId mk = makePoint(t, {{"X", Value(5)}});
+    NodeId br = breakPoint(t);
+    NodeId st = setField(t, "X", Value(1));
+    t.link(mk, "Struct", br, "Struct");
+    NodeId pr = t.node("util.print");
+    t.link(br, "X", pr, "String");
+    t.s.renameStruct("Point", "Spot");
+    t.s.renameField("Spot", "X", "Across");
+    CHECK(t.s.findStruct("Spot") && !t.s.findStruct("Point"));
+    CHECK_EQ(t.s.structs[1].fields[0].type, std::string("Spot"));
+    CHECK_EQ(t.s.structs[1].fields[1].type, std::string("array<Spot>"));
+    CHECK_EQ(t.s.variables[0].type, std::string("map<string,Spot>"));
+    CHECK(t.g->findNode(mk)->prop("struct") == "Spot" && t.g->findNode(mk)->defaults.count("Across"));
+    CHECK(t.g->findNode(st)->prop("field") == "Across");
+    bool linked = false;
+    for (auto& c : t.g->connections) linked |= c.fromNode == br && c.fromPin == "Across";
+    CHECK(linked);
+    CHECK(build(rt, t.s)->ok());
+
+    // the palette: Make, Break and a Set for each field, for each struct of the script
+    NodeBuildCtx ctx{rt.registry(), &t.s, t.g};
+    auto all = buildPalette(ctx);
+    std::set<std::string> titles;
+    for (auto& tp : all)
+        if (tp.defId.rfind("struct.", 0) == 0) titles.insert(tp.title);
+    CHECK(titles == std::set<std::string>({"Make Spot", "Break Spot", "Set Spot.Across", "Set Spot.Y", "Make Line", "Break Line",
+                                           "Set Line.From", "Set Line.All"}));
+    // dragging a Spot: its Break and Set nodes fit, a Line's do not
+    auto prog = build(rt, t.s);
+    PinFilter f;
+    f.kind = PinKind::Data; f.dir = PinDir::Out; f.type = prog->types->findType("Spot");
+    std::set<std::string> fits;
+    for (auto& tp : filterPalette(rt.registry(), all, f, prog->types.get()))
+        if (tp.defId.rfind("struct.", 0) == 0) fits.insert(tp.title);
+    CHECK(fits.count("Break Spot") && fits.count("Set Spot.Y") && fits.count("Make Line") && !fits.count("Break Line"));
+
+    // the application does not need to know the structs; a type it does not know in a field is reported
+    CHECK(checkCompatibility(t.s, rt.registry()).ok());
+    t.s.structs[1].fields.push_back({"Gone", "MissingClass", Value(), ""});
+    CHECK(!checkCompatibility(t.s, rt.registry()).ok());
 }
 
 int main(int argc, char** argv) {

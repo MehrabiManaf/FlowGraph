@@ -14,7 +14,9 @@
 
 namespace fg {
 
-enum class TypeKind : uint8_t { Void, Bool, Int, Float, String, Any, Class, Enum, Array, Map };
+// Byte: an int from 0 to 255 (a Value of Kind::Int; a value out of range wraps around, like int overflow). Bytes: raw data (fg::Bytes).
+// Struct: a record type a script declares (Script::structs): its fields, a value like an array (copied when it is assigned).
+enum class TypeKind : uint8_t { Void, Bool, Int, Float, String, Any, Class, Enum, Array, Map, Byte, Bytes, Struct };
 
 struct ParamDesc {
     std::string name;
@@ -80,6 +82,13 @@ struct EnumValueDesc {
     std::string doc;
 };
 
+// A field of a struct type: its default is the value a new struct starts with (a literal of the field's type, or null: the type's).
+struct FieldDesc {
+    std::string name, doc;
+    const TypeDesc* type = nullptr;
+    Value def;
+};
+
 struct FG_CORE_EXPORT TypeDesc {
     std::string name, category, doc, source;
     uint32_t color = 0;                     // 0xRRGGBB pin color used by editors
@@ -101,12 +110,25 @@ struct FG_CORE_EXPORT TypeDesc {
     std::deque<PropertyDesc> properties;
     std::vector<CtorDesc> ctors;
     std::function<std::string(const void*)> toStringFn;  // optional pretty printer
+    // Struct: the fields, in order, and what owns this type (the TypeScope of a program): struct values keep it alive.
+    std::vector<FieldDesc> fields;
+    std::weak_ptr<const void> owner;
 
     bool isClass() const { return kind == TypeKind::Class; }
     bool isEnum() const { return kind == TypeKind::Enum; }
+    bool isStruct() const { return kind == TypeKind::Struct; }
+    int fieldIndex(const std::string& n) const {
+        for (size_t i = 0; i < fields.size(); ++i) if (fields[i].name == n) return static_cast<int>(i);
+        return -1;
+    }
     bool isContainer() const { return kind == TypeKind::Array || kind == TypeKind::Map; }
-    bool isPrimitive() const { return kind == TypeKind::Bool || kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::String; }
-    bool isNumeric() const { return kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::Enum || kind == TypeKind::Bool; }
+    bool isPrimitive() const {
+        return kind == TypeKind::Bool || kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::String ||
+               kind == TypeKind::Byte || kind == TypeKind::Bytes;
+    }
+    bool isNumeric() const {
+        return kind == TypeKind::Int || kind == TypeKind::Float || kind == TypeKind::Enum || kind == TypeKind::Bool || kind == TypeKind::Byte;
+    }
 
     // Whether `v` is one of the values of this enum.
     bool hasEnumValue(int64_t v) const {

@@ -159,5 +159,6 @@ void ScriptEditor::devSelect(const QString& spec) { window_->devSelect(spec); }
 void ScriptEditor::devFrameAll() { window_->devFrameAll(); }
 void ScriptEditor::devProbe(const QString& file, bool coordinates) { window_->devProbe(file, coordinates); }
 void ScriptEditor::devSceneShot(const QString& file) { window_->devSceneShot(file); }
+void ScriptEditor::devLayout(const QString& file) { window_->devLayout(file); }
 
 } // namespace fged

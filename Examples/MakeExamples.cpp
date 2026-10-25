@@ -7,6 +7,8 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <tuple>
+#include <vector>
 
 using namespace fg;
 
@@ -289,6 +291,157 @@ void files(const std::string& dir) {
     saveScript(s, dir + "/files.flow");
 }
 
+// A node of a struct of the script: Make, Break or Set Field ("struct" says which struct).
+NodeId structNode(Graph& g, const char* def, const char* structName, double x, double y) {
+    Node& n = g.addNode(def, x, y);
+    n.props["struct"] = structName;
+    return n.id;
+}
+
+// Contacts: structs. A Contact holds a name, an age and a Point; the contacts are an array of them. Set Field changes the
+// contact in the array itself (Get Item hands out the element, not a copy); Break Contact reads the fields in a loop.
+void contacts(const std::string& dir) {
+    Script s;
+    s.name = "Contacts";
+    s.doc = "Structs: Make, Break and Set Field, a struct in a struct, an array of structs.";
+    s.structs.push_back({"Point", "A place on a map", "", {{"X", "int", Value(), ""}, {"Y", "int", Value(), ""}}});
+    s.structs.push_back({"Contact", "Someone we know", "",
+                         {{"Name", "string", Value("Nobody"), ""}, {"Age", "int", Value(), "In years"}, {"Home", "Point", Value(), ""}}});
+    s.variables.push_back({"People", "array<Contact>", Value(), "Contacts", "Everyone we know"});
+
+    // AddContact(Name, Age, X, Y): Make Contact (with Make Point for its Home), added to People
+    Graph& f = s.addFunction("AddContact", {{"Name", "string", false, false, Value()}, {"Age", "int", false, false, Value()},
+                                            {"X", "int", false, false, Value()}, {"Y", "int", false, false, Value()}});
+    f.connections.clear();
+    NodeId entry = f.nodes[0].id;
+    f.nodes.pop_back();                       // no outputs: the chain simply ends
+    const NodeId point = structNode(f, "struct.make", "Point", 300, 260);
+    const NodeId contact = structNode(f, "struct.make", "Contact", 520, 160);
+    NodeId people = var(f, "var.get", "People", "global", 520, 40);
+    NodeId push = add(f, "array.add", 800, 0);
+    link(f, entry, "Then", push, "In");
+    link(f, entry, "X", point, "X");
+    link(f, entry, "Y", point, "Y");
+    link(f, entry, "Name", contact, "Name");
+    link(f, entry, "Age", contact, "Age");
+    link(f, point, "Struct", contact, "Home");
+    link(f, people, "Value", push, "Array");
+    link(f, contact, "Struct", push, "Item");
+
+    Graph& g = s.addEventGraph();
+    NodeId ev = event(g, "Main");
+    struct Person { const char* name; int age, x, y; };
+    NodeId prev = ev;
+    double x = 250;
+    for (Person p : {Person{"Ana", 30, 3, 4}, Person{"Ben", 25, 10, 2}}) {
+        NodeId c = call(g, "AddContact", x, 0);
+        g.findNode(c)->defaults = {{"Name", Value(p.name)}, {"Age", Value(p.age)}, {"X", Value(p.x)}, {"Y", Value(p.y)}};
+        link(g, prev, "Then", c, "In");
+        prev = c;
+        x += 250;
+    }
+    // People[1].Age = 26: in the array itself
+    NodeId all = var(g, "var.get", "People", "global", x - 480, 420);
+    NodeId second = add(g, "array.get", x - 250, 420);
+    g.findNode(second)->defaults["Index"] = Value(1);
+    link(g, all, "Value", second, "Array");
+    const NodeId birthday = structNode(g, "struct.set", "Contact", x, 0);
+    g.findNode(birthday)->props["field"] = "Age";
+    g.findNode(birthday)->defaults["Value"] = Value(26);
+    link(g, prev, "Then", birthday, "In");
+    link(g, second, "Item", birthday, "Struct");
+    // each contact: "<Name> is <Age>"; then the whole array
+    NodeId each = add(g, "flow.foreach", x + 260, 0);
+    link(g, birthday, "Then", each, "In");
+    link(g, all, "Value", each, "Array");
+    const NodeId fields = structNode(g, "struct.break", "Contact", x + 520, 260);
+    link(g, each, "Element", fields, "Struct");
+    NodeId is = add(g, "fn:String.Concat", x + 760, 220);
+    g.findNode(is)->defaults["B"] = Value(" is ");
+    NodeId line = add(g, "fn:String.Concat", x + 980, 260);
+    link(g, fields, "Name", is, "A");
+    link(g, is, "Result", line, "A");
+    link(g, fields, "Age", line, "B");
+    NodeId pr = print(g, x + 1200, 60);
+    link(g, each, "Loop Body", pr, "In");
+    link(g, line, "Result", pr, "String");
+    NodeId everyone = print(g, x + 1200, -140);
+    link(g, each, "Completed", everyone, "In");
+    link(g, all, "Value", everyone, "String");
+    saveScript(s, dir + "/contacts.flow");
+}
+
+// Bytes: text as bytes, written as hex and Base64, into a binary file and read back (FileSystem plugin).
+void bytes(const std::string& dir) {
+    Script s;
+    s.name = "Bytes";
+    s.doc = "Bytes: From Text / To Text, To Hex, To Base64, Byte At; a binary file written with Write Bytes and read back with Read "
+            "Bytes (flowgraph-bytes.bin in the temporary folder).";
+    Graph& g = s.addEventGraph();
+    NodeId ev = event(g, "Main");
+    NodeId data = add(g, "fn:Bytes.From Text", -280, 360);
+    g.findNode(data)->defaults["Text"] = Value("Hello, bytes!");
+    // what the bytes are: their length, hex, Base64 and first byte
+    NodeId length = add(g, "fn:Bytes.Length", 0, 320);
+    NodeId hex = add(g, "fn:Bytes.To Hex", 0, 420);
+    g.findNode(hex)->defaults["Spaced"] = Value(true);
+    NodeId base64 = add(g, "fn:Bytes.To Base64", 0, 520);
+    NodeId first = add(g, "fn:Bytes.Byte At", 0, 620);
+    for (NodeId n : {length, hex, base64, first}) link(g, data, "Bytes", n, "Bytes");
+    NodeId prev = ev;
+    double x = 250;
+    for (auto [label, from, pin] : std::vector<std::tuple<const char*, NodeId, const char*>>{
+             {"Length: ", length, "Length"}, {"Hex: ", hex, "Text"}, {"Base64: ", base64, "Text"}, {"First byte: ", first, "Byte"}}) {
+        NodeId text = concat(g, label, x + 20, 170);
+        link(g, from, pin, text, "B");
+        NodeId pr = print(g, x + 230, 0);
+        link(g, prev, "Then", pr, "In");
+        link(g, text, "Result", pr, "String");
+        prev = pr;
+        x += 300;
+    }
+    // into <temp>/flowgraph-bytes.bin, and back
+    NodeId temp = add(g, "fn:FileSystem.Temp Folder", x, 360);
+    NodeId path = add(g, "fn:FileSystem.Join Path", x + 180, 360);
+    g.findNode(path)->defaults["B"] = Value("flowgraph-bytes.bin");
+    link(g, temp, "Folder", path, "A");
+    NodeId write = add(g, "filesystem.open", x + 200, 0);
+    g.findNode(write)->defaults["Mode"] = Value(int64_t(1));    // Write
+    link(g, prev, "Then", write, "In");
+    link(g, path, "Path", write, "Path");
+    NodeId writeBytes = add(g, "filesystem.file.writebytes", x + 460, 0);
+    link(g, write, "Then", writeBytes, "In");
+    link(g, write, "File", writeBytes, "Target");
+    link(g, data, "Bytes", writeBytes, "Bytes");
+    NodeId closeWrite = add(g, "filesystem.file.close", x + 700, 0);
+    link(g, writeBytes, "Then", closeWrite, "In");
+    link(g, write, "File", closeWrite, "Target");
+    NodeId read = add(g, "filesystem.open", x + 920, 0);       // Read (the default mode)
+    link(g, closeWrite, "Then", read, "In");
+    link(g, path, "Path", read, "Path");
+    NodeId readBytes = add(g, "filesystem.file.readbytes", x + 1180, 0);   // Count -1: all of it
+    link(g, read, "Then", readBytes, "In");
+    link(g, read, "File", readBytes, "Target");
+    NodeId closeRead = add(g, "filesystem.file.close", x + 1420, 0);
+    link(g, readBytes, "Then", closeRead, "In");
+    link(g, read, "File", closeRead, "Target");
+    NodeId back = add(g, "bytes.totext", x + 1360, 240);
+    link(g, readBytes, "Bytes", back, "Bytes");
+    NodeId said = concat(g, "Read back: ", x + 1560, 240);
+    link(g, back, "Text", said, "B");
+    NodeId pr = print(g, x + 1800, 0);
+    link(g, closeRead, "Then", pr, "In");
+    link(g, said, "Result", pr, "String");
+    // a file that could not be opened says why
+    for (NodeId open : {write, read}) {
+        NodeId why = print(g, g.findNode(open)->x + 260, -180);
+        link(g, open, "Failed", why, "In");
+        link(g, open, "Error", why, "String");
+    }
+    g.addComment(x + 180, -60, 1840, 160).text = "A binary file: written, then read back";
+    saveScript(s, dir + "/bytes.flow");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -302,6 +455,8 @@ int main(int argc, char** argv) {
     inventory(dir);
     fizzbuzz(dir);
     files(dir);
-    std::printf("wrote hello.flow, fibonacci.flow, inventory.flow, fizzbuzz.flow, files.flow to %s\n", dir.c_str());
+    contacts(dir);
+    bytes(dir);
+    std::printf("wrote hello.flow, fibonacci.flow, inventory.flow, fizzbuzz.flow, files.flow, contacts.flow, bytes.flow to %s\n", dir.c_str());
     return 0;
 }

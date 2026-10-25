@@ -88,13 +88,20 @@ public:
     QRectF contentRect() const;
 
     // ---- snap to grid: nodes moved by the user (and new nodes) land on a grid of `step` scene units, by their top left corner.
-    // Holding Alt while dragging moves freely.
+    // The pins are not on the grid lines (their height is the one of the text and its editor): a node moved alone snaps to one of
+    // its links instead when that link can be straight close to where it is dragged, and a node made from a dragged pin is
+    // placed so that its link is straight. Holding Alt while dragging moves freely.
     void setSnapToGrid(bool on) { snap_ = on; }
     bool snapToGrid() const { return snap_; }
     void setSnapStep(double step) { snapStep_ = step >= 1.0 ? step : 1.0; }
     double snapStep() const { return snapStep_; }
     QPointF snapped(const QPointF& p) const;                                   // p moved to the nearest grid point (when snapping is on)
     bool snapsUserMoves() const { return snap_ && userMoving_ && !altHeld_ && !syncing_; }
+    // Where a node the user moves goes (`proposed`: where the mouse takes it; `dragStart`: where it was when the drag started).
+    // Alone: on the grid, or level with a pin it is linked to. With others (a selection, the nodes of a comment box): by whole
+    // steps from where it started, so that the nodes keep where they are to each other.
+    QPointF snappedMove(const NodeItem* item, const QPointF& proposed, const QPointF& dragStart) const;
+    int dragSerial() const { return dragSerial_; }    // a new number for each press of the left button
 
 signals:
     void selectionNodesChanged(const QList<int>& ids);
@@ -130,6 +137,8 @@ private:
     double snapStep_ = 20.0;
     bool userMoving_ = false;          // the left mouse button is down: item moves come from the user
     bool altHeld_ = false;             // Alt switches snapping off while dragging
+    int dragSerial_ = 0;
+    int addSerial_ = 0;                // the undo step of a node made from a pin (it is moved after, to straighten its link)
     bool animating_ = false;
     QTimer animTimer_;
     fg::NodeId debugNode_ = 0;

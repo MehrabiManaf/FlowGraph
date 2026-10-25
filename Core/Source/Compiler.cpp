@@ -43,7 +43,8 @@ struct Work {
     std::vector<CompiledPin> pins;
 };
 
-void resolvePins(const Registry& reg, Work& w) {
+void resolvePins(const TypeScope& types, Work& w) {
+    const Registry& reg = types.registry();
     w.pins.clear();
     w.exprs.clear();
     if (!w.def) return;
@@ -72,9 +73,9 @@ void resolvePins(const Registry& reg, Work& w) {
                 eff[tp.name] = fallbackOf(tp);
             }
         }
-        cp.type = reg.resolveType(e.substitute(eff));
+        cp.type = types.resolveType(e.substitute(eff));
         if (!cp.type) cp.type = reg.tAny();
-        if (pd.access != PinAccess::Value && cp.type->isContainer()) {       // the node refers to the container it is connected to
+        if (pd.access != PinAccess::Value && (cp.type->isContainer() || cp.type->isStruct())) {   // the node refers to what it is connected to
             cp.byRef = true;
             if (pd.access == PinAccess::Read) cp.isConst = true;
         }
@@ -135,6 +136,7 @@ struct GraphCompiler {
     const Registry& reg;
     Program& prog;
     const CompileOptions& options;
+    const TypeScope& types;
 
     void diag(Severity s, const std::string& graph, NodeId node, const std::string& msg) {
         Diagnostic d;
@@ -147,7 +149,7 @@ struct GraphCompiler {
     }
 
     const TypeDesc* typeFor(const std::string& expr, const std::string& graph, NodeId node, const std::string& what) {
-        const TypeDesc* t = reg.findType(expr);
+        const TypeDesc* t = types.findType(expr);
         if (!t) {
             diag(Severity::Error, graph, node, "Unknown type '" + expr + "' for " + what);
             return reg.tAny();
@@ -197,7 +199,7 @@ struct GraphCompiler {
     void compileGraph(size_t gi) {
         const Graph& g = script.graphs[gi];
         CompiledGraph& cg = prog.graphs[gi];
-        NodeBuildCtx bctx{reg, &script, &g};
+        NodeBuildCtx bctx{reg, &script, &g, &types};
 
         std::vector<Work> work(g.nodes.size());
         for (size_t i = 0; i < g.nodes.size(); ++i) {
@@ -210,7 +212,7 @@ struct GraphCompiler {
                 if (n.def.rfind("event:", 0) == 0) diag(Severity::Error, g.name, n.id, "This application does not provide the event '" + n.def.substr(6) + "'");
                 else diag(Severity::Error, g.name, n.id, "Unknown node type '" + n.def + "' (missing plugin?)");
             } else {
-                w.raw = collectPinDefs(n, *w.def, reg, &script, &g);
+                w.raw = collectPinDefs(n, *w.def, reg, &script, &g, &types);
                 if (w.def->eventGraphOnly && g.kind != GraphKind::Event)
                     diag(Severity::Error, g.name, n.id, "'" + w.def->title + "' can only be used in an event graph");
                 if (w.def->functionGraphOnly && g.kind != GraphKind::Function)
@@ -218,7 +220,7 @@ struct GraphCompiler {
                 if (options.allowNode && !options.allowNode(*w.def))
                     diag(Severity::Error, g.name, n.id, "'" + w.def->title + "' is not allowed in this application");
             }
-            resolvePins(reg, w);
+            resolvePins(types, w);
             cg.nodeIndex[n.id] = static_cast<int>(i);
         }
         (void)bctx;
@@ -262,7 +264,7 @@ struct GraphCompiler {
                 if (!tp.wildcard && fw.def && mentionsParams(fw, fe) && unify(fw, fe, tp.type, false)) dirty.insert(l.from);
             }
             if (dirty.empty()) break;
-            for (int i : dirty) resolvePins(reg, work[static_cast<size_t>(i)]);
+            for (int i : dirty) resolvePins(types, work[static_cast<size_t>(i)]);
         }
 
         // ---- build compiled nodes
@@ -390,6 +392,12 @@ struct GraphCompiler {
         bool haveEntry = false;
         for (auto& cn : cg.nodes) {
             if (!cn.def) continue;
+            if (cn.defId.rfind("struct.", 0) == 0) {          // the nodes of a struct: the struct (and the field) must be declared
+                const StructDecl* s = script.findStruct(cn.prop("struct"));
+                if (!s) diag(Severity::Error, g.name, cn.id, "Unknown struct '" + cn.prop("struct") + "'");
+                else if (cn.defId == "struct.set" && !s->findField(cn.prop("field")))
+                    diag(Severity::Error, g.name, cn.id, "The struct '" + s->name + "' has no field '" + cn.prop("field") + "'");
+            }
             switch (cn.op) {
             case NodeOp::FunctionEntry:
                 if (g.kind == GraphKind::Function) {
@@ -628,15 +636,22 @@ std::string nodeTitle(const Node& n, const NodeDef* def) {
             return v.empty() ? def->title : def->title + "." + v;
         }
         if (def->id == "flow.switch.enum" && !n.prop("enum").empty()) return "Switch on " + n.prop("enum");
+        // the nodes of a struct of the script: "Make Point", "Break Point", "Set Point.X"
+        if (!n.prop("struct").empty()) {
+            if (def->id == "struct.make") return "Make " + n.prop("struct");
+            if (def->id == "struct.break") return "Break " + n.prop("struct");
+            if (def->id == "struct.set") return "Set " + n.prop("struct") + "." + n.prop("field");
+        }
         return def->title;
     }
     return n.def;
 }
 
-std::vector<PinDef> collectPinDefs(const Node& node, const NodeDef& def, const Registry& reg, const Script* script, const Graph* graph) {
+std::vector<PinDef> collectPinDefs(const Node& node, const NodeDef& def, const Registry& reg, const Script* script, const Graph* graph,
+                                   const TypeScope* types) {
     std::vector<PinDef> pins = def.pins;
     if (def.dynamicPins) {
-        NodeBuildCtx ctx{reg, script, graph};
+        NodeBuildCtx ctx{reg, script, graph, types};
         def.dynamicPins(node, ctx, pins);
     }
     if (def.customInputs)
@@ -646,20 +661,30 @@ std::vector<PinDef> collectPinDefs(const Node& node, const NodeDef& def, const R
     return pins;
 }
 
-std::vector<CompiledPin> buildNodePins(const Node& node, const Registry& reg, const Script* script, const Graph* graph) {
+std::vector<CompiledPin> buildNodePins(const Node& node, const Registry& reg, const Script* script, const Graph* graph,
+                                       const TypeScope* types) {
     Work w;
     w.node = &node;
     w.def = reg.findNode(node.def);
     if (!w.def) return {};
+    std::shared_ptr<TypeScope> own;                 // the types of the script, when the caller has none at hand
+    if (!types) {
+        own = script ? TypeScope::forScript(reg, *script) : std::make_shared<TypeScope>(reg);
+        types = own.get();
+    }
     w.args = node.typeArgs;
-    w.raw = collectPinDefs(node, *w.def, reg, script, graph);
-    resolvePins(reg, w);
+    w.raw = collectPinDefs(node, *w.def, reg, script, graph, types);
+    resolvePins(*types, w);
     return std::move(w.pins);
 }
 
 std::shared_ptr<Program> compile(const Script& script, const Registry& reg, const CompileOptions& options) {
     auto prog = std::make_shared<Program>();
-    GraphCompiler gc{script, reg, *prog, options};
+    std::vector<std::string> structErrors;
+    auto types = TypeScope::forScript(reg, script, &structErrors);
+    prog->types = types;
+    GraphCompiler gc{script, reg, *prog, options, *types};
+    for (auto& e : structErrors) gc.diag(Severity::Error, "", 0, e);
     gc.declare();
     for (size_t i = 0; i < script.graphs.size(); ++i) gc.compileGraph(i);
     return prog;

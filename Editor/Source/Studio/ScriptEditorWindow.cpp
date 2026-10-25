@@ -38,7 +38,12 @@
 #include <algorithm>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QResizeEvent>
 #include <QTimer>
+#include <QWindow>
 #include <set>
 #include "../Common/Settings.hpp"
 #include <QSettings>
@@ -179,6 +184,17 @@ ScriptEditorWindow::~ScriptEditorWindow() {
     for (auto* dw : docks_) delete dw;
 }
 
+namespace {
+// what Find References looks for, for an item of My Script
+fg::RefTarget::Kind refKind(MyScriptPanel::Kind kind) {
+    switch (kind) {
+    case MyScriptPanel::Kind::Function: return fg::RefTarget::Kind::Function;
+    case MyScriptPanel::Kind::Struct: return fg::RefTarget::Kind::Struct;
+    default: return fg::RefTarget::Kind::Variable;
+    }
+}
+} // namespace
+
 // ------------------------------------------------------------------ construction
 void ScriptEditorWindow::createDocks() {
     KDDockWidgets::DockWidgetOptions opts = KDDockWidgets::DockWidgetOption_None;
@@ -236,6 +252,7 @@ void ScriptEditorWindow::createDocks() {
         case K::Variable: details_->showVariable("", name); break;
         case K::Local: details_->showVariable(owner, name); break;
         case K::Function: details_->showGraph(name); break;
+        case K::Struct: details_->showStruct(name); break;
         default: details_->showNothing(); break;
         }
     });
@@ -250,9 +267,21 @@ void ScriptEditorWindow::createDocks() {
         if (n) focusNode(g, n);
         else openGraph(g);                // a comment box: show its graph
     });
+    connect(find_, &FindPanel::declarationActivated, this, [this](int declaration, const QString& g, const QString& name) {
+        using D = fg::ScriptRef::Declaration;
+        switch (D(declaration)) {
+        case D::Variable: details_->showVariable("", name); break;
+        case D::Local: openGraph(g); details_->showVariable(g, name); break;
+        case D::Input:
+        case D::Output: openGraph(g); details_->showGraph(g); break;
+        case D::Field: details_->showStruct(name.section('.', 0, 0)); break;
+        default: return;
+        }
+        if (dDetails_) dDetails_->setAsCurrentTab();
+    });
     connect(myScript_, &MyScriptPanel::referencesRequested, this, [this](int kind, const QString& owner, const QString& name) {
         fg::RefTarget t;
-        t.kind = MyScriptPanel::Kind(kind) == MyScriptPanel::Kind::Function ? fg::RefTarget::Kind::Function : fg::RefTarget::Kind::Variable;
+        t.kind = refKind(MyScriptPanel::Kind(kind));
         t.name = ss(name);
         t.graph = ss(owner);
         showReferences(t);
@@ -295,6 +324,9 @@ void ScriptEditorWindow::createActions() {
     actSelectAll_->setIcon(themedIcon(":/Icons/select-all.svg"));
     actComment_->setIcon(themedIcon(":/Icons/comment.svg"));
     actFrame_ = act(tr("&Frame All") + "\tHome");
+    // not F11 (Step Into, as in Visual Studio): the key of Visual Studio's full screen
+    actFullScreen_ = act(tr("F&ull Screen"), QKeySequence("Shift+Alt+Return"));
+    actFullScreen_->setCheckable(true);
     {
         QSettings settings = editorSettings();
         snapToGrid_ = settings.value("editor/snapToGrid", true).toBool();
@@ -363,6 +395,7 @@ void ScriptEditorWindow::createActions() {
         if (auto* v = currentView()) v->graphScene()->addComment(v->mapToScene(v->viewport()->rect().center()));
     });
     connect(actFrame_, &QAction::triggered, this, [this] { if (auto* v = currentView()) v->frameAll(); });
+    connect(actFullScreen_, &QAction::triggered, this, [this] { toggleFullScreen(); });
     connect(actSnap_, &QAction::toggled, this, [this](bool on) {
         snapToGrid_ = on;
         editorSettings().setValue("editor/snapToGrid", on);
@@ -426,6 +459,7 @@ void ScriptEditorWindow::createMenus() {
     QMenu* view = menuBar()->addMenu(tr("&View"));
     view->setObjectName("View");                // its English name: menuNamed() finds it in any language
     view->addAction(actFrame_);
+    view->addAction(actFullScreen_);
     view->addSeparator();
     view->addAction(actSnap_);
     QMenu* gridSize = view->addMenu(tr("Grid Snap Si&ze"));
@@ -670,7 +704,7 @@ void ScriptEditorWindow::findReferencesOfSelection() {
     const MyScriptPanel::Kind kind = myScript_->selected(&owner, &name);
     if (kind != MyScriptPanel::Kind::None && focus && myScript_->isAncestorOf(focus)) {
         fg::RefTarget t;
-        t.kind = kind == MyScriptPanel::Kind::Function ? fg::RefTarget::Kind::Function : fg::RefTarget::Kind::Variable;
+        t.kind = refKind(kind);
         t.name = ss(name);
         t.graph = ss(owner);
         showReferences(t);
@@ -681,7 +715,7 @@ void ScriptEditorWindow::findReferencesOfSelection() {
     const fg::Graph* g = s ? doc_.graph(s->graphName()) : nullptr;
     const fg::Node* n = g && ids.size() == 1 ? g->findNode(ids.front()) : nullptr;
     if (!n) {
-        statusBar()->showMessage(tr("Select a node, or a variable or function in My Script, to find its references"), 4000);
+        statusBar()->showMessage(tr("Select a node, or a variable, function or struct in My Script, to find its references"), 4000);
         return;
     }
     showReferences(fg::referenceTargetOf(doc_.script(), ss(s->graphName()), *n));
@@ -1062,6 +1096,10 @@ bool ScriptEditorWindow::fileSaveAs() {
 // side docks are brought to a sensible width.
 void ScriptEditorWindow::showEvent(QShowEvent* e) {
     KDDockWidgets::QtWidgets::MainWindow::showEvent(e);
+    restoreMaximizedLayout();
+    // a window that was not maximized meanwhile (the window manager did not) keeps the layout it has: restoring it later, when the
+    // user maximizes the window, would undo what they did since
+    if (!maximizedLayout_.isEmpty()) QTimer::singleShot(2000, this, [this] { maximizedLayout_.clear(); });
     if (sizesApplied_) return;
     sizesApplied_ = true;
     QTimer::singleShot(0, this, [this] { applyInitialSizes(); });
@@ -1104,6 +1142,51 @@ void ScriptEditorWindow::restoreSavedLayout() {
         sizesApplied_ = false;
         return;
     }
+    afterLayoutRestored();
+    // KDDockWidgets restores a maximized window at its normal size and maximizes it afterwards: docks that do not fit the normal
+    // size at their saved shares are squeezed to their minimum sizes, and the window grows from that. Once the window is
+    // maximized the layout is restored again, relative to the window's real size: the docks get the sizes they were saved with.
+    // (the window's state is the saved one: KDDockWidgets set it on the native window, which QWidget::windowState() may not
+    // know yet while the window is hidden)
+    const QJsonArray windows = QJsonDocument::fromJson(saved).object().value("mainWindows").toArray();
+    if (!windows.isEmpty() && windows.first().toObject().value("windowState").toInt() != 0) maximizedLayout_ = saved;
+}
+
+void ScriptEditorWindow::restoreMaximizedLayout() {
+    // (the state of the native window: KDDockWidgets maximizes that one, the widget's windowState() follows later)
+    const Qt::WindowStates state = windowHandle() ? windowHandle()->windowStates() : windowState();
+    if (maximizedLayout_.isEmpty() || !isVisible() || !(state & (Qt::WindowMaximized | Qt::WindowFullScreen))) return;
+    // the next turn of the event loop: the size of the maximized window has arrived by then (a resize comes in several steps)
+    QTimer::singleShot(0, this, [this] {
+        if (maximizedLayout_.isEmpty()) return;
+        const QByteArray saved = std::exchange(maximizedLayout_, QByteArray());
+        if (KDDockWidgets::LayoutSaver(KDDockWidgets::RestoreOption_RelativeToMainWindow).restoreLayout(saved)) afterLayoutRestored();
+    });
+}
+
+void ScriptEditorWindow::toggleFullScreen() {
+    if (!isFullScreen()) {
+        maximizedBeforeFullScreen_ = isMaximized();
+        showFullScreen();
+    } else if (maximizedBeforeFullScreen_) {
+        showMaximized();
+    } else {
+        showNormal();
+    }
+}
+
+// The check mark follows the window, whatever made it full screen or not (the saved layout, the window manager...).
+void ScriptEditorWindow::changeEvent(QEvent* e) {
+    KDDockWidgets::QtWidgets::MainWindow::changeEvent(e);
+    if (e->type() == QEvent::WindowStateChange && actFullScreen_) actFullScreen_->setChecked(isFullScreen());
+}
+
+void ScriptEditorWindow::resizeEvent(QResizeEvent* e) {
+    KDDockWidgets::QtWidgets::MainWindow::resizeEvent(e);
+    restoreMaximizedLayout();
+}
+
+void ScriptEditorWindow::afterLayoutRestored() {
     // A dock that is newer than the saved layout would stay closed: put it where it goes by default. (A layout saved before this list
     // was kept knows the docks the editor had then.) Docks the layout knows keep whatever the user did with them, closed or not.
     QStringList known = editorSettings().value(appKey("layoutDocks")).toStringList();
@@ -1212,6 +1295,7 @@ void ScriptEditorWindow::devSelect(const QString& spec) {
     if (p.size() == 3 && p[0] == "node") focusNode(p[1], p[2].toInt());
     else if (p.size() == 2 && p[0] == "var") details_->showVariable("", p[1]);
     else if (p.size() == 2 && p[0] == "graph") { openGraph(p[1]); details_->showGraph(p[1]); }
+    else if (p.size() == 2 && p[0] == "struct") details_->showStruct(p[1]);
     else if (p.size() == 2 && p[0] == "theme") applyTheme(*qApp, themeFromKey(p[1]));     // a switch while running; not saved
 }
 
@@ -1244,6 +1328,11 @@ void ScriptEditorWindow::devProbe(const QString& file, bool coordinates) {
         for (auto& c : g->connections) completed += c.fromNode == 1 && c.toNode == 3;
         out << "completedLinks " << completed << "\n";
     }
+}
+
+void ScriptEditorWindow::devLayout(const QString& file) {
+    QFile f(file);
+    if (f.open(QIODevice::WriteOnly)) f.write(KDDockWidgets::LayoutSaver().serializeLayout());
 }
 
 void ScriptEditorWindow::devSceneShot(const QString& file) {

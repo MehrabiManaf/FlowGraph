@@ -17,6 +17,9 @@ namespace {
 const char* kGetVariable = "Get {Name}";
 const char* kSetVariable = "Set {Name}";
 const char* kSwitchOnEnum = "Switch on {Enum}";
+const char* kMakeStruct = "Make {Struct}";
+const char* kBreakStruct = "Break {Struct}";
+const char* kSetField = "Set {Struct}.{Field}";
 
 std::string replaceAll(std::string s, const std::string& what, const std::string& with) {
     for (size_t p = 0; (p = s.find(what, p)) != std::string::npos; p += with.size()) s.replace(p, what.size(), with);
@@ -87,6 +90,12 @@ std::string Translations::nodeTitle(const NodeDef* def, const std::map<std::stri
     }
     if (def->id == "flow.switch.enum" && !propOr(props, "enum").empty())
         return replaceAll(text("template:switch-on-enum", kSwitchOnEnum), "{Enum}", propOr(props, "enum"));
+    if (const std::string s = propOr(props, "struct"); !s.empty()) {
+        if (def->id == "struct.make") return replaceAll(text("template:make-struct", kMakeStruct), "{Struct}", s);
+        if (def->id == "struct.break") return replaceAll(text("template:break-struct", kBreakStruct), "{Struct}", s);
+        if (def->id == "struct.set")
+            return replaceAll(replaceAll(text("template:set-field", kSetField), "{Struct}", s), "{Field}", propOr(props, "field"));
+    }
     // the definition's title is translated; a title of its own (a palette entry made by `expand`) stays
     return english.empty() || english == def->title ? text("node:" + def->id, def->title) : english;
 }
@@ -250,6 +259,9 @@ std::vector<std::pair<std::string, std::string>> translatableTexts(const Registr
         add("template:get-variable", kGetVariable);
         add("template:set-variable", kSetVariable);
         add("template:switch-on-enum", kSwitchOnEnum);
+        add("template:make-struct", kMakeStruct);
+        add("template:break-struct", kBreakStruct);
+        add("template:set-field", kSetField);
     }
     for (auto& [name, count] : mine.names) {
         if (count < 2 || base.shared(name)) continue;

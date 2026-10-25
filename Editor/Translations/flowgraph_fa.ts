@@ -136,10 +136,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation>چیزی با جستجو جور نیست.</translation>
     </message>
     <message>
-        <source>Select a variable, function or node to see its properties.</source>
-        <translation>برای دیدن ویژگی‌ها، یک متغیر، تابع یا گره را انتخاب کنید.</translation>
-    </message>
-    <message>
         <source>The variable no longer exists.</source>
         <translation>این متغیر دیگر وجود ندارد.</translation>
     </message>
@@ -407,6 +403,70 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>%1 nodes selected</source>
         <translation>%1 گره انتخاب شده</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation>هگزادسیمال، مثلاً 48 65 6C 6C 6F</translation>
+    </message>
+    <message>
+        <source>Select a variable, function, struct or node to see its properties.</source>
+        <translation>برای دیدن ویژگی‌ها، یک متغیر، تابع، ساختار یا گره را انتخاب کنید.</translation>
+    </message>
+    <message>
+        <source>Each field starts with the default of the struct.</source>
+        <translation>هر فیلد با مقدار پیش‌فرضِ ساختار آغاز می‌شود.</translation>
+    </message>
+    <message>
+        <source>The struct no longer exists.</source>
+        <translation>این ساختار دیگر وجود ندارد.</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation>ساختار</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation>تغییر نام ساختار</translation>
+    </message>
+    <message>
+        <source>Fields</source>
+        <translation>فیلدها</translation>
+    </message>
+    <message>
+        <source>Field names must be unique and not empty.</source>
+        <translation>نام فیلدها باید یکتا و غیرخالی باشد.</translation>
+    </message>
+    <message>
+        <source>Edit fields</source>
+        <translation>ویرایش فیلدها</translation>
+    </message>
+    <message>
+        <source>Add field</source>
+        <translation>افزودن فیلد</translation>
+    </message>
+    <message>
+        <source>Remove field</source>
+        <translation>حذف فیلد</translation>
+    </message>
+    <message>
+        <source>Move field</source>
+        <translation>جابه‌جایی فیلد</translation>
+    </message>
+    <message>
+        <source>Add a field with the + of Fields.</source>
+        <translation>با + در «فیلدها» یک فیلد اضافه کنید.</translation>
+    </message>
+    <message>
+        <source>Field: %1</source>
+        <translation>فیلد: %1</translation>
+    </message>
+    <message>
+        <source>Change field</source>
+        <translation>تغییر فیلد</translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation>فیلد</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
@@ -440,6 +500,18 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>EventGraph</source>
         <translation>گراف رویداد</translation>
+    </message>
+    <message>
+        <source>A struct name is one word, without spaces or &lt; &gt; ,</source>
+        <translation>نام ساختار یک کلمه است، بدون فاصله و بدون &lt; &gt; ,</translation>
+    </message>
+    <message>
+        <source>A struct with that name exists.</source>
+        <translation>ساختاری با این نام وجود دارد.</translation>
+    </message>
+    <message>
+        <source>A type of this application has that name.</source>
+        <translation>یکی از نوع‌های این برنامه این نام را دارد.</translation>
     </message>
 </context>
 <context>
@@ -488,16 +560,16 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation>ارجاع‌های %1</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation>برای جستجو تایپ کنید، یا «یافتن ارجاع‌ها» را روی یک گره، متغیر یا تابع به کار ببرید.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation>چیزی پیدا نشد</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation>%1 مورد پیدا شد</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation>برای جستجو تایپ کنید، یا «یافتن ارجاع‌ها» را روی یک گره، متغیر، تابع یا ساختار به کار ببرید.</translation>
     </message>
 </context>
 <context>
@@ -716,14 +788,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation>جستجو</translation>
     </message>
     <message>
-        <source>Shows only the events, functions and variables whose name contains this text</source>
-        <translation>فقط رویدادها، تابع‌ها و متغیرهایی را نشان می‌دهد که نامشان این متن را دارد</translation>
-    </message>
-    <message>
-        <source>Add a function or a variable</source>
-        <translation>افزودن تابع یا متغیر</translation>
-    </message>
-    <message>
         <source>Event Graphs</source>
         <translation>گراف‌های رویداد</translation>
     </message>
@@ -822,6 +886,30 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>not provided by this application</source>
         <translation>این برنامه آن را فراهم نمی‌کند</translation>
+    </message>
+    <message>
+        <source>Shows only the events, functions, variables and structs whose name contains this text</source>
+        <translation>فقط رویدادها، تابع‌ها، متغیرها و ساختارهایی را نشان می‌دهد که نامشان این متن را دارد</translation>
+    </message>
+    <message>
+        <source>Add a function, a variable or a struct</source>
+        <translation>افزودن تابع، متغیر یا ساختار</translation>
+    </message>
+    <message>
+        <source>Structs</source>
+        <translation>ساختارها</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation>ساختار</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation>تغییر نام ساختار</translation>
+    </message>
+    <message>
+        <source>Add struct</source>
+        <translation>افزودن ساختار</translation>
     </message>
 </context>
 <context>
@@ -1085,10 +1173,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation>%1 ارجاع به %2</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation>برای یافتن ارجاع‌ها، یک گره، یا یک متغیر یا تابع در «اسکریپت من» را انتخاب کنید</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation>پوستهٔ %1</translation>
     </message>
@@ -1259,6 +1343,14 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>De&amp;lete</source>
         <translation>حذف(&amp;L)</translation>
+    </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation>تمام‌صفحه(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation>برای یافتن ارجاع‌ها، یک گره، یا یک متغیر، تابع یا ساختار در «اسکریپت من» را انتخاب کنید</translation>
     </message>
 </context>
 <context>

@@ -11,10 +11,14 @@ editor and debug them step by step; your application runs them in a small interp
   when you hover a pin - also on a script your application is running right now.
 * **Ready to use on its own.** `flow script.flow` runs a script from the command line, like `python script.py`; `flowstudio`
   edits, runs and debugs it.
+* **Scripts have their own data.** Functions with parameters by value, by reference or const; local variables; arrays and
+  maps; **structs** the script declares (a `Contact` with a `Name`, an `Age` and a `Home` that is a `Point`); **bytes** for
+  binary data; and the classes and enums of your application.
 * **Safe with scripts users write.** Every script is checked against what the application provides before it runs. Limits keep a
   script you do not trust from running away, and a changed script can be reloaded while the application runs.
 * **Extensible.** Plugins add classes, functions, enums and nodes; a plugin built for another version is refused, not run.
-  The **FileSystem** plugin comes with it: open, read and write files; copy, move, list and delete files and folders.
+  The **FileSystem** plugin comes with it: open, read and write files (text or binary); copy, move, list and delete files
+  and folders.
 * **In 10 languages.** The editor speaks English, Persian, Chinese, Spanish, German, Japanese, Portuguese, French, Russian and
   Korean (most of them machine translations: reviews are welcome).
 
@@ -24,7 +28,9 @@ editor and debug them step by step; your application runs them in a small interp
 
 Download the package for Windows or Linux from [Releases](https://github.com/MehrabiManaf/FlowGraph/releases) and unzip it. Start
 `bin/flowstudio`, open `examples/fizzbuzz.flow` (*File > Open*) and press **F5**: *Run > Execution speed* slows the run down
-so you can follow it. In a terminal, `bin/flow examples/fizzbuzz.flow` runs the same script without the editor.
+so you can follow it. In a terminal, `bin/flow examples/fizzbuzz.flow` runs the same script without the editor. The other
+examples show functions and containers (`inventory.flow`), structs (`contacts.flow`), files (`files.flow`) and bytes
+(`bytes.flow`).
 
 On Linux the package runs on distributions with glibc 2.28 or newer: RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu
 20.04 and newer. `flowstudio` uses the system's X11 libraries, and Qt 6 needs `xcb-util-cursor` among them (RHEL family, from

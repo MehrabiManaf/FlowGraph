@@ -38,6 +38,8 @@ public:
 
     std::optional<PinRef> pinAt(const QPointF& scenePos) const;
     QPointF pinScenePos(const std::string& name, fg::PinDir dir) const;
+    // The center of a pin's connector in the node's coordinates; none when the node has no such pin (shown).
+    std::optional<QPointF> pinLocalPos(const std::string& name, fg::PinDir dir) const;
     // Updates the preview text of a pin editor while it is being edited.
     void setEditorPreview(const std::string& pin, const QString& text);
     void clearEditorPreview();
@@ -82,6 +84,8 @@ private:
     std::vector<PinView*> allPins();
     PinView* pinViewAt(const QPointF& local);
     const PinView* findPin(const std::string& name, fg::PinDir dir) const;
+    int dragSerial_ = -1;              // the drag of the scene (GraphScene::dragSerial) dragStart_ belongs to
+    QPointF dragStart_;                // where the node was when that drag started
     PinRef refFor(const PinView& v) const;
     void layoutReroute();
     QRectF commentRect() const;

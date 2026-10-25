@@ -1,0 +1,332 @@
+{
+  "format": "flowgraph",
+  "version": 2,
+  "name": "Contacts",
+  "doc": "Structs: Make, Break and Set Field, a struct in a struct, an array of structs.",
+  "structs": [
+    {
+      "name": "Point",
+      "doc": "A place on a map",
+      "fields": [
+        {
+          "name": "X",
+          "type": "int"
+        },
+        {
+          "name": "Y",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "Contact",
+      "doc": "Someone we know",
+      "fields": [
+        {
+          "name": "Name",
+          "type": "string",
+          "default": "Nobody"
+        },
+        {
+          "name": "Age",
+          "type": "int",
+          "doc": "In years"
+        },
+        {
+          "name": "Home",
+          "type": "Point"
+        }
+      ]
+    }
+  ],
+  "variables": [
+    {
+      "name": "People",
+      "type": "array<Contact>",
+      "category": "Contacts",
+      "doc": "Everyone we know"
+    }
+  ],
+  "graphs": [
+    {
+      "name": "AddContact",
+      "kind": "function",
+      "inputs": [
+        {
+          "name": "Name",
+          "type": "string"
+        },
+        {
+          "name": "Age",
+          "type": "int"
+        },
+        {
+          "name": "X",
+          "type": "int"
+        },
+        {
+          "name": "Y",
+          "type": "int"
+        }
+      ],
+      "outputs": [],
+      "nodes": [
+        {
+          "id": 1,
+          "def": "func.entry",
+          "x": 0.0,
+          "y": 0.0
+        },
+        {
+          "id": 3,
+          "def": "struct.make",
+          "x": 300.0,
+          "y": 260.0,
+          "props": {
+            "struct": "Point"
+          }
+        },
+        {
+          "id": 4,
+          "def": "struct.make",
+          "x": 520.0,
+          "y": 160.0,
+          "props": {
+            "struct": "Contact"
+          }
+        },
+        {
+          "id": 5,
+          "def": "var.get",
+          "x": 520.0,
+          "y": 40.0,
+          "props": {
+            "name": "People",
+            "scope": "global"
+          }
+        },
+        {
+          "id": 6,
+          "def": "array.add",
+          "x": 800.0,
+          "y": 0.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [6, "In"]
+        },
+        {
+          "from": [1, "X"],
+          "to": [3, "X"]
+        },
+        {
+          "from": [1, "Y"],
+          "to": [3, "Y"]
+        },
+        {
+          "from": [1, "Name"],
+          "to": [4, "Name"]
+        },
+        {
+          "from": [1, "Age"],
+          "to": [4, "Age"]
+        },
+        {
+          "from": [3, "Struct"],
+          "to": [4, "Home"]
+        },
+        {
+          "from": [5, "Value"],
+          "to": [6, "Array"]
+        },
+        {
+          "from": [4, "Struct"],
+          "to": [6, "Item"]
+        }
+      ]
+    },
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event:Main",
+          "x": 0.0,
+          "y": 0.0,
+          "props": {
+            "sig": "(Args: array<string>)"
+          }
+        },
+        {
+          "id": 2,
+          "def": "func.call",
+          "x": 250.0,
+          "y": 0.0,
+          "props": {
+            "function": "AddContact"
+          },
+          "defaults": {
+            "Age": 30,
+            "Name": "Ana",
+            "X": 3,
+            "Y": 4
+          }
+        },
+        {
+          "id": 3,
+          "def": "func.call",
+          "x": 500.0,
+          "y": 0.0,
+          "props": {
+            "function": "AddContact"
+          },
+          "defaults": {
+            "Age": 25,
+            "Name": "Ben",
+            "X": 10,
+            "Y": 2
+          }
+        },
+        {
+          "id": 4,
+          "def": "var.get",
+          "x": 270.0,
+          "y": 420.0,
+          "props": {
+            "name": "People",
+            "scope": "global"
+          }
+        },
+        {
+          "id": 5,
+          "def": "array.get",
+          "x": 500.0,
+          "y": 420.0,
+          "defaults": {
+            "Index": 1
+          }
+        },
+        {
+          "id": 6,
+          "def": "struct.set",
+          "x": 750.0,
+          "y": 0.0,
+          "props": {
+            "field": "Age",
+            "struct": "Contact"
+          },
+          "defaults": {
+            "Value": 26
+          }
+        },
+        {
+          "id": 7,
+          "def": "flow.foreach",
+          "x": 1010.0,
+          "y": 0.0
+        },
+        {
+          "id": 8,
+          "def": "struct.break",
+          "x": 1270.0,
+          "y": 260.0,
+          "props": {
+            "struct": "Contact"
+          }
+        },
+        {
+          "id": 9,
+          "def": "fn:String.Concat",
+          "x": 1510.0,
+          "y": 220.0,
+          "defaults": {
+            "B": " is "
+          }
+        },
+        {
+          "id": 10,
+          "def": "fn:String.Concat",
+          "x": 1730.0,
+          "y": 260.0
+        },
+        {
+          "id": 11,
+          "def": "util.print",
+          "x": 1950.0,
+          "y": 60.0
+        },
+        {
+          "id": 12,
+          "def": "util.print",
+          "x": 1950.0,
+          "y": -140.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [1, "Then"],
+          "to": [2, "In"]
+        },
+        {
+          "from": [2, "Then"],
+          "to": [3, "In"]
+        },
+        {
+          "from": [4, "Value"],
+          "to": [5, "Array"]
+        },
+        {
+          "from": [3, "Then"],
+          "to": [6, "In"]
+        },
+        {
+          "from": [5, "Item"],
+          "to": [6, "Struct"]
+        },
+        {
+          "from": [6, "Then"],
+          "to": [7, "In"]
+        },
+        {
+          "from": [4, "Value"],
+          "to": [7, "Array"]
+        },
+        {
+          "from": [7, "Element"],
+          "to": [8, "Struct"]
+        },
+        {
+          "from": [8, "Name"],
+          "to": [9, "A"]
+        },
+        {
+          "from": [9, "Result"],
+          "to": [10, "A"]
+        },
+        {
+          "from": [8, "Age"],
+          "to": [10, "B"]
+        },
+        {
+          "from": [7, "Loop Body"],
+          "to": [11, "In"]
+        },
+        {
+          "from": [10, "Result"],
+          "to": [11, "String"]
+        },
+        {
+          "from": [7, "Completed"],
+          "to": [12, "In"]
+        },
+        {
+          "from": [4, "Value"],
+          "to": [12, "String"]
+        }
+      ]
+    }
+  ]
+}

@@ -174,12 +174,13 @@ public:
     void log(int level, const QString& text);        // level: 0 info, 1 warning, 2 error (fg::LogLevel)
 
     // Developer aids used by the smoke tests: run an entry, select an item, frame the graph, write screen coordinates, render the
-    // graph.
+    // graph, write the layout of the docks (as it would be saved).
     void devRun(const QString& entry, const QString& breakpoint = QString());
     void devSelect(const QString& spec);
     void devFrameAll();
     void devProbe(const QString& file, bool coordinates);
     void devSceneShot(const QString& file);
+    void devLayout(const QString& file);
 
 signals:
     void scriptChanged();                            // opened, created or saved

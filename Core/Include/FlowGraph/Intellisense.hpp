@@ -20,9 +20,12 @@ struct PinFilter {
     const TypeDesc* type = nullptr;    // data pins only
 };
 
-// True when `t` has a pin that can be connected to the dragged pin; `pinName` receives the first match.
-FG_CORE_EXPORT bool templateAccepts(const Registry& reg, const NodeTemplate& t, const PinFilter& f, std::string* pinName = nullptr);
-FG_CORE_EXPORT std::vector<NodeTemplate> filterPalette(const Registry& reg, const std::vector<NodeTemplate>& all, const PinFilter& f);
+// True when `t` has a pin that can be connected to the dragged pin; `pinName` receives the first match. `types`: those of the
+// script (Program::types), so that its structs are found; null: the registry's only.
+FG_CORE_EXPORT bool templateAccepts(const Registry& reg, const NodeTemplate& t, const PinFilter& f, std::string* pinName = nullptr,
+                                    const TypeScope* types = nullptr);
+FG_CORE_EXPORT std::vector<NodeTemplate> filterPalette(const Registry& reg, const std::vector<NodeTemplate>& all, const PinFilter& f,
+                                                       const TypeScope* types = nullptr);
 
 // Case insensitive search over title, keywords and category; every word of `query` must match.
 // Results are ordered best match first. An empty query returns everything sorted by category and title.

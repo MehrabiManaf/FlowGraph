@@ -6,6 +6,7 @@
 #include <FlowGraph/Registry.hpp>
 
 #include <chrono>
+#include <cstddef>
 #include <functional>
 #include <future>
 #include <initializer_list>
@@ -39,6 +40,7 @@ template <class T, class D> struct IsUnique<std::unique_ptr<T, D>> : std::true_t
 // A registered (reflected) class used by value, reference or pointer.
 template <class T>
 inline constexpr bool IsClassType = std::is_class_v<T> && !std::is_same_v<T, std::string> && !std::is_same_v<T, Value> &&
+                                    !std::is_same_v<T, Bytes> &&
                                     !IsVector<T>::value && !IsMap<T>::value && !IsShared<T>::value && !IsUnique<T>::value &&
                                     !IsFuture<T>::value;
 
@@ -135,6 +137,18 @@ template <> struct Conv<Value> {
     static const TypeDesc* type(const Registry& r) { return r.tAny(); }
     static Value to(const Registry&, Value v) { return v; }
     static Value from(const Registry&, const Value& v) { return v; }
+};
+// fg::Bytes <-> bytes (shared, no copy). Anything that is not bytes is an error: text becomes bytes with From Text.
+template <> struct Conv<Bytes> {
+    static const TypeDesc* type(const Registry& r) { return r.tBytes(); }
+    static Value to(const Registry&, Bytes v) { return Value(std::move(v)); }
+    static Bytes from(const Registry& r, const Value& v) { return v.isBytes() ? v.bytes() : r.convert(v, r.tBytes()).bytes(); }
+};
+// std::byte <-> byte (uint8_t stays an int, as it always was)
+template <> struct Conv<std::byte> {
+    static const TypeDesc* type(const Registry& r) { return r.tByte(); }
+    static Value to(const Registry&, std::byte v) { return Value(static_cast<int64_t>(static_cast<uint8_t>(v))); }
+    static std::byte from(const Registry&, const Value& v) { return static_cast<std::byte>(static_cast<uint8_t>(v.toInt())); }
 };
 template <class E> struct Conv<E, std::enable_if_t<std::is_enum_v<E>>> {
     static const TypeDesc* type(const Registry& r) {

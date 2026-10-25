@@ -20,10 +20,13 @@ FG_CORE_EXPORT std::shared_ptr<Program> compile(const Script& script, const Regi
 // The pins of `node` with the type parameters it currently has (Node::typeArgs). Unresolved type
 // parameters produce pins with `wildcard == true` that use the parameter's fallback type. Editors use
 // this to draw nodes that are not (yet) part of a compiled program.
-FG_CORE_EXPORT std::vector<CompiledPin> buildNodePins(const Node& node, const Registry& reg, const Script* script, const Graph* graph);
+// `types`: the types of the script (Program::types); null makes them from `script`.
+FG_CORE_EXPORT std::vector<CompiledPin> buildNodePins(const Node& node, const Registry& reg, const Script* script, const Graph* graph,
+                                                     const TypeScope* types = nullptr);
 
 // Raw pin definitions (static + dynamic) of a node.
-FG_CORE_EXPORT std::vector<PinDef> collectPinDefs(const Node& node, const NodeDef& def, const Registry& reg, const Script* script, const Graph* graph);
+FG_CORE_EXPORT std::vector<PinDef> collectPinDefs(const Node& node, const NodeDef& def, const Registry& reg, const Script* script, const Graph* graph,
+                                                  const TypeScope* types = nullptr);
 
 // ---- loops ----------------------------------------------------------------------------------------
 // A node that cannot leave a loop it is part of: an exec node with a single exec output that is not flow control (Branch, Delay,

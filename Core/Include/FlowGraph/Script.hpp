@@ -38,6 +38,24 @@ struct VariableDecl {
     std::string category, doc;
 };
 
+// A field of a struct the script declares: a name, a type expression and a default (null: the default of the type).
+struct FieldDecl {
+    std::string name, type;
+    Value def;
+    std::string doc;
+};
+
+// A record type the script declares: variables, function parameters and containers may be of its type, and the nodes Make <Name>,
+// Break <Name> and Set Field work with it. A struct is a value, like an array: assigning it makes a copy. Its fields may be of
+// any type - other structs too - but a struct may contain itself only through an array or a map.
+struct FG_CORE_EXPORT StructDecl {
+    std::string name, doc, category;
+    std::vector<FieldDecl> fields;
+
+    FieldDecl* findField(const std::string& n);
+    const FieldDecl* findField(const std::string& n) const;
+};
+
 class Node {
 public:
     NodeId id = 0;
@@ -102,6 +120,7 @@ class FG_CORE_EXPORT Script {
 public:
     std::string name = "Script";
     std::string doc;
+    std::vector<StructDecl> structs;
     std::vector<VariableDecl> variables;
     std::deque<Graph> graphs;
 
@@ -111,6 +130,8 @@ public:
     const Graph* findGraph(const std::string& name) const;
     VariableDecl* findVariable(const std::string& name);
     const VariableDecl* findVariable(const std::string& name) const;
+    StructDecl* findStruct(const std::string& name);
+    const StructDecl* findStruct(const std::string& name) const;
 
     Graph& addEventGraph(const std::string& name = "EventGraph");
     // Adds a function graph with an entry node and one return node.
@@ -118,11 +139,21 @@ public:
     bool removeGraph(const std::string& name);
     std::string uniqueGraphName(const std::string& base) const;
     std::string uniqueVariableName(const std::string& base) const;
+    std::string uniqueStructName(const std::string& base) const;
 
     // Structural rename helpers: they also update every node that refers to the old name.
     void renameVariable(const std::string& from, const std::string& to);
     void renameFunction(const std::string& from, const std::string& to);
     void renameLocal(const std::string& graph, const std::string& from, const std::string& to);
+    // A struct: also every type that names it (variables, parameters, fields, array<Point>...) and its Make / Break / Set nodes.
+    void renameStruct(const std::string& from, const std::string& to);
+    // A field: also the pins of the Make / Break nodes of the struct (their links and values) and its Set Field nodes.
+    void renameField(const std::string& structName, const std::string& from, const std::string& to);
+    // Removes a field, and the links and values of its pins on the Make / Break nodes of the struct. Its Set Field nodes stay: the
+    // compiler reports them.
+    void removeField(const std::string& structName, const std::string& field);
+    // A field gets another type: its default and the values typed into the Make nodes and its Set Field nodes are cleared.
+    void retypeField(const std::string& structName, const std::string& field, const std::string& type);
     // A variable gets another type: its default and the values typed into its Set nodes (their Value pin) are cleared, as they
     // were values of the old type (Sunday of a Weekday would be a 7 in another enum, which has no such value).
     void retypeVariable(const std::string& name, const std::string& type);
@@ -131,7 +162,8 @@ public:
     // ---- serialization (JSON, extension .flow)
     // Version of the file format this build writes. Older files are read (and migrated); a file written by a newer
     // FlowGraph is refused, because reading it would silently drop what this build does not understand.
-    static constexpr int kFileVersion = 1;
+    // 2: structs. A script without structs is still written as version 1, so that older FlowGraph versions read it.
+    static constexpr int kFileVersion = 2;
     Json toJson() const;
     static Script fromJson(const Json& j);              // throws JsonError on malformed documents and newer file versions
     std::string toText(int indent = 2) const { return toJson().dump(indent); }

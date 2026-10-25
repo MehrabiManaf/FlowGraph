@@ -20,7 +20,8 @@
 //   category:<name>          one part of a category path ("Flow|Switch": category:Flow and category:Switch)
 //   enum:<Type>.<Value>      the name of an enum value as shown (enum:<Type>.<Value>#doc)
 //   template:<name>          titles made from a name: get-variable "Get {Name}", set-variable "Set {Name}", switch-on-enum
-//                            "Switch on {Enum}"
+//                            "Switch on {Enum}", make-struct "Make {Struct}", break-struct "Break {Struct}", set-field
+//                            "Set {Struct}.{Field}"
 // `flow --translations <file>` writes or updates a catalog for the nodes of the standard applications (texts added with an empty
 // translation, removed ones dropped, outdated ones reported); updateCatalog does it for any registry.
 //

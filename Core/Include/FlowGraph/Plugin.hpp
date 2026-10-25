@@ -28,7 +28,7 @@
 #endif
 
 // Bump when the meaning of something plugins rely on changes without changing a class size (see PluginAbi::layout).
-#define FG_PLUGIN_ABI_VERSION 1
+#define FG_PLUGIN_ABI_VERSION 2          // 2 (0.5.0): the byte and bytes types, structs (Value::Kind, TypeKind, NodeBuildCtx::types)
 
 namespace fg {
 

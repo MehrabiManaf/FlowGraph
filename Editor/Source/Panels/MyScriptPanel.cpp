@@ -156,7 +156,7 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     top->setSpacing(4);
     search_ = new QLineEdit(this);
     makeSearchField(search_, tr("Search"));
-    search_->setToolTip(tr("Shows only the events, functions and variables whose name contains this text"));
+    search_->setToolTip(tr("Shows only the events, functions, variables and structs whose name contains this text"));
     addButton_ = new AddButton(this);
     QSize iconSize;
     addButton_->setIcon(addMenuIcon(search_, search_->sizeHint().height(), &iconSize));       // a plus and a drop-down arrow: the button opens a menu
@@ -170,7 +170,7 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
         scheduleRefresh();
     });
     addButton_->setText("+");                         // not shown (icon only), but names the button
-    addButton_->setToolTip(tr("Add a function or a variable"));
+    addButton_->setToolTip(tr("Add a function, a variable or a struct"));
     addButton_->setPopupMode(QToolButton::InstantPopup);
     addButton_->setFixedSize(iconSize.width() + 2 * kAddMargin, search_->sizeHint().height());     // the same margin on both sides
     top->addWidget(search_, 1);
@@ -186,7 +186,8 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     functions_ = makeSection(tr("Functions"), true, functionsPanel_);
     vars_ = makeSection(tr("Variables"), true, varsPanel_);
     locals_ = makeSection(tr("Local Variables"), true, localsPanel_);
-    for (auto* p : {graphsPanel_, functionsPanel_, varsPanel_, localsPanel_}) {
+    structs_ = makeSection(tr("Structs"), true, structsPanel_);
+    for (auto* p : {graphsPanel_, functionsPanel_, varsPanel_, localsPanel_, structsPanel_}) {
         lay->addWidget(p);
         p->SetContentsExpaned(true);
     }
@@ -200,6 +201,7 @@ MyScriptPanel::MyScriptPanel(Document* doc, QWidget* parent) : QWidget(parent), 
     connect(functionsPanel_, &CCollapsiblePanel::PlusButtonClicked, this, [this] { addFunction(); });
     connect(varsPanel_, &CCollapsiblePanel::PlusButtonClicked, this, [this] { addVariable(); });
     connect(localsPanel_, &CCollapsiblePanel::PlusButtonClicked, this, [this] { addLocal(); });
+    connect(structsPanel_, &CCollapsiblePanel::PlusButtonClicked, this, [this] { addStruct(); });
     connect(doc_, &Document::changed, this, [this] { scheduleRefresh(); });
     connect(doc_, &Document::scriptReplaced, this, [this] { scheduleRefresh(); });
     refresh();
@@ -279,6 +281,7 @@ std::vector<MyScriptPanel::EventEntry> MyScriptPanel::collectEvents() const {
 void MyScriptPanel::refresh() {
     const fg::Script& s = doc_->script();
     const fg::Registry& reg = doc_->registry();
+    const auto types = doc_->types();
     if (!localsGraph_.isEmpty()) {
         const fg::Graph* lg = s.findGraph(ss(localsGraph_));
         if (!lg || lg->kind != fg::GraphKind::Function) localsGraph_.clear();
@@ -294,6 +297,11 @@ void MyScriptPanel::refresh() {
             for (auto& p : g.inputs) sig += qs(p.name) + ":" + qs(p.type) + ",";
     }
     for (auto& v : s.variables) sig += qs(v.name) + ":" + qs(v.type) + "|";
+    for (auto& st : s.structs) {
+        sig += "s" + qs(st.name) + "{";
+        for (auto& f : st.fields) sig += qs(f.name) + ",";
+        sig += "}|";
+    }
     for (auto& e : events) sig += "e" + e.graph + "/" + e.name + e.params + QString::number(e.node) + (e.missing ? "m" : "") + "|";
     if (sig == lastSignature_) {
         refreshLocals();
@@ -304,9 +312,9 @@ void MyScriptPanel::refresh() {
     building_ = true;
     QString keepName;
     FitTree* keepTree = nullptr;
-    for (auto* t : {graphs_, functions_, vars_})
+    for (auto* t : {graphs_, functions_, vars_, structs_})
         if (t->currentItem()) { keepTree = t; keepName = t->currentItem()->data(0, kName).toString() + "@" + t->currentItem()->data(0, kMime).toString(); }
-    for (auto* t : {graphs_, functions_, vars_}) t->clear();
+    for (auto* t : {graphs_, functions_, vars_, structs_}) t->clear();
 
     for (auto& g : s.graphs) {
         if (g.kind != fg::GraphKind::Function) continue;
@@ -326,9 +334,16 @@ void MyScriptPanel::refresh() {
     }
     graphs_->expandAll();
     for (auto& v : s.variables) {
-        QColor c = rgb(reg.typeColor(reg.typeOrAny(v.type)));
+        QColor c = rgb(reg.typeColor(types->typeOrAny(v.type)));
         auto* it = mk(vars_, nullptr, qs(v.name), qs(v.type), Kind::Variable, true, &c);
         it->setData(0, kMime, "global|" + qs(v.name));
+    }
+    for (auto& st : s.structs) {
+        QStringList fields;
+        for (auto& f : st.fields) fields << qs(f.name);
+        QColor c = rgb(reg.typeColor(types->findStruct(st.name)));
+        auto* it = mk(structs_, nullptr, qs(st.name), "{" + fields.join(", ") + "}", Kind::Struct, true, &c);
+        it->setToolTip(0, qs(st.doc));
     }
     if (keepTree) {
         for (QTreeWidgetItemIterator it(keepTree); *it; ++it)
@@ -342,6 +357,7 @@ void MyScriptPanel::refresh() {
 void MyScriptPanel::refreshLocals() {
     const fg::Script& s = doc_->script();
     const fg::Registry& reg = doc_->registry();
+    const auto types = doc_->types();
     const fg::Graph* g = s.findGraph(ss(localsGraph_));
     if (g && g->kind != fg::GraphKind::Function) g = nullptr;
     QString sig = localsGraph_ + "#";
@@ -356,7 +372,7 @@ void MyScriptPanel::refreshLocals() {
     locals_->clear();
     if (g) {
         for (auto& v : g->locals) {
-            QColor c = rgb(reg.typeColor(reg.typeOrAny(v.type)));
+            QColor c = rgb(reg.typeColor(types->typeOrAny(v.type)));
             auto* it = mk(locals_, nullptr, qs(v.name), qs(v.type), Kind::Local, true, &c);
             it->setData(0, kMime, "local|" + qs(v.name));
             if (!keepName.isEmpty() && qs(v.name) == keepName) locals_->setCurrentItem(it);
@@ -370,7 +386,7 @@ void MyScriptPanel::refreshLocals() {
 
 void MyScriptPanel::applyFilter() {
     const QString text = search_ ? search_->text().trimmed() : QString();
-    const std::pair<FitTree*, CCollapsiblePanel*> sections[] = {{graphs_, graphsPanel_}, {functions_, functionsPanel_}, {vars_, varsPanel_}, {locals_, localsPanel_}};
+    const std::pair<FitTree*, CCollapsiblePanel*> sections[] = {{graphs_, graphsPanel_}, {functions_, functionsPanel_}, {vars_, varsPanel_}, {locals_, localsPanel_}, {structs_, structsPanel_}};
     for (auto& [tree, panel] : sections) {
         int shown = 0;
         for (QTreeWidgetItemIterator it(tree); *it; ++it) {
@@ -392,11 +408,12 @@ void MyScriptPanel::showAddMenu() {
     menu->addAction(themedIcon(":/Icons/function.svg"), tr("Function"), this, [this] { addFunction(); });
     menu->addAction(themedIcon(":/Icons/variable.svg"), tr("Variable"), this, [this] { addVariable(); });
     if (!localsGraph_.isEmpty()) menu->addAction(themedIcon(":/Icons/local-variable.svg"), tr("Local Variable (%1)").arg(localsGraph_), this, [this] { addLocal(); });
+    menu->addAction(themedIcon(":/Icons/struct.svg"), tr("Struct"), this, [this] { addStruct(); });
 }
 
 void MyScriptPanel::onSelection(FitTree* tree) {
     building_ = true;
-    for (auto* t : {graphs_, functions_, vars_, locals_})
+    for (auto* t : {graphs_, functions_, vars_, locals_, structs_})
         if (t != tree) { t->clearSelection(); t->setCurrentItem(nullptr); }
     building_ = false;
     auto* it = tree->currentItem();
@@ -413,6 +430,7 @@ void MyScriptPanel::onSelection(FitTree* tree) {
     }
     else if (tree == vars_) emit selectionChanged(int(Kind::Variable), "", name);
     else if (tree == locals_) emit selectionChanged(int(Kind::Local), localsGraph_, name);
+    else if (tree == structs_) emit selectionChanged(int(Kind::Struct), "", name);
     else emit selectionChanged(int(Kind::None), "", "");
 }
 
@@ -427,6 +445,7 @@ MyScriptPanel::Kind MyScriptPanel::selected(QString* owner, QString* name) const
     if (pick(functions_, Kind::Function, QString())) return Kind::Function;
     if (pick(vars_, Kind::Variable, QString())) return Kind::Variable;
     if (pick(locals_, Kind::Local, localsGraph_)) return Kind::Local;
+    if (pick(structs_, Kind::Struct, QString())) return Kind::Struct;
     return Kind::None;
 }
 
@@ -440,7 +459,7 @@ void MyScriptPanel::showNodeSelection(const QString& graph, const QList<int>& id
                 break;
             }
     building_ = true;
-    for (auto* t : {graphs_, functions_, vars_, locals_})
+    for (auto* t : {graphs_, functions_, vars_, locals_, structs_})
         if (!(event && t == graphs_)) { t->clearSelection(); t->setCurrentItem(nullptr); }
     if (event) graphs_->setCurrentItem(event);
     building_ = false;
@@ -452,6 +471,7 @@ CCollapsiblePanel* MyScriptPanel::panelOf(FitTree* tree) const {
     if (tree == functions_) return functionsPanel_;
     if (tree == vars_) return varsPanel_;
     if (tree == locals_) return localsPanel_;
+    if (tree == structs_) return structsPanel_;
     return nullptr;
 }
 
@@ -515,6 +535,10 @@ void MyScriptPanel::onItemChanged(FitTree* tree, QTreeWidgetItem* item) {
     } else if (tree == vars_) {
         if (s.variableIndex(ss(newName)) >= 0) { QMessageBox::warning(this, tr("Rename"), tr("A variable named '%1' already exists.").arg(newName)); return revert(); }
         doc_->edit(tr("Rename variable"), [&](fg::Script& sc) { sc.renameVariable(ss(oldName), ss(newName)); });
+    } else if (tree == structs_) {
+        const QString problem = doc_->structNameProblem(newName, oldName);
+        if (!problem.isEmpty()) { QMessageBox::warning(this, tr("Rename"), problem); return revert(); }
+        doc_->edit(tr("Rename struct"), [&](fg::Script& sc) { sc.renameStruct(ss(oldName), ss(newName)); });
     } else if (tree == locals_) {
         const fg::Graph* g = s.findGraph(ss(localsGraph_));
         if (!g || g->findLocal(ss(newName))) return revert();
@@ -553,7 +577,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     QAction* a = m.exec(tree->viewport()->mapToGlobal(pos));
     if (!a) return;
     if (a == refs) {
-        const Kind kind = tree == functions_ ? Kind::Function : tree == vars_ ? Kind::Variable : Kind::Local;
+        const Kind kind = tree == functions_ ? Kind::Function : tree == vars_ ? Kind::Variable : tree == structs_ ? Kind::Struct : Kind::Local;
         emit referencesRequested(int(kind), kind == Kind::Local ? localsGraph_ : QString(), name);
         return;
     }
@@ -573,6 +597,7 @@ void MyScriptPanel::contextMenu(FitTree* tree, const QPoint& pos) {
     } else if (a == del) {
         doc_->edit(tr("Delete"), [&](fg::Script& s) {
             if (tree == functions_) s.removeGraph(ss(name));
+            else if (tree == structs_) s.structs.erase(std::remove_if(s.structs.begin(), s.structs.end(), [&](const fg::StructDecl& d) { return d.name == ss(name); }), s.structs.end());
             else if (tree == vars_) s.variables.erase(std::remove_if(s.variables.begin(), s.variables.end(), [&](const fg::VariableDecl& v) { return v.name == ss(name); }), s.variables.end());
             else if (tree == locals_)
                 if (auto* g = s.findGraph(ss(localsGraph_)))
@@ -594,6 +619,13 @@ void MyScriptPanel::addVariable() {
     QString name = qs(doc_->script().uniqueVariableName("NewVar"));
     doc_->edit(tr("Add variable"), [&](fg::Script& s) { s.variables.push_back({ss(name), "int", fg::Value(int64_t(0)), "", ""}); });
     beginRename(vars_, name);
+}
+
+void MyScriptPanel::addStruct() {
+    search_->clear();
+    QString name = qs(doc_->script().uniqueStructName("NewStruct"));
+    doc_->edit(tr("Add struct"), [&](fg::Script& s) { s.structs.push_back({ss(name), "", "", {{"Value", "int", fg::Value(), ""}}}); });
+    beginRename(structs_, name);
 }
 
 void MyScriptPanel::addLocal() {

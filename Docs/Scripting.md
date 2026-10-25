@@ -16,7 +16,7 @@ defaults, is in [NodeReference.md](NodeReference.md).
 | Find | Ctrl+F finds nodes by title, comment or value in every graph; Shift+F12 (or right-click > *Find References*) lists the nodes that use the selected variable or function; double-click a result to go there |
 | Run | F5 (or F6) runs the launch configuration chosen in the toolbar; the same button pauses the running script and continues a paused one; Shift+F5 stop |
 | Debug | F9 toggles a breakpoint, F10 / F11 / Shift+F11 step over / into / out; hover pins while paused to see values; *Run > Execution speed* slows execution so the animated links are visible |
-| View | *View > Theme*: Dark, Light or System; *View > Language*. *File > Open Recent* lists the last 10 scripts |
+| View | Shift+Alt+Enter (*View > Full Screen*) switches full screen on and off; *View > Theme*: Dark, Light or System; *View > Language*. *File > Open Recent* lists the last 10 scripts |
 
 ## Launch configurations
 
@@ -70,6 +70,20 @@ flow [options] script.flow [arguments...]
   Find and Character At count characters, not bytes (`Length("سلام")` is 4); Byte Length gives the size in bytes. For Each
   Character goes through a text once: faster than Character At in a loop. **Format** (`"{Name} is {Age}"`) gets an input per
   placeholder in *Details > Inputs*; `{{` and `}}` are literal braces.
+* **Bytes** are data, not text: the content of a file, a BLOB, a network message. A `bytes` value is one shared buffer, cheap to
+  pass along whatever its size; a `byte` is a number from 0 to 255 that works where an int does (a value out of range wraps around:
+  300 becomes 44). *From Text* / *To Text* convert between text and bytes (UTF-8; *To Text* says in *Valid* whether the bytes were
+  UTF-8), *To Base64* / *From Base64* and *To Hex* / *From Hex* write and read them as text, *To Array* / *Make Bytes* turn them
+  into an `array<byte>` and back for the array nodes. Print String shows a preview (`bytes(5): 48 65 6C 6C 6F`); a bytes default
+  is typed as hex.
+* **Structs** are record types a script declares (*My Script > Structs*, then the fields in *Details*: name, type, default,
+  description). *Make Point* builds one from its fields, *Break Point* gives its fields, *Set Point.X* changes one field in place.
+  A struct is a value, like an array: setting a variable or passing it to a function by value makes a copy, while Set Field
+  changes the struct it is connected to (a variable, an element of an array...). Fields can be of any type, other structs too;
+  a struct holds itself only through an array or a map (`Children: array<Tree>`). Variables, function parameters and containers
+  can be of a struct type; the application's events and functions cannot (they do not know the script's structs). Renaming a
+  struct or a field updates every type and node that uses it, and *Find References* lists them; a running script that is
+  changed keeps its values field by field.
 * **Time:** a timestamp is seconds since 1970-01-01 00:00 UTC, as a float. *Now* and *Seconds Since Start* read the clock once
   per run. *Break Date Time* / *Make Date Time* convert to and from year, month, day... in local time or UTC (out of range values
   carry over: month 13 is January); *Format Date Time* writes `%Y-%m-%d %H:%M:%S` style text, *Parse Date Time* reads ISO 8601
@@ -87,7 +101,9 @@ flow [options] script.flow [arguments...]
 It comes with `flow` and `flowstudio` (category *File System*):
 
 * **File:** Open File (Read, Write or Append) gives a `File` to read a line at a time (Read Line, Read Text, Is At End) or to
-  write a piece at a time (Write Line, Write Text); each write is in the file at once. Close it when it is done.
+  write a piece at a time (Write Line, Write Text); each write is in the file at once. Close it when it is done. Files that are
+  not text (images, archives, binary formats) are read with Read Bytes (Count bytes, or all the rest) and written with Write
+  Bytes, as `bytes`; a text read at the start of a file skips its UTF-8 byte order mark, a bytes read does not.
 * **Files and Folders:** Copy, Move, Delete, Create Folder, List Folder, For Each File (patterns like `*.txt;*.md`, Recursive).
 * **Paths** and **Information** (pure): Join Path, Parent Folder, File Name, Extension, Change Extension, Absolute Path,
   Current / Temp / Home Folder; Exists, Is File, Is Folder, File Size, Last Modified.

@@ -35,14 +35,16 @@ PalettePopup::PalettePopup(GraphScene* scene, const PinRef& from, QWidget* paren
     resize(420, 460);
 
     const fg::Script& script = scene->document()->script();
+    const auto types = scene->document()->types();          // the dragged pin's type may be a struct of the script
     fg::NodeBuildCtx ctx{scene->registry(), &script, script.findGraph(scene->graphName().toStdString())};
+    ctx.types = types.get();
     all_ = fg::buildPalette(ctx);
     if (from.valid()) {
         fg::PinFilter f;
         f.kind = from.kind;
         f.dir = from.dir;
         f.type = from.wildcard ? nullptr : from.type;
-        all_ = fg::filterPalette(scene->registry(), all_, f);
+        all_ = fg::filterPalette(scene->registry(), all_, f, types.get());
     }
     // Titles, folders and docs in the language of the editor. The English title and folder join the search words, so a search finds
     // a node in either language ("branch" finds it in Persian too). What is created stays the same: the definition and its props.

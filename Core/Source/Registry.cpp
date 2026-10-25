@@ -61,11 +61,14 @@ void Registry::registerBuiltinTypes() {
         t->category = "Basic";
         return t;
     };
+    // in the order editors list them (Registry::types)
     void_ = make("void", TypeKind::Void, 0x808080);
     bool_ = make("bool", TypeKind::Bool, 0xc23b3b);
+    byte_ = make("byte", TypeKind::Byte, 0x3a8fd8);
     int_ = make("int", TypeKind::Int, 0x2fd0c0);
     float_ = make("float", TypeKind::Float, 0x9ee04a);
     string_ = make("string", TypeKind::String, 0xe052c8);
+    bytes_ = make("bytes", TypeKind::Bytes, 0x7a6ae0);
     any_ = make("any", TypeKind::Any, 0xa0a0a8);
 }
 
@@ -229,9 +232,10 @@ bool Registry::canConnect(const TypeDesc* from, const TypeDesc* to) const {
     if (from->kind == TypeKind::Void || to->kind == TypeKind::Void) return false;
     if (from->kind == TypeKind::Any || to->kind == TypeKind::Any) return true;
     auto numeric = [](const TypeDesc* t) {
-        return t->kind == TypeKind::Bool || t->kind == TypeKind::Int || t->kind == TypeKind::Float || t->kind == TypeKind::Enum;
+        return t->kind == TypeKind::Bool || t->kind == TypeKind::Int || t->kind == TypeKind::Float || t->kind == TypeKind::Enum ||
+               t->kind == TypeKind::Byte;
     };
-    if (to->kind == TypeKind::String) return true;     // everything can be printed
+    if (to->kind == TypeKind::String) return true;     // everything can be printed (bytes as a preview: To Text converts them)
     if (numeric(from) && numeric(to)) return !(from->kind == TypeKind::Enum && to->kind == TypeKind::Enum);
     if (from->isClass() && to->isClass()) return from->isA(to);
     if (from->kind == TypeKind::Array && to->kind == TypeKind::Array)
@@ -250,6 +254,15 @@ Value Registry::defaultValue(const TypeDesc* t) const {
     case TypeKind::Enum: return Value(t->enumValues.empty() ? int64_t(0) : t->enumValues.front().value);
     case TypeKind::Float: return Value(0.0);
     case TypeKind::String: return Value(std::string());
+    case TypeKind::Byte: return Value(int64_t(0));
+    case TypeKind::Bytes: return Value(Bytes());
+    case TypeKind::Struct: {                                    // each field with its default
+        auto s = std::make_shared<StructData>();
+        s->type = std::shared_ptr<const TypeDesc>(t->owner.lock(), t);
+        s->fields.reserve(t->fields.size());
+        for (auto& f : t->fields) s->fields.push_back(f.def.isNull() ? defaultValue(f.type) : f.def.deepCopy());
+        return Value(std::move(s));
+    }
     case TypeKind::Array: return makeArray(t->elem);
     case TypeKind::Map: return makeMap(t->keyType, t->elem);
     default: return Value();
@@ -271,6 +284,40 @@ Value Registry::convert(const Value& v, const TypeDesc* to) const {
         return v.isInt() ? v : Value(v.toInt());
     case TypeKind::Float: return v.isFloat() ? v : Value(v.toFloat());
     case TypeKind::String: return v.isString() ? v : Value(toString(v));
+    case TypeKind::Byte: {                                      // 300 -> 44, -1 -> 255: wraps around, like int overflow
+        const int64_t i = v.toInt();
+        return (i >= 0 && i <= 255 && v.isInt()) ? v : Value(int64_t(static_cast<uint8_t>(i)));
+    }
+    case TypeKind::Bytes:                                       // only bytes are bytes: text becomes bytes with From Text
+        if (v.isBytes()) return v;
+        if (v.isNull()) return Value(Bytes());
+        throw ScriptError("cannot convert " + v.toString() + " to bytes (From Text turns a text into bytes)");
+    case TypeKind::Struct: {
+        if (v.isNull()) return defaultValue(to);
+        const StructData* s = v.structPtr();
+        if (s && s->type.get() == to) return v;
+        // the same struct of another program (a hot reload), or a map of its fields (a default in a file): field by field, by
+        // name; a field that is not there, or whose value does not fit any more, gets its default
+        const MapData* m = v.mapPtr();
+        if ((s && s->type && s->type->name == to->name) || (m && (!m->key || m->key->kind == TypeKind::String))) {
+            Value out = defaultValue(to);
+            StructData* d = out.structPtr();
+            for (size_t i = 0; i < to->fields.size(); ++i) {
+                const FieldDesc& f = to->fields[i];
+                try {
+                    if (s) {
+                        const int old = s->type->fieldIndex(f.name);
+                        if (old >= 0) d->fields[i] = convertFrom(s->fields[static_cast<size_t>(old)], s->type->fields[static_cast<size_t>(old)].type, f.type);
+                    } else if (auto it = m->items.find(Value(f.name)); it != m->items.end()) {
+                        d->fields[i] = convert(it->second, f.type);
+                    }
+                } catch (const ScriptError&) {
+                }
+            }
+            return out;
+        }
+        throw ScriptError("cannot convert " + v.toString() + " to " + to->name);
+    }
     case TypeKind::Class: {
         if (v.isNull()) return v;
         auto* h = v.objectPtr();

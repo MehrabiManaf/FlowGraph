@@ -29,14 +29,47 @@ int rank(const Value& v) {
     case Value::Kind::Int:
     case Value::Kind::Float: return 2;
     case Value::Kind::String: return 3;
-    case Value::Kind::Object: return 4;
-    case Value::Kind::Array: return 5;
-    case Value::Kind::Map: return 6;
+    case Value::Kind::Bytes: return 4;
+    case Value::Kind::Object: return 5;
+    case Value::Kind::Array: return 6;
+    case Value::Kind::Map: return 7;
+    case Value::Kind::Struct: return 8;
     }
     return 0;
 }
 
+std::string quotedIfText(const Value& v) { return v.isString() ? "\"" + v.str() + "\"" : v.toString(); }
+
+const std::shared_ptr<const std::string>& emptyBytes() {
+    static const std::shared_ptr<const std::string> e = std::make_shared<const std::string>();
+    return e;
+}
+
+// What Print String shows of bytes: the size and the first bytes in hex ("bytes(5): 48 65 6C 6C 6F"), never the raw data.
+std::string bytesPreview(std::string_view b) {
+    static const char hex[] = "0123456789ABCDEF";
+    constexpr size_t kShown = 16;
+    std::string s = "bytes(" + std::to_string(b.size()) + ")";
+    if (b.empty()) return s;
+    s += ":";
+    for (size_t i = 0; i < b.size() && i < kShown; ++i) {
+        const auto c = static_cast<unsigned char>(b[i]);
+        s += ' ';
+        s += hex[c >> 4];
+        s += hex[c & 15];
+    }
+    if (b.size() > kShown) s += " ...";
+    return s;
+}
+
 } // namespace
+
+Bytes::Bytes() : data_(emptyBytes()) {}
+Bytes::Bytes(std::string data) : data_(std::make_shared<const std::string>(std::move(data))) {}
+Bytes::Bytes(const void* data, size_t size)
+    : data_(std::make_shared<const std::string>(static_cast<const char*>(data), size)) {}
+Bytes::Bytes(const std::vector<uint8_t>& data)
+    : data_(std::make_shared<const std::string>(reinterpret_cast<const char*>(data.data()), data.size())) {}
 
 std::string Value::toString() const {
     switch (kind_) {
@@ -45,6 +78,7 @@ std::string Value::toString() const {
     case Kind::Int: return std::to_string(u_.i);
     case Kind::Float: return formatFloat(u_.d);
     case Kind::String: return str();
+    case Kind::Bytes: return bytesPreview(bytesView());
     case Kind::Object: {
         auto* h = objectPtr();
         if (h->type && h->type->toStringFn && h->ptr) return h->type->toStringFn(h->ptr.get());
@@ -70,6 +104,16 @@ std::string Value::toString() const {
         }
         return s + "}";
     }
+    case Kind::Struct: {                                     // Point{X: 1, Y: 2}
+        const StructData* d = structPtr();
+        std::string s = (d->type ? d->type->name : std::string("struct")) + "{";
+        for (size_t i = 0; i < d->fields.size(); ++i) {
+            if (i) s += ", ";
+            const bool named = d->type && i < d->type->fields.size();
+            s += (named ? d->type->fields[i].name + ": " : std::string()) + quotedIfText(d->fields[i]);
+        }
+        return s + "}";
+    }
     }
     return {};
 }
@@ -81,6 +125,7 @@ bool Value::toBoolSlow() const {
     case Kind::Int: return u_.i != 0;
     case Kind::Float: return u_.d != 0.0;
     case Kind::String: return !str().empty();
+    case Kind::Bytes: return !bytesView().empty();
     default: return true;
     }
 }
@@ -140,6 +185,14 @@ Value Value::deepCopyAt(int depth) const {
         for (auto& e : src->items) dst->items.push_back(e.deepCopyAt(depth + 1));
         return Value(std::move(dst));
     }
+    if (kind_ == Kind::Struct) {
+        auto src = structPtr();
+        auto dst = std::make_shared<StructData>();
+        dst->type = src->type;
+        dst->fields.reserve(src->fields.size());
+        for (auto& f : src->fields) dst->fields.push_back(f.deepCopyAt(depth + 1));
+        return Value(std::move(dst));
+    }
     auto src = mapPtr();
     auto dst = std::make_shared<MapData>();
     dst->key = src->key;
@@ -158,6 +211,7 @@ bool Value::equalsSlow(const Value& a, const Value& b) {
     case Value::Kind::Null: return true;
     case Value::Kind::Bool: return a.u_.i == b.u_.i;
     case Value::Kind::String: return a.str() == b.str();
+    case Value::Kind::Bytes: return a.identity() == b.identity() || a.bytesView() == b.bytesView();
     case Value::Kind::Object: {
         auto* x = a.objectPtr();
         auto* y = b.objectPtr();
@@ -183,6 +237,16 @@ bool Value::equalsSlow(const Value& a, const Value& b) {
             if (i->first != j->first || i->second != j->second) return false;
         return true;
     }
+    case Value::Kind::Struct: {                              // the same struct (by name: a reload makes new types) and the same fields
+        auto* x = a.structPtr();
+        auto* y = b.structPtr();
+        if (x == y) return true;
+        if (x->type != y->type && (!x->type || !y->type || x->type->name != y->type->name)) return false;
+        if (x->fields.size() != y->fields.size()) return false;
+        for (size_t i = 0; i < x->fields.size(); ++i)
+            if (x->fields[i] != y->fields[i]) return false;
+        return true;
+    }
     default: return false;
     }
 }
@@ -197,13 +261,15 @@ bool ValueLess::slow(const Value& a, const Value& b) {
         if (a.isInt() && b.isInt()) return a.toInt() < b.toInt();
         return a.toFloat() < b.toFloat();
     case Value::Kind::String: return a.str() < b.str();
+    case Value::Kind::Bytes: return a.bytesView() < b.bytesView();
     case Value::Kind::Object: {
         auto* x = a.objectPtr();
         auto* y = b.objectPtr();
         return std::less<const void*>()(x->ptr.get(), y->ptr.get());
     }
     case Value::Kind::Array:
-    case Value::Kind::Map: return std::less<const void*>()(a.identity(), b.identity());
+    case Value::Kind::Map:
+    case Value::Kind::Struct: return std::less<const void*>()(a.identity(), b.identity());
     default: return false;
     }
 }

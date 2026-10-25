@@ -10,7 +10,7 @@ cmake --install build/Release --prefix C:/FlowGraph --component FlowGraph
 installs the libraries, their headers, `flow` / `flowstudio` (with the FileSystem plugin in `bin/plugins`) and a CMake package.
 A host project then only needs
 ```cmake
-find_package(FlowGraph 0.4 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
+find_package(FlowGraph 0.5 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
 target_link_libraries(myapp PRIVATE FlowGraph::Core FlowGraph::ScriptEditor)
 ```
 with `CMAKE_PREFIX_PATH` pointing at the prefix (and at Qt). The editor is installed when it is built as a shared library
@@ -45,6 +45,12 @@ instance.callEvent("Tick", {0.016});                 // synchronous: runs until 
   `fg::checkCompatibility` list everything this application lacks: events it never raises, events whose arguments changed
   (the script records the signature of the host events it handles), classes / functions / enums of missing plugins and
   unknown types. Runtime-only applications refuse such a script; the editor opens it anyway so that it can be repaired.
+* **Types of C++ arguments and results:** `bool`, the integers (`int64_t`...), `double` / `float`, `std::string` (text),
+  `fg::Value` (`any`), `std::vector<T>` (`array<T>`), `std::map<K, V>` (`map<K, V>`), registered classes and enums, `fg::Bytes`
+  (`bytes`: data, shared without a copy) and `std::byte` (`byte`, 0 to 255; `uint8_t` stays an int).
+* **Structs** are types of the script, not of the registry: each compiled program has its own (`Program::types`). An application
+  reads a struct value it gets from a script (a variable, the result of a function) with `Value::isStruct()` and
+  `structPtr()`: `fields[i]` is the value of the field named `type->fields[i].name`.
 * Classes, enums, methods, properties, constructors, free functions and events become nodes automatically
   (`fn:`, `m:`, `get:`/`set:`, `new:`, `cast:`, `enum:`, `event:` node ids). Inheritance (also multiple) is honoured. Enum
   values print by name and may be given by name in scripts (`"default": "Sad"`).
@@ -80,7 +86,7 @@ auto program = rt.compile(script, opts);                       // a refused node
 
 fg::Instance::Limits lim;
 lim.maxContainerSize = 100'000;                                // elements of one array / map
-lim.maxStringLength = 1 << 20;                                 // bytes of one string
+lim.maxStringLength = 1 << 20;                                 // bytes of one string (or of one bytes value)
 lim.maxTaskSeconds = 0.5;                                      // time one task may spend executing nodes
 instance.setLimits(lim);
 instance.setStepLimit(10'000'000);                             // nodes per run (default 50 million)

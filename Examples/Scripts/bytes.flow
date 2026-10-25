@@ -1,0 +1,372 @@
+{
+  "format": "flowgraph",
+  "version": 1,
+  "name": "Bytes",
+  "doc": "Bytes: From Text / To Text, To Hex, To Base64, Byte At; a binary file written with Write Bytes and read back with Read Bytes (flowgraph-bytes.bin in the temporary folder).",
+  "variables": [],
+  "graphs": [
+    {
+      "name": "EventGraph",
+      "kind": "event",
+      "nodes": [
+        {
+          "id": 1,
+          "def": "event:Main",
+          "x": 0.0,
+          "y": 0.0,
+          "props": {
+            "sig": "(Args: array<string>)"
+          }
+        },
+        {
+          "id": 2,
+          "def": "fn:Bytes.From Text",
+          "x": -280.0,
+          "y": 360.0,
+          "defaults": {
+            "Text": "Hello, bytes!"
+          }
+        },
+        {
+          "id": 3,
+          "def": "fn:Bytes.Length",
+          "x": 0.0,
+          "y": 320.0
+        },
+        {
+          "id": 4,
+          "def": "fn:Bytes.To Hex",
+          "x": 0.0,
+          "y": 420.0,
+          "defaults": {
+            "Spaced": true
+          }
+        },
+        {
+          "id": 5,
+          "def": "fn:Bytes.To Base64",
+          "x": 0.0,
+          "y": 520.0
+        },
+        {
+          "id": 6,
+          "def": "fn:Bytes.Byte At",
+          "x": 0.0,
+          "y": 620.0
+        },
+        {
+          "id": 7,
+          "def": "fn:String.Concat",
+          "x": 270.0,
+          "y": 170.0,
+          "defaults": {
+            "A": "Length: "
+          }
+        },
+        {
+          "id": 8,
+          "def": "util.print",
+          "x": 480.0,
+          "y": 0.0
+        },
+        {
+          "id": 9,
+          "def": "fn:String.Concat",
+          "x": 570.0,
+          "y": 170.0,
+          "defaults": {
+            "A": "Hex: "
+          }
+        },
+        {
+          "id": 10,
+          "def": "util.print",
+          "x": 780.0,
+          "y": 0.0
+        },
+        {
+          "id": 11,
+          "def": "fn:String.Concat",
+          "x": 870.0,
+          "y": 170.0,
+          "defaults": {
+            "A": "Base64: "
+          }
+        },
+        {
+          "id": 12,
+          "def": "util.print",
+          "x": 1080.0,
+          "y": 0.0
+        },
+        {
+          "id": 13,
+          "def": "fn:String.Concat",
+          "x": 1170.0,
+          "y": 170.0,
+          "defaults": {
+            "A": "First byte: "
+          }
+        },
+        {
+          "id": 14,
+          "def": "util.print",
+          "x": 1380.0,
+          "y": 0.0
+        },
+        {
+          "id": 15,
+          "def": "fn:FileSystem.Temp Folder",
+          "x": 1450.0,
+          "y": 360.0
+        },
+        {
+          "id": 16,
+          "def": "fn:FileSystem.Join Path",
+          "x": 1630.0,
+          "y": 360.0,
+          "defaults": {
+            "B": "flowgraph-bytes.bin"
+          }
+        },
+        {
+          "id": 17,
+          "def": "filesystem.open",
+          "x": 1650.0,
+          "y": 0.0,
+          "defaults": {
+            "Mode": 1
+          }
+        },
+        {
+          "id": 18,
+          "def": "filesystem.file.writebytes",
+          "x": 1910.0,
+          "y": 0.0
+        },
+        {
+          "id": 19,
+          "def": "filesystem.file.close",
+          "x": 2150.0,
+          "y": 0.0
+        },
+        {
+          "id": 20,
+          "def": "filesystem.open",
+          "x": 2370.0,
+          "y": 0.0
+        },
+        {
+          "id": 21,
+          "def": "filesystem.file.readbytes",
+          "x": 2630.0,
+          "y": 0.0
+        },
+        {
+          "id": 22,
+          "def": "filesystem.file.close",
+          "x": 2870.0,
+          "y": 0.0
+        },
+        {
+          "id": 23,
+          "def": "bytes.totext",
+          "x": 2810.0,
+          "y": 240.0
+        },
+        {
+          "id": 24,
+          "def": "fn:String.Concat",
+          "x": 3010.0,
+          "y": 240.0,
+          "defaults": {
+            "A": "Read back: "
+          }
+        },
+        {
+          "id": 25,
+          "def": "util.print",
+          "x": 3250.0,
+          "y": 0.0
+        },
+        {
+          "id": 26,
+          "def": "util.print",
+          "x": 1910.0,
+          "y": -180.0
+        },
+        {
+          "id": 27,
+          "def": "util.print",
+          "x": 2630.0,
+          "y": -180.0
+        }
+      ],
+      "connections": [
+        {
+          "from": [2, "Bytes"],
+          "to": [3, "Bytes"]
+        },
+        {
+          "from": [2, "Bytes"],
+          "to": [4, "Bytes"]
+        },
+        {
+          "from": [2, "Bytes"],
+          "to": [5, "Bytes"]
+        },
+        {
+          "from": [2, "Bytes"],
+          "to": [6, "Bytes"]
+        },
+        {
+          "from": [3, "Length"],
+          "to": [7, "B"]
+        },
+        {
+          "from": [1, "Then"],
+          "to": [8, "In"]
+        },
+        {
+          "from": [7, "Result"],
+          "to": [8, "String"]
+        },
+        {
+          "from": [4, "Text"],
+          "to": [9, "B"]
+        },
+        {
+          "from": [8, "Then"],
+          "to": [10, "In"]
+        },
+        {
+          "from": [9, "Result"],
+          "to": [10, "String"]
+        },
+        {
+          "from": [5, "Text"],
+          "to": [11, "B"]
+        },
+        {
+          "from": [10, "Then"],
+          "to": [12, "In"]
+        },
+        {
+          "from": [11, "Result"],
+          "to": [12, "String"]
+        },
+        {
+          "from": [6, "Byte"],
+          "to": [13, "B"]
+        },
+        {
+          "from": [12, "Then"],
+          "to": [14, "In"]
+        },
+        {
+          "from": [13, "Result"],
+          "to": [14, "String"]
+        },
+        {
+          "from": [15, "Folder"],
+          "to": [16, "A"]
+        },
+        {
+          "from": [14, "Then"],
+          "to": [17, "In"]
+        },
+        {
+          "from": [16, "Path"],
+          "to": [17, "Path"]
+        },
+        {
+          "from": [17, "Then"],
+          "to": [18, "In"]
+        },
+        {
+          "from": [17, "File"],
+          "to": [18, "Target"]
+        },
+        {
+          "from": [2, "Bytes"],
+          "to": [18, "Bytes"]
+        },
+        {
+          "from": [18, "Then"],
+          "to": [19, "In"]
+        },
+        {
+          "from": [17, "File"],
+          "to": [19, "Target"]
+        },
+        {
+          "from": [19, "Then"],
+          "to": [20, "In"]
+        },
+        {
+          "from": [16, "Path"],
+          "to": [20, "Path"]
+        },
+        {
+          "from": [20, "Then"],
+          "to": [21, "In"]
+        },
+        {
+          "from": [20, "File"],
+          "to": [21, "Target"]
+        },
+        {
+          "from": [21, "Then"],
+          "to": [22, "In"]
+        },
+        {
+          "from": [20, "File"],
+          "to": [22, "Target"]
+        },
+        {
+          "from": [21, "Bytes"],
+          "to": [23, "Bytes"]
+        },
+        {
+          "from": [23, "Text"],
+          "to": [24, "B"]
+        },
+        {
+          "from": [22, "Then"],
+          "to": [25, "In"]
+        },
+        {
+          "from": [24, "Result"],
+          "to": [25, "String"]
+        },
+        {
+          "from": [17, "Failed"],
+          "to": [26, "In"]
+        },
+        {
+          "from": [17, "Error"],
+          "to": [26, "String"]
+        },
+        {
+          "from": [20, "Failed"],
+          "to": [27, "In"]
+        },
+        {
+          "from": [20, "Error"],
+          "to": [27, "String"]
+        }
+      ],
+      "comments": [
+        {
+          "id": 1,
+          "text": "A binary file: written, then read back",
+          "x": 1630.0,
+          "y": -60.0,
+          "w": 1840.0,
+          "h": 160.0,
+          "color": 4878245
+        }
+      ]
+    }
+  ]
+}

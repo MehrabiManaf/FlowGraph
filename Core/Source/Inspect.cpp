@@ -30,6 +30,8 @@ const TypeDesc* dynamicType(const Registry& reg, const Value& v) {
     case Value::Kind::Int: return reg.tInt();
     case Value::Kind::Float: return reg.tFloat();
     case Value::Kind::String: return reg.tString();
+    case Value::Kind::Bytes: return reg.tBytes();
+    case Value::Kind::Struct: return v.structPtr()->type.get();
     case Value::Kind::Object: return v.objectPtr()->type;
     case Value::Kind::Array: return reg.arrayOf(v.arrayPtr()->elem);
     case Value::Kind::Map: return reg.mapOf(v.mapPtr()->key, v.mapPtr()->val);
@@ -98,13 +100,27 @@ void fillChildren(const Registry& reg, ValueView& out, const Value& v, const Ins
         out.truncated = to < m->items.size();
         return;
     }
+    case Value::Kind::Struct: {                              // its fields, by name
+        const StructData* d = v.structPtr();
+        if (!d->type) return;
+        to = std::min(to, d->fields.size());
+        for (size_t i = from; i < to && i < d->type->fields.size(); ++i) {
+            const FieldDesc& f = d->type->fields[i];
+            ValueView c;
+            c.name = f.name;
+            fill(reg, c, d->fields[i], f.type, opt, childDepth, path.empty() ? std::string() : path + "." + f.name);
+            out.children.push_back(std::move(c));
+        }
+        out.truncated = to < d->fields.size();
+        return;
+    }
     default: return;
     }
 }
 
 void fill(const Registry& reg, ValueView& out, const Value& v, const TypeDesc* declared, const InspectOptions& opt, int depth, const std::string& path) {
     const TypeDesc* t = dynamicType(reg, v);
-    if (!t) t = declared;
+    if (!t || (declared && declared->kind == TypeKind::Byte && v.isInt())) t = declared;   // a byte is held as an int
     out.type = t ? t->name : (declared ? declared->name : "null");
     out.path = path;
     switch (v.kind()) {
@@ -131,6 +147,14 @@ void fill(const Registry& reg, ValueView& out, const Value& v, const TypeDesc* d
         if (depth >= opt.maxDepth) return;
         fillChildren(reg, out, v, opt, depth + 1, path, 0, opt.maxItems);
         return;
+    case Value::Kind::Struct: {                              // Point{X: 1, Y: 2}, or its name when that is long
+        out.total = v.structPtr()->fields.size();
+        out.text = v.toString();
+        if (out.text.size() > 80) out.text = out.type;
+        if (depth >= opt.maxDepth) return;
+        fillChildren(reg, out, v, opt, depth + 1, path, 0, opt.maxItems);
+        return;
+    }
     default:
         out.text = reg.toString(v, declared ? declared : t);
         return;
@@ -329,7 +353,14 @@ EvalResult evaluateExpression(const Instance& inst, const Task* task, size_t fra
     try {
         for (size_t s = 0; s < walk; ++s) {
             const Step& st = steps[s];
-            if (st.kind == Step::Kind::Property) {
+            if (st.kind == Step::Kind::Property && cur->isStruct()) {     // a field of a struct
+                const StructData* d = cur->structPtr();
+                const int i = d->type ? d->type->fieldIndex(st.name) : -1;
+                if (i < 0) { res.error = "'" + path + "' has no field '" + st.name + "'"; return res; }
+                cur = &d->fields[static_cast<size_t>(i)];
+                declared = d->type->fields[static_cast<size_t>(i)].type;
+                path += "." + st.name;
+            } else if (st.kind == Step::Kind::Property) {
                 const ObjectHandle* h = cur->objectPtr();
                 if (!h || !h->type) { res.error = "'" + path + "' has no properties"; return res; }
                 const PropertyDesc* found = nullptr;

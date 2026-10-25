@@ -136,10 +136,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">검색과 일치하는 항목이 없습니다.</translation>
     </message>
     <message>
-        <source>Select a variable, function or node to see its properties.</source>
-        <translation type="unfinished">변수, 함수 또는 노드를 선택하면 속성이 표시됩니다.</translation>
-    </message>
-    <message>
         <source>The variable no longer exists.</source>
         <translation type="unfinished">이 변수는 더 이상 존재하지 않습니다.</translation>
     </message>
@@ -407,6 +403,70 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>%1 nodes selected</source>
         <translation type="unfinished">노드 %1개 선택됨</translation>
     </message>
+    <message>
+        <source>Hex, e.g. 48 65 6C 6C 6F</source>
+        <translation type="unfinished">16진수, 예: 48 65 6C 6C 6F</translation>
+    </message>
+    <message>
+        <source>Select a variable, function, struct or node to see its properties.</source>
+        <translation type="unfinished">변수, 함수, 구조체 또는 노드를 선택하면 속성이 표시됩니다.</translation>
+    </message>
+    <message>
+        <source>Each field starts with the default of the struct.</source>
+        <translation type="unfinished">각 필드는 구조체의 기본값으로 시작합니다.</translation>
+    </message>
+    <message>
+        <source>The struct no longer exists.</source>
+        <translation type="unfinished">이 구조체는 더 이상 존재하지 않습니다.</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">구조체</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">구조체 이름 바꾸기</translation>
+    </message>
+    <message>
+        <source>Fields</source>
+        <translation type="unfinished">필드</translation>
+    </message>
+    <message>
+        <source>Field names must be unique and not empty.</source>
+        <translation type="unfinished">필드 이름은 고유해야 하며 비어 있으면 안 됩니다.</translation>
+    </message>
+    <message>
+        <source>Edit fields</source>
+        <translation type="unfinished">필드 편집</translation>
+    </message>
+    <message>
+        <source>Add field</source>
+        <translation type="unfinished">필드 추가</translation>
+    </message>
+    <message>
+        <source>Remove field</source>
+        <translation type="unfinished">필드 제거</translation>
+    </message>
+    <message>
+        <source>Move field</source>
+        <translation type="unfinished">필드 이동</translation>
+    </message>
+    <message>
+        <source>Add a field with the + of Fields.</source>
+        <translation type="unfinished">필드의 + 로 필드를 추가하세요.</translation>
+    </message>
+    <message>
+        <source>Field: %1</source>
+        <translation type="unfinished">필드: %1</translation>
+    </message>
+    <message>
+        <source>Change field</source>
+        <translation type="unfinished">필드 변경</translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation type="unfinished">필드</translation>
+    </message>
 </context>
 <context>
     <name>fged::DiagnosticsPanel</name>
@@ -440,6 +500,18 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>EventGraph</source>
         <translation type="unfinished">이벤트 그래프</translation>
+    </message>
+    <message>
+        <source>A struct name is one word, without spaces or &lt; &gt; ,</source>
+        <translation type="unfinished">구조체 이름은 공백이나 &lt; &gt; , 가 없는 한 단어입니다</translation>
+    </message>
+    <message>
+        <source>A struct with that name exists.</source>
+        <translation type="unfinished">같은 이름의 구조체가 이미 있습니다.</translation>
+    </message>
+    <message>
+        <source>A type of this application has that name.</source>
+        <translation type="unfinished">이 애플리케이션의 형식 중에 같은 이름이 있습니다.</translation>
     </message>
 </context>
 <context>
@@ -488,16 +560,16 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">%1의 참조</translation>
     </message>
     <message>
-        <source>Type to search, or use Find References on a node, variable or function.</source>
-        <translation type="unfinished">입력하여 검색하거나, 노드, 변수 또는 함수에서 참조 찾기를 사용하세요.</translation>
-    </message>
-    <message>
         <source>nothing found</source>
         <translation type="unfinished">찾은 항목 없음</translation>
     </message>
     <message>
         <source>%1 found</source>
         <translation type="unfinished">%1개 찾음</translation>
+    </message>
+    <message>
+        <source>Type to search, or use Find References on a node, variable, function or struct.</source>
+        <translation type="unfinished">입력하여 검색하거나, 노드, 변수, 함수 또는 구조체에서 참조 찾기를 사용하세요.</translation>
     </message>
 </context>
 <context>
@@ -716,14 +788,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">검색</translation>
     </message>
     <message>
-        <source>Shows only the events, functions and variables whose name contains this text</source>
-        <translation type="unfinished">이름에 이 텍스트가 들어 있는 이벤트, 함수, 변수만 표시합니다</translation>
-    </message>
-    <message>
-        <source>Add a function or a variable</source>
-        <translation type="unfinished">함수 또는 변수 추가</translation>
-    </message>
-    <message>
         <source>Event Graphs</source>
         <translation type="unfinished">이벤트 그래프</translation>
     </message>
@@ -822,6 +886,30 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>Add local variable</source>
         <translation type="unfinished">지역 변수 추가</translation>
+    </message>
+    <message>
+        <source>Shows only the events, functions, variables and structs whose name contains this text</source>
+        <translation type="unfinished">이름에 이 텍스트가 들어 있는 이벤트, 함수, 변수, 구조체만 표시합니다</translation>
+    </message>
+    <message>
+        <source>Add a function, a variable or a struct</source>
+        <translation type="unfinished">함수, 변수 또는 구조체 추가</translation>
+    </message>
+    <message>
+        <source>Structs</source>
+        <translation type="unfinished">구조체</translation>
+    </message>
+    <message>
+        <source>Struct</source>
+        <translation type="unfinished">구조체</translation>
+    </message>
+    <message>
+        <source>Rename struct</source>
+        <translation type="unfinished">구조체 이름 바꾸기</translation>
+    </message>
+    <message>
+        <source>Add struct</source>
+        <translation type="unfinished">구조체 추가</translation>
     </message>
 </context>
 <context>
@@ -1109,10 +1197,6 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <translation type="unfinished">%2의 참조 %1개</translation>
     </message>
     <message>
-        <source>Select a node, or a variable or function in My Script, to find its references</source>
-        <translation type="unfinished">참조를 찾으려면 노드, 또는 내 스크립트의 변수나 함수를 선택하세요</translation>
-    </message>
-    <message>
         <source>%1 theme</source>
         <translation type="unfinished">%1 테마</translation>
     </message>
@@ -1259,6 +1343,14 @@ Locals and parameters of the selected stack frame are found first, then the vari
     <message>
         <source>Nothing to run: add an event to a graph (this application offers: %1 entries).</source>
         <translation type="unfinished">실행할 것이 없습니다: 그래프에 이벤트를 추가하세요(이 애플리케이션이 제공하는 것: 진입점 %1개).</translation>
+    </message>
+    <message>
+        <source>F&amp;ull Screen</source>
+        <translation type="unfinished">전체 화면(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
+        <translation type="unfinished">참조를 찾으려면 노드, 또는 내 스크립트의 변수, 함수나 구조체를 선택하세요</translation>
     </message>
 </context>
 <context>

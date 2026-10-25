@@ -97,7 +97,11 @@ FindPanel::FindPanel(Document* doc, QWidget* parent) : QWidget(parent), doc_(doc
         if (auto* first = tree_->topLevelItem(0)) emit tree_->itemActivated(first, 0);
     });
     connect(tree_, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem* it, int) {
-        if (it) emit activated(it->data(0, Qt::UserRole).toString(), it->data(0, Qt::UserRole + 1).toInt());
+        if (!it) return;
+        if (const int declaration = it->data(0, Qt::UserRole + 2).toInt())
+            emit declarationActivated(declaration, it->data(0, Qt::UserRole).toString(), it->data(0, Qt::UserRole + 3).toString());
+        else
+            emit activated(it->data(0, Qt::UserRole).toString(), it->data(0, Qt::UserRole + 1).toInt());
     });
     connect(doc_, &Document::compiled, this, [this] { refresh(); });
     refresh();
@@ -145,8 +149,10 @@ void FindPanel::refresh() {
         it->setToolTip(2, qs(r.detail));
         it->setData(0, Qt::UserRole, qs(r.graph));
         it->setData(0, Qt::UserRole + 1, r.node);
+        it->setData(0, Qt::UserRole + 2, int(r.declaration));
+        it->setData(0, Qt::UserRole + 3, qs(r.title));
     }
-    if (what.isEmpty()) summary_->setText(tr("Type to search, or use Find References on a node, variable or function."));
+    if (what.isEmpty()) summary_->setText(tr("Type to search, or use Find References on a node, variable, function or struct."));
     else summary_->setText(what + ": " + (refs.empty() ? tr("nothing found") : tr("%1 found").arg(refs.size())));
 }
 

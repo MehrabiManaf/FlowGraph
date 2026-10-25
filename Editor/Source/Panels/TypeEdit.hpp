@@ -1,18 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
-#include <FlowGraph/Registry.hpp>
+#include <FlowGraph/TypeScope.hpp>
 
 #include <QComboBox>
 
 namespace fged {
 
-// Editable combo box listing the registry's types (plus array<..> / map<string,..> variants).
-// It only accepts type expressions the registry understands.
+// Editable combo box listing the types a script can use: the registry's and the script's structs. The container (array / map) is
+// chosen elsewhere. It only accepts type expressions the scope understands.
 class TypeEdit : public QComboBox {
     Q_OBJECT
 public:
-    TypeEdit(const fg::Registry& reg, QWidget* parent = nullptr, bool allowVoidlessAny = true);
+    TypeEdit(std::shared_ptr<const fg::TypeScope> types, QWidget* parent = nullptr);
     QString type() const { return current_; }
     void setType(const QString& t);
 
@@ -21,7 +21,7 @@ signals:
 
 private:
     void commit();
-    const fg::Registry& reg_;
+    std::shared_ptr<const fg::TypeScope> types_;
     QString current_;
 };
 
