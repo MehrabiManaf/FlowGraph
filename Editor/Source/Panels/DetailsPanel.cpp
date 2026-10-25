@@ -191,6 +191,12 @@ DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), do
 void DetailsPanel::showNothing() { mode_ = Mode::None; rebuild(); }
 void DetailsPanel::showVariable(const QString& owner, const QString& name) { mode_ = Mode::Variable; owner_ = owner; name_ = name; rebuild(); }
 void DetailsPanel::showGraph(const QString& name) { mode_ = Mode::Graph; name_ = name; rebuild(); }
+void DetailsPanel::showStruct(const QString& name) {
+    if (mode_ != Mode::Struct || name_ != name) fieldRow_ = 0;
+    mode_ = Mode::Struct;
+    name_ = name;
+    rebuild();
+}
 void DetailsPanel::showNodes(const QString& graph, const QList<int>& ids) {
     if (mode_ == Mode::Nodes && owner_ == graph && ids_ == ids && !ids.isEmpty()) return;
     mode_ = ids.isEmpty() ? Mode::None : Mode::Nodes;
@@ -213,9 +219,10 @@ void DetailsPanel::clearForm() {
 void DetailsPanel::rebuild() {
     clearForm();
     switch (mode_) {
-    case Mode::None: form_->addRow(dim(tr("Select a variable, function or node to see its properties."))); break;
+    case Mode::None: form_->addRow(dim(tr("Select a variable, function, struct or node to see its properties."))); break;
     case Mode::Variable: buildVariable(); break;
     case Mode::Graph: buildGraph(); break;
+    case Mode::Struct: buildStruct(); break;
     case Mode::Nodes: buildNodes(); break;
     }
     applyFilter();
@@ -272,6 +279,41 @@ void DetailsPanel::applyFilter() {
     noMatch_->setVisible(!text.isEmpty() && total > 0 && shown == 0);
 }
 
+// An editor of a value of a primitive type or an enum (a default): null for the other types. `stored` is what the script has (null:
+// the default of the type); `set` is called with the new value.
+QWidget* DetailsPanel::valueEditor(const fg::TypeDesc* t, const fg::Value& stored, std::function<void(const fg::Value&)> set) {
+    if (!t || !(t->isPrimitive() || t->isEnum())) return nullptr;
+    const fg::Registry& reg = doc_->registry();
+    fg::CompiledPin cp;
+    cp.type = t;
+    try { cp.def = stored.isNull() ? reg.defaultValue(t) : reg.convert(stored, t); }
+    catch (...) { cp.def = reg.defaultValue(t); }
+    if (t->isEnum() && !t->hasEnumValue(cp.def.toInt())) cp.def = reg.defaultValue(t);     // what the compiler uses too
+    if (t->isEnum() && !t->enumValues.empty()) {
+        // the names of the values to choose from, never a bare number
+        auto* box = new QComboBox;
+        for (auto& e : t->enumValues) {
+            box->addItem(enumValueText(t->name, e.name), qlonglong(e.value));
+            if (!e.doc.empty()) box->setItemData(box->count() - 1, qs(e.doc), Qt::ToolTipRole);
+        }
+        box->setCurrentIndex(std::max(0, box->findData(qlonglong(cp.def.toInt()))));
+        connect(box, qOverload<int>(&QComboBox::activated), this, [=](int i) { set(fg::Value(int64_t(box->itemData(i).toLongLong()))); });
+        return box;
+    }
+    if (t->kind == fg::TypeKind::Bool) {
+        auto* cb = new QCheckBox;
+        cb->setChecked(cp.def.toBool());
+        connect(cb, &QCheckBox::toggled, this, [=](bool on) { set(fg::Value(on)); });
+        return cb;
+    }
+    auto* le = new QLineEdit(t->isEnum() ? qs(t->enumName(cp.def.toInt()))
+                             : t->kind == fg::TypeKind::Bytes ? defaultText(cp)       // bytes as hex: 48 65 6C
+                             : qs(cp.def.toString() == "null" ? "" : (cp.def.isString() ? cp.def.str() : cp.def.toString())));
+    if (t->kind == fg::TypeKind::Bytes) le->setPlaceholderText(tr("Hex, e.g. 48 65 6C 6C 6F"));
+    connect(le, &QLineEdit::editingFinished, this, [=, this] { set(RunController::parseArgument(doc_->registry(), t, le->text())); });
+    return le;
+}
+
 // ------------------------------------------------------------------ variables
 void DetailsPanel::buildVariable() {
     const fg::Script& s = doc_->script();
@@ -311,12 +353,12 @@ void DetailsPanel::buildVariable() {
 
     {
         TypeSpec spec = TypeSpec::parse(qs(v->type));
-        auto* valueEdit = new TypeEdit(doc_->registry());
+        auto* valueEdit = new TypeEdit(doc_->types());
         valueEdit->setType(spec.value);
         auto* containerBox = new QComboBox;
         containerBox->addItems({containerName(0), containerName(1), containerName(2)});
         containerBox->setCurrentIndex(int(spec.container));
-        auto* keyEdit = new TypeEdit(doc_->registry());
+        auto* keyEdit = new TypeEdit(doc_->types());
         keyEdit->setType(spec.key);
         auto apply = [=, this]() {
             TypeSpec ns;
@@ -340,45 +382,13 @@ void DetailsPanel::buildVariable() {
         if (spec.container == TypeSpec::Container::Map) form_->addRow(tr("Key type"), keyEdit);
     }
 
-    const fg::TypeDesc* t = doc_->registry().findType(v->type);
-    if (t && (t->isPrimitive() || t->isEnum())) {
-        fg::CompiledPin cp;
-        cp.type = t;
-        try { cp.def = v->def.isNull() ? doc_->registry().defaultValue(t) : doc_->registry().convert(v->def, t); }
-        catch (...) { cp.def = doc_->registry().defaultValue(t); }
-        if (t->isEnum() && !t->hasEnumValue(cp.def.toInt())) cp.def = doc_->registry().defaultValue(t);     // what the compiler uses too
-        if (t->isEnum() && !t->enumValues.empty()) {
-            // the names of the values to choose from, never a bare number
-            auto* box = new QComboBox;
-            for (auto& e : t->enumValues) {
-                box->addItem(enumValueText(t->name, e.name), qlonglong(e.value));
-                if (!e.doc.empty()) box->setItemData(box->count() - 1, qs(e.doc), Qt::ToolTipRole);
-            }
-            box->setCurrentIndex(std::max(0, box->findData(qlonglong(cp.def.toInt()))));
-            connect(box, qOverload<int>(&QComboBox::activated), this, [=, this](int i) {
-                const fg::Value nv(int64_t(box->itemData(i).toLongLong()));
-                mutate([&](fg::VariableDecl& d) { d.def = nv; }, tr("Edit default value"), "vardef:" + name_);
-            });
-            form_->addRow(tr("Default"), box);
-        } else if (t->kind == fg::TypeKind::Bool) {
-            auto* cb = new QCheckBox;
-            cb->setChecked(cp.def.toBool());
-            connect(cb, &QCheckBox::toggled, this, [=, this](bool on) { mutate([&](fg::VariableDecl& d) { d.def = fg::Value(on); }, tr("Edit default value"), "vardef:" + name_); });
-            form_->addRow(tr("Default"), cb);
-        } else {
-            auto* le = new QLineEdit(t->isEnum() ? qs(t->enumName(cp.def.toInt()))
-                                     : t->kind == fg::TypeKind::Bytes ? defaultText(cp)       // bytes as hex: 48 65 6C
-                                     : qs(cp.def.toString() == "null" ? "" : (cp.def.isString() ? cp.def.str() : cp.def.toString())));
-            if (t->kind == fg::TypeKind::Bytes) le->setPlaceholderText(tr("Hex, e.g. 48 65 6C 6C 6F"));
-            connect(le, &QLineEdit::editingFinished, this, [=, this] {
-                fg::Value nv = RunController::parseArgument(doc_->registry(), t, le->text());
-                mutate([&](fg::VariableDecl& d) { d.def = nv; }, tr("Edit default value"), "vardef:" + name_);
-            });
-            form_->addRow(tr("Default"), le);
-        }
-    } else {
-        form_->addRow(tr("Default"), dim(t && t->isContainer() ? tr("Containers start empty.") : tr("Objects start as null.")));
-    }
+    const fg::TypeDesc* t = doc_->types()->findType(v->type);
+    if (QWidget* def = valueEditor(t, v->def, [=, this](const fg::Value& nv) { mutate([&](fg::VariableDecl& d) { d.def = nv; }, tr("Edit default value"), "vardef:" + name_); }))
+        form_->addRow(tr("Default"), def);
+    else
+        form_->addRow(tr("Default"), dim(t && t->isStruct()      ? tr("Each field starts with the default of the struct.")
+                                         : t && t->isContainer() ? tr("Containers start empty.")
+                                                                 : tr("Objects start as null.")));
     auto* cat = new QLineEdit(qs(v->category));
     connect(cat, &QLineEdit::editingFinished, this, [=, this] { mutate([&](fg::VariableDecl& d) { d.category = ss(cat->text()); }, tr("Edit category"), "varcat:" + name_); });
     form_->addRow(tr("Category"), cat);
@@ -451,7 +461,7 @@ private:
 // containers) or a line edit (names) appears, and the check columns toggle on a click.
 class ParamDelegate : public QStyledItemDelegate {
 public:
-    ParamDelegate(const fg::Registry& reg, QObject* parent) : QStyledItemDelegate(parent), reg_(reg) {}
+    ParamDelegate(std::shared_ptr<const fg::TypeScope> types, QObject* parent) : QStyledItemDelegate(parent), types_(std::move(types)) {}
 
     QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         switch (index.column()) {
@@ -487,7 +497,7 @@ public:
         auto* box = qobject_cast<QComboBox*>(editor);
         if (!box) return QStyledItemDelegate::setModelData(editor, model, index);
         QString text = box->currentText().trimmed();
-        if (box->isEditable() && !reg_.findType(ss(text))) return;       // only types the registry knows
+        if (box->isEditable() && !types_->findType(ss(text))) return;    // only types the script can use
         model->setData(index, text, Qt::EditRole);
     }
 
@@ -565,7 +575,7 @@ private:
         auto* box = new PopupCombo(parent);
         box->setEditable(true);
         box->setInsertPolicy(QComboBox::NoInsert);
-        for (auto* t : reg_.types()) box->addItem(qs(t->name));
+        for (auto* t : types_->types()) box->addItem(qs(t->name));
         if (box->completer()) box->completer()->setCaseSensitivity(Qt::CaseInsensitive);
         QObject::connect(box, qOverload<int>(&QComboBox::activated), box, [this, box](int) { if (!box->justOpened()) finish(box); });
         // A choice or Return ends the edit; so does moving the focus to another widget - but not while the list is open, and not
@@ -583,7 +593,7 @@ private:
         emit self->commitData(editor);
         emit self->closeEditor(editor, QAbstractItemDelegate::NoHint);
     }
-    const fg::Registry& reg_;
+    std::shared_ptr<const fg::TypeScope> types_;
 };
 
 // Tooltips (they replace the header) and the look of the Key cell, which only means something for maps.
@@ -617,7 +627,7 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
     constexpr int kRowHeight = 24;
     const int columns = inputs ? ColCount : ColRef;
     auto* table = new QTableWidget(int(params.size()), columns);
-    table->setItemDelegate(new ParamDelegate(doc_->registry(), table));
+    table->setItemDelegate(new ParamDelegate(doc_->types(), table));
     table->horizontalHeader()->hide();                  // the column names are in the tooltips of the cells
     table->verticalHeader()->hide();
     table->verticalHeader()->setDefaultSectionSize(kRowHeight);
@@ -681,6 +691,131 @@ QTableWidget* DetailsPanel::buildParamTable(bool inputs, const std::vector<fg::P
         apply(collect());
     });
     return table;
+}
+
+// ------------------------------------------------------------------ structs
+// A struct of the script: name, description and fields. The fields are edited like the outputs of a function (name, type, container);
+// the default and the description of the field selected in the table are edited below it.
+void DetailsPanel::buildStruct() {
+    const fg::StructDecl* st = doc_->script().findStruct(ss(name_));
+    if (!st) { form_->addRow(dim(tr("The struct no longer exists."))); return; }
+    form_->addRow(heading(tr("Struct")));
+    auto* nameEdit = new QLineEdit(qs(st->name));
+    connect(nameEdit, &QLineEdit::editingFinished, this, [this, nameEdit] {
+        const QString nn = nameEdit->text().trimmed();
+        if (nn == name_) { nameEdit->setText(name_); return; }
+        const QString problem = doc_->structNameProblem(nn, name_);
+        if (!problem.isEmpty()) { QMessageBox::warning(this, tr("Rename"), problem); nameEdit->setText(name_); return; }
+        const QString old = name_;
+        edit(tr("Rename struct"), [&](fg::Script& s) { s.renameStruct(ss(old), ss(nn)); });
+        name_ = nn;
+    });
+    form_->addRow(tr("Name"), nameEdit);
+    auto mutate = [this](const std::function<void(fg::StructDecl&)>& fn, const QString& label, const QString& key, bool rebuildAfter = false) {
+        const QString name = name_;
+        edit(label, [=](fg::Script& s) { if (auto* d = s.findStruct(ss(name))) fn(*d); }, key, rebuildAfter);
+    };
+    auto* docEdit = new QLineEdit(qs(st->doc));
+    connect(docEdit, &QLineEdit::editingFinished, this, [=, this] {
+        const std::string text = ss(docEdit->text());
+        mutate([&](fg::StructDecl& d) { d.doc = text; }, tr("Edit description"), "structdoc:" + name_);
+    });
+    form_->addRow(tr("Description"), docEdit);
+
+    std::vector<fg::ParamDecl> params;
+    for (auto& f : st->fields) params.push_back({f.name, f.type, false, false, f.def});
+    const QString sname = name_;
+    auto apply = [this, sname](std::vector<fg::ParamDecl> np) {
+        const fg::StructDecl* cur = doc_->script().findStruct(ss(sname));
+        if (!cur || cur->fields.size() != np.size()) return;
+        std::set<std::string> names;
+        for (auto& p : np)
+            if (p.name.empty() || !names.insert(p.name).second) {
+                QMessageBox::warning(this, tr("Fields"), tr("Field names must be unique and not empty."));
+                QTimer::singleShot(0, this, [this] { rebuild(); });
+                return;
+            }
+        const std::vector<fg::FieldDecl> old = cur->fields;
+        edit(tr("Edit fields"), [&](fg::Script& s) {
+            for (size_t i = 0; i < np.size(); ++i) {
+                if (old[i].name != np[i].name) s.renameField(ss(sname), old[i].name, np[i].name);
+                if (old[i].type != np[i].type) s.retypeField(ss(sname), np[i].name, np[i].type);
+            }
+        }, QString(), true);
+    };
+    auto* table = buildParamTable(false, params, apply);
+    // a panel like the parameters of a function: "+" adds a field, Move / Remove are in the right click menu
+    auto* panel = new CCollapsiblePanel(tr("Fields"), nullptr, true);
+    panel->AddWidget(table);
+    panel->ExpandImmediately();
+    connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [=, this] {
+        const fg::StructDecl* cur = doc_->script().findStruct(ss(sname));
+        if (!cur) return;
+        std::string n = "Field";
+        for (int i = 1; cur->findField(n); ++i) n = "Field" + std::to_string(i);
+        fieldRow_ = int(cur->fields.size());
+        mutate([&](fg::StructDecl& d) { d.fields.push_back({n, "int", fg::Value(), ""}); }, tr("Add field"), QString(), true);
+    });
+    table->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table, &QWidget::customContextMenuRequested, this, [this, sname, table](const QPoint& pos) {
+        const int row = table->rowAt(pos.y());
+        if (row < 0) return;
+        table->selectRow(row);
+        const fg::StructDecl* cur = doc_->script().findStruct(ss(sname));
+        if (!cur || size_t(row) >= cur->fields.size()) return;
+        QMenu menu;
+        QAction* up = menu.addAction(tr("Move Up"));
+        QAction* down = menu.addAction(tr("Move Down"));
+        menu.addSeparator();
+        QAction* remove = menu.addAction(tr("Remove"));
+        up->setEnabled(row > 0);
+        down->setEnabled(size_t(row) + 1 < cur->fields.size());
+        QAction* a = menu.exec(table->viewport()->mapToGlobal(pos));
+        if (!a) return;
+        const std::string field = cur->fields[size_t(row)].name;
+        if (a == remove) {
+            edit(tr("Remove field"), [&](fg::Script& s) { s.removeField(ss(sname), field); }, QString(), true);
+            return;
+        }
+        // the order of the fields is the order of the pins of Make and Break; their links stay (they are by name)
+        const int to = a == up ? row - 1 : row + 1;
+        fieldRow_ = to;
+        edit(tr("Move field"), [&](fg::Script& s) {
+            if (auto* d = s.findStruct(ss(sname))) std::swap(d->fields[size_t(row)], d->fields[size_t(to)]);
+        }, QString(), true);
+    });
+    form_->addRow(panel);
+
+    // the field chosen in the table: its default and its description
+    if (st->fields.empty()) { form_->addRow(dim(tr("Add a field with the + of Fields."))); return; }
+    const int row = std::clamp(fieldRow_, 0, int(st->fields.size()) - 1);
+    {
+        QSignalBlocker block(table);
+        table->selectRow(row);
+    }
+    const fg::FieldDecl& f = st->fields[size_t(row)];
+    form_->addRow(heading(tr("Field: %1").arg(qs(f.name))));
+    const std::string field = f.name;
+    const fg::TypeDesc* ft = doc_->types()->findType(f.type);
+    if (QWidget* def = valueEditor(ft, f.def, [=](const fg::Value& nv) {
+            mutate([&](fg::StructDecl& d) { if (auto* x = d.findField(field)) x->def = nv; }, tr("Edit default value"), "fielddef:" + sname + "." + qs(field));
+        }))
+        form_->addRow(tr("Default"), def);
+    else
+        form_->addRow(tr("Default"), dim(ft && ft->isStruct()      ? tr("Each field starts with the default of the struct.")
+                                         : ft && ft->isContainer() ? tr("Containers start empty.")
+                                                                   : tr("Objects start as null.")));
+    auto* fieldDoc = new QLineEdit(qs(f.doc));
+    connect(fieldDoc, &QLineEdit::editingFinished, this, [=] {
+        const std::string text = ss(fieldDoc->text());
+        mutate([&](fg::StructDecl& d) { if (auto* x = d.findField(field)) x->doc = text; }, tr("Edit description"), "fielddoc:" + sname + "." + qs(field));
+    });
+    form_->addRow(tr("Description"), fieldDoc);
+    connect(table, &QTableWidget::currentCellChanged, this, [this](int r, int, int previous, int) {
+        if (r < 0 || r == previous || r == fieldRow_) return;
+        fieldRow_ = r;
+        QTimer::singleShot(0, this, [this] { rebuild(); });
+    });
 }
 
 // ------------------------------------------------------------------ graphs / functions
@@ -967,6 +1102,24 @@ void DetailsPanel::buildNodes() {
     }
     if (cn->op == fg::NodeOp::GetVariable || cn->op == fg::NodeOp::SetVariable)
         form_->addRow(tr("Variable"), new QLabel(qs(node->prop("name")) + "  (" + qs(node->prop("scope")) + ")"));
+    if (cn->defId.rfind("struct.", 0) == 0) {
+        form_->addRow(tr("Struct"), new QLabel(qs(node->prop("struct"))));
+        const fg::StructDecl* st = doc_->script().findStruct(node->prop("struct"));
+        if (cn->defId == "struct.set" && st) {
+            // the field it changes: another one keeps the struct's link, its value is cleared (it was of the old field's type)
+            auto* combo = new QComboBox;
+            for (auto& f : st->fields) combo->addItem(qs(f.name) + "  (" + qs(f.type) + ")", qs(f.name));
+            const QString current = qs(node->prop("field"));
+            if (combo->findData(current) < 0) combo->addItem(current, current);
+            combo->setCurrentIndex(combo->findData(current));
+            connect(combo, qOverload<int>(&QComboBox::activated), this, [=](int i) {
+                const std::string v = ss(combo->itemData(i).toString());
+                if (v == ss(current)) return;
+                mutateNode([&](fg::Node& n) { n.props["field"] = v; n.defaults.erase("Value"); }, tr("Change field"), QString());
+            });
+            form_->addRow(tr("Field"), combo);
+        }
+    }
     // the settings of the node (NodeDef::settings): pin counts, the cases of a switch...
     if (cn->def)
         for (const fg::NodeSetting& setting : cn->def->settings) {
@@ -1021,7 +1174,7 @@ void DetailsPanel::buildNodes() {
             combo->addItem(resolved.isEmpty() ? tr("Auto") : tr("Auto (%1)").arg(resolved), QString());
             QStringList choices;
             if (!tp.allowed.empty()) for (auto& a : tp.allowed) choices << qs(a);
-            else for (auto* t : doc_->registry().types()) choices << qs(t->name);
+            else for (auto* t : doc_->types()->types()) choices << qs(t->name);
             for (auto& c : choices) combo->addItem(c, c);
             auto ex = node->typeArgs.find(tp.name);
             if (ex != node->typeArgs.end()) combo->setCurrentIndex(std::max(0, combo->findData(qs(ex->second))));

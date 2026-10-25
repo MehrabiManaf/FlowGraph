@@ -7,12 +7,12 @@
 
 namespace fged {
 
-TypeEdit::TypeEdit(const fg::Registry& reg, QWidget* parent, bool) : QComboBox(parent), reg_(reg) {
+TypeEdit::TypeEdit(std::shared_ptr<const fg::TypeScope> types, QWidget* parent) : QComboBox(parent), types_(std::move(types)) {
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
     // base types only: the container (array / map) is chosen in its own column
     QStringList items;
-    for (auto* t : reg.types()) items << QString::fromStdString(t->name);
+    for (auto* t : types_->types()) items << QString::fromStdString(t->name);
     addItems(items);
     if (completer()) completer()->setCaseSensitivity(Qt::CaseInsensitive);
     connect(lineEdit(), &QLineEdit::editingFinished, this, [this] { commit(); });
@@ -29,7 +29,7 @@ void TypeEdit::setType(const QString& t) {
 void TypeEdit::commit() {
     QString t = currentText().trimmed();
     if (t == current_) return;
-    if (!reg_.findType(t.toStdString())) {
+    if (!types_->findType(t.toStdString())) {
         setCurrentText(current_);
         return;
     }

@@ -236,6 +236,7 @@ void ScriptEditorWindow::createDocks() {
         case K::Variable: details_->showVariable("", name); break;
         case K::Local: details_->showVariable(owner, name); break;
         case K::Function: details_->showGraph(name); break;
+        case K::Struct: details_->showStruct(name); break;
         default: details_->showNothing(); break;
         }
     });
@@ -1212,6 +1213,7 @@ void ScriptEditorWindow::devSelect(const QString& spec) {
     if (p.size() == 3 && p[0] == "node") focusNode(p[1], p[2].toInt());
     else if (p.size() == 2 && p[0] == "var") details_->showVariable("", p[1]);
     else if (p.size() == 2 && p[0] == "graph") { openGraph(p[1]); details_->showGraph(p[1]); }
+    else if (p.size() == 2 && p[0] == "struct") details_->showStruct(p[1]);
     else if (p.size() == 2 && p[0] == "theme") applyTheme(*qApp, themeFromKey(p[1]));     // a switch while running; not saved
 }
 

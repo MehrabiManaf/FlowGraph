@@ -26,6 +26,20 @@ void Document::markDirty(bool d) {
     emit titleChanged();
 }
 
+std::shared_ptr<const fg::TypeScope> Document::types() const {
+    if (program_ && program_->types) return program_->types;
+    return std::make_shared<fg::TypeScope>(rt_.registry());
+}
+
+QString Document::structNameProblem(const QString& name, const QString& current) const {
+    const std::string n = name.toStdString();
+    const fg::TypeExpr e = fg::TypeExpr::parse(n);
+    if (n.empty() || !e.valid || !e.isPlain() || e.str() != n) return QCoreApplication::translate("fged::Document", "A struct name is one word, without spaces or < > ,");
+    if (name != current && script_.findStruct(n)) return QCoreApplication::translate("fged::Document", "A struct with that name exists.");
+    if (rt_.registry().findType(n)) return QCoreApplication::translate("fged::Document", "A type of this application has that name.");
+    return QString();
+}
+
 void Document::recompile() {
     loadPluginTranslations(rt_);                // plugins loaded since (a launch configuration's) bring their texts
     program_ = fg::compile(script_, rt_.registry());

@@ -31,6 +31,7 @@
         <file alias="function.svg">Icons/function.svg</file>
         <file alias="variable.svg">Icons/variable.svg</file>
         <file alias="local-variable.svg">Icons/local-variable.svg</file>
+        <file alias="struct.svg">Icons/struct.svg</file>
         <file alias="rename.svg">Icons/rename.svg</file>
         <file alias="goto.svg">Icons/goto.svg</file>
         <file alias="find.svg">Icons/find.svg</file>

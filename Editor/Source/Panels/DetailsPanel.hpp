@@ -12,7 +12,7 @@ class QTableWidget;
 
 namespace fged {
 
-// Property editor for whatever is selected: a variable, a function signature, a custom event or nodes.
+// Property editor for whatever is selected: a variable, a function signature, a struct, a custom event or nodes.
 class DetailsPanel : public QWidget {
     Q_OBJECT
 public:
@@ -21,21 +21,24 @@ public:
     void showNothing();
     void showVariable(const QString& graphOwner, const QString& name);   // empty owner = global variable
     void showGraph(const QString& name);
+    void showStruct(const QString& name);
     void showNodes(const QString& graph, const QList<int>& ids);
 
 signals:
     void graphRenamed(const QString& from, const QString& to);
 
 private:
-    enum class Mode { None, Variable, Graph, Nodes };
+    enum class Mode { None, Variable, Graph, Struct, Nodes };
 
     void rebuild();
     void applyFilter();         // hides the rows that do not contain the search text
     void clearForm();
     void edit(const QString& label, const std::function<void(fg::Script&)>& fn, const QString& key = QString(), bool rebuildAfter = false);
 
+    QWidget* valueEditor(const fg::TypeDesc* t, const fg::Value& stored, std::function<void(const fg::Value&)> set);
     void buildVariable();
     void buildGraph();
+    void buildStruct();
     void buildGraphFor(const QString& graphName);
     void buildNodes();
     void buildNodePins(const fg::Node& node, const fg::CompiledNode& cn, const QString& graph);
@@ -46,6 +49,7 @@ private:
     QString owner_, name_;
     QString graphTarget_;      // graph shown by the function editor (name_ or owner_)
     QList<int> ids_;
+    int fieldRow_ = 0;         // the field of the struct whose default and description are shown
     QFormLayout* form_ = nullptr;
     QWidget* body_ = nullptr;
     QLineEdit* search_ = nullptr;

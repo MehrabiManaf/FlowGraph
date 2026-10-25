@@ -1482,10 +1482,10 @@ TEST(adding_in_my_script_expands_the_section) {
     auto* panel = f.win.findChild<MyScriptPanel*>();
     CHECK(panel != nullptr);
     if (!panel) return;
-    const auto sections = panel->findChildren<CCollapsiblePanel*>();      // Event Graphs, Functions, Variables, Local Variables
+    const auto sections = panel->findChildren<CCollapsiblePanel*>();      // Event Graphs, Functions, Variables, Local Variables, Structs
     const auto trees = panel->findChildren<QTreeWidget*>();
-    CHECK(sections.size() == 4 && trees.size() >= 3);
-    if (sections.size() != 4 || trees.size() < 3) return;
+    CHECK(sections.size() == 5 && trees.size() >= 3);
+    if (sections.size() != 5 || trees.size() < 3) return;
     CCollapsiblePanel* functions = sections[1];
     CCollapsiblePanel* variables = sections[2];
     auto editing = [](QTreeWidget* tree, const QString& name) {     // the item is current and its name editor is open
@@ -1810,7 +1810,7 @@ TEST(theme_is_chosen_kept_and_applied_again) {
         {
             QToolButton* add = nullptr;
             for (auto* b : f.win.findChild<MyScriptPanel*>()->findChildren<QToolButton*>())
-                if (b->toolTip() == "Add a function or a variable") add = b;
+                if (b->toolTip() == "Add a function, a variable or a struct") add = b;
             CHECK(add != nullptr);
             if (add) CHECK(add->palette().color(QPalette::Button) == qApp->palette().color(QPalette::Button));
             CHECK(styled.palette().color(QPalette::Window) == qApp->palette().color(QPalette::Window));
@@ -1957,10 +1957,10 @@ TEST(event_list_shows_only_the_events_the_script_handles) {
     QCoreApplication::processEvents();
     CHECK(find("Tick") != nullptr);
     if (auto* tick = find("Tick")) CHECK(tick->text(1).contains("DeltaTime"));
-    // the section has no "+" button (functions, variables and local variables have one)
+    // the section has no "+" button (functions, variables, local variables and structs have one)
     int plus = 0;
     for (auto* b : panel.findChildren<QToolButton*>()) plus += b->text() == "+";
-    CHECK_EQ(plus, 4);                                 // those three and the "add" button next to the search box
+    CHECK_EQ(plus, 5);                                 // those four and the "add" button next to the search box
     // a second event graph (made by a file or a host) is not listed: the section holds events only, and there is no
     // way to create event graphs from it
     f.doc.edit("Second event graph", [](fg::Script& sc) { sc.addEventGraph("Other"); });
@@ -1984,8 +1984,8 @@ TEST(my_script_search_filters_and_the_add_button_offers_what_can_be_added) {
     panel.show();
     QCoreApplication::processEvents();
     auto trees = panel.findChildren<QTreeWidget*>();
-    CHECK_EQ(trees.size(), 4);
-    if (trees.size() != 4) return;
+    CHECK_EQ(trees.size(), 5);
+    if (trees.size() != 5) return;
     auto visibleRows = [](QTreeWidget* t) {
         int n = 0;
         for (QTreeWidgetItemIterator it(t); *it; ++it) n += !(*it)->isHidden();
@@ -2015,7 +2015,7 @@ TEST(my_script_search_filters_and_the_add_button_offers_what_can_be_added) {
     search->clear();
     QCoreApplication::processEvents();
     for (auto* t : trees) CHECK(t->isVisibleTo(&panel));
-    // the add button: function and variable always, local variable only while a function is selected
+    // the add button: function, variable and struct always, local variable only while a function is selected
     QToolButton* add = nullptr;
     for (auto* b : panel.findChildren<QToolButton*>()) if (b->menu()) add = b;
     CHECK(add != nullptr);
@@ -2027,18 +2027,117 @@ TEST(my_script_search_filters_and_the_add_button_offers_what_can_be_added) {
         return out;
     };
     auto withLocal = entries();
-    CHECK_EQ(withLocal.size(), 3);
-    CHECK(withLocal.value(0) == "Function" && withLocal.value(1) == "Variable" && withLocal.value(2).startsWith("Local Variable"));
+    CHECK_EQ(withLocal.size(), 4);
+    CHECK(withLocal.value(0) == "Function" && withLocal.value(1) == "Variable" && withLocal.value(2).startsWith("Local Variable") &&
+          withLocal.value(3) == "Struct");
     trees[0]->setCurrentItem(trees[0]->topLevelItem(0));      // an event is selected: no function any more
     QCoreApplication::processEvents();
     QCoreApplication::processEvents();
-    CHECK_EQ(entries().size(), 2);
+    CHECK_EQ(entries().size(), 3);
     // adding clears the search so that the new item is visible
     search->setText("Counter");
     add->menu()->actions().at(1)->trigger();
     QCoreApplication::processEvents();
     CHECK(search->text().isEmpty());
     CHECK_EQ(f.doc.script().variables.size(), size_t(3));
+}
+
+// A struct is added and renamed in My Script, its fields are edited in Details, its types are offered where a variable's type is
+// chosen and its nodes are in the palette.
+TEST(structs_are_made_in_my_script_and_edited_in_details) {
+    Fixture f;
+    MyScriptPanel panel(&f.doc);
+    panel.show();
+    QCoreApplication::processEvents();
+    QToolButton* add = nullptr;
+    for (auto* b : panel.findChildren<QToolButton*>()) if (b->menu()) add = b;
+    CHECK(add != nullptr);
+    if (!add) return;
+    emit add->menu()->aboutToShow();
+    for (auto* a : add->menu()->actions()) if (a->text() == "Struct") a->trigger();
+    QCoreApplication::processEvents();
+    CHECK(f.doc.script().findStruct("NewStruct") != nullptr);
+    // renamed in its list
+    auto trees = panel.findChildren<QTreeWidget*>();
+    CHECK_EQ(trees.size(), 5);
+    if (trees.size() != 5) return;
+    QTreeWidget* structs = trees[4];
+    CHECK_EQ(structs->topLevelItemCount(), 1);
+    if (structs->topLevelItemCount() != 1) return;
+    structs->closePersistentEditor(structs->topLevelItem(0), 0);
+    structs->topLevelItem(0)->setText(0, "Point");
+    QCoreApplication::processEvents();
+    CHECK(f.doc.script().findStruct("Point") && !f.doc.script().findStruct("NewStruct"));
+    // the names a struct cannot have
+    CHECK(f.doc.structNameProblem("Point").contains("exists"));
+    CHECK(f.doc.structNameProblem("Point", "Point").isEmpty());          // its own name
+    CHECK(!f.doc.structNameProblem("int").isEmpty());
+    CHECK(!f.doc.structNameProblem("two words").isEmpty());
+    CHECK(!f.doc.structNameProblem("array<int>").isEmpty());
+
+    // the fields, in Details: renaming and retyping a row, adding one
+    DetailsPanel details(&f.doc);
+    details.resize(500, 700);
+    details.show();
+    details.showStruct("Point");
+    QCoreApplication::processEvents();
+    auto fieldTable = [&]() -> QTableWidget* {
+        auto tables = details.findChildren<QTableWidget*>();
+        return tables.isEmpty() ? nullptr : tables.front();
+    };
+    QTableWidget* table = fieldTable();
+    CHECK(table && table->rowCount() == 1);
+    if (!table || table->rowCount() != 1) return;
+    table->item(0, 0)->setText("X");
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    CHECK(f.doc.script().findStruct("Point")->findField("X") != nullptr);
+    table = fieldTable();
+    if (!table) return;
+    table->item(0, 1)->setText("float");
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    CHECK_EQ(f.doc.script().findStruct("Point")->fields[0].type, std::string("float"));
+    f.doc.edit("Add Y", [](fg::Script& s) { s.findStruct("Point")->fields.push_back({"Y", "int", fg::Value(int64_t(7)), "down"}); });
+    details.showStruct("Point");
+    QCoreApplication::processEvents();
+    bool heading = false;
+    for (auto* l : details.findChildren<QLabel*>()) heading |= l->text() == "<b>Field: X</b>";
+    CHECK(heading);
+    CHECK(f.doc.program()->ok());
+
+    // a variable can be a Point
+    f.doc.edit("Variable", [](fg::Script& s) { s.variables.push_back({"P", "Point", fg::Value(), "", ""}); });
+    details.showVariable("", "P");
+    QCoreApplication::processEvents();
+    bool offered = false;
+    for (auto* box : details.findChildren<QComboBox*>()) offered |= box->isEditable() && box->findText("Point") >= 0;
+    CHECK(offered);
+    bool startsWithFields = false;
+    for (auto* l : details.findChildren<QLabel*>()) startsWithFields |= l->text().contains("default of the struct");
+    CHECK(startsWithFields);
+
+    // its nodes are in the palette; a Set Field node chooses its field in Details
+    auto all = f.palette();
+    const fg::NodeTemplate* set = nullptr;
+    for (auto& t : all) if (t.title == "Set Point.Y") set = &t;
+    CHECK(set != nullptr);
+    CHECK(std::any_of(all.begin(), all.end(), [](const fg::NodeTemplate& t) { return t.title == "Make Point"; }));
+    if (!set) return;
+    const fg::NodeId id = f.scene.addNodeFromTemplate(*set, QPointF(300, 300));
+    f.scene.sync();
+    CHECK(f.scene.nodeItem(id) != nullptr);
+    details.showNodes("EventGraph", {int(id)});
+    QCoreApplication::processEvents();
+    QComboBox* field = nullptr;
+    for (auto* box : details.findChildren<QComboBox*>()) if (box->findData("X") >= 0 && box->findData("Y") >= 0) field = box;
+    CHECK(field != nullptr);
+    if (!field) return;
+    CHECK_EQ(field->currentData().toString(), QString("Y"));
+    field->setCurrentIndex(field->findData("X"));
+    emit field->activated(field->currentIndex());
+    QCoreApplication::processEvents();
+    CHECK_EQ(f.graph().findNode(id)->prop("field"), std::string("X"));
 }
 
 TEST(details_search_shows_only_the_matching_properties) {

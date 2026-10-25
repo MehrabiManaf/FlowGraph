@@ -544,7 +544,7 @@ fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPoi
         filter.kind = from->kind;
         filter.dir = from->dir;
         filter.type = from->wildcard ? nullptr : from->type;
-        connect = fg::templateAccepts(registry(), t, filter, &pinName);
+        connect = fg::templateAccepts(registry(), t, filter, &pinName, doc_->types().get());
     }
     doc_->edit(tr("Add node"), [&](fg::Script& s) {
         fg::Graph* g = mutableGraph(s);
