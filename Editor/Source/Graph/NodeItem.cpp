@@ -81,7 +81,13 @@ NodeItem::NodeItem(GraphScene* scene, fg::NodeId id) : gscene_(scene), id_(id) {
 }
 
 QVariant NodeItem::itemChange(GraphicsItemChange change, const QVariant& value) {
-    if (change == ItemPositionChange && gscene_ && gscene_->snapsUserMoves()) return gscene_->snapped(value.toPointF());
+    if (change == ItemPositionChange && gscene_ && gscene_->snapsUserMoves()) {
+        if (dragSerial_ != gscene_->dragSerial()) {         // the first move of this drag: from here
+            dragSerial_ = gscene_->dragSerial();
+            dragStart_ = pos();
+        }
+        return gscene_->snappedMove(this, value.toPointF(), dragStart_);
+    }
     if (change == ItemPositionHasChanged && gscene_) gscene_->nodeMoved(this);
     return QGraphicsObject::itemChange(change, value);
 }
@@ -298,6 +304,11 @@ std::optional<PinRef> NodeItem::pinAt(const QPointF& scenePos) const {
 QPointF NodeItem::pinScenePos(const std::string& name, fg::PinDir dir) const {
     if (auto* v = findPin(name, dir)) return mapToScene(v->connector.center());
     return scenePos();
+}
+
+std::optional<QPointF> NodeItem::pinLocalPos(const std::string& name, fg::PinDir dir) const {
+    if (auto* v = findPin(name, dir)) return v->connector.center();
+    return std::nullopt;
 }
 
 void NodeItem::setEditorPreview(const std::string& pin, const QString& text) {

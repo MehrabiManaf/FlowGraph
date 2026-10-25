@@ -3693,6 +3693,66 @@ TEST(snap_to_grid_places_and_moves_nodes_on_the_grid) {
     CHECK(std::abs(f.doc.graph("EventGraph")->findNode(free)->x - 263) < 0.01);
 }
 
+// Snap to grid makes links straight: the pins are not on the grid lines (a Branch's False is one row below a node's In), so a
+// node made from a pin goes level with it, a node moved alone snaps to one of its links, and nodes moved together keep where
+// they are to each other.
+TEST(snap_to_grid_straightens_links) {
+    ViewFixture f;
+    f.scene.setSnapToGrid(true);
+    f.scene.setSnapStep(20);
+    auto all = fg::buildPalette(fg::NodeBuildCtx{f.rt.registry(), &f.doc.script(), f.doc.script().findGraph("EventGraph")});
+    auto level = [&](fg::NodeId a, const std::string& ap, fg::NodeId b, const std::string& bp) {
+        return std::abs(f.scene.nodeItem(a)->pinScenePos(ap, fg::PinDir::Out).y() - f.scene.nodeItem(b)->pinScenePos(bp, fg::PinDir::In).y()) < 0.01;
+    };
+    // a Branch, and a Print String made from its False output (one row below its first): straight, in one undo step
+    const fg::NodeId branch = f.scene.addNodeFromTemplate(*findTemplate(all, "flow.branch"), QPointF(300, 300));
+    f.scene.sync();
+    const PinRef no = pinOf(f.scene, branch, "False", fg::PinDir::Out);
+    const size_t before = f.doc.graph("EventGraph")->nodes.size();
+    const fg::NodeId print = f.scene.addNodeFromTemplate(*findTemplate(all, "util.print"), QPointF(560, 300), &no);
+    f.scene.sync();
+    CHECK(level(branch, "False", print, "In"));
+    CHECK(f.doc.graph("EventGraph")->findNode(print)->x == 560.0);              // x stays on the grid
+    f.doc.undo();
+    f.scene.sync();
+    CHECK_EQ(f.doc.graph("EventGraph")->nodes.size(), before);                  // the node and its move were one step
+    f.doc.redo();
+    f.scene.sync();
+    CHECK(level(branch, "False", print, "In"));
+
+    // moved alone, a few units off: back to the straight link (the grid alone would not make it straight)
+    NodeItem* n = f.scene.nodeItem(print);
+    QPoint header = f.toView(n->mapToScene(QPointF(20, 8)));
+    f.drag(header, header + QPoint(41, 6));
+    n = f.scene.nodeItem(print);
+    CHECK(level(branch, "False", print, "In"));
+    CHECK(std::abs(f.doc.graph("EventGraph")->findNode(print)->y - n->scenePos().y()) < 0.01);   // saved where it is shown
+    // far from it: on the grid
+    header = f.toView(n->mapToScene(QPointF(20, 8)));
+    f.drag(header, header + QPoint(0, 70));
+    n = f.scene.nodeItem(print);
+    CHECK(!level(branch, "False", print, "In"));
+    CHECK(onGrid(n->scenePos().y(), 20));
+
+    // moved together: by whole steps, the straight link stays straight
+    header = f.toView(n->mapToScene(QPointF(20, 8)));
+    f.drag(header, header + QPoint(0, -70));
+    CHECK(level(branch, "False", print, "In"));
+    f.scene.clearSelection();
+    f.scene.nodeItem(branch)->setSelected(true);
+    f.scene.nodeItem(print)->setSelected(true);
+    const QPointF branch0 = f.scene.nodeItem(branch)->scenePos();
+    header = f.toView(f.scene.nodeItem(branch)->mapToScene(QPointF(20, 8)));
+    f.send(QEvent::MouseButtonPress, header, Qt::LeftButton, Qt::LeftButton);
+    f.send(QEvent::MouseMove, header + QPoint(20, 15), Qt::NoButton, Qt::LeftButton);
+    f.send(QEvent::MouseMove, header + QPoint(47, 33), Qt::NoButton, Qt::LeftButton);
+    f.send(QEvent::MouseButtonRelease, header + QPoint(47, 33), Qt::LeftButton, Qt::NoButton);
+    const QPointF moved = f.scene.nodeItem(branch)->scenePos() - branch0;
+    CHECK(moved.x() > 0 && moved.y() > 0 && onGrid(moved.x(), 20) && onGrid(moved.y(), 20));
+    CHECK(level(branch, "False", print, "In"));
+    f.scene.setSnapToGrid(false);
+}
+
 TEST(view_menu_snap_to_grid_switches_every_graph) {
     StudioFixture f;
     CHECK(f.view != nullptr);

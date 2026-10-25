@@ -248,8 +248,36 @@ QPointF GraphScene::snapped(const QPointF& p) const {
     return QPointF(std::round(p.x() / snapStep_) * snapStep_, std::round(p.y() / snapStep_) * snapStep_);
 }
 
+QPointF GraphScene::snappedMove(const NodeItem* item, const QPointF& proposed, const QPointF& dragStart) const {
+    const QList<fg::NodeId> selected = selectedNodeIds();
+    if (!(selected.size() == 1 && selected.front() == item->nodeId())) {
+        const QPointF d = proposed - dragStart;
+        return dragStart + QPointF(std::round(d.x() / snapStep_) * snapStep_, std::round(d.y() / snapStep_) * snapStep_);
+    }
+    QPointF at = snapped(proposed);
+    const fg::Graph* g = doc_->graph(name_);
+    if (!g) return at;
+    // the link that can be straight closest to where the node is dragged, if it is close enough
+    double best = std::max(snapStep_ * 0.75, 8.0);
+    for (const fg::Connection& c : g->connections) {
+        const bool out = c.fromNode == item->nodeId(), in = c.toNode == item->nodeId();
+        if (out == in) continue;                         // not one of its links, or a link to itself
+        const NodeItem* other = nodeItem(out ? c.toNode : c.fromNode);
+        const auto mine = item->pinLocalPos(out ? c.fromPin : c.toPin, out ? fg::PinDir::Out : fg::PinDir::In);
+        const auto theirs = other ? other->pinLocalPos(out ? c.toPin : c.fromPin, out ? fg::PinDir::In : fg::PinDir::Out) : std::nullopt;
+        if (!mine || !theirs) continue;
+        const double y = other->pos().y() + theirs->y() - mine->y();
+        if (std::abs(y - proposed.y()) < best) {
+            best = std::abs(y - proposed.y());
+            at.setY(y);
+        }
+    }
+    return at;
+}
+
 void GraphScene::mousePressEvent(QGraphicsSceneMouseEvent* e) {
     userMoving_ = e->button() == Qt::LeftButton;
+    if (userMoving_) ++dragSerial_;
     altHeld_ = e->modifiers().testFlag(Qt::AltModifier);
     QGraphicsScene::mousePressEvent(e);
 }
@@ -546,6 +574,7 @@ fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPoi
         filter.type = from->wildcard ? nullptr : from->type;
         connect = fg::templateAccepts(registry(), t, filter, &pinName, doc_->types().get());
     }
+    const QString step = "add-node:" + QString::number(++addSerial_);       // one undo step with the move below
     doc_->edit(tr("Add node"), [&](fg::Script& s) {
         fg::Graph* g = mutableGraph(s);
         if (!g) return;
@@ -556,7 +585,21 @@ fg::NodeId GraphScene::addNodeFromTemplate(const fg::NodeTemplate& t, const QPoi
                                                             : fg::Connection{newId, pinName, from->node, from->pin};
             addConnection(*g, c, from->kind == fg::PinKind::Exec);
         }
-    });
+    }, EditKind::Structural, step);
+    // snapping: the new node goes level with the pin it was made from, so that their link is straight (where its pins are is only
+    // known now that it is laid out)
+    if (connect && snap_ && !nodeItem(newId)) sync();
+    const NodeItem* made = connect && snap_ ? nodeItem(newId) : nullptr;
+    const NodeItem* source = made ? nodeItem(from->node) : nullptr;
+    const auto mine = source ? made->pinLocalPos(pinName, from->dir == fg::PinDir::Out ? fg::PinDir::In : fg::PinDir::Out) : std::nullopt;
+    if (mine) {
+        const double y = source->pinScenePos(from->pin, from->dir).y() - mine->y();
+        if (std::abs(y - at.y()) > 1e-6)
+            doc_->edit(tr("Add node"), [&](fg::Script& s) {
+                if (fg::Graph* g = mutableGraph(s))
+                    if (fg::Node* n = g->findNode(newId)) n->y = y;
+            }, EditKind::Layout, step);
+    }
     selectOnly(newId);
     return newId;
 }
