@@ -9,6 +9,7 @@
 #include "../Common/CollapsiblePanel/CollapsiblePanel.hpp"
 #include "../Common/NodeTexts.hpp"
 #include "../Common/SearchField.hpp"
+#include "../Common/Settings.hpp"
 #include "TypeEdit.hpp"
 #include "TypeSpec.hpp"
 
@@ -163,6 +164,7 @@ void moveNodePin(fg::Graph& g, fg::NodeId id, fg::PinDir dir, const std::string&
 } // namespace
 
 DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), doc_(doc) {
+    for (const QString& key : editorSettings().value("details/closedSections").toStringList()) closedSections_.insert(key);
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(6, 6, 6, 6);
     outer->setAlignment(Qt::AlignTop);
@@ -196,6 +198,36 @@ DetailsPanel::DetailsPanel(Document* doc, QWidget* parent) : QWidget(parent), do
         QTimer::singleShot(0, this, [this] { rebuildQueued_ = false; rebuild(); });
     });
     rebuild();
+}
+
+void DetailsPanel::openAsBefore(CCollapsiblePanel* panel, const QString& key) {
+    panel->setProperty("sectionKey", key);
+    if (openingSections_.remove(key)) {
+        // its "+" added an item while it was closed: it opens now, animated, with the item in it
+        QTimer::singleShot(0, panel, [panel] { panel->SetContentsExpaned(true); });
+    } else if (!closedSections_.contains(key)) {
+        panel->ExpandImmediately();
+    }
+    auto remember = [this, key](bool open) {
+        if (open) closedSections_.remove(key);
+        else closedSections_.insert(key);
+        editorSettings().setValue("details/closedSections", QStringList(closedSections_.begin(), closedSections_.end()));
+    };
+    connect(panel, &CCollapsiblePanel::Toggled, this, remember);
+}
+
+// "+" of a section adds at once, and a closed section opens to show what was added, animated as in My Script. The edit builds the
+// panel again: the new section is the one that opens (openAsBefore), and it stays open from then on.
+void DetailsPanel::addOnPlus(CCollapsiblePanel* panel, std::function<void()> add) {
+    connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [this, panel, add] {
+        const QString key = panel->property("sectionKey").toString();
+        if (!panel->IsContentsExpanded() && !key.isEmpty()) {
+            openingSections_.insert(key);
+            closedSections_.remove(key);
+            editorSettings().setValue("details/closedSections", QStringList(closedSections_.begin(), closedSections_.end()));
+        }
+        add();
+    });
 }
 
 void DetailsPanel::showNothing() { mode_ = Mode::None; rebuild(); }
@@ -840,8 +872,8 @@ void DetailsPanel::buildStruct() {
     // a panel like the parameters of a function: "+" adds a field, Move / Remove are in the right click menu
     auto* panel = new CCollapsiblePanel(tr("Fields"), nullptr, true);
     panel->AddWidget(table);
-    panel->ExpandImmediately();
-    connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [=, this] {
+    openAsBefore(panel, "struct/fields");
+    addOnPlus(panel, [=, this] {
         const fg::StructDecl* cur = doc_->script().findStruct(ss(sname));
         if (!cur) return;
         std::string n = "Field";
@@ -978,8 +1010,8 @@ void DetailsPanel::buildGraphFor(const QString& graphName) {
         // a panel like the ones of My Script: "+" in its header adds a parameter, "Remove" is in the right click menu
         auto* panel = new CCollapsiblePanel(inputs ? tr("Inputs") : tr("Outputs"), nullptr, true);
         panel->AddWidget(table);
-        panel->ExpandImmediately();
-        connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [this, gname, inputs] {
+        openAsBefore(panel, inputs ? "function/inputs" : "function/outputs");
+        addOnPlus(panel, [this, gname, inputs] {
             edit(tr("Add parameter"), [&](fg::Script& s) {
                 auto* gr = s.findGraph(ss(gname));
                 if (!gr) return;
@@ -1107,7 +1139,7 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
             auto* table = buildParamTable(false, mine, apply);
             table->setObjectName(inputs ? "customInputs" : "customOutputs");
             panel->AddWidget(table);
-            connect(panel, &CCollapsiblePanel::PlusButtonClicked, this, [=] {
+            addOnPlus(panel, [=] {
                 change(tr("Add pin"), [&](std::vector<fg::ParamDecl>& list, fg::Graph&) {
                     const std::string base = inputs ? "Input" : "Output";
                     std::string n = base;
@@ -1143,7 +1175,7 @@ void DetailsPanel::buildNodePins(const fg::Node& node, const fg::CompiledNode& c
                 });
             });
         }
-        panel->ExpandImmediately();
+        openAsBefore(panel, inputs ? "node/inputs" : "node/outputs");
         form_->addRow(panel);
     }
 }

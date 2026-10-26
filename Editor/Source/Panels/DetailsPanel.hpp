@@ -3,12 +3,14 @@
 #pragma once
 #include "../Document.hpp"
 
+#include <QSet>
 #include <QWidget>
 
 class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QTableWidget;
+class CCollapsiblePanel;
 
 namespace fged {
 
@@ -43,6 +45,11 @@ private:
     void buildGraphFor(const QString& graphName);
     void buildNodes();
     void buildNodePins(const fg::Node& node, const fg::CompiledNode& cn, const QString& graph);
+    // A section (Inputs, Outputs, Fields) opens as the user left the section of that `key` the last time - whatever is shown,
+    // another node or another function - and is remembered in the settings.
+    void openAsBefore(CCollapsiblePanel* panel, const QString& key);
+    // What the "+" of a section adds, at once; a closed section then opens, animated (after openAsBefore).
+    void addOnPlus(CCollapsiblePanel* panel, std::function<void()> add);
     QTableWidget* buildParamTable(bool inputs, const std::vector<fg::ParamDecl>& params, std::function<void(std::vector<fg::ParamDecl>)> apply);
 
     Document* doc_;
@@ -50,6 +57,8 @@ private:
     QString owner_, name_;
     QString graphTarget_;      // graph shown by the function editor (name_ or owner_)
     QList<int> ids_;
+    QSet<QString> closedSections_;   // the keys of openAsBefore the user closed
+    QSet<QString> openingSections_;  // closed sections whose "+" was pressed: they open animated when built again
     int fieldRow_ = 0;         // the field of the struct whose default and description are shown
     QFormLayout* form_ = nullptr;
     QWidget* body_ = nullptr;

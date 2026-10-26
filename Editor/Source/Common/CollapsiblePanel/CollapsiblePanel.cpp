@@ -199,6 +199,7 @@ void CCollapsiblePanel::OnToggle(const bool& Expanded)
 {
     mp_ExpandCollapseAnimation->setDirection(Expanded? QAbstractAnimation::Forward: QAbstractAnimation::Backward);
     mp_ExpandCollapseAnimation->start();
+    emit Toggled(Expanded);
 }
 
 void CCollapsiblePanel::OnPlusButtonClicked(const bool&)

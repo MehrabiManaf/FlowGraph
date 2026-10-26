@@ -701,6 +701,64 @@ TEST(details_parameter_type_cells_open_on_a_click) {
     }
 }
 
+// The Inputs / Outputs of the Details panel stay as the user left them, whichever node is shown next (and at the next start).
+TEST(details_sections_stay_open_or_closed_from_node_to_node) {
+    Fixture f;
+    const fg::NodeId main = f.graph().nodes.front().id, print = f.graph().nodes.back().id;
+    DetailsPanel details(&f.doc);
+    details.resize(420, 600);
+    details.show();
+    auto sections = [&] {      // Inputs, then Outputs
+        QCoreApplication::processEvents();
+        return details.findChildren<CCollapsiblePanel*>();
+    };
+    details.showNodes("EventGraph", {int(print)});
+    auto s = sections();
+    CHECK_EQ(s.size(), 2);
+    if (s.size() != 2) return;
+    CHECK(s[0]->IsContentsExpanded() && s[1]->IsContentsExpanded());
+    s[0]->SetContentsExpaned(false);                        // the user closes Inputs
+    details.showNodes("EventGraph", {int(main)});
+    details.showNodes("EventGraph", {int(print)});
+    s = sections();
+    CHECK(s.size() == 2 && !s[0]->IsContentsExpanded() && s[1]->IsContentsExpanded());
+    CHECK(editorSettings().value("details/closedSections").toStringList().contains("node/inputs"));
+    // a new panel (the next start) opens it the same way
+    {
+        DetailsPanel again(&f.doc);
+        again.showNodes("EventGraph", {int(print)});
+        QCoreApplication::processEvents();
+        auto t = again.findChildren<CCollapsiblePanel*>();
+        CHECK(t.size() == 2 && !t[0]->IsContentsExpanded());
+    }
+    // opened again: open for every node
+    if (s.size() == 2) s[0]->SetContentsExpaned(true);
+    details.showNodes("EventGraph", {int(main)});
+    details.showNodes("EventGraph", {int(print)});
+    s = sections();
+    CHECK(s.size() == 2 && s[0]->IsContentsExpanded());
+    CHECK(!editorSettings().value("details/closedSections").toStringList().contains("node/inputs"));
+
+    // "+" of a closed section opens it: what it adds is seen
+    f.doc.edit("Function", [](fg::Script& sc) { sc.addFunction("Fn", {{"A", "int", false, false, fg::Value()}}, {}); });
+    details.showGraph("Fn");
+    s = sections();
+    CHECK_EQ(s.size(), 2);                                   // the function's Inputs and Outputs
+    if (s.size() != 2) return;
+    s[0]->SetContentsExpaned(false);
+    details.showGraph("Fn");
+    s = sections();
+    CHECK(s.size() == 2 && !s[0]->IsContentsExpanded());
+    if (s.size() != 2) return;
+    emit s[0]->PlusButtonClicked();
+    CHECK_EQ(f.doc.graph("Fn")->inputs.size(), size_t(2));  // added at once ...
+    CHECK(spinUntil([&] {                                     // ... and the section built again opens, animated
+        s = sections();
+        return s.size() == 2 && s[0]->IsContentsExpanded();
+    }, 3000));
+    CHECK(!editorSettings().value("details/closedSections").toStringList().contains("function/inputs"));     // open from now on
+}
+
 TEST(details_parameter_tables_edit_through_a_delegate) {
     Fixture f;
     f.doc.edit("Function", [&](fg::Script& s) {

@@ -38,6 +38,7 @@ private:
 signals:
     void PlusButtonClicked();
     void ExpandFinished();          // the expand animation has ended: the contents have their full height
+    void Toggled(bool expanded);    // opened or closed by its header (not by ExpandImmediately)
 private slots:
     void OnToggle(const bool& Expanded);
     void OnPlusButtonClicked(const bool&);
