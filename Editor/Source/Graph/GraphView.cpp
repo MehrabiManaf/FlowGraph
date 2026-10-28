@@ -296,12 +296,19 @@ void GraphView::keyPressEvent(QKeyEvent* e) {
 // ------------------------------------------------------------------ drag & drop of variables
 static bool isOurs(const QMimeData* m) { return m->hasFormat(GraphView::variableMime()) || m->hasFormat(GraphView::functionMime()); }
 
+// A variable or function dropped here makes a node: always a copy, whatever action the platform proposes (with Alt, Linux
+// proposes Link, which the drag does not offer: the cursor said "forbidden" though the drop worked).
+static void acceptAsCopy(QDropEvent* e) {
+    e->setDropAction(Qt::CopyAction);
+    e->accept();
+}
+
 void GraphView::dragEnterEvent(QDragEnterEvent* e) {
-    if (isOurs(e->mimeData())) e->acceptProposedAction();
+    if (isOurs(e->mimeData())) acceptAsCopy(e);
     else QGraphicsView::dragEnterEvent(e);
 }
 void GraphView::dragMoveEvent(QDragMoveEvent* e) {
-    if (isOurs(e->mimeData())) e->acceptProposedAction();
+    if (isOurs(e->mimeData())) acceptAsCopy(e);
     else QGraphicsView::dragMoveEvent(e);
 }
 
@@ -310,7 +317,7 @@ void GraphView::dropEvent(QDropEvent* e) {
         // a function dropped on the graph: a node that calls it
         const QString function = QString::fromUtf8(e->mimeData()->data(functionMime()));
         if (!function.isEmpty()) graphScene()->addFunctionCall(function, mapToScene(e->position().toPoint()));
-        e->acceptProposedAction();
+        acceptAsCopy(e);
         return;
     }
     if (!e->mimeData()->hasFormat(variableMime())) { QGraphicsView::dropEvent(e); return; }
@@ -324,7 +331,7 @@ void GraphView::dropEvent(QDropEvent* e) {
     else {
         // Neither key: the user chooses in a menu. It is shown when the drop is over, not inside it: a popup that opens while the drag and
         // drop of the system is still handing the drop over can lose the mouse at once and vanish before anybody sees it.
-        e->acceptProposedAction();
+        acceptAsCopy(e);
         const QPoint at = viewport()->mapToGlobal(e->position().toPoint());
         QPointer<GraphView> self(this);
         QTimer::singleShot(0, this, [self, name, scope, sp, at] {
@@ -338,7 +345,7 @@ void GraphView::dropEvent(QDropEvent* e) {
         return;
     }
     graphScene()->addVariableNode(name, scope, isSet, sp);
-    e->acceptProposedAction();
+    acceptAsCopy(e);
 }
 
 } // namespace fged

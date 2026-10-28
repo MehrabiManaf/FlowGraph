@@ -42,6 +42,10 @@ void FitTree::fit() {
     setFixedHeight(sizeHint().height());
 }
 
+void FitTree::startDrag(Qt::DropActions supportedActions) {
+    QTreeWidget::startDrag(mime_.isEmpty() ? supportedActions : Qt::CopyAction);
+}
+
 QMimeData* FitTree::mimeData(const QList<QTreeWidgetItem*>& items) const {
     if (mime_.isEmpty() || items.isEmpty()) return QTreeWidget::mimeData(items);
     auto* m = new QMimeData;

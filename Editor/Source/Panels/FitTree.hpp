@@ -19,6 +19,9 @@ public:
 
 protected:
     QMimeData* mimeData(const QList<QTreeWidgetItem*>& items) const override;
+    // A dragged item is copied to where it is dropped (a node is made), never moved: only Copy is offered, so that no platform
+    // proposes an action the drop does not take (Linux proposes Link with Alt, Move with Shift: the cursor showed "forbidden").
+    void startDrag(Qt::DropActions supportedActions) override;
 
 private:
     QString mime_;
