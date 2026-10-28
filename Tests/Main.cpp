@@ -314,6 +314,64 @@ TEST(const_param_cannot_be_modified) {
     CHECK(!prog->ok());
 }
 
+// A const parameter is refused by the nodes that change their first input however it reaches them: from the entry node's pin
+// (the usual way), through a reroute, through Get Item / Break (a part of it, not a copy). Reading it, and changing a parameter
+// that is not const, are fine.
+TEST(const_param_cannot_be_modified_from_the_entry_node_or_through_a_part_of_it) {
+    TestRuntime rt;
+    auto compileWith = [&](bool isConst, const std::function<void(Graph&, NodeId entry)>& body) {
+        Script s;
+        s.structs.push_back({"Point", "", "", {{"X", "int", Value(), ""}}});
+        Graph& f = s.addFunction("Fn", {{"A", "array<int>", false, isConst, Value()}, {"P", "array<Point>", false, isConst, Value()}});
+        f.connections.clear();
+        body(f, f.nodes[0].id);
+        return rt.compile(s);
+    };
+    auto modifiesConst = [](const std::shared_ptr<Program>& prog) {
+        for (auto& d : prog->diagnostics)
+            if (d.message.find("modifies the const parameter") != std::string::npos) return true;
+        return false;
+    };
+    // Add on the entry node's pin
+    auto addToA = [](Graph& f, NodeId entry) {
+        NodeId add = f.addNode("array.add").id;
+        link(f, entry, "Then", add, "In");
+        link(f, entry, "A", add, "Array");
+    };
+    CHECK(modifiesConst(compileWith(true, addToA)));
+    CHECK(!modifiesConst(compileWith(false, addToA)));
+    // through a reroute
+    CHECK(modifiesConst(compileWith(true, [](Graph& f, NodeId entry) {
+        NodeId r = f.addNode("reroute").id;
+        NodeId add = f.addNode("array.add").id;
+        link(f, entry, "Then", add, "In");
+        link(f, entry, "A", r, "In");
+        link(f, r, "Out", add, "Array");
+    })));
+    // Set Field on an element of a const array of structs (Get Item gives the element itself)
+    auto setElement = [](Graph& f, NodeId entry) {
+        NodeId item = f.addNode("array.get").id;
+        Node& set = f.addNode("struct.set");
+        set.props = {{"struct", "Point"}, {"field", "X"}};
+        const NodeId setId = set.id;
+        link(f, entry, "P", item, "Array");
+        link(f, entry, "Then", setId, "In");
+        link(f, item, "Item", setId, "Struct");
+    };
+    CHECK(modifiesConst(compileWith(true, setElement)));
+    CHECK(!modifiesConst(compileWith(false, setElement)));
+    // reading is fine
+    auto prog = compileWith(true, [](Graph& f, NodeId entry) {
+        NodeId len = f.addNode("array.length").id;
+        NodeId pr = f.addNode("util.print").id;
+        link(f, entry, "Then", pr, "In");
+        link(f, entry, "A", len, "Array");
+        link(f, len, "Length", pr, "String");
+    });
+    CHECK(prog->ok());
+    if (!prog->ok()) std::printf("%s", dumpDiagnostics(*prog).c_str());
+}
+
 TEST(reflection_methods_properties_and_inheritance) {
     TestRuntime rt;
     registerSample(rt);

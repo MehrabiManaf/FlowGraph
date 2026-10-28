@@ -495,6 +495,40 @@ struct GraphCompiler {
         return nullptr;
     }
 
+    // The const parameter of the function that input `ordinal` of `n` refers to, if any (empty otherwise): it comes from the entry
+    // node's pin of the parameter or from a Get of it, also through reroutes and through the outputs that hand out a part of
+    // their first input instead of a copy (Get Item, Break, For Each's Element: PinAccess::Alias). A copy (a by-value parameter,
+    // a result) is not the parameter any more.
+    std::string constParamReached(const Graph& g, const CompiledGraph& cg, const CompiledNode& n, size_t ordinal) {
+        auto constParam = [&](const std::string& name) {
+            for (auto& p : g.inputs)
+                if (p.name == name) return p.isConst ? name : std::string();
+            return std::string();
+        };
+        const CompiledNode* cur = &n;
+        size_t ord = ordinal;
+        for (int guard = 0; guard < 64; ++guard) {
+            if (ord >= cur->inputs.size()) return {};
+            const DataSource& ds = cur->inputs[ord];
+            if (ds.kind == DataSource::Kind::Default || ds.node < 0) return {};
+            const CompiledNode& src = cg.nodes[static_cast<size_t>(ds.node)];
+            if (src.op == NodeOp::FunctionEntry && ds.pin >= 0) return constParam(src.pins[static_cast<size_t>(ds.pin)].name);
+            if (src.op == NodeOp::GetVariable) return src.scope == VarScope::Param ? constParam(src.prop("name")) : std::string();
+            bool passesOn = src.op == NodeOp::Reroute || (src.def && src.def->aliasesFirstInput);
+            if (!passesOn && src.def && ds.pin >= 0) {             // an output that is a part of the node's first input
+                const Node* node = g.findNode(src.id);
+                const std::string& pin = src.pins[static_cast<size_t>(ds.pin)].name;
+                if (node)
+                    for (const PinDef& pd : collectPinDefs(*node, *src.def, reg, &script, &g, &types))
+                        if (pd.dir == PinDir::Out && pd.kind == PinKind::Data && pd.name == pin) passesOn = pd.access == PinAccess::Alias;
+            }
+            if (!passesOn) return {};
+            cur = &src;
+            ord = 0;
+        }
+        return {};
+    }
+
     void validate(size_t gi) {
         const Graph& g = script.graphs[gi];
         CompiledGraph& cg = prog.graphs[gi];
@@ -519,9 +553,8 @@ struct GraphCompiler {
             }
             // nodes that modify their first input may not be applied to const parameters
             if (cn.def->mutatesFirstInput && !cn.inputs.empty()) {
-                const CompiledNode* src = originOf(cg, cn, 0);
-                if (src && isConstParam(*src))
-                    diag(Severity::Error, g.name, cn.id, "'" + cn.title + "' modifies the const parameter '" + src->prop("name") + "'");
+                const std::string param = constParamReached(g, cg, cn, 0);
+                if (!param.empty()) diag(Severity::Error, g.name, cn.id, "'" + cn.title + "' modifies the const parameter '" + param + "'");
             }
         }
         // cycles through pure nodes can never be evaluated
