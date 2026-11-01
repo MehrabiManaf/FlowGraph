@@ -9,6 +9,7 @@ qt_add_library(FlowGraphEditor ${FG_LIB_TYPE} ${FGED_SOURCES} Resources/Resource
 add_library(FlowGraph::ScriptEditor ALIAS FlowGraphEditor)
 set_target_properties(FlowGraphEditor PROPERTIES
     VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}   # Linux: libX.so.0.5 - every 0.5.x fits what was built against 0.5
     CXX_VISIBILITY_PRESET hidden            # only what FG_EDITOR_EXPORT marks (ScriptEditor.hpp) is exported
     VISIBILITY_INLINES_HIDDEN ON
     EXPORT_NAME ScriptEditor)

@@ -30,6 +30,7 @@ add_library(FlowGraphCore ${FG_LIB_TYPE}
 add_library(FlowGraph::Core ALIAS FlowGraphCore)
 set_target_properties(FlowGraphCore PROPERTIES
     VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}   # Linux: libX.so.0.5 - every 0.5.x fits what was built against 0.5
     CXX_VISIBILITY_PRESET hidden            # GCC / Clang: only what FG_CORE_EXPORT marks is exported, as on Windows
     VISIBILITY_INLINES_HIDDEN ON
     EXPORT_NAME Core)
