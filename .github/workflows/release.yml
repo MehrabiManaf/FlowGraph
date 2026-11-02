@@ -146,12 +146,17 @@ jobs:
         run: |
           dist="dist/$PACKAGE"
           cmake --install build/linux-release --prefix "$dist" --component FlowGraph
-          # Qt's plugins: X11 (xcb) and offscreen platforms, SVG images and icons
+          # Qt's plugins: X11 (xcb), Wayland and offscreen platforms, SVG images and icons. Without Wayland, a Wayland session runs
+          # flowstudio through XWayland, and KWin shows "forbidden" during a whole drag inside it (a variable dragged on a graph),
+          # though the drop works: KWin starts a Wayland drag of its own for it that no Wayland window ever accepts.
           for p in platforms/libqxcb.so platforms/libqoffscreen.so imageformats/libqsvg.so iconengines/libqsvgicon.so; do
             mkdir -p "$dist/plugins/$(dirname "$p")"
             cp "$QT_ROOT_DIR/plugins/$p" "$dist/plugins/$p"
           done
-          cp -r "$QT_ROOT_DIR/plugins/xcbglintegrations" "$dist/plugins/"
+          cp "$QT_ROOT_DIR"/plugins/platforms/libqwayland*.so "$dist/plugins/platforms/"
+          for d in xcbglintegrations wayland-shell-integration wayland-decoration-client wayland-graphics-integration-client; do
+            cp -r "$QT_ROOT_DIR/plugins/$d" "$dist/plugins/"
+          done
           printf '[Paths]\nPrefix=..\nPlugins=plugins\n' > "$dist/bin/qt.conf"
           # every Qt library (and ICU) that the programs, libraries and plugins need, until nothing is missing
           for pass in 1 2 3 4; do
@@ -231,8 +236,9 @@ jobs:
           - **FlowGraph-$VERSION-windows-x64.zip**: \`flow\`, \`flowstudio\` (Qt included) and the SDK: headers, libraries and the CMake
             package (\`find_package(FlowGraph)\`: \`FlowGraph::Core\`, \`FlowGraph::ScriptEditor\`). Windows 10 or later, x64.
           - **FlowGraph-$VERSION-linux-x64.tar.gz**: the same for Linux x64. It runs on distributions with glibc 2.28 or newer:
-            RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu 20.04 and newer. \`flowstudio\` brings its Qt; the system
-            needs the usual X11 libraries (for example \`xcb-util-cursor\` / \`libxcb-cursor0\`, \`libxkbcommon-x11\`).
+            RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu 20.04 and newer. \`flowstudio\` brings its Qt and runs on
+            Wayland or X11; on X11 the system needs the usual X11 libraries (for example \`xcb-util-cursor\` / \`libxcb-cursor0\`,
+            \`libxkbcommon-x11\`).
           - **SHA256SUMS.txt**: checksums of both.
 
           Plugins are binary: build them against this release (the loader refuses a plugin made for another build, with the reason).
