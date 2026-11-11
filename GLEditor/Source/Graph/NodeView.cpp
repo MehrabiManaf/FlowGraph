@@ -393,7 +393,7 @@ void NodeView::paint(glw::PaintContext& context) {
     p.strokeRoundedRect(body, radius, borderWidth, border);
     selectionRing(radius);
     if (titleText_)
-        context.drawText(*titleText_, {(width_ - titleText_->size().width) / 2, titleMargins.top}, {1, 1, 1, 1});
+        context.drawText(*titleText_, {(width_ - titleText_->size().width) / 2, titleMargins.top + titleText_->opticalOffset()}, {1, 1, 1, 1});
 
     if (graph_.isBreakpoint(id_))
         p.fillCircle({-4, -4}, 6, colors.breakpoint);
@@ -420,7 +420,8 @@ void NodeView::paint(glw::PaintContext& context) {
                           .hollow = colors.body});
         }
         if (v.labelText)
-            context.drawText(*v.labelText, {v.labelRect.x, v.labelRect.y}, lit ? colors.highlight : colors.text);
+            // (the letters centered by themselves, as a field centers what is typed in it: TextLayout::opticalOffset)
+            context.drawText(*v.labelText, {v.labelRect.x, v.labelRect.y + v.labelText->opticalOffset()}, lit ? colors.highlight : colors.text);
         if (v.isConst) {
             // a padlock: its shackle, its body
             const glw::Rect l = v.lockRect;
@@ -451,7 +452,7 @@ void NodeView::paint(glw::PaintContext& context) {
             glw::paintSunken(p, r, std::min(field.cornerRadius, r.height / 2), colors.field, colors.fieldBorder, field.bevel);
             if (v.valueText) {
                 p.pushClip({r.x + 3, r.y, std::max(0.0f, r.width - 6 - (v.editor == Editor::Choice ? 14 : 0)), r.height});
-                context.drawText(*v.valueText, {r.x + 6, r.y + (r.height - v.valueText->size().height) / 2}, colors.fieldText);
+                context.drawText(*v.valueText, {r.x + 6, r.y + (r.height - v.valueText->size().height) / 2 + v.valueText->opticalOffset()}, colors.fieldText);
                 p.popClip();
             }
             if (v.editor == Editor::Choice) {

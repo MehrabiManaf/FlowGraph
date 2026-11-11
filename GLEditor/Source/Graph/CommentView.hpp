@@ -55,7 +55,7 @@ protected:
             text_.emplace(box_.text, glw::text::TextStyle{{&context.ui.fonts.defaultFont()}, context.ui.theme.fontSize + 1});
         }
         p.pushClip({6, 0, std::max(0.0f, r.width - 12), commentHeader});
-        context.drawText(*text_, {8, (commentHeader - text_->size().height) / 2}, {1, 1, 1, 1});
+        context.drawText(*text_, {8, (commentHeader - text_->size().height) / 2 + text_->opticalOffset()}, {1, 1, 1, 1});
         p.popClip();
         // the grip that resizes it, at its bottom right corner
         for (int i = 1; i <= 3; ++i)

@@ -118,7 +118,7 @@ protected:
         if (!layout_)
             layout_.emplace(text_, glw::text::TextStyle{{&context.ui.fonts.defaultFont()}, detail_ ? t.fontSize - 1 : t.fontSize});
         p.pushClip({x, 0, std::max(0.0f, size().width - x - 4), size().height});
-        context.drawText(*layout_, {x, (size().height - layout_->size().height) / 2},
+        context.drawText(*layout_, {x, (size().height - layout_->size().height) / 2 + layout_->opticalOffset()},
                          detail_ || missing_ ? t.palette.mutedText : t.palette.text);
         p.popClip();
     }
@@ -578,7 +578,7 @@ void MyScriptPanel::beginRename(core::Member member, const std::string& owner, c
     Section* section = sectionOf(member);
     if (!section)
         return;
-    section->panel->setExpanded(true, false);
+    section->panel->setExpanded(true);      // animated, as the theme moves (the plain style: at once)
     const std::optional<std::size_t> row = rowIn(*section, owner, name);
     if (!row)
         return;

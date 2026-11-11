@@ -3,6 +3,7 @@
 #include <FlowGraphGLEditor/Studio.hpp>
 
 #include "Graph/GraphView.hpp"
+#include "Panels/DetailsPanel.hpp"
 #include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Vm.hpp>
@@ -26,6 +27,7 @@
 #include <filesystem>
 #include <map>
 #include <optional>
+#include <set>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -134,6 +136,7 @@ struct Studio::Impl {
     glw::DockArea* area = nullptr;
     glw::DockTabs* documents = nullptr;         // the graphs: the panels of the dock area's center stack
     MyScriptPanel* myScript = nullptr;
+    DetailsPanel* details = nullptr;
     glw::StatusBar* status = nullptr;
     glw::Label* runState = nullptr;
     glw::TextEdit* log = nullptr;               // the Output Log
@@ -251,13 +254,35 @@ struct Studio::Impl {
         myScript->setOnMessage([this](glw::LocalizedText text) { status->showMessage(std::move(text), 4s); });
         area->addPanel({.id = "myScript", .title = tr("My Script"), .content = std::move(scriptPanel), .closable = false}, center,
                        glw::DockSide::Start, 0.2f);
-        area->addPanel({.id = "details",
-                        .title = tr("Details"),
-                        .content = ui::Label({.text = tr("Select a node, a variable or a function to see its details."), .muted = true, .wrap = true})
-                                       .alignment(glw::Alignment::Stretch, glw::Alignment::Start)
-                                       .padding(glw::Insets::all(12)),
-                        .closable = false},
-                       center, glw::DockSide::End, 0.24f);
+        // what is chosen in My Script, or selected in a graph: its properties
+        auto detailsPanel = std::make_unique<DetailsPanel>(doc);
+        details = detailsPanel.get();
+        {
+            const std::vector<std::string> closed = settings.strings("detailsClosed");
+            details->setClosedSections({closed.begin(), closed.end()});
+        }
+        details->setOnSectionsChanged([this](const std::set<std::string>& closed) {
+            settings.setStrings("detailsClosed", {closed.begin(), closed.end()});
+            saveSettings();
+        });
+        details->setOnMessage([this](glw::LocalizedText text) { status->showMessage(std::move(text), 4s); });
+        myScript->setOnSelectionChanged([this] {
+            const std::optional<MyScriptPanel::Selection>& chosen = myScript->selection();
+            if (!chosen) {
+                if (details->mode() != DetailsPanel::Mode::Nodes)
+                    details->showNothing();
+                return;
+            }
+            switch (chosen->member) {
+            case core::Member::Variable: details->showVariable({}, chosen->name); break;
+            case core::Member::Local: details->showVariable(chosen->owner, chosen->name); break;
+            case core::Member::Function:
+            case core::Member::EventGraph: details->showGraph(chosen->name); break;
+            case core::Member::Struct: details->showStruct(chosen->name); break;
+            }
+        });
+        area->addPanel({.id = "details", .title = tr("Details"), .content = std::move(detailsPanel), .closable = false}, center,
+                       glw::DockSide::End, 0.24f);
         // what a run prints
         auto output = std::make_unique<glw::TextEdit>();
         log = output.get();
@@ -457,6 +482,19 @@ struct Studio::Impl {
         GraphView* g = view.get();
         view->setPinValues([this, g](fg::NodeId node, const std::string& pin, std::string& out) {
             return run && run->state() == core::RunState::Paused && run->pinText(g->graphName(), node, pin, out);
+        });
+        // nodes selected: their properties (what My Script had chosen let go)
+        view->setOnSelectionChanged([this, g] {
+            if (!details)
+                return;
+            const std::set<fg::NodeId>& nodes = g->selectedNodes();
+            if (!nodes.empty()) {
+                if (myScript)
+                    myScript->clearSelection();
+                details->showNodes(g->graphName(), {nodes.begin(), nodes.end()});
+            } else if (details->mode() == DetailsPanel::Mode::Nodes) {
+                details->showNothing();
+            }
         });
         // a call of a function clicked twice: the function's graph
         view->setOnNodeActivated([this, g](fg::NodeId id) {

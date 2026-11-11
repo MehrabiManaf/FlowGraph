@@ -4,13 +4,17 @@
 // events given to it as a window would.
 #include "Graph/GraphView.hpp"
 #include "Graph/NodeView.hpp"
+#include "Panels/DetailsPanel.hpp"
 #include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Runtime.hpp>
 #include <GLWidgets/Paint/DrawList.hpp>
 #include <GLWidgets/Text/Font.hpp>
 #include <GLWidgets/Text/GlyphAtlas.hpp>
+#include <GLWidgets/Widgets/CollapsiblePanel.hpp>
 #include <GLWidgets/Widgets/Layout.hpp>
+#include <GLWidgets/Widgets/LineEdit.hpp>
+#include <GLWidgets/Widgets/SpinBox.hpp>
 #include <GLWidgets/Widgets/ToolBar.hpp>
 #include <GLWidgets/Widgets/UiRoot.hpp>
 
@@ -621,6 +625,210 @@ TEST(myScriptsTablesRenameByF2AndOpenByADoubleClick) {
     l.release(at);
     CHECK(opened == std::vector<std::string>{"Jump"});
     CHECK(l.panel->selection() && l.panel->selection()->name == "Jump");
+}
+
+namespace {
+
+// The Details panel alone in a root (500 by 900), and a script with a bit of everything.
+struct Detailed {
+    fg::Runtime rt;
+    std::unique_ptr<fged::core::Document> doc;
+    Host host;
+    glw::UiRoot root{context(), &host};
+    fged::gl::DetailsPanel* panel = nullptr;
+    fg::NodeId format = 0, sequence = 0;
+    std::vector<std::string> messages;
+
+    Detailed() {
+        rt.registry().addEvent("Go");
+        doc = std::make_unique<fged::core::Document>(rt);
+        fg::Script s;
+        fg::Graph& g = s.addEventGraph();
+        g.addNode("event:Go", 0, 0);
+        format = g.addNode("string.format", 200, 0).id;
+        sequence = g.addNode("flow.sequence", 400, 0).id;
+        s.variables.push_back({"Speed", "float", fg::Value(1.5), "", ""});
+        s.addFunction("Jump", {{"Height", "float", false, false, fg::Value()}});
+        s.structs.push_back({"Point", "", "", {{"X", "float", fg::Value(), ""}, {"Y", "float", fg::Value(), ""}}});
+        doc->setScript(s, "Test");
+        auto p = std::make_unique<fged::gl::DetailsPanel>(*doc);
+        panel = p.get();
+        panel->setOnMessage([this](glw::LocalizedText t) { messages.push_back(t.source); });
+        root.setContent(std::move(p));
+        root.setSize({500, 900});
+        root.layout();
+    }
+    Point middleOf(const glw::Widget& w) const { return w.mapToRoot({w.size().width / 2, w.size().height / 2}); }
+    // What the panel posted for after the event (it made again), done.
+    void settle() {
+        context().scheduler->tick();
+        root.layout();
+    }
+    void click(Point p) {
+        root.dispatch(glw::platform::MouseMoved{1, p});
+        root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, true, 1, p});
+        root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, false, 1, p});
+        settle();
+    }
+    // `text` typed into a field (all it had replaced), then Enter.
+    void type(const std::string& id, const std::string& text) {
+        root.layout();
+        glw::Widget* f = panel->field(id);
+        CHECK(f != nullptr);
+        if (!f)
+            return;
+        root.setFocus(f);
+        static_cast<glw::LineEdit*>(f)->selectAll();
+        root.dispatch(glw::platform::TextInput{1, text});
+        root.dispatch(glw::platform::KeyChanged{1, Key::Enter, KeyModifiers::None, true, false});
+        settle();
+    }
+    // The + buttons that show, in order.
+    std::vector<glw::Widget*> plusButtons() const {
+        std::vector<glw::Widget*> found;
+        std::function<void(glw::Widget&)> walk = [&](glw::Widget& w) {
+            if (dynamic_cast<glw::ToolButton*>(&w) && w.visibleInTree())
+                found.push_back(&w);
+            for (const auto& c : w.children())
+                walk(*c);
+        };
+        walk(*panel);
+        return found;
+    }
+};
+
+} // namespace
+
+TEST(detailsEditAVariable) {
+    Detailed d;
+    d.panel->showVariable("", "Speed");
+    d.root.layout();
+    CHECK(d.panel->mode() == fged::gl::DetailsPanel::Mode::Variable);
+    CHECK(d.panel->field("name") && d.panel->field("type") && d.panel->field("default") && !d.panel->field("key"));
+    d.type("category", "Movement");
+    d.type("default", "2.5");
+    CHECK(d.doc->script().findVariable("Speed")->category == "Movement");
+    CHECK(d.doc->script().findVariable("Speed")->def.toFloat() == 2.5);
+    d.type("name", "Velocity");
+    CHECK(d.doc->script().findVariable("Velocity") && d.panel->mode() == fged::gl::DetailsPanel::Mode::Variable);
+    CHECK(d.panel->field("name") && static_cast<glw::LineEdit*>(d.panel->field("name"))->text() == "Velocity");
+    // a name taken: told, not renamed
+    d.doc->edit("v", [](fg::Script& s) { s.variables.push_back({"Other", "int", fg::Value(int64_t(0)), "", ""}); });
+    d.settle();
+    d.type("name", "Other");
+    CHECK(d.doc->script().findVariable("Velocity") && !d.messages.empty());
+    // the search (the panel's first child): only the rows with the words
+    d.root.setFocus(nullptr);
+    static_cast<glw::LineEdit&>(*d.panel->children()[0]).setText("categ");
+    d.panel->rebuild();
+    d.root.layout();
+    glw::Widget* category = d.panel->field("category");
+    glw::Widget* name = d.panel->field("name");
+    CHECK(category && category->visible() && name && !name->visible());
+    // deleted elsewhere: nothing shown
+    d.doc->edit("x", [](fg::Script& s) { s.variables.clear(); });
+    d.settle();
+    CHECK(d.panel->mode() == fged::gl::DetailsPanel::Mode::None);
+}
+
+TEST(detailsEditAFunctionsParameters) {
+    Detailed d;
+    d.panel->setClosedSections({"function/outputs"});
+    d.panel->showGraph("Jump");
+    d.root.layout();
+    CHECK(d.panel->field("inputs") && d.panel->field("outputs"));
+    const std::vector<glw::Widget*> plus = d.plusButtons();
+    CHECK(plus.size() == 2);
+    if (plus.size() != 2)
+        return;
+    // the + of Outputs, closed: an output added, the section opened to show it, animated
+    const auto outputs = [&d]() -> glw::CollapsiblePanel* {
+        for (glw::Widget* w = d.panel->field("outputs"); w; w = w->parent())
+            if (auto* p = dynamic_cast<glw::CollapsiblePanel*>(w))
+                return p;
+        return nullptr;
+    };
+    CHECK(outputs() && !outputs()->expanded());
+    d.click(d.middleOf(*plus[1]));
+    const fg::Graph* jump = d.doc->script().findGraph("Jump");
+    CHECK(jump->outputs.size() == 1 && jump->outputs[0].name == "Output");
+    CHECK(outputs() && outputs()->expanded() && outputs()->openness() < 1);
+    d.type("description", "Jumps");
+    CHECK(d.doc->script().findGraph("Jump")->doc == "Jumps");
+}
+
+TEST(detailsEditAStructAndItsFields) {
+    Detailed d;
+    d.panel->showStruct("Point");
+    d.root.layout();
+    CHECK(d.panel->field("fields") && d.panel->field("default"));
+    d.type("default", "3");
+    CHECK(d.doc->script().findStruct("Point")->fields[0].def.toFloat() == 3);
+    const std::vector<glw::Widget*> plus = d.plusButtons();
+    CHECK(plus.size() == 1);
+    if (plus.empty())
+        return;
+    d.click(d.middleOf(*plus[0]));
+    CHECK(d.doc->script().findStruct("Point")->fields.size() == 3);
+    d.type("fieldDescription", "the new one");
+    CHECK(d.doc->script().findStruct("Point")->fields[2].doc == "the new one");
+}
+
+TEST(detailsEditANode) {
+    Detailed d;
+    d.panel->showNodes("EventGraph", {d.format});
+    d.root.layout();
+    CHECK(d.panel->field("fixedInputs") && d.panel->field("nodeInputs") && d.panel->field("comment"));
+    // its own inputs: + adds one
+    const std::vector<glw::Widget*> plus = d.plusButtons();
+    CHECK(plus.size() == 1);
+    if (!plus.empty())
+        d.click(d.middleOf(*plus[0]));
+    const fg::Node* n = d.doc->script().findGraph("EventGraph")->findNode(d.format);
+    CHECK(n->inputs.size() == 1 && n->inputs[0].name == "Input");
+    d.type("comment", "says hello");
+    CHECK(d.doc->script().findGraph("EventGraph")->findNode(d.format)->comment == "says hello");
+    // a node with a setting: a spin box
+    d.panel->showNodes("EventGraph", {d.sequence});
+    d.root.layout();
+    auto* spin = dynamic_cast<glw::SpinBox*>(d.panel->field("setting:count"));
+    CHECK(spin && spin->value() == 2);
+}
+
+TEST(propertyEditsKeepLinksAndValues) {
+    fg::Runtime rt;
+    fged::core::Document doc(rt);
+    fg::Script s;
+    s.addFunction("F", {{"A", "int", false, false, fg::Value()}, {"B", "int", false, false, fg::Value()}});
+    fg::Graph& g = s.addEventGraph();
+    fg::Node& call = g.addNode("func.call", 0, 0);
+    call.props["function"] = "F";
+    call.defaults["A"] = fg::Value(int64_t(7));
+    const fg::NodeId callId = call.id;
+    s.structs.push_back({"P", "", "", {{"X", "int", fg::Value(), ""}, {"Y", "float", fg::Value(), ""}}});
+    doc.setScript(s, "T");
+    fged::core::PropertyEdits edits(doc);
+    // A and B swap their names: the value typed into the call's A follows it (B now)
+    std::vector<fg::ParamDecl> params = doc.script().findGraph("F")->inputs;
+    std::swap(params[0].name, params[1].name);
+    CHECK(edits.setParams("F", true, params, "swap") == fged::core::ListProblem::None);
+    const fg::Node* c = doc.script().findGraph("EventGraph")->findNode(callId);
+    CHECK(c && c->defaults.count("B") && c->defaults.at("B").toInt() == 7 && !c->defaults.count("A"));
+    // two of a name: refused
+    params[1].name = params[0].name;
+    CHECK(edits.setParams("F", true, params, "dup") == fged::core::ListProblem::DuplicateName);
+    // fields renamed into each other's names, and retyped
+    std::vector<fg::ParamDecl> fields{{"Y", "int", false, false, fg::Value()}, {"X", "string", false, false, fg::Value()}};
+    CHECK(edits.setFields("P", fields, "f") == fged::core::ListProblem::None);
+    const fg::StructDecl* p = doc.script().findStruct("P");
+    CHECK(p->fields[0].name == "Y" && p->fields[0].type == "int" && p->fields[1].name == "X" && p->fields[1].type == "string");
+    edits.moveField("P", 0, false, "m");
+    CHECK(doc.script().findStruct("P")->fields[0].name == "X");
+    CHECK(fged::core::TypeParts::parse("map<string,array<int>>").container == fged::core::TypeParts::Container::Map);
+    CHECK(fged::core::TypeParts::parse("array<float>").str() == "array<float>");
+    // undone in one step each
+    doc.undo();
+    CHECK(doc.script().findStruct("P")->fields[0].name == "Y");
 }
 
 int main() {
