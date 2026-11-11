@@ -105,6 +105,7 @@ struct Studio::Impl {
     std::vector<std::string> shownGraphs;       // the graphs in the tabs, in their order
 
     std::shared_ptr<glw::Action> newAction, openAction, saveAction, saveAsAction, quitAction, undoAction, redoAction;
+    std::shared_ptr<glw::Action> cutAction, copyAction, pasteAction, duplicateAction, selectAllAction, snapAction;
     bool closing = false;                       // asked whether to save, and it goes: the window may close now
 
     Impl(glw::Application& a, fg::Runtime& r, StudioOptions o) : app(a), rt(r), options(std::move(o)), doc(r) {}
@@ -231,6 +232,26 @@ struct Studio::Impl {
         quitAction = action(tr("&Quit"), [this] { window->requestClose(); }, key(Key::Q));
         undoAction = action(tr("&Undo"), [this] { doc.undo(); }, key(Key::Z));
         redoAction = action(tr("&Redo"), [this] { doc.redo(); }, key(Key::Y));
+        // on the graph shown
+        const auto onGraph = [this](void (GraphView::*command)()) {
+            return [this, command] {
+                if (GraphView* g = currentGraph())
+                    (g->*command)();
+            };
+        };
+        cutAction = action(tr("Cu&t"), onGraph(&GraphView::cutSelection), key(Key::X));
+        copyAction = action(tr("&Copy"), onGraph(&GraphView::copySelection), key(Key::C));
+        pasteAction = action(tr("&Paste"), onGraph(&GraphView::paste), key(Key::V));
+        duplicateAction = action(tr("D&uplicate"), onGraph(&GraphView::duplicateSelection), key(Key::D));
+        selectAllAction = action(tr("Select &All"), onGraph(&GraphView::selectAll), key(Key::A));
+        snapAction = action(tr("&Snap to Grid"), [this] {
+            settings.setBoolean("snapToGrid", snapAction->checked());
+            saveSettings();
+            for (GraphView* g : graphViews())
+                g->setSnapToGrid(snapAction->checked());
+        });
+        snapAction->setCheckable(true);
+        snapAction->setChecked(settings.boolean("snapToGrid", false));
         showUndoState();
     }
 
@@ -273,9 +294,29 @@ struct Studio::Impl {
                        {.action = saveAsAction},
                        glw::MenuItem::separatorItem(),
                        {.action = quitAction}}},
-            {.text = tr("&Edit"), .items = {{.action = undoAction}, {.action = redoAction}}},
+            {.text = tr("&Edit"),
+             .items = {{.action = undoAction},
+                       {.action = redoAction},
+                       glw::MenuItem::separatorItem(),
+                       {.action = cutAction},
+                       {.action = copyAction},
+                       {.action = pasteAction},
+                       {.action = duplicateAction},
+                       {.text = tr("&Delete"), .onTriggered = [this] {
+                            if (GraphView* g = currentGraph())
+                                g->deleteSelection();
+                        }, .shortcut = tr("Del")},
+                       glw::MenuItem::separatorItem(),
+                       {.action = selectAllAction}}},
             {.text = tr("&View"),
-             .items = {{.text = tr("&Colors"), .items = std::move(colors)}, {.text = tr("&Style"), .items = std::move(looks)}}},
+             .items = {{.text = tr("&Frame Selection"), .onTriggered = [this] {
+                            if (GraphView* g = currentGraph())
+                                g->frameSelection();
+                        }, .shortcut = tr("F")},
+                       {.action = snapAction},
+                       glw::MenuItem::separatorItem(),
+                       {.text = tr("&Colors"), .items = std::move(colors)},
+                       {.text = tr("&Style"), .items = std::move(looks)}}},
             {.text = tr("&Help"), .items = {{.text = tr("&About FlowGraph Studio"), .onTriggered = [this] { about(); }}}},
         };
         if (!menuBar)
@@ -304,6 +345,28 @@ struct Studio::Impl {
     }
 
     // The graphs in tabs, what the script has in My Script: until the canvas and the panels are made, what there is.
+    // A graph's view: told what to say in the status bar, snapping as the View menu says.
+    std::unique_ptr<GraphView> makeGraphView(const std::string& name) {
+        auto view = std::make_unique<GraphView>(doc, name);
+        view->setSnapToGrid(snapAction && snapAction->checked());
+        view->setOnMessage([this](glw::LocalizedText text) { status->showMessage(std::move(text), 4s); });
+        return view;
+    }
+
+    GraphView* currentGraph() const {
+        const std::optional<std::size_t> i = graphs->current();
+        return i ? dynamic_cast<GraphView*>(graphs->content(*i)) : nullptr;
+    }
+
+    std::vector<GraphView*> graphViews() const {
+        std::vector<GraphView*> views;
+        for (std::size_t i = 0; i < graphs->count(); ++i) {
+            if (auto* g = dynamic_cast<GraphView*>(graphs->content(i)))
+                views.push_back(g);
+        }
+        return views;
+    }
+
     void dropGraphs() {
         while (graphs->count() > 0)
             graphs->removeTab(graphs->count() - 1);
@@ -329,7 +392,7 @@ struct Studio::Impl {
         for (const fg::Graph& g : script.graphs) {
             std::unique_ptr<glw::Widget> view = std::move(kept[g.name]);
             if (!view)
-                view = std::make_unique<GraphView>(doc, g.name);
+                view = makeGraphView(g.name);
             // a function's tab says so, as the Qt editor's
             graphs->addTab(glw::LocalizedText(g.kind == fg::GraphKind::Function ? "\u0192 " + g.name : g.name), std::move(view));
             shownGraphs.push_back(g.name);

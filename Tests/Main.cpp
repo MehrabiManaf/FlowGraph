@@ -3,6 +3,7 @@
 // Minimal test runner: TEST(name) { CHECK(cond); }
 #include <FlowGraph/Encoding.hpp>
 #include <FlowGraph/Runtime.hpp>
+#include <FlowGraphEditorCore/GraphEdits.hpp>
 #include <FlowGraphEditorCore/RunSession.hpp>
 
 #include <algorithm>
@@ -5610,6 +5611,97 @@ TEST(editor_core_document_undoes_coalesces_and_tells) {
     CHECK(other.load(file, &error) && other.script().structs.size() == 1 && !other.canUndo());
     CHECK(!other.load(file + ".missing", &error) && !error.empty());
     std::filesystem::remove(file);
+}
+
+TEST(editor_core_graph_edits_link_remove_copy_and_place) {
+    using fged::core::GraphEdits;
+    using fged::core::LinkProblem;
+    using fged::core::PinEnd;
+    TestRuntime rt;
+    GoGraph t;
+    t.s.variables.push_back({"Name", "string", Value("Ann"), "", ""});
+    const NodeId a = t.say("a"), b = t.say("b");
+    const NodeId get = t.var("var.get", "Name");
+    fged::core::Document doc(rt);
+    doc.setScript(t.s, "Test");
+    GraphEdits edits(doc, "EventGraph");
+    const auto pin = [&](NodeId node, const std::string& name, PinDir dir) {
+        return PinEnd::of(*doc.compiledGraph("EventGraph")->findNode(node), name, dir);
+    };
+    const auto links = [&] { return doc.graph("EventGraph")->connections.size(); };
+
+    // what cannot be linked, and why
+    LinkProblem why = LinkProblem::None;
+    CHECK(!edits.link(pin(a, "In", PinDir::In), pin(b, "In", PinDir::In), "Link", &why) && why == LinkProblem::SameDirection);
+    CHECK(!edits.link(pin(a, "Then", PinDir::Out), pin(a, "In", PinDir::In), "Link", &why) && why == LinkProblem::SameNode);
+    CHECK(edits.linkProblem(pin(t.ev, "Then", PinDir::Out), pin(a, "String", PinDir::In)) == LinkProblem::KindsDiffer);
+    CHECK(links() == 0 && !doc.canUndo());
+    // linked, in either order; an output of execution has one link: the next replaces it
+    CHECK(edits.link(pin(a, "In", PinDir::In), pin(t.ev, "Then", PinDir::Out), "Link"));
+    CHECK(links() == 1 && doc.undoLabel() == "Link");
+    CHECK(edits.link(pin(t.ev, "Then", PinDir::Out), pin(b, "In", PinDir::In), "Link"));
+    CHECK(links() == 1 && doc.graph("EventGraph")->connections[0].toNode == b);
+    // a loop of execution with no way out is refused
+    CHECK(edits.link(pin(b, "Then", PinDir::Out), pin(a, "In", PinDir::In), "Link"));
+    CHECK(edits.linkProblem(pin(a, "Then", PinDir::Out), pin(b, "In", PinDir::In)) == LinkProblem::EndlessLoop);
+
+    // a reroute in a link of data, none in one of execution
+    const fg::CompiledNode& getter = *doc.compiledGraph("EventGraph")->findNode(get);
+    const std::string value = getter.pins[std::size_t(getter.dataOut.at(0))].name;
+    CHECK(edits.link(pin(get, value, PinDir::Out), pin(a, "String", PinDir::In), "Link"));
+    const fg::Connection data{get, value, a, "String"};
+    CHECK(!edits.insertReroute(doc.graph("EventGraph")->connections[0], 0, 0, "Reroute"));
+    CHECK(edits.insertReroute(data, 50, 60, "Reroute"));
+    const fg::Graph& g = *doc.graph("EventGraph");
+    const auto reroute = std::find_if(g.nodes.begin(), g.nodes.end(), [](const fg::Node& n) { return n.def == "reroute"; });
+    CHECK(reroute != g.nodes.end() && reroute->x == 50 && reroute->y == 60);
+    CHECK(std::count(g.connections.begin(), g.connections.end(), data) == 0 && links() == 4);
+
+    // breaking a pin's links
+    edits.breakLinks(pin(b, "Then", PinDir::Out), "Break");
+    CHECK(links() == 3);
+
+    // moved: one step of the layout; not moved: none
+    const std::string before = doc.undoLabel();
+    edits.place({{a, 20, 20}}, {}, "Move");
+    edits.place({{a, 20, 20}}, {}, "Move");         // where it is already: no step
+    CHECK(doc.undoLabel() == "Move");
+    doc.undo();
+    CHECK(doc.undoLabel() == before);
+    edits.place({{a, 300, 40}}, {}, "Move");
+    CHECK(doc.graph("EventGraph")->findNode(a)->x == 300);
+
+    // copied and pasted: the nodes and the links between them; an event is not copied
+    const std::string clip = edits.copy({a, b, t.ev});
+    CHECK(GraphEdits::isClip(clip) && !GraphEdits::isClip("{\"name\": \"x\"}") && !GraphEdits::isClip("not json"));
+    const std::size_t nodes = doc.graph("EventGraph")->nodes.size();
+    const std::vector<NodeId> made = edits.paste(clip, 1000, 1000, false, "Paste");
+    CHECK(made.size() == 2 && doc.graph("EventGraph")->nodes.size() == nodes + 2);
+    double left = 1e9;
+    for (NodeId id : made)
+        left = std::min(left, doc.graph("EventGraph")->findNode(id)->x);
+    CHECK(left == 1000);
+    CHECK(edits.paste("nothing", 0, 0, false, "Paste").empty());
+
+    // removed: the nodes with their links; the event stays
+    edits.remove({made[0], made[1], t.ev}, {}, {}, "Delete");
+    CHECK(doc.graph("EventGraph")->nodes.size() == nodes && doc.graph("EventGraph")->findNode(t.ev));
+
+    // a value typed: one step
+    edits.setPinValue(b, "String", Value("x"), "Edit value");
+    edits.setPinValue(b, "String", Value("xy"), "Edit value");
+    CHECK(doc.graph("EventGraph")->findNode(b)->defaults.at("String").str() == "xy");
+    doc.undo();
+    CHECK(doc.graph("EventGraph")->findNode(b)->defaults.at("String").str() == "b");
+
+    // comments
+    const int id = edits.addComment(0, 0, 300, 160, "Note", "Comment");
+    edits.setCommentText(id, "Notes", "Comment");
+    edits.place({}, {{id, 10, 20, 400, 200}}, "Resize");
+    const fg::CommentBox& c = doc.graph("EventGraph")->comments.at(0);
+    CHECK(c.text == "Notes" && c.x == 10 && c.w == 400);
+    edits.setNodeComment(a, "first", "Node comment");
+    CHECK(doc.graph("EventGraph")->findNode(a)->comment == "first");
 }
 
 TEST(editor_core_run_session_runs_reports_and_stops_on_edits) {

@@ -8,3 +8,11 @@ target_include_directories(FlowGraphGLEditor
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Include>
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
 target_link_libraries(FlowGraphGLEditor PUBLIC FlowGraphEditorCore GLWidgets::GLWidgets)
+
+# Its graph edited with the mouse and the keys, in a root without a window (no GPU).
+if(FG_BUILD_TESTS)
+    add_executable(FlowGraphGLEditorTests Tests/GraphViewTests.cpp)
+    target_link_libraries(FlowGraphGLEditorTests PRIVATE FlowGraphGLEditor)
+    target_include_directories(FlowGraphGLEditorTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
+    add_test(NAME FlowGraphGLEditorTests COMMAND FlowGraphGLEditorTests)
+endif()

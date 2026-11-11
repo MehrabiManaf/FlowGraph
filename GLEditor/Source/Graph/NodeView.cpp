@@ -395,6 +395,8 @@ void NodeView::paint(glw::PaintContext& context) {
 // ---- the mouse over it ----
 
 void NodeView::onMouse(glw::MouseEvent& event) {
+    // pressed, dragged, let go: the graph's (selecting, moving, linking)
+    graph_.nodeMouse(*this, event);
     if (event.type != glw::MouseEventType::Move)
         return;
     std::optional<PinHit> pin = pinAt(event.position);
