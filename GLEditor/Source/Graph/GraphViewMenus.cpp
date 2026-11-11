@@ -6,6 +6,7 @@
 #include "Graph/GraphView.hpp"
 #include "Graph/NodeView.hpp"
 #include "NodeTexts.hpp"
+#include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Intellisense.hpp>
 #include <FlowGraph/Vm.hpp>
@@ -130,6 +131,53 @@ void GraphView::openPalette(glw::Point at, const core::PinEnd* from) {
                                   focus();
                               },
                           .search = [searched](const std::string& query) { return fg::searchPaletteIndices(*searched, query); }});
+}
+
+// ---- what is dropped on it ----
+
+glw::DropAction GraphView::onDragOver(const glw::DragEvent& event) {
+    const bool ours = event.data.format == functionDragFormat || event.data.format == variableDragFormat;
+    return ours ? glw::DropAction::Copy : glw::DropAction::None;
+}
+
+glw::DropAction GraphView::onDrop(const glw::DragEvent& event) {
+    glw::Point at = toCanvas(event.position);
+    if (snap_)
+        at = {std::round(at.x / snapStep_) * snapStep_, std::round(at.y / snapStep_) * snapStep_};
+    if (event.data.format == functionDragFormat) {
+        // a call of the function
+        if (const fg::NodeId made = edits_.addCall(event.data.content, at.x, at.y,
+                                                   words(tr("Add call to {function}").arg("function", event.data.content)))) {
+            select({made});
+            focus();
+        }
+        return glw::DropAction::Copy;
+    }
+    if (event.data.format != variableDragFormat)
+        return glw::DropAction::None;
+    const std::size_t bar = event.data.content.find('|');
+    if (bar == std::string::npos)
+        return glw::DropAction::None;
+    const std::string scope = event.data.content.substr(0, bar), name = event.data.content.substr(bar + 1);
+    const auto make = [this, scope, name, at](bool set) {
+        if (const fg::NodeId made = edits_.addVariableNode(name, scope, set, at.x, at.y,
+                                                           words(set ? tr("Add Set variable") : tr("Add Get variable")))) {
+            select({made});
+            focus();
+        }
+    };
+    // Ctrl: a Get, Alt: a Set; neither: chosen in a menu, once the drop is over
+    if (glw::platform::hasAny(event.modifiers, glw::platform::shortcutModifier))
+        make(false);
+    else if (glw::platform::hasAny(event.modifiers, glw::platform::KeyModifiers::Alt))
+        make(true);
+    else if (glw::UiRoot* r = root())
+        r->defer([this, make, name, shown = event.position] {
+            glw::showContextMenu(*this, shown,
+                                 {{.text = tr("Get {name}").arg("name", name), .onTriggered = [make] { make(false); }},
+                                  {.text = tr("Set {name}").arg("name", name), .onTriggered = [make] { make(true); }}});
+        });
+    return glw::DropAction::Copy;
 }
 
 // ---- comments, breakpoints ----

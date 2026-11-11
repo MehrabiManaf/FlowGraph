@@ -4,11 +4,14 @@
 // events given to it as a window would.
 #include "Graph/GraphView.hpp"
 #include "Graph/NodeView.hpp"
+#include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Runtime.hpp>
 #include <GLWidgets/Paint/DrawList.hpp>
 #include <GLWidgets/Text/Font.hpp>
 #include <GLWidgets/Text/GlyphAtlas.hpp>
+#include <GLWidgets/Widgets/Layout.hpp>
+#include <GLWidgets/Widgets/ToolBar.hpp>
 #include <GLWidgets/Widgets/UiRoot.hpp>
 
 #include <cstdio>
@@ -455,6 +458,169 @@ TEST(aRunLightsTheLinksItTakesAndANodeClickedTwiceIsOpened) {
     });
     std::string value;
     CHECK(e.view->pinValue(e.a, "String", value) && value == "42");
+}
+
+namespace {
+
+// My Script beside a graph, in one root (1400 by 900): the panel 320 wide at the start.
+struct Listed {
+    fg::Runtime rt;
+    std::unique_ptr<fged::core::Document> doc;
+    Host host;
+    glw::UiRoot root{context(), &host};
+    fged::gl::MyScriptPanel* panel = nullptr;
+    fged::gl::GraphView* view = nullptr;
+
+    Listed() {
+        rt.registry().addEvent("Go");
+        doc = std::make_unique<fged::core::Document>(rt);
+        fg::Script s;
+        s.addEventGraph().addNode("event:Go", 0, 0);
+        s.variables.push_back({"Speed", "float", fg::Value(1.5), "", ""});
+        s.addFunction("Jump");
+        doc->setScript(s, "Test");
+        auto row = std::make_unique<glw::Widget>();
+        row->setLayout(std::make_unique<glw::StackLayout>(glw::Orientation::Horizontal));
+        auto p = std::make_unique<fged::gl::MyScriptPanel>(*doc);
+        p->setMinimumSize({320, 0});
+        p->setMaximumSize({320, glw::unbounded});
+        panel = &row->add(std::move(p));
+        auto v = std::make_unique<fged::gl::GraphView>(*doc, "EventGraph");
+        v->setStretch(1);
+        view = &row->add(std::move(v));
+        root.setContent(std::move(row));
+        root.setSize({1400, 900});
+        root.layout();
+        view->setZoom(1);
+        view->setOrigin({0, 0});
+        root.layout();
+    }
+    Point middleOf(const glw::Widget& w) const { return w.mapToRoot({w.size().width / 2, w.size().height / 2}); }
+    void press(Point p, KeyModifiers m = KeyModifiers::None, int clicks = 1) {
+        root.dispatch(glw::platform::KeyChanged{1, Key::Unknown, m, false, false});
+        root.dispatch(glw::platform::MouseMoved{1, p});
+        root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, true, clicks, p});
+    }
+    void move(Point p) { root.dispatch(glw::platform::MouseMoved{1, p}); }
+    void release(Point p) {
+        root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, false, 1, p});
+        root.layout();
+    }
+    void click(Point p) {
+        press(p);
+        release(p);
+    }
+    // The + buttons of the sections, in order (Functions, Variables, Local Variables, Structs).
+    std::vector<glw::Widget*> plusButtons() const {
+        std::vector<glw::Widget*> found;
+        std::function<void(glw::Widget&)> walk = [&](glw::Widget& w) {
+            if (dynamic_cast<glw::ToolButton*>(&w) && w.visibleInTree())
+                found.push_back(&w);
+            for (const auto& c : w.children())
+                walk(*c);
+        };
+        walk(*panel);
+        return found;
+    }
+};
+
+} // namespace
+
+TEST(myScriptListsSelectsAddsAndRenames) {
+    Listed l;
+    glw::Widget* speed = l.panel->rowOf(fged::core::Member::Variable, "", "Speed");
+    CHECK(speed && l.panel->rowOf(fged::core::Member::Function, "", "Jump"));
+    CHECK(!l.panel->rowOf(fged::core::Member::EventGraph, "", "EventGraph"));      // its events, not the graph
+    if (!speed)
+        return;
+    // a click selects it
+    l.click(l.middleOf(*speed));
+    CHECK(l.panel->selection() && l.panel->selection()->name == "Speed");
+    // the + of Functions: a function added, its name typed at once
+    const std::vector<glw::Widget*> plus = l.plusButtons();
+    CHECK(plus.size() == 3);        // Local Variables hidden: the graph shown is no function
+    if (plus.empty())
+        return;
+    l.click(l.middleOf(*plus[0]));
+    CHECK(l.doc->script().findGraph("NewFunction") && l.doc->undoLabel() == "Add function");
+    l.root.dispatch(glw::platform::TextInput{1, "Land"});
+    l.root.dispatch(glw::platform::KeyChanged{1, Key::Enter, KeyModifiers::None, true, false});
+    l.root.layout();
+    CHECK(l.doc->script().findGraph("Land") && !l.doc->script().findGraph("NewFunction"));
+    CHECK(l.panel->rowOf(fged::core::Member::Function, "", "Land"));
+    // a name taken: told, nothing renamed
+    std::vector<std::string> told;
+    l.panel->setOnMessage([&](glw::LocalizedText t) { told.push_back(t.source); });
+    l.click(l.middleOf(*plus[1]));
+    l.root.dispatch(glw::platform::TextInput{1, "Speed"});
+    l.root.dispatch(glw::platform::KeyChanged{1, Key::Enter, KeyModifiers::None, true, false});
+    l.root.layout();
+    CHECK(told.size() == 1 && l.doc->script().findVariable("NewVar"));
+}
+
+TEST(aVariableOrAFunctionDraggedOntoTheGraphMakesANode) {
+    Listed l;
+    const std::size_t nodes = l.doc->graph("EventGraph")->nodes.size();
+    // a variable with Ctrl: a Get where it is let go
+    glw::Widget* speed = l.panel->rowOf(fged::core::Member::Variable, "", "Speed");
+    if (!speed)
+        return;
+    const Point from = l.middleOf(*speed);
+    l.press(from);
+    l.move({from.x + 20, from.y});
+    l.move({700, 400});
+    CHECK(l.root.dragging());
+    l.root.dispatch(glw::platform::KeyChanged{1, Key::Control, glw::platform::shortcutModifier, true, false});
+    l.release({700, 400});
+    const fg::Graph& g = *l.doc->graph("EventGraph");
+    CHECK(g.nodes.size() == nodes + 1);
+    if (g.nodes.size() == nodes + 1) {
+        const fg::Node& made = g.nodes.back();
+        CHECK(made.def == "var.get" && made.props.at("name") == "Speed");
+        const Point canvas = l.view->toCanvas(l.view->mapFromRoot({700, 400}));
+        CHECK(std::abs(made.x - canvas.x) < 1 && std::abs(made.y - canvas.y) < 1);
+    }
+    // a function: a call of it
+    glw::Widget* jump = l.panel->rowOf(fged::core::Member::Function, "", "Jump");
+    if (!jump)
+        return;
+    const Point f = l.middleOf(*jump);
+    l.root.dispatch(glw::platform::KeyChanged{1, Key::Control, KeyModifiers::None, false, false});
+    l.press(f);
+    l.move({f.x + 20, f.y});
+    l.move({800, 500});
+    l.release({800, 500});
+    CHECK(l.doc->graph("EventGraph")->nodes.size() == nodes + 2 && l.doc->graph("EventGraph")->nodes.back().def == "func.call");
+}
+
+TEST(myScriptsTablesRenameByF2AndOpenByADoubleClick) {
+    Listed l;
+    glw::Widget* speed = l.panel->rowOf(fged::core::Member::Variable, "", "Speed");
+    CHECK(speed != nullptr);
+    if (!speed)
+        return;
+    // F2 on the member chosen: its name typed in its cell
+    l.click(l.middleOf(*speed));
+    l.root.dispatch(glw::platform::KeyChanged{1, Key::F2, KeyModifiers::None, true, false});
+    l.root.layout();
+    l.root.dispatch(glw::platform::TextInput{1, "Velocity"});
+    l.root.dispatch(glw::platform::KeyChanged{1, Key::Enter, KeyModifiers::None, true, false});
+    l.root.layout();
+    CHECK(l.doc->script().findVariable("Velocity") && !l.doc->script().findVariable("Speed"));
+    CHECK(l.panel->selection() && l.panel->selection()->name == "Velocity");
+    // a function clicked twice: its graph opened
+    std::vector<std::string> opened;
+    l.panel->setOnOpenGraph([&](const std::string& g) { opened.push_back(g); });
+    glw::Widget* jump = l.panel->rowOf(fged::core::Member::Function, "", "Jump");
+    if (!jump)
+        return;
+    const Point at = l.middleOf(*jump);
+    l.press(at);
+    l.release(at);
+    l.press(at, KeyModifiers::None, 2);
+    l.release(at);
+    CHECK(opened == std::vector<std::string>{"Jump"});
+    CHECK(l.panel->selection() && l.panel->selection()->name == "Jump");
 }
 
 int main() {

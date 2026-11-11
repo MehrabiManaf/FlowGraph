@@ -149,6 +149,35 @@ fg::NodeId GraphEdits::addNode(const fg::NodeTemplate& t, double x, double y, co
     return made;
 }
 
+fg::NodeId GraphEdits::addVariableNode(const std::string& name, const std::string& scope, bool set, double x, double y,
+                                       const std::string& label) {
+    fg::NodeId id = 0;
+    doc_.edit(label, [&](fg::Script& s) {
+        if (fg::Graph* g = graphOf(s)) {
+            fg::Node& n = g->addNode(set ? "var.set" : "var.get", x, y);
+            n.props["name"] = name;
+            n.props["scope"] = scope;
+            id = n.id;
+        }
+    });
+    return id;
+}
+
+fg::NodeId GraphEdits::addCall(const std::string& function, double x, double y, const std::string& label) {
+    const fg::Graph* callee = doc_.script().findGraph(function);
+    if (!callee || callee->kind != fg::GraphKind::Function)
+        return 0;
+    fg::NodeId id = 0;
+    doc_.edit(label, [&](fg::Script& s) {
+        if (fg::Graph* g = graphOf(s)) {
+            fg::Node& n = g->addNode("func.call", x, y);
+            n.props["function"] = function;
+            id = n.id;
+        }
+    });
+    return id;
+}
+
 bool GraphEdits::removable(const fg::CompiledNode& node) {
     return node.op != fg::NodeOp::Event && node.op != fg::NodeOp::FunctionEntry;
 }

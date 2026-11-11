@@ -61,6 +61,10 @@ public:
     // canvas) when it has a pin that fits: its id, and that pin's name in `linkedPin`. `coalesceKey`: the step it is one of.
     fg::NodeId addNode(const fg::NodeTemplate& t, double x, double y, const PinEnd* from, const std::string& label,
                        std::string* linkedPin = nullptr, const std::string& coalesceKey = {});
+    // A Get (or a Set) of a variable at (x, y): `scope` "global", or "local" (of the function the graph is); its id.
+    fg::NodeId addVariableNode(const std::string& name, const std::string& scope, bool set, double x, double y, const std::string& label);
+    // A call of a function of the script at (x, y); 0 when there is no such function.
+    fg::NodeId addCall(const std::string& function, double x, double y, const std::string& label);
     // Whether a node can be deleted, copied: the entry of a function and the events of the application are fixed.
     static bool removable(const fg::CompiledNode& node);
     // The nodes (those removable), links and comments, gone with the links of the nodes.

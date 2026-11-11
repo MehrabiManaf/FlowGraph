@@ -5,6 +5,7 @@
 #include <FlowGraph/Runtime.hpp>
 #include <FlowGraphEditorCore/GraphEdits.hpp>
 #include <FlowGraphEditorCore/RunSession.hpp>
+#include <FlowGraphEditorCore/ScriptEdits.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -5702,6 +5703,56 @@ TEST(editor_core_graph_edits_link_remove_copy_and_place) {
     CHECK(c.text == "Notes" && c.x == 10 && c.w == 400);
     edits.setNodeComment(a, "first", "Node comment");
     CHECK(doc.graph("EventGraph")->findNode(a)->comment == "first");
+}
+
+TEST(editor_core_script_edits_add_rename_duplicate_and_remove_members) {
+    using fged::core::Member;
+    using fged::core::NameProblem;
+    TestRuntime rt;
+    fged::core::Document doc(rt);
+    fged::core::ScriptEdits edits(doc);
+    // added, with names not taken
+    const std::string f = edits.add(Member::Function, "NewFunction", "Add function");
+    const std::string f2 = edits.add(Member::Function, "NewFunction", "Add function");
+    CHECK(f == "NewFunction" && f2 != f && doc.script().findGraph(f2));
+    CHECK(doc.script().findGraph(f)->kind == fg::GraphKind::Function && doc.undoLabel() == "Add function");
+    const std::string v = edits.add(Member::Variable, "NewVar", "Add variable");
+    const std::string st = edits.add(Member::Struct, "NewStruct", "Add struct");
+    const std::string l = edits.add(Member::Local, "NewLocal", "Add local", f);
+    CHECK(doc.script().findVariable(v) && doc.script().findStruct(st) && doc.script().findGraph(f)->findLocal(l));
+    CHECK(edits.add(Member::Local, "NewLocal", "Add local", "EventGraph").empty());      // locals are a function's
+    // what a rename would clash with
+    CHECK(edits.renameProblem(Member::Function, "", f, f2) == NameProblem::GraphExists);
+    CHECK(edits.renameProblem(Member::Function, "", f, "EventGraph") == NameProblem::GraphExists);
+    CHECK(edits.renameProblem(Member::Variable, "", v, " ") == NameProblem::Empty);
+    CHECK(edits.renameProblem(Member::Struct, "", st, "two words") == NameProblem::NotAName);
+    CHECK(edits.renameProblem(Member::Struct, "", st, "int") == NameProblem::TypeExists);
+    CHECK(edits.renameProblem(Member::Function, "", f, f) == NameProblem::None);
+    // renamed with what refers to it: a Get of the variable follows
+    doc.edit("Get", [&](fg::Script& s) {
+        fg::Node& n = s.graphs[0].addNode("var.get");
+        n.props["name"] = v;
+        n.props["scope"] = "global";
+    });
+    NameProblem why = NameProblem::None;
+    CHECK(edits.rename(Member::Variable, "", v, "Speed", "Rename variable", &why) && why == NameProblem::None);
+    CHECK(doc.script().findVariable("Speed") && doc.script().graphs[0].nodes.back().props.at("name") == "Speed");
+    CHECK(!edits.rename(Member::Function, "", f, f2, "Rename function", &why) && why == NameProblem::GraphExists);
+    CHECK(edits.rename(Member::Function, "", f, "Move", "Rename function") && doc.script().findGraph("Move"));
+    CHECK(edits.rename(Member::Local, "Move", l, "Step", "Rename local") && doc.script().findGraph("Move")->findLocal("Step"));
+    // a function duplicated; members removed; an event graph stays
+    const std::string copy = edits.duplicateFunction("Move", "Duplicate function");
+    CHECK(copy == "Move_Copy" && doc.script().findGraph(copy)->findLocal("Step"));
+    CHECK(edits.duplicateFunction("EventGraph", "Duplicate function").empty());
+    edits.remove(Member::Function, "", copy, "Delete");
+    edits.remove(Member::Local, "Move", "Step", "Delete");
+    edits.remove(Member::Variable, "", "Speed", "Delete");
+    edits.remove(Member::Struct, "", st, "Delete");
+    edits.remove(Member::EventGraph, "", "EventGraph", "Delete");
+    CHECK(!doc.script().findGraph(copy) && !doc.script().findGraph("Move")->findLocal("Step"));
+    CHECK(!doc.script().findVariable("Speed") && !doc.script().findStruct(st) && doc.script().findGraph("EventGraph"));
+    doc.undo();
+    CHECK(doc.script().findStruct(st));
 }
 
 TEST(editor_core_run_session_runs_reports_and_stops_on_edits) {

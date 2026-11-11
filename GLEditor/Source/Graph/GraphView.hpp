@@ -120,6 +120,9 @@ protected:
     void onPreviewMouse(glw::MouseEvent& event) override;
     void onMouse(glw::MouseEvent& event) override;
     void onKey(glw::KeyEvent& event) override;
+    // a variable or a function of My Script dropped on it: a node there (a Get or a Set, a call)
+    glw::DropAction onDragOver(const glw::DragEvent& event) override;
+    glw::DropAction onDrop(const glw::DragEvent& event) override;
 
 private:
     enum class Drag { None, Move, Resize, Link, Band };

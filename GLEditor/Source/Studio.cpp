@@ -3,6 +3,7 @@
 #include <FlowGraphGLEditor/Studio.hpp>
 
 #include "Graph/GraphView.hpp"
+#include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Vm.hpp>
 #include <FlowGraphEditorCore/RunSession.hpp>
@@ -116,6 +117,8 @@ private:
     glw::Timer timer_;
 };
 
+constexpr const char* graphPrefix = "graph:";      // the id of a graph's panel: graph:<name>
+
 } // namespace
 
 struct Studio::Impl {
@@ -129,12 +132,22 @@ struct Studio::Impl {
 
     glw::Window* window = nullptr;
     glw::DockArea* area = nullptr;
-    glw::TabView* graphs = nullptr;
-    glw::Widget* myScript = nullptr;            // the panel's content: made again as the script changes
+    glw::DockTabs* documents = nullptr;         // the graphs: the panels of the dock area's center stack
+    MyScriptPanel* myScript = nullptr;
     glw::StatusBar* status = nullptr;
     glw::Label* runState = nullptr;
     glw::TextEdit* log = nullptr;               // the Output Log
-    std::vector<std::string> shownGraphs;       // the graphs in the tabs, in their order
+    std::map<std::string, GraphView*> views;    // the graphs open, by name (in the center stack, or docked or floated elsewhere)
+    std::string currentGraphName;               // the one shown last
+    // Views closed while the document tells its listeners (they among them): destroyed once that is over.
+    std::vector<std::unique_ptr<glw::Widget>> closedViews;
+    void closeGraph(const std::string& name) {
+        if (std::unique_ptr<glw::Widget> view = area->removePanel(graphPrefix + name)) {
+            closedViews.push_back(std::move(view));
+            app.post([this] { closedViews.clear(); });
+        }
+        views.erase(name);
+    }
 
     std::shared_ptr<glw::Action> newAction, openAction, saveAction, saveAsAction, quitAction, undoAction, redoAction;
     std::shared_ptr<glw::Action> cutAction, copyAction, pasteAction, duplicateAction, selectAllAction, snapAction;
@@ -201,15 +214,43 @@ struct Studio::Impl {
         auto dock = std::make_unique<glw::DockArea>();
         area = dock.get();
 
-        auto tabs = std::make_unique<glw::TabView>(glw::TabView::Props{.closable = false});
-        graphs = tabs.get();
-        area->setCenter(std::move(tabs));
+        // the graphs in the middle: dock tabs of the area's center stack (closed, moved, floated as any panel), the stack kept
+        // with its room when none is open
+        documents = &area->setCenterStack();
         glw::Widget* center = area->center();
+        area->setOnPanelShown([this](glw::DockTabs&, const std::string& id) {
+            if (id.rfind(graphPrefix, 0) != 0)
+                return;
+            currentGraphName = id.substr(std::string_view(graphPrefix).size());
+            if (myScript)
+                myScript->setCurrentGraph(currentGraphName);
+        });
+        // a graph's tab closed: its view goes (the graph stays in the script: My Script opens it again)
+        area->setOnPanelClosed([this](glw::DockPanel panel) {
+            if (panel.id.rfind(graphPrefix, 0) != 0)
+                return;
+            const std::string name = panel.id.substr(std::string_view(graphPrefix).size());
+            views.erase(name);
+            if (currentGraphName == name) {
+                currentGraphName.clear();
+                if (myScript)
+                    myScript->setCurrentGraph({});
+            }
+        });
 
-        auto scriptPanel = std::make_unique<glw::Widget>();
+        auto scriptPanel = std::make_unique<MyScriptPanel>(doc);
         myScript = scriptPanel.get();
-        area->addPanel({.id = "myScript", .title = tr("My Script"), .content = ui::ScrollArea({}, std::move(scriptPanel)), .closable = false},
-                       center, glw::DockSide::Start, 0.2f);
+        myScript->setOnOpenGraph([this](const std::string& graph) { showGraph(graph); });
+        myScript->setOnEventChosen([this](const std::string& graph, fg::NodeId node, bool show) {
+            if (GraphView* g = showGraph(graph)) {
+                g->select({node});
+                if (show)
+                    g->showNode(node);
+            }
+        });
+        myScript->setOnMessage([this](glw::LocalizedText text) { status->showMessage(std::move(text), 4s); });
+        area->addPanel({.id = "myScript", .title = tr("My Script"), .content = std::move(scriptPanel), .closable = false}, center,
+                       glw::DockSide::Start, 0.2f);
         area->addPanel({.id = "details",
                         .title = tr("Details"),
                         .content = ui::Label({.text = tr("Select a node, a variable or a function to see its details."), .muted = true, .wrap = true})
@@ -430,21 +471,30 @@ struct Studio::Impl {
         return view;
     }
 
-    // The tab of `graph` shown; its view.
+    // The tab of `graph` shown (opened, in the center stack, when it is not open); its view. None: no such graph.
     GraphView* showGraph(const std::string& graph) {
-        const auto it = std::find(shownGraphs.begin(), shownGraphs.end(), graph);
-        if (it == shownGraphs.end())
+        const fg::Graph* g = doc.script().findGraph(graph);
+        if (!g)
             return nullptr;
-        graphs->setCurrent(std::size_t(it - shownGraphs.begin()));
-        return currentGraph();
+        const std::string id = graphPrefix + graph;
+        if (!views.contains(graph)) {
+            std::unique_ptr<GraphView> view = makeGraphView(graph);
+            views[graph] = view.get();
+            // a function's tab says so, as the Qt editor's
+            area->addPanel({.id = id, .title = glw::LocalizedText(g->kind == fg::GraphKind::Function ? "\u0192 " + graph : graph), .content = std::move(view)},
+                           documents, glw::DockSide::Center);
+        }
+        if (glw::DockTabs* tabs = area->tabsOf(id))
+            tabs->setActive(*tabs->indexOf(id));
+        currentGraphName = graph;
+        if (myScript)
+            myScript->setCurrentGraph(graph);
+        return views[graph];
     }
 
     GraphView* graphView(const std::string& graph) const {
-        for (GraphView* g : graphViews()) {
-            if (g->graphName() == graph)
-                return g;
-        }
-        return nullptr;
+        const auto it = views.find(graph);
+        return it == views.end() ? nullptr : it->second;
     }
 
     // ---- running ----
@@ -520,88 +570,37 @@ struct Studio::Impl {
         }
     }
 
-    GraphView* currentGraph() const {
-        const std::optional<std::size_t> i = graphs->current();
-        return i ? dynamic_cast<GraphView*>(graphs->content(*i)) : nullptr;
-    }
+    GraphView* currentGraph() const { return graphView(currentGraphName); }
 
     std::vector<GraphView*> graphViews() const {
-        std::vector<GraphView*> views;
-        for (std::size_t i = 0; i < graphs->count(); ++i) {
-            if (auto* g = dynamic_cast<GraphView*>(graphs->content(i)))
-                views.push_back(g);
-        }
-        return views;
+        std::vector<GraphView*> all;
+        for (const auto& [name, view] : views)
+            all.push_back(view);
+        return all;
     }
 
+    // Every graph's tab closed (another script).
     void dropGraphs() {
-        while (graphs->count() > 0)
-            graphs->removeTab(graphs->count() - 1);
-        shownGraphs.clear();
+        for (const auto& [name, view] : std::map<std::string, GraphView*>(views))
+            closeGraph(name);
+        currentGraphName.clear();
     }
 
-    // A tab for each graph, its view kept while the graph is there (where it was zoomed and panned).
-    void showGraphs() {
-        const fg::Script& script = doc.script();
-        std::vector<std::string> names;
-        for (const fg::Graph& g : script.graphs)
-            names.push_back(g.name);
-        if (names == shownGraphs)
-            return;
-        const std::optional<std::size_t> current = graphs->current();
-        const std::string shown = current && *current < shownGraphs.size() ? shownGraphs[*current] : std::string();
-        std::map<std::string, std::unique_ptr<glw::Widget>> kept;
-        while (graphs->count() > 0) {
-            const std::size_t last = graphs->count() - 1;
-            kept[shownGraphs[last]] = graphs->removeTab(last);
-            shownGraphs.pop_back();
-        }
-        for (const fg::Graph& g : script.graphs) {
-            std::unique_ptr<glw::Widget> view = std::move(kept[g.name]);
-            if (!view)
-                view = makeGraphView(g.name);
-            // a function's tab says so, as the Qt editor's
-            graphs->addTab(glw::LocalizedText(g.kind == fg::GraphKind::Function ? "\u0192 " + g.name : g.name), std::move(view));
-            shownGraphs.push_back(g.name);
-        }
-        const auto it = std::find(shownGraphs.begin(), shownGraphs.end(), shown);
-        if (it != shownGraphs.end())
-            graphs->setCurrent(std::size_t(it - shownGraphs.begin()));
-        else if (!shownGraphs.empty())
-            graphs->setCurrent(0);
-    }
-
-    // The graphs in tabs, what the script has in My Script (its panel comes later).
+    // The graphs open follow the script: a graph gone, its tab closed; a script just opened, its event graphs open.
     void showScript() {
         const fg::Script& script = doc.script();
-        showGraphs();
-
-        while (!myScript->children().empty())
-            myScript->removeChild(*myScript->children().back());
-        myScript->setLayout(std::make_unique<glw::StackLayout>(glw::Orientation::Vertical, 4.0f));
-        myScript->setPadding(glw::Insets::all(10));
-        const auto section = [this](glw::LocalizedText title) {
-            myScript->add(std::make_unique<glw::Label>(glw::Label::Props{.text = std::move(title), .muted = true}));
-        };
-        const auto entry = [this](const std::string& name) {
-            myScript->add(std::make_unique<glw::Label>(glw::Label::Props{.text = glw::LocalizedText(name)})).setMargin({10, 0, 0, 0});
-        };
-        section(tr("Graphs"));
-        for (const fg::Graph& g : script.graphs) {
-            if (g.kind == fg::GraphKind::Event)
-                entry(g.name);
+        for (const auto& [name, view] : std::map<std::string, GraphView*>(views)) {
+            if (!script.findGraph(name))
+                closeGraph(name);
         }
-        section(tr("Functions"));
-        for (const fg::Graph& g : script.graphs) {
-            if (g.kind == fg::GraphKind::Function)
-                entry(g.name);
+        if (views.empty()) {
+            for (const fg::Graph& g : script.graphs)
+                if (g.kind == fg::GraphKind::Event)
+                    showGraph(g.name);
         }
-        section(tr("Variables"));
-        for (const fg::VariableDecl& v : script.variables)
-            entry(v.name);
-        section(tr("Structs"));
-        for (const fg::StructDecl& s : script.structs)
-            entry(s.name);
+        if (!views.contains(currentGraphName))
+            currentGraphName = views.empty() ? std::string() : views.begin()->first;
+        myScript->setCurrentGraph(currentGraphName);
     }
 
     // ---- files ----
