@@ -12,6 +12,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 option(FG_BUILD_EDITOR   "Build the Qt based editor and FlowGraph Studio" ON)
+option(FG_BUILD_GLEDITOR "Build the GLWidgets based editor (flowstudio-next; CMake 3.24 or newer)" ON)
 option(FG_BUILD_TESTS    "Build the unit tests"                            ON)
 option(FG_BUILD_EXAMPLES "Build the examples"                              ON)
 option(FG_SHARED         "Build FlowGraphCore and FlowGraphEditor as shared libraries" ON)
@@ -76,6 +77,26 @@ if(FG_BUILD_EDITOR AND EXISTS ${CMAKE_SOURCE_DIR}/Editor/CMakeLists.txt)
     add_subdirectory(Apps/Studio)
     if(FG_BUILD_EXAMPLES AND EXISTS ${CMAKE_SOURCE_DIR}/Examples/Embedded/CMakeLists.txt)
         add_subdirectory(Examples/Embedded)
+    endif()
+endif()
+
+# ---- the new editor: GLWidgets (its own widgets and GPU drawing on SDL3), no Qt ---------------------------
+# It takes the place of the Qt editor once it does all it does; until then it is flowstudio-next, not installed.
+if(FG_BUILD_GLEDITOR)
+    if(CMAKE_VERSION VERSION_LESS 3.24)
+        message(WARNING "FlowGraph: the GLWidgets editor needs CMake 3.24 or newer (this is ${CMAKE_VERSION}): not built")
+    elseif(NOT EXISTS ${CMAKE_SOURCE_DIR}/ThirdParty/GLWidgets/CMakeLists.txt)
+        message(WARNING "FlowGraph: ThirdParty/GLWidgets is missing (git submodule update --init ThirdParty/GLWidgets): "
+                        "the GLWidgets editor is not built")
+    else()
+        # linked into the editor: no library of its own to ship; none of its examples, tests or benchmarks
+        set(GLW_SHARED OFF CACHE BOOL "" FORCE)
+        set(GLW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(GLW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(GLW_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+        add_subdirectory(ThirdParty/GLWidgets EXCLUDE_FROM_ALL)
+        add_subdirectory(GLEditor)
+        add_subdirectory(Apps/StudioNext)
     endif()
 endif()
 

@@ -53,7 +53,8 @@ jobs:
           arch: win64_msvc2022_64
           cache: true
       - name: Configure
-        run: cmake --preset windows-release
+        # the GLWidgets editor (flowstudio-next) is not in the packages until it takes the place of flowstudio
+        run: cmake --preset windows-release -DFG_BUILD_GLEDITOR=OFF
         env:
           QT_DIR: ${{ env.QT_ROOT_DIR }}
       - name: Build
@@ -135,7 +136,8 @@ jobs:
           echo "QT_ROOT_DIR=/opt/Qt/$QT_VERSION/gcc_64" >> "$GITHUB_ENV"
       - name: Configure
         # lib, not lib64 (the default of RHEL-like systems): the layout of the package, and where its RPATH looks
-        run: cmake --preset linux-release -DCMAKE_INSTALL_LIBDIR=lib '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
+        # (the GLWidgets editor, flowstudio-next, is not in the packages until it takes the place of flowstudio)
+        run: cmake --preset linux-release -DFG_BUILD_GLEDITOR=OFF -DCMAKE_INSTALL_LIBDIR=lib '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
         env:
           QT_DIR: ${{ env.QT_ROOT_DIR }}
       - name: Build

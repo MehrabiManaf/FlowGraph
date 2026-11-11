@@ -24,6 +24,10 @@ rem ---- Ninja: from the Qt installation when it has one (Visual Studio's CMake 
 if exist "%QT_DIR%\..\..\Tools\Ninja\ninja.exe" set PATH=%QT_DIR%\..\..\Tools\Ninja;%PATH%
 set PATH=%QT_DIR%\bin;%PATH%
 
+rem ---- CMake: Visual Studio's own (new enough for GLWidgets, which needs 3.24) before the one on PATH
+set CMAKE=cmake
+if exist "%VSINSTALLDIR%Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" set CMAKE="%VSINSTALLDIR%Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+
 set BUILD=%ROOT%\build\%CONFIG%
-cmake -S "%ROOT%" -B "%BUILD%" -G Ninja -DCMAKE_BUILD_TYPE=%CONFIG% "-DCMAKE_PREFIX_PATH=%QT_DIR%" -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl %FG_CMAKE_ARGS% || exit /b 1
-cmake --build "%BUILD%" %1 %2 %3 %4 %5 %6 %7 %8 %9 || exit /b 1
+%CMAKE% -S "%ROOT%" -B "%BUILD%" -G Ninja -DCMAKE_BUILD_TYPE=%CONFIG% "-DCMAKE_PREFIX_PATH=%QT_DIR%" -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl %FG_CMAKE_ARGS% || exit /b 1
+%CMAKE% --build "%BUILD%" %1 %2 %3 %4 %5 %6 %7 %8 %9 || exit /b 1

@@ -16,6 +16,8 @@ GPL-3.0-only (LICENSES/GPL-3.0.txt) - the editor, because it is built on KDDockW
 under GPL-2.0-only or GPL-3.0-only:
   Editor/                  FlowGraphEditor (the ScriptEditor library), its icons and resources
   Apps/Studio/             flowstudio
+  GLEditor/                FlowGraphGLEditor, the editor on GLWidgets (its successor)
+  Apps/StudioNext/         flowstudio-next, FlowGraph Studio on GLWidgets while it grows
   Examples/Embedded/       the example of an application that embeds the editor
   Tests/EditorTests.cpp
 
@@ -25,6 +27,9 @@ runtime (FlowGraphCore) is not.
 Third-party components
   KDDockWidgets   ThirdParty/KDDockWidgets, GPL-2.0-only or GPL-3.0-only (its LICENSE.txt and LICENSES/);
                   linked into the editor only
+  GLWidgets       ThirdParty/GLWidgets, MIT (its LICENSE), with what it builds in (SDL3, FreeType, HarfBuzz,
+                  SheenBidi, libunibreak, ThorVG, the Vazirmatn font: their licenses in its folder); linked into
+                  the GLWidgets editor only
   Qt              LGPL-3.0 (LICENSES/LGPL-3.0.txt, which supplements LICENSES/GPL-3.0.txt); used by the editor
                   only, as shared libraries
 The runtime uses only the C++ standard library and the operating system. Its calendar arithmetic
