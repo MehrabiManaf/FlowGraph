@@ -46,18 +46,65 @@ struct Register {
 
 // ---- a window that is only a root ----
 
+glw::UiContext& context();
+
+// A popup (a menu, the search of nodes, a dialog): a root of its own, kept by the window's host until the test ends.
+struct Popup;
+
 struct Host : glw::UiHost {
     std::string clipboard;
+    std::vector<std::unique_ptr<Popup>>* popups = nullptr;      // the window's (a popup's host shares them)
+    bool closed = false;
+    std::vector<std::unique_ptr<Popup>> own;
+    Host() : popups(&own) {}
+    glw::UiRoot* openPopup(glw::PopupRequest request) override;
+    // The popups open now, in order.
+    std::vector<Popup*> open() const;
     glw::platform::WindowState windowState() const override { return glw::platform::WindowState::Normal; }
     void minimizeWindow() override {}
     void toggleMaximizeWindow() override {}
-    void closeWindow() override {}
+    void closeWindow() override;
     void startTextInput() override {}
     void stopTextInput() override {}
     void setTextInputArea(const glw::Rect&) override {}
     std::string clipboardText() const override { return clipboard; }
     void setClipboardText(const std::string& text) override { clipboard = text; }
 };
+
+struct Popup {
+    Host host;
+    glw::UiRoot root;
+    Popup(std::vector<std::unique_ptr<Popup>>* all, glw::PopupRequest request) : root(context(), &host) {
+        host.popups = all;
+        root.setContent(std::move(request.content));
+        root.setSize(root.content()->measure({glw::unbounded, glw::unbounded}));
+        root.layout();
+    }
+};
+
+glw::UiRoot* Host::openPopup(glw::PopupRequest request) {
+    popups->push_back(std::make_unique<Popup>(popups, std::move(request)));
+    return &popups->back()->root;
+}
+
+void Host::closeWindow() {
+    if (closed)
+        return;
+    closed = true;
+    for (const auto& p : *popups) {
+        if (&p->host == this)
+            p->root.windowClosing();
+    }
+}
+
+std::vector<Popup*> Host::open() const {
+    std::vector<Popup*> result;
+    for (const auto& p : *popups) {
+        if (!p->host.closed)
+            result.push_back(p.get());
+    }
+    return result;
+}
 
 glw::UiContext& context() {
     static glw::text::FontLibrary fonts;
@@ -73,15 +120,15 @@ using glw::platform::Key;
 using glw::platform::KeyModifiers;
 using glw::platform::MouseButton;
 
-// A graph of an event and two Print nodes, on a canvas filling a root, at zoom 1 with its origin at the root's (a point of the
-// canvas is a point of the root).
+// A graph of an event, two Print nodes and a Branch, on a canvas filling a root, at zoom 1, its origin at (50, 150) of the
+// root. The tests say points of the canvas: given to the root where they show.
 struct Edited {
     fg::Runtime rt;
     std::unique_ptr<fged::core::Document> doc;
     Host host;
     glw::UiRoot root{context(), &host};
     fged::gl::GraphView* view = nullptr;
-    fg::NodeId ev = 0, a = 0, b = 0;
+    fg::NodeId ev = 0, a = 0, b = 0, branch = 0;
 
     Edited() {
         rt.registry().addEvent("Go");
@@ -91,14 +138,15 @@ struct Edited {
         ev = g.addNode("event:Go", 0, 0).id;
         a = g.addNode("util.print", 300, 0).id;
         b = g.addNode("util.print", 300, 200).id;
+        branch = g.addNode("flow.branch", 700, 0).id;
         doc->setScript(s, "Test");
         auto v = std::make_unique<fged::gl::GraphView>(*doc, "EventGraph");
         view = v.get();
         root.setContent(std::move(v));
-        root.setSize({1200, 800});
+        root.setSize({1400, 1000});
         root.layout();
         view->setZoom(1);
-        view->setOrigin({0, 0});
+        view->setOrigin({50, 150});
         root.layout();
     }
 
@@ -109,17 +157,23 @@ struct Edited {
         const fged::gl::NodeView& v = *view->nodeView(id);
         return view->itemPosition(v) + *v.pinCenter(name, dir);
     }
+    // The middle of the box of an input's value, on the canvas.
+    Point value(fg::NodeId id, const std::string& pin) const {
+        const fged::gl::NodeView& v = *view->nodeView(id);
+        return view->itemPosition(v) + v.valueRect(pin)->center();
+    }
     // A point of a node's header.
     Point header(fg::NodeId id) const { return view->itemPosition(*view->nodeView(id)) + Point{12, 8}; }
 
+    Point shown(Point canvas) const { return view->fromCanvas(canvas); }
     void press(Point p, KeyModifiers m = KeyModifiers::None, int clicks = 1) {
         root.dispatch(glw::platform::KeyChanged{1, Key::Unknown, m, false, false});
-        root.dispatch(glw::platform::MouseMoved{1, p});
-        root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, true, clicks, p});
+        root.dispatch(glw::platform::MouseMoved{1, shown(p)});
+        root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, true, clicks, shown(p)});
     }
-    void move(Point p) { root.dispatch(glw::platform::MouseMoved{1, p}); }
+    void move(Point p) { root.dispatch(glw::platform::MouseMoved{1, shown(p)}); }
     void release(Point p) {
-        root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, false, 1, p});
+        root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, false, 1, shown(p)});
         root.layout();
     }
     void drag(Point from, Point to, KeyModifiers m = KeyModifiers::None) {
@@ -133,6 +187,8 @@ struct Edited {
         release(p);
     }
     void key(Key k, KeyModifiers m = KeyModifiers::None) { root.dispatch(glw::platform::KeyChanged{1, k, m, true, false}); }
+    void type(const std::string& text, glw::UiRoot* into = nullptr) { (into ? *into : root).dispatch(glw::platform::TextInput{1, text}); }
+    static void key(glw::UiRoot& r, Key k) { r.dispatch(glw::platform::KeyChanged{1, k, KeyModifiers::None, true, false}); }
     std::size_t links() const { return graph().connections.size(); }
 };
 
@@ -247,7 +303,133 @@ TEST(aLinkIsSelectedAndGetsAReroute) {
     CHECK(e.links() == 1 && told.size() == 1);
 }
 
+TEST(valuesAreTypedToggledAndChosenOnTheNode) {
+    Edited e;
+    // the box of a text: typed in, Enter takes it (one step)
+    e.click(e.value(e.a, "String"));
+    e.type("hello");
+    e.key(Key::Enter);
+    e.root.layout();
+    CHECK(e.node(e.a).defaults.at("String").str() == "hello");
+    CHECK(e.doc->undoLabel() == "Edit value");
+    // Escape: not taken
+    e.click(e.value(e.a, "String"));
+    e.type("other");
+    e.key(Key::Escape);
+    e.root.layout();
+    CHECK(e.node(e.a).defaults.at("String").str() == "hello");
+    // another click takes it (the box loses the focus)
+    e.click(e.value(e.b, "String"));
+    e.type("typed");
+    e.click({900, 700});
+    e.root.layout();
+    CHECK(e.node(e.b).defaults.at("String").str() == "typed");
+    // a check box: toggled by a click
+    e.click(e.value(e.branch, "Condition"));
+    CHECK(e.node(e.branch).defaults.at("Condition").toBool());
+    e.click(e.value(e.branch, "Condition"));
+    CHECK(!e.node(e.branch).defaults.at("Condition").toBool());
+}
+
+TEST(nodesAreAddedBySearchingThem) {
+    Edited e;
+    // Space, where the mouse is: every node; typed, the best one taken by Enter
+    e.move({500, 500});
+    e.click({500, 500});
+    e.key(Key::Space);
+    CHECK(e.host.open().size() == 1);
+    if (e.host.open().empty())
+        return;
+    glw::UiRoot& search = e.host.open()[0]->root;
+    e.type("branch", &search);
+    Edited::key(search, Key::Enter);
+    e.root.layout();
+    CHECK(e.graph().nodes.size() == 5 && e.view->selectedNodes().size() == 1);
+    const fg::NodeId made = *e.view->selectedNodes().begin();
+    CHECK(e.node(made).def == "flow.branch" && e.doc->undoLabel() == "Add node");
+    // a link let go on the empty canvas: those that fit it, the one added linked to it
+    e.drag(e.pin(e.ev, "Then", fg::PinDir::Out), {500, 650});
+    CHECK(e.host.open().size() == 1);
+    if (e.host.open().empty())
+        return;
+    glw::UiRoot& fits = e.host.open()[0]->root;
+    e.type("print string", &fits);
+    Edited::key(fits, Key::Enter);
+    e.root.layout();
+    CHECK(e.graph().nodes.size() == 6 && e.links() == 1);
+    const fg::Connection& c = e.graph().connections.at(0);
+    CHECK(c.fromNode == e.ev && c.fromPin == "Then" && e.node(c.toNode).def == "util.print");
+}
+
+TEST(theSearchFindsNodesByTheirKeywords) {
+    Edited e;
+    e.move({500, 500});
+    e.click({500, 500});
+    e.key(Key::Space);
+    CHECK(e.host.open().size() == 1);
+    if (e.host.open().empty())
+        return;
+    // "+": Add (its keyword), not a title with + in it
+    glw::UiRoot& search = e.host.open()[0]->root;
+    e.type("+", &search);
+    Edited::key(search, Key::Enter);
+    e.root.layout();
+    CHECK(e.view->selectedNodes().size() == 1);
+    if (!e.view->selectedNodes().empty())
+        CHECK(e.node(*e.view->selectedNodes().begin()).def == "math.add");
+}
+
+TEST(commentsAreAddedAroundTheSelectionAndNamed) {
+    Edited e;
+    e.click(e.header(e.a));
+    e.click(e.header(e.b), glw::platform::shortcutModifier);
+    e.view->addComment({0, 0});
+    CHECK(e.graph().comments.size() == 1);
+    if (e.graph().comments.empty())
+        return;
+    const fg::CommentBox c = e.graph().comments[0];
+    CHECK(c.x < 300 && c.y < 0 && c.x + c.w > 400 && c.y + c.h > 250);
+    // its header clicked twice: a dialog for its text
+    e.root.layout();
+    const Point header{float(c.x) + 40, float(c.y) + 10};
+    e.press(header);
+    e.release(header);
+    e.press(header, KeyModifiers::None, 2);
+    e.release(header);
+    CHECK(e.host.open().size() == 1);
+    if (e.host.open().empty())
+        return;
+    glw::UiRoot& dialog = e.host.open()[0]->root;
+    dialog.layout();
+    e.type(" of Prints", &dialog);
+    Edited::key(dialog, Key::Enter);
+    CHECK(e.graph().comments[0].text == "Comment of Prints");
+}
+
+TEST(theBoxAndItsNodeFollowWhatIsTypedAndASpaceIsTyped) {
+    Edited e;
+    const fged::gl::NodeView& node = *e.view->nodeView(e.a);
+    const float boxBefore = node.valueRect("String")->width, nodeBefore = node.size().width;
+    e.click(e.value(e.a, "String"));
+    // the box typed in is as wide as the value's box
+    CHECK(e.host.open().empty());
+    e.type("a long text, typed with spaces");
+    e.root.dispatch(glw::platform::KeyChanged{1, Key::Space, KeyModifiers::None, true, false});
+    e.root.layout();
+    // a space is the field's: no search of nodes
+    CHECK(e.host.open().empty());
+    // while it is typed, before it is taken: the box and the node wider
+    CHECK(node.valueRect("String")->width > boxBefore + 40);
+    CHECK(node.size().width > nodeBefore + 40);
+    CHECK(!e.node(e.a).defaults.contains("String"));       // not taken yet
+    // Escape: as it was
+    e.key(Key::Escape);
+    e.root.layout();
+    CHECK(node.valueRect("String")->width == boxBefore);
+}
+
 int main() {
+    std::setvbuf(stdout, nullptr, _IONBF, 0);       // what a test printed, before one that fails hard
     for (const TestCase& t : registry()) {
         const int before = failures;
         t.run();

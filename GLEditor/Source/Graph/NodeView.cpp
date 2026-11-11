@@ -21,9 +21,15 @@ constexpr float rerouteWidth = 36, rerouteHeight = 18, rerouteInset = 10, rerout
 constexpr glw::Insets titleMargins{10, 6, 10, 6};
 constexpr glw::Insets pinMargins{6, 2, 6, 2};
 constexpr float pinSpacing = 5, sideSpacing = 14;
+constexpr float bottomMargin = 5;                       // under the last row of pins
 constexpr glw::Size dataConnector{12, 12}, arrayConnector{arrayConnectorWidth, 12}, execConnector{12, 15};
 constexpr float editorMinimum = 22, editorMaximum = 400, editorHeight = 20, checkSize = 14;
 constexpr std::size_t valueShown = 200;                 // of a long text, what its box shows
+
+// How wide the box of a value is for a text `textWidth` wide.
+float boxWidth(float textWidth, bool choice) {
+    return std::clamp(textWidth + 12 + (choice ? 14.0f : 0.0f), editorMinimum, editorMaximum);
+}
 
 // "In" and "Then" are what every execution pin is: their names are not shown.
 bool hiddenLabel(const fg::CompiledPin& p) {
@@ -100,6 +106,8 @@ void NodeView::layout() {
         v.wildcard = p.wildcard;
         v.container = !p.type ? 0 : p.type->kind == fg::TypeKind::Array ? 1 : p.type->kind == fg::TypeKind::Map ? 2 : 0;
         v.typeName = p.kind == fg::PinKind::Exec ? std::string() : typeName(p.type);
+        v.type = p.type;
+        v.def = p.def;
         v.doc = pinDoc(node_.defId, p.name, p.doc);
         if (p.kind == fg::PinKind::Data && p.dir == fg::PinDir::In && !p.connected && !p.byRef && p.type) {
             switch (p.type->kind) {
@@ -117,7 +125,8 @@ void NodeView::layout() {
         if (!v.label.empty())
             v.labelText.emplace(v.label, textStyle);
         if (v.editor == Editor::Line || v.editor == Editor::Choice) {
-            std::string shown = v.value.size() > valueShown ? v.value.substr(0, valueShown) + "…" : v.value;
+            const std::string& value = previewText_ && previewPin_ == v.name ? *previewText_ : v.value;
+            std::string shown = value.size() > valueShown ? value.substr(0, valueShown) + "…" : value;
             std::replace(shown.begin(), shown.end(), '\n', ' ');
             v.valueText.emplace(std::move(shown), textStyle);
         }
@@ -166,8 +175,7 @@ void NodeView::layout() {
         float right = v.labelRect.right();
         if (v.editor != Editor::None) {
             const float w = v.editor == Editor::Check ? checkSize
-                                                     : std::clamp((v.valueText ? v.valueText->size().width : 0) + 12 + (v.editor == Editor::Choice ? 14 : 0),
-                                                                  editorMinimum, editorMaximum);
+                                                     : boxWidth(v.valueText ? v.valueText->size().width : 0, v.editor == Editor::Choice);
             const float h = v.editor == Editor::Check ? checkSize : editorHeight;
             v.editorRect = {right + pinSpacing, top + (pinHeight - h) / 2, w, h};
             right = v.editorRect.right();
@@ -200,7 +208,8 @@ void NodeView::layout() {
         v.lockRect.x += width_;
     }
     titleRect_.width = width_;
-    height_ = std::max({inputsBottom, outputsBottom, titleRect_.bottom() + 4});
+    // a little room under the last row (its value's box not on the edge)
+    height_ = std::max({inputsBottom, outputsBottom, titleRect_.bottom() + 4}) + bottomMargin;
 }
 
 void NodeView::layoutReroute() {
@@ -253,6 +262,47 @@ std::optional<glw::Point> NodeView::pinCenter(const std::string& name, fg::PinDi
 std::optional<NodeView::PinHit> NodeView::pinAt(glw::Point point) const {
     if (const Pin* v = pinAtPoint(point))
         return PinHit{v->name, v->dir, v->kind};
+    return std::nullopt;
+}
+
+std::optional<NodeView::ValueHit> NodeView::valueAt(glw::Point point) const {
+    for (const Pin& v : inputs_) {
+        if (v.editor == Editor::None || !v.editorRect.inflated(1).contains(point))
+            continue;
+        ValueHit hit;
+        hit.kind = v.editor == Editor::Check ? ValueHit::Kind::Check : v.editor == Editor::Choice ? ValueHit::Kind::Choice : ValueHit::Kind::Line;
+        hit.pin = v.name;
+        hit.rect = v.editorRect;
+        hit.text = v.value;
+        hit.type = v.type;
+        hit.value = v.def;
+        return hit;
+    }
+    return std::nullopt;
+}
+
+void NodeView::setValuePreview(const std::string& pin, std::optional<std::string> text) {
+    if (pin == previewPin_ && text == previewText_)
+        return;
+    previewPin_ = pin;
+    previewText_ = std::move(text);
+    laidOut_ = false;
+    invalidateLayout();
+    invalidatePaint();
+}
+
+float NodeView::valueBoxWidth(const glw::UiContext& ui, const std::string& text, bool choice) {
+    std::string shown = text.size() > valueShown ? text.substr(0, valueShown) + "…" : text;
+    std::replace(shown.begin(), shown.end(), '\n', ' ');
+    const glw::text::TextLayout layout(shown, glw::text::TextStyle{{&ui.fonts.defaultFont()}, ui.theme.fontSize});
+    return boxWidth(layout.size().width, choice);
+}
+
+std::optional<glw::Rect> NodeView::valueRect(const std::string& pin) const {
+    for (const Pin& v : inputs_) {
+        if (v.name == pin && v.editor != Editor::None)
+            return v.editorRect;
+    }
     return std::nullopt;
 }
 

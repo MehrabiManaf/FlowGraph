@@ -7,7 +7,9 @@
 #include <FlowGraph/Encoding.hpp>
 #include <GLWidgets/Paint/Painter.hpp>
 
+#include <charconv>
 #include <cstdio>
+#include <cstdlib>
 
 namespace fged::gl {
 
@@ -117,6 +119,39 @@ std::string defaultText(const fg::CompiledPin& pin) {
     case fg::TypeKind::Enum: return enumValueText(pin.type, pin.def.toInt());
     case fg::TypeKind::Bytes: return pin.def.isBytes() ? fg::hexEncode(pin.def.bytesView(), true) : std::string();
     default: return {};
+    }
+}
+
+fg::Value parseValue(const fg::TypeDesc* type, const std::string& text) {
+    std::string t = text;
+    while (!t.empty() && t.front() == ' ')
+        t.erase(t.begin());
+    while (!t.empty() && t.back() == ' ')
+        t.pop_back();
+    const auto integer = [&]() -> int64_t {
+        int64_t v = 0;
+        const char* begin = t.data() + (!t.empty() && t.front() == '+' ? 1 : 0);
+        std::from_chars(begin, t.data() + t.size(), v);
+        return v;
+    };
+    switch (type ? type->kind : fg::TypeKind::Any) {
+    case fg::TypeKind::Bool: return fg::Value(!t.empty() && t != "0" && t != "false");
+    case fg::TypeKind::Int: return fg::Value(integer());
+    case fg::TypeKind::Float: return fg::Value(std::strtod(t.c_str(), nullptr));
+    case fg::TypeKind::String: return fg::Value(text);
+    case fg::TypeKind::Byte: return fg::Value(static_cast<int64_t>(static_cast<uint8_t>(integer())));
+    case fg::TypeKind::Bytes: {
+        std::string data;
+        fg::hexDecode(t, data);         // what is not hex (an odd digit) gives no bytes
+        return fg::Value(fg::Bytes(std::move(data)));
+    }
+    case fg::TypeKind::Enum:
+        for (const fg::EnumValueDesc& e : type->enumValues) {
+            if (e.name == t || enumValueText(type, e.value) == t)
+                return fg::Value(e.value);
+        }
+        return fg::Value(integer());
+    default: return fg::Value();
     }
 }
 

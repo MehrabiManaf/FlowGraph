@@ -39,6 +39,22 @@ public:
     };
     // The pin at `point` (its own coordinates): its connector or its name.
     std::optional<PinHit> pinAt(glw::Point point) const;
+    // The box of an input's value at `point` (its own coordinates): what is clicked to change the value.
+    struct ValueHit {
+        enum class Kind : std::uint8_t { Check, Line, Choice } kind = Kind::Line;
+        std::string pin;
+        glw::Rect rect;                     // its own coordinates
+        std::string text;                   // as the box shows it (Check: "x" when true)
+        const fg::TypeDesc* type = nullptr;
+        fg::Value value;
+    };
+    std::optional<ValueHit> valueAt(glw::Point point) const;
+    // Where the box of an input's value is (its own coordinates); none when it has none (a link, no box for its type).
+    std::optional<glw::Rect> valueRect(const std::string& pin) const;
+    // What is being typed in the box of `pin` (none: its value): the box as wide as it, the node with it.
+    void setValuePreview(const std::string& pin, std::optional<std::string> text);
+    // How wide the box of a value is for `text` (of a choice: with its arrow), in dips.
+    static float valueBoxWidth(const glw::UiContext& ui, const std::string& text, bool choice);
 
 protected:
     glw::Size measureContent(glw::Size available) override;
@@ -62,6 +78,8 @@ private:
         Editor editor = Editor::None;
         std::string value;              // its value's text (Line, Choice); Check: "x" when true
         std::string typeName;
+        const fg::TypeDesc* type = nullptr;
+        fg::Value def;
         std::string doc;
         glw::Rect connector, labelRect, editorRect, lockRect;
         std::optional<glw::text::TextLayout> labelText, valueText;
@@ -88,7 +106,9 @@ private:
     glw::Rect titleRect_;
     float width_ = 0, height_ = 0;
     std::vector<Pin> inputs_, outputs_;     // execution pins first, each
-    std::optional<PinHit> hovered_;         // the pin under the mouse
+    std::optional<PinHit> hovered_;
+    std::string previewPin_;                // the box being typed in, and what is typed
+    std::optional<std::string> previewText_;         // the pin under the mouse
     bool hoveredBody_ = false;
 };
 

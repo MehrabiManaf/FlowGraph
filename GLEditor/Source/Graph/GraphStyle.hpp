@@ -67,5 +67,8 @@ void drawExecGlyph(glw::paint::Painter& p, glw::Point center, glw::Color color, 
 
 // The text of an input's value, as its box shows it (empty for a bool: a check box shows it).
 std::string defaultText(const fg::CompiledPin& pin);
+// What is typed into the box of a value of `type`: a value of that type (a number that is no number: 0; bytes as hex,
+// "48 65 6C"; an enum by its name, shown or English, or its number).
+fg::Value parseValue(const fg::TypeDesc* type, const std::string& text);
 
 } // namespace fged::gl

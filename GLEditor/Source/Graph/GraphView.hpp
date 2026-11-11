@@ -12,11 +12,16 @@
 //   moving freely); a comment by its header, with the nodes in it, and resized by its corner;
 //   a pin dragged to another links them (why not, when they cannot be: told); Alt and a click breaks a pin's links;
 //   a link of data clicked twice gets a reroute there;
-//   Delete removes what is selected, F frames it (or everything), Escape lets go of a link being dragged.
+//   Delete removes what is selected, F frames it (or everything), Escape lets go of a link being dragged;
+//   Space or Tab searches the nodes to add one where the mouse is; a link let go on the empty canvas searches those that
+//   fit its pin, and links the one added; the right button: what can be done there (on a node, a comment, the canvas);
+//   a value of an input: its check box toggled, its box typed into (Enter or another click takes it, Escape not), an
+//   enum's chosen from its values; a comment's header clicked twice: its text.
 // Cut, copy, paste, duplicate and select all are the editor's (its Edit menu).
 #include <FlowGraph/Program.hpp>
 #include <FlowGraphEditorCore/Document.hpp>
 #include <FlowGraphEditorCore/GraphEdits.hpp>
+#include "Graph/NodeView.hpp"
 #include <GLWidgets/Widgets/Canvas.hpp>
 #include <GLWidgets/Widgets/Localization.hpp>
 
@@ -29,7 +34,7 @@
 
 namespace fged::gl {
 
-class NodeView;
+
 class CommentView;
 
 class GraphView final : public glw::Canvas {
@@ -70,6 +75,12 @@ public:
     void paste();
     // A copy of the selection beside it.
     void duplicateSelection();
+    // The nodes to add at `at` (the canvas's), searched by name; those that fit `from` (a pin a link was dragged from), and
+    // the one added linked to it.
+    void openPalette(glw::Point at, const core::PinEnd* from = nullptr);
+    // A comment around the selected nodes, or at `at` (the canvas's) when none is.
+    void addComment(glw::Point at);
+    void toggleBreakpoints();
 
     // Nodes moved by the user land on a grid of `step` dips (Alt moves them freely).
     void setSnapToGrid(bool snap) { snap_ = snap; }
@@ -109,6 +120,13 @@ private:
     CommentView* commentView(int id) const;
     // `text` in the language of the editor (an undo step's name).
     std::string words(const glw::LocalizedText& text) const;
+    // What the right button offers at `at` of the canvas.
+    void contextMenu(glw::Point at);
+    // A dialog with a field for a text: `done` given what was typed, when it is taken.
+    void askText(glw::LocalizedText title, std::string text, std::function<void(std::string)> done);
+    // ---- the value of an input, typed in a box over it ----
+    void editValue(NodeView& node, const NodeView::ValueHit& hit);
+    void finishValue(bool take);
     void tell(glw::LocalizedText text) const;
     void selectionChanged();
     void showSelection();
@@ -147,6 +165,13 @@ private:
     std::set<fg::NodeId> bandBefore_;       // what was selected before the band, kept (Ctrl, Shift)
     glw::Point mouse_;                      // its own coordinates, the last the mouse was at
     bool mouseIn_ = false;
+
+    glw::Widget* valueEditor_ = nullptr;    // the box a value is typed in, on the canvas over the input's
+    fg::NodeId editNode_ = 0;
+    std::string editPin_;
+    const fg::TypeDesc* editType_ = nullptr;
+    std::string editText_;                  // what it showed when it opened
+    int addSerial_ = 0;                     // the steps of nodes added (one each, with where they are put after)
 
     std::function<void(glw::LocalizedText)> onMessage_;
     std::function<void()> onSelectionChanged_;

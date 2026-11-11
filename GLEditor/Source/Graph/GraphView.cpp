@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Graph/GraphView.hpp"
 
+#include "Graph/CommentView.hpp"
 #include "Graph/GraphStyle.hpp"
 #include "Graph/NodeView.hpp"
 
@@ -20,82 +21,12 @@ namespace fged::gl {
 using glw::tr;
 
 namespace {
-constexpr float commentHeader = 26;     // a comment's header: what moves it
-constexpr float commentGrip = 16;       // its corner: what resizes it
 constexpr float dragThreshold = 4;
 } // namespace
 
-// A comment of the graph: a colored frame behind a group of nodes, its text in its header. Its header moves it (with the
-// nodes in it), its corner resizes it; the rest of it is the canvas's (a click there selects with a rectangle).
-class CommentView final : public glw::Widget {
-public:
-    CommentView(GraphView& graph, const fg::CommentBox& box) : graph_(graph), box_(box) {}
-
-    const fg::CommentBox& box() const { return box_; }
-    void setSize(float w, float h) {
-        box_.w = w;
-        box_.h = h;
-        invalidateLayout();
-    }
-    void setSelected(bool selected) {
-        if (selected != selected_) {
-            selected_ = selected;
-            invalidatePaint();
-        }
-    }
-
-protected:
-    glw::Size measureContent(glw::Size) override { return {float(box_.w), float(box_.h)}; }
-
-    void paint(glw::PaintContext& context) override {
-        glw::paint::Painter& p = context.painter;
-        const glw::Rect r{0, 0, size().width, size().height};
-        const float radius = std::min(context.ui.theme.node.cornerRadius, commentHeader / 2);     // as the theme's nodes are rounded
-        p.fillRoundedRect(r, radius, rgb(box_.color, 0.22f));
-        p.pushClip({0, 0, r.width, commentHeader});
-        p.fillRoundedRect({0, 0, r.width, commentHeader + radius}, radius, rgb(box_.color, 0.75f));
-        p.popClip();
-        p.strokeRoundedRect(r, radius, selected_ ? 2.0f : 1.0f, selected_ ? context.ui.theme.node.selection : rgb(box_.color, 0.9f));
-        if (!text_ || shown_ != box_.text) {
-            shown_ = box_.text;
-            text_.emplace(box_.text, glw::text::TextStyle{{&context.ui.fonts.defaultFont()}, context.ui.theme.fontSize + 1});
-        }
-        p.pushClip({6, 0, std::max(0.0f, r.width - 12), commentHeader});
-        context.drawText(*text_, {8, (commentHeader - text_->size().height) / 2}, {1, 1, 1, 1});
-        p.popClip();
-        // the grip that resizes it, at its bottom right corner
-        for (int i = 1; i <= 3; ++i)
-            p.drawLine({r.width - 4 - 4.0f * i, r.height - 4}, {r.width - 4, r.height - 4 - 4.0f * i}, 1, {1, 1, 1, 0.35f});
-    }
-
-    void onMouse(glw::MouseEvent& event) override {
-        const bool corner = glw::Rect{size().width - commentGrip, size().height - commentGrip, commentGrip, commentGrip}.contains(event.position);
-        const bool header = event.position.y < commentHeader;
-        if (event.type == glw::MouseEventType::Press && event.button == glw::platform::MouseButton::Left && !corner && !header)
-            return;     // the canvas's
-        if (event.type == glw::MouseEventType::Press && event.button != glw::platform::MouseButton::Left)
-            return;
-        if (event.type == glw::MouseEventType::Wheel)
-            return;
-        graph_.commentMouse(*this, event, corner ? 1 : 0);
-    }
-
-    std::optional<glw::platform::Cursor> cursorAt(glw::Point point) const override {
-        if (glw::Rect{size().width - commentGrip, size().height - commentGrip, commentGrip, commentGrip}.contains(point))
-            return glw::platform::Cursor::ResizeDiagonal;
-        return std::nullopt;
-    }
-
-private:
-    GraphView& graph_;
-    fg::CommentBox box_;
-    bool selected_ = false;
-    std::optional<glw::text::TextLayout> text_;
-    std::string shown_;
-};
-
 GraphView::GraphView(core::Document& doc, std::string graph) : doc_(doc), graph_(graph), edits_(doc, std::move(graph)) {
     setFocusable(true);
+    setOnContextRequested([this](glw::Point at) { contextMenu(at); });
     compiledConnection_ = doc_.compiled.connect([this] { refresh(); });
     // an edit of places (a node moved) is not compiled: the places follow it
     changedConnection_ = doc_.changed.connect([this](bool structural) {
@@ -415,6 +346,14 @@ void GraphView::nodeMouse(NodeView& node, glw::MouseEvent& event) {
             return;
         event.handled = true;
         focus();
+        // the box of a value: changed there
+        if (const std::optional<NodeView::ValueHit> value = node.valueAt(event.position);
+            value && !glw::platform::hasAny(event.modifiers, glw::platform::KeyModifiers::Alt)) {
+            if (!selectedNodes_.contains(node.id()))
+                select({node.id()});
+            editValue(node, *value);
+            return;
+        }
         if (const std::optional<NodeView::PinHit> pin = node.pinAt(event.position)) {
             const core::PinEnd end = core::PinEnd::of(node.compiled(), pin->name, pin->dir);
             if (glw::platform::hasAny(event.modifiers, glw::platform::KeyModifiers::Alt)) {
@@ -507,6 +446,12 @@ void GraphView::nodeMouse(NodeView& node, glw::MouseEvent& event) {
                 }
                 return;
             }
+            // let go on the empty canvas: the nodes that fit, to add there linked; on a node, nothing
+            for (const auto& [id, view] : nodes_) {
+                if (itemRect(*view).contains(at))
+                    return;
+            }
+            openPalette(at, &from);
             return;
         }
         if (!dragMoved_ && pressedAlone_ && selectedNodes_.size() + selectedComments_.size() > 1) {
@@ -529,6 +474,11 @@ void GraphView::commentMouse(CommentView& comment, glw::MouseEvent& event, int p
         event.handled = true;
         focus();
         const int id = comment.box().id;
+        if (event.clicks == 2 && part == 0) {
+            // its header clicked twice: its text
+            askText(tr("Comment"), comment.box().text, [this, id](std::string text) { edits_.setCommentText(id, text, words(tr("Edit comment"))); });
+            return;
+        }
         const bool add = glw::platform::hasAny(event.modifiers, glw::platform::shortcutModifier | glw::platform::KeyModifiers::Shift);
         if (add) {
             if (!selectedComments_.erase(id))
@@ -739,7 +689,8 @@ void GraphView::onMouse(glw::MouseEvent& event) {
 }
 
 void GraphView::onKey(glw::KeyEvent& event) {
-    if (!event.pressed)
+    // its own keys only: not those a field on it lets through (a space typed in a value's box)
+    if (!event.pressed || (root() && root()->focusWidget() != this))
         return;
     using glw::platform::Key;
     const bool command = glw::platform::hasAny(event.modifiers, glw::platform::shortcutModifier | glw::platform::KeyModifiers::Alt);
@@ -751,6 +702,13 @@ void GraphView::onKey(glw::KeyEvent& event) {
             return;
         frameSelection();
         break;
+    case Key::Space:
+    case Key::Tab:
+        if (command)
+            return;
+        openPalette(toCanvas(mouseIn_ ? mouse_ : glw::Point{size().width / 2, size().height / 2}));
+        break;
+    case Key::F9: toggleBreakpoints(); break;
     case Key::Escape:
         if (drag_ == Drag::Link) {
             drag_ = Drag::None;
