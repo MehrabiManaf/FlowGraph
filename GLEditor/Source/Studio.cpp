@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include <FlowGraphGLEditor/Studio.hpp>
 
+#include "Graph/GraphView.hpp"
+
 #include <GLWidgets/Platform/Platform.hpp>
 #include <GLWidgets/Widgets/Action.hpp>
 #include <GLWidgets/Widgets/Application.hpp>
@@ -17,6 +19,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -99,6 +102,7 @@ struct Studio::Impl {
     glw::Widget* myScript = nullptr;            // the panel's content: made again as the script changes
     glw::StatusBar* status = nullptr;
     glw::Label* runState = nullptr;
+    std::vector<std::string> shownGraphs;       // the graphs in the tabs, in their order
 
     std::shared_ptr<glw::Action> newAction, openAction, saveAction, saveAsAction, quitAction, undoAction, redoAction;
     bool closing = false;                       // asked whether to save, and it goes: the window may close now
@@ -214,6 +218,8 @@ struct Studio::Impl {
                 showScript();
         });
         doc.scriptReplaced.connect([this] { showScript(); });
+        // another script: views of its own (not those of the graphs of the same name the other had)
+        doc.scriptOpened.connect([this] { dropGraphs(); });
     }
 
     void makeActions() {
@@ -298,26 +304,47 @@ struct Studio::Impl {
     }
 
     // The graphs in tabs, what the script has in My Script: until the canvas and the panels are made, what there is.
-    void showScript() {
-        const fg::Script& script = doc.script();
-        std::optional<std::size_t> shown = graphs->current();
+    void dropGraphs() {
         while (graphs->count() > 0)
             graphs->removeTab(graphs->count() - 1);
-        for (const fg::Graph& g : script.graphs) {
-            const glw::LocalizedText kind = g.kind == fg::GraphKind::Function ? tr("A function") : tr("An event graph");
-            graphs->addTab(glw::LocalizedText(g.name),
-                           ui::VStack({.spacing = 8},
-                                      ui::Label({.text = glw::LocalizedText(g.name), .fontSize = 20}),
-                                      ui::Label({.text = tr("{kind} of {n} nodes. Its canvas comes next.")
-                                                             .arg("kind", app.translator().resolve(kind))
-                                                             .arg("n", g.nodes.size()),
-                                                 .muted = true}))
-                               .padding(glw::Insets::all(24)));
+        shownGraphs.clear();
+    }
+
+    // A tab for each graph, its view kept while the graph is there (where it was zoomed and panned).
+    void showGraphs() {
+        const fg::Script& script = doc.script();
+        std::vector<std::string> names;
+        for (const fg::Graph& g : script.graphs)
+            names.push_back(g.name);
+        if (names == shownGraphs)
+            return;
+        const std::optional<std::size_t> current = graphs->current();
+        const std::string shown = current && *current < shownGraphs.size() ? shownGraphs[*current] : std::string();
+        std::map<std::string, std::unique_ptr<glw::Widget>> kept;
+        while (graphs->count() > 0) {
+            const std::size_t last = graphs->count() - 1;
+            kept[shownGraphs[last]] = graphs->removeTab(last);
+            shownGraphs.pop_back();
         }
-        if (shown && *shown < graphs->count())
-            graphs->setCurrent(*shown);
-        else if (graphs->count() > 0)
+        for (const fg::Graph& g : script.graphs) {
+            std::unique_ptr<glw::Widget> view = std::move(kept[g.name]);
+            if (!view)
+                view = std::make_unique<GraphView>(doc, g.name);
+            // a function's tab says so, as the Qt editor's
+            graphs->addTab(glw::LocalizedText(g.kind == fg::GraphKind::Function ? "\u0192 " + g.name : g.name), std::move(view));
+            shownGraphs.push_back(g.name);
+        }
+        const auto it = std::find(shownGraphs.begin(), shownGraphs.end(), shown);
+        if (it != shownGraphs.end())
+            graphs->setCurrent(std::size_t(it - shownGraphs.begin()));
+        else if (!shownGraphs.empty())
             graphs->setCurrent(0);
+    }
+
+    // The graphs in tabs, what the script has in My Script (its panel comes later).
+    void showScript() {
+        const fg::Script& script = doc.script();
+        showGraphs();
 
         while (!myScript->children().empty())
             myScript->removeChild(*myScript->children().back());
@@ -354,7 +381,12 @@ struct Studio::Impl {
         status->showMessage(tr("A new script"), 3s);
     }
 
-    bool open(const std::string& path) {
+    bool open(const std::string& given) {
+        // by its whole path: what the document and the files opened lately keep (a command line's may be relative)
+        std::error_code ec;
+        const std::filesystem::path whole = std::filesystem::absolute(std::filesystem::path(std::u8string(given.begin(), given.end())), ec);
+        const std::u8string text = (ec ? std::filesystem::path(std::u8string(given.begin(), given.end())) : whole.lexically_normal()).u8string();
+        const std::string path(text.begin(), text.end());
         std::string error;
         if (!doc.load(path, &error)) {
             glw::showMessage(*area, tr("The script was not opened"), glw::LocalizedText(error), {tr("Close")});
