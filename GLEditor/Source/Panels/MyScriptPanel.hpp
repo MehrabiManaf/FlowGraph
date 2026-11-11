@@ -60,6 +60,12 @@ public:
     void setOnEventChosen(std::function<void(const std::string&, fg::NodeId, bool show)> handler) { onEventChosen_ = std::move(handler); }
     void setOnSelectionChanged(std::function<void()> handler) { onSelectionChanged_ = std::move(handler); }
     void setOnMessage(std::function<void(glw::LocalizedText)> handler) { onMessage_ = std::move(handler); }
+    // Find References chosen in a member's menu: what refers to it (an event: its handlers; `name` the event's).
+    void setOnFindReferences(std::function<void(core::Member, const std::string& owner, const std::string& name)> handler) {
+        onFindReferences_ = std::move(handler);
+    }
+    // Whether the focus is in it (Shift+F12 finds the references of what it has selected then).
+    bool hasFocusInside() const;
 
     // ---- what its sections pass on ----
 
@@ -100,6 +106,7 @@ private:
     std::function<void(const std::string&, fg::NodeId, bool)> onEventChosen_;
     std::function<void()> onSelectionChanged_;
     std::function<void(glw::LocalizedText)> onMessage_;
+    std::function<void(core::Member, const std::string&, const std::string&)> onFindReferences_;
 };
 
 } // namespace fged::gl

@@ -4,6 +4,7 @@
 
 #include "Graph/GraphView.hpp"
 #include "Panels/DetailsPanel.hpp"
+#include "Panels/InfoPanels.hpp"
 #include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Vm.hpp>
@@ -137,6 +138,9 @@ struct Studio::Impl {
     glw::DockTabs* documents = nullptr;         // the graphs: the panels of the dock area's center stack
     MyScriptPanel* myScript = nullptr;
     DetailsPanel* details = nullptr;
+    CompileResultsPanel* compileResults = nullptr;
+    FindPanel* find = nullptr;
+    glw::Label* compileState = nullptr;         // the status bar's: how many errors and warnings
     glw::StatusBar* status = nullptr;
     glw::Label* runState = nullptr;
     glw::TextEdit* log = nullptr;               // the Output Log
@@ -154,6 +158,7 @@ struct Studio::Impl {
 
     std::shared_ptr<glw::Action> newAction, openAction, saveAction, saveAsAction, quitAction, undoAction, redoAction;
     std::shared_ptr<glw::Action> cutAction, copyAction, pasteAction, duplicateAction, selectAllAction, snapAction;
+    std::shared_ptr<glw::Action> findAction, findReferencesAction;
     std::shared_ptr<glw::Action> runAction, pauseAction, stopAction, stepOverAction, stepIntoAction, stepOutAction, breakpointAction;
     bool closing = false;                       // asked whether to save, and it goes: the window may close now
 
@@ -290,14 +295,54 @@ struct Studio::Impl {
         log->setLineNumbers(false);
         area->addPanel({.id = "output", .title = tr("Output Log"), .content = std::move(output), .closable = false}, center,
                        glw::DockSide::Bottom, 0.24f);
+        // what the compiler says, what was found: beside it
+        auto results = std::make_unique<CompileResultsPanel>(doc);
+        compileResults = results.get();
+        compileResults->setOnActivated([this](const std::string& graph, fg::NodeId node) { focusNode(graph, node); });
+        compileResults->setOnSummaryChanged([this](int errors, int warnings) { showCompileState(errors, warnings); });
+        auto findPanel = std::make_unique<FindPanel>(doc);
+        find = findPanel.get();
+        find->setOnActivated([this](const std::string& graph, fg::NodeId node) { focusNode(graph, node); });
+        find->setOnDeclaration([this](fg::ScriptRef::Declaration declaration, const std::string& graph, const std::string& name) {
+            showDeclaration(declaration, graph, name);
+        });
+        myScript->setOnFindReferences([this](core::Member member, const std::string& owner, const std::string& name) {
+            fg::RefTarget target;
+            switch (member) {
+            case core::Member::EventGraph: target = {fg::RefTarget::Kind::Definition, "event:" + name, {}}; break;
+            case core::Member::Function: target = {fg::RefTarget::Kind::Function, name, {}}; break;
+            case core::Member::Struct: target = {fg::RefTarget::Kind::Struct, name, {}}; break;
+            case core::Member::Variable:
+            case core::Member::Local: target = {fg::RefTarget::Kind::Variable, name, owner}; break;
+            }
+            showReferences(target);
+        });
+        // what the compiler says, what was found: beside the Output Log. A layout saved before them does not know them: they
+        // are put there after it is restored (it would put them in its first stack)
+        std::vector<glw::DockPanel> info;
+        info.push_back({.id = "compileResults", .title = tr("Compile Results"), .content = std::move(results), .closable = false});
+        info.push_back({.id = "findResults", .title = tr("Find Results"), .content = std::move(findPanel), .closable = false});
         const std::string layout = settings.string("layout");
+        const std::vector<std::string> known = glw::DockArea::panelsIn(layout);
+        std::vector<glw::DockPanel> later;
+        for (glw::DockPanel& panel : info) {
+            if (layout.empty() || std::find(known.begin(), known.end(), panel.id) != known.end())
+                area->addPanel(std::move(panel), area->tabsOf("output"));
+            else
+                later.push_back(std::move(panel));
+        }
         if (!layout.empty())
             area->restoreLayout(layout);
+        for (glw::DockPanel& panel : later)
+            area->addPanel(std::move(panel), area->tabsOf("output"));
+        showPanel("output");
 
         const glw::Size size{static_cast<float>(settings.number("windowWidth", 1280)), static_cast<float>(settings.number("windowHeight", 760))};
         window = &app.openWindow({.title = tr("FlowGraph Studio"), .size = size}, std::move(dock));
         status = &window->setStatusBar();
         status->setText(tr("Ready"));
+        compileState = &status->addPermanent(std::make_unique<glw::Label>(glw::Label::Props{.fontSize = 12}));
+        showCompileState(compileResults->errors(), compileResults->warnings());
         runState = &status->addPermanent(std::make_unique<glw::Label>(glw::Label::Props{.text = tr("Idle"), .fontSize = 12, .muted = true}));
 
         makeRun();
@@ -351,6 +396,12 @@ struct Studio::Impl {
                 g->setSnapToGrid(snapAction->checked());
         });
         snapAction->setCheckable(true);
+        findAction = action(tr("&Find in Script..."), [this] {
+            showPanel("findResults");
+            find->focusSearch();
+        }, key(Key::F));
+        findReferencesAction = action(tr("Find &References"), [this] { findReferencesOfSelection(); },
+                                      {Key::F12, glw::platform::KeyModifiers::Shift});
         snapAction->setChecked(settings.boolean("snapToGrid", false));
 
         // running and debugging
@@ -425,7 +476,10 @@ struct Studio::Impl {
                                 g->deleteSelection();
                         }, .shortcut = tr("Del")},
                        glw::MenuItem::separatorItem(),
-                       {.action = selectAllAction}}},
+                       {.action = selectAllAction},
+                       glw::MenuItem::separatorItem(),
+                       {.action = findAction},
+                       {.action = findReferencesAction}}},
             {.text = tr("&View"),
              .items = {{.text = tr("&Frame Selection"), .onTriggered = [this] {
                             if (GraphView* g = currentGraph())
@@ -495,6 +549,11 @@ struct Studio::Impl {
             } else if (details->mode() == DetailsPanel::Mode::Nodes) {
                 details->showNothing();
             }
+        });
+        view->setOnFindReferences([this, g](fg::NodeId id) {
+            const fg::Graph* graph = doc.graph(g->graphName());
+            if (const fg::Node* node = graph ? graph->findNode(id) : nullptr)
+                showReferences(fg::referenceTargetOf(doc.script(), g->graphName(), *node));
         });
         // a call of a function clicked twice: the function's graph
         view->setOnNodeActivated([this, g](fg::NodeId id) {
@@ -609,6 +668,76 @@ struct Studio::Impl {
     }
 
     GraphView* currentGraph() const { return graphView(currentGraphName); }
+
+    // The tab of the panel `id` shown.
+    void showPanel(const std::string& id) {
+        if (glw::DockTabs* tabs = area->tabsOf(id))
+            if (const std::optional<std::size_t> index = tabs->indexOf(id))
+                tabs->setActive(*index);
+    }
+
+    // A node in view, selected, in its graph (a comment's graph: shown).
+    void focusNode(const std::string& graph, fg::NodeId node) {
+        GraphView* g = showGraph(graph);
+        if (!g || node == 0)
+            return;
+        g->select({node});
+        g->showNode(node);
+    }
+
+    // A declaration that uses a struct, found: in the Details panel (a local's, a parameter's function shown).
+    void showDeclaration(fg::ScriptRef::Declaration declaration, const std::string& graph, const std::string& name) {
+        using D = fg::ScriptRef::Declaration;
+        switch (declaration) {
+        case D::Variable: details->showVariable({}, name); break;
+        case D::Local:
+            showGraph(graph);
+            details->showVariable(graph, name);
+            break;
+        case D::Input:
+        case D::Output:
+            showGraph(graph);
+            details->showGraph(graph);
+            break;
+        case D::Field: details->showStruct(name.substr(0, name.find('.'))); break;
+        case D::None: return;
+        }
+        showPanel("details");
+    }
+
+    void showReferences(const fg::RefTarget& target) {
+        find->findReferences(target);
+        showPanel("findResults");
+        status->showMessage(tr("{count} reference(s) of {what}").arg("count", find->resultCount()).arg("what", target.describe()), 4s);
+    }
+
+    // Shift+F12: what My Script has selected, when it has the focus; otherwise the node selected in the graph shown.
+    void findReferencesOfSelection() {
+        if (const std::optional<MyScriptPanel::Selection>& chosen = myScript->selection(); chosen && myScript->hasFocusInside()) {
+            switch (chosen->member) {
+            case core::Member::Function: showReferences({fg::RefTarget::Kind::Function, chosen->name, {}}); return;
+            case core::Member::Struct: showReferences({fg::RefTarget::Kind::Struct, chosen->name, {}}); return;
+            case core::Member::Variable:
+            case core::Member::Local: showReferences({fg::RefTarget::Kind::Variable, chosen->name, chosen->owner}); return;
+            case core::Member::EventGraph: break;
+            }
+        }
+        GraphView* g = currentGraph();
+        const fg::Graph* graph = g ? doc.graph(g->graphName()) : nullptr;
+        const fg::Node* node = graph && g->selectedNodes().size() == 1 ? graph->findNode(*g->selectedNodes().begin()) : nullptr;
+        if (!node) {
+            status->showMessage(tr("Select a node, or a variable, function or struct in My Script, to find its references"), 4s);
+            return;
+        }
+        showReferences(fg::referenceTargetOf(doc.script(), g->graphName(), *node));
+    }
+
+    void showCompileState(int errors, int warnings) {
+        if (!compileState)
+            return;
+        compileState->setText(errors || warnings ? tr("{errors} error(s), {warnings} warning(s)").arg("errors", errors).arg("warnings", warnings) : tr("OK"));
+        compileState->setColor(errors ? glw::Color{0.92f, 0.36f, 0.36f, 1} : warnings ? glw::Color{0.95f, 0.70f, 0.30f, 1} : glw::Color{0.35f, 0.80f, 0.50f, 1});
+    }
 
     std::vector<GraphView*> graphViews() const {
         std::vector<GraphView*> all;

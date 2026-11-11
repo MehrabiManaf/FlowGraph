@@ -235,6 +235,11 @@ void GraphView::contextMenu(glw::Point at) {
                          }});
         items.push_back({.text = tr("Toggle Breakpoint"), .onTriggered = [this] { toggleBreakpoints(); }, .shortcut = tr("F9"),
                          .checked = isBreakpoint(id)});
+        if (onFindReferences_)
+            items.push_back({.text = tr("Find References"), .onTriggered = [this, id] {
+                                 if (onFindReferences_)
+                                     onFindReferences_(id);
+                             }, .shortcut = tr("Shift+F12")});
         items.push_back(glw::MenuItem::separatorItem());
     } else if (comment) {
         const int id = comment->box().id;

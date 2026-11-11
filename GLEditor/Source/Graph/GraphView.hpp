@@ -106,6 +106,8 @@ public:
     void setOnMessage(std::function<void(glw::LocalizedText)> handler) { onMessage_ = std::move(handler); }
     // The nodes selected changed: what the Details panel shows.
     void setOnSelectionChanged(std::function<void()> handler) { onSelectionChanged_ = std::move(handler); }
+    // Find References chosen in a node's menu: the references of what it uses (its variable, function, struct, kind).
+    void setOnFindReferences(std::function<void(fg::NodeId)> handler) { onFindReferences_ = std::move(handler); }
 
     // ---- what its nodes and comments pass on (the mouse on them) ----
 
@@ -206,6 +208,7 @@ private:
 
     std::function<void(glw::LocalizedText)> onMessage_;
     std::function<void()> onSelectionChanged_;
+    std::function<void(fg::NodeId)> onFindReferences_;
 };
 
 } // namespace fged::gl

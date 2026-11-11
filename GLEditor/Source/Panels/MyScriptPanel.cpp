@@ -477,6 +477,14 @@ glw::Widget* MyScriptPanel::rowOf(core::Member member, const std::string& owner,
     return row ? section->table->cellWidget(*row, 0) : nullptr;
 }
 
+bool MyScriptPanel::hasFocusInside() const {
+    const glw::UiRoot* r = root();
+    for (const glw::Widget* w = r ? r->focusWidget() : nullptr; w; w = w->parent())
+        if (w == this)
+            return true;
+    return false;
+}
+
 void MyScriptPanel::clearSelection() {
     selecting_ = true;
     for (const auto& s : sections_)
@@ -548,6 +556,14 @@ void MyScriptPanel::menu(Section& section, std::size_t row, glw::Point at) {
             items.push_back({.text = tr("Duplicate"), .onTriggered = [this, entry] { edits_.duplicateFunction(entry.name, words(tr("Duplicate function"))); }});
         const core::Member member = section.member;
         items.push_back({.text = tr("Delete"), .onTriggered = [this, member, entry] { edits_.remove(member, entry.owner, entry.name, words(tr("Delete"))); }});
+    }
+    if (onFindReferences_) {
+        const core::Member member = section.member;
+        items.push_back(glw::MenuItem::separatorItem());
+        items.push_back({.text = tr("Find References"), .onTriggered = [this, member, entry] {
+                             if (onFindReferences_)
+                                 onFindReferences_(member, entry.owner, entry.name);
+                         }, .shortcut = tr("Shift+F12")});
     }
     glw::showContextMenu(*section.table, at, std::move(items));
 }

@@ -5,6 +5,7 @@
 #include "Graph/GraphView.hpp"
 #include "Graph/NodeView.hpp"
 #include "Panels/DetailsPanel.hpp"
+#include "Panels/InfoPanels.hpp"
 #include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Runtime.hpp>
@@ -15,6 +16,7 @@
 #include <GLWidgets/Widgets/Layout.hpp>
 #include <GLWidgets/Widgets/LineEdit.hpp>
 #include <GLWidgets/Widgets/SpinBox.hpp>
+#include <GLWidgets/Widgets/TableView.hpp>
 #include <GLWidgets/Widgets/ToolBar.hpp>
 #include <GLWidgets/Widgets/UiRoot.hpp>
 
@@ -829,6 +831,67 @@ TEST(propertyEditsKeepLinksAndValues) {
     // undone in one step each
     doc.undo();
     CHECK(doc.script().findStruct("P")->fields[0].name == "Y");
+}
+
+TEST(compileResultsListTheErrorsAndShowWhere) {
+    fg::Runtime rt;
+    fged::core::Document doc(rt);
+    fg::Script s;
+    fg::Graph& g = s.addEventGraph();
+    const fg::NodeId unknown = g.addNode("fn:No.SuchThing", 0, 0).id;
+    doc.setScript(s, "T");
+    Host host;
+    glw::UiRoot root{context(), &host};
+    auto p = std::make_unique<fged::gl::CompileResultsPanel>(doc);
+    fged::gl::CompileResultsPanel& panel = *p;
+    std::vector<std::pair<std::string, fg::NodeId>> shown;
+    panel.setOnActivated([&](const std::string& graph, fg::NodeId node) { shown.emplace_back(graph, node); });
+    root.setContent(std::move(p));
+    root.setSize({800, 300});
+    root.layout();
+    CHECK(panel.errors() >= 1 && panel.rowCount() >= 1);
+    // the row clicked twice: its node
+    if (glw::Widget* cell = panel.table().cellWidget(0, 0)) {
+        const Point at = cell->mapToRoot({cell->size().width / 2, cell->size().height / 2});
+        for (int clicks : {1, 2}) {
+            root.dispatch(glw::platform::MouseMoved{1, at});
+            root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, true, clicks, at});
+            root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Left, false, clicks, at});
+        }
+    }
+    CHECK(shown.size() == 1 && shown[0].first == "EventGraph" && shown[0].second == unknown);
+    // fixed: none
+    doc.edit("x", [](fg::Script& sc) { sc.graphs[0].nodes.clear(); });
+    CHECK(panel.errors() == 0 && panel.rowCount() == 0);
+}
+
+TEST(findResultsSearchAndFindReferences) {
+    fg::Runtime rt;
+    fged::core::Document doc(rt);
+    fg::Script s;
+    s.variables.push_back({"Speed", "float", fg::Value(1.5), "", ""});
+    fg::Graph& g = s.addEventGraph();
+    fg::Node& get = g.addNode("var.get", 0, 0);
+    get.props["name"] = "Speed";
+    get.props["scope"] = "global";
+    fg::Node& print = g.addNode("util.print", 200, 0);
+    print.defaults["String"] = fg::Value(std::string("Hello there"));
+    doc.setScript(s, "T");
+    Host host;
+    glw::UiRoot root{context(), &host};
+    auto p = std::make_unique<fged::gl::FindPanel>(doc);
+    fged::gl::FindPanel& panel = *p;
+    root.setContent(std::move(p));
+    root.setSize({800, 300});
+    root.layout();
+    CHECK(panel.resultCount() == 0);
+    panel.search("there");
+    CHECK(panel.resultCount() == 1);
+    panel.findReferences({fg::RefTarget::Kind::Variable, "Speed", {}});
+    CHECK(panel.resultCount() == 1);
+    // they follow the edits
+    doc.edit("x", [](fg::Script& sc) { sc.graphs[0].nodes.erase(sc.graphs[0].nodes.begin()); });
+    CHECK(panel.resultCount() == 0);
 }
 
 int main() {
