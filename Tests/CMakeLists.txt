@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 # SPDX-License-Identifier: MIT
 add_executable(FlowGraphTests Main.cpp ProcessProbe.cpp)
-target_link_libraries(FlowGraphTests PRIVATE FlowGraphCore)
+target_link_libraries(FlowGraphTests PRIVATE FlowGraphCore FlowGraphEditorCore)
 add_test(NAME FlowGraphTests COMMAND FlowGraphTests)
 add_executable(FlowGraphBench Bench.cpp)
 target_link_libraries(FlowGraphBench PRIVATE FlowGraphCore)

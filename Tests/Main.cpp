@@ -3,6 +3,7 @@
 // Minimal test runner: TEST(name) { CHECK(cond); }
 #include <FlowGraph/Encoding.hpp>
 #include <FlowGraph/Runtime.hpp>
+#include <FlowGraphEditorCore/RunSession.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -10,6 +11,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <deque>
 #include <ctime>
 #include <map>
 #include <filesystem>
@@ -5543,6 +5545,130 @@ TEST(structs_are_renamed_everywhere_and_offered_in_the_palette) {
     CHECK(checkCompatibility(t.s, rt.registry()).ok());
     t.s.structs[1].fields.push_back({"Gone", "MissingClass", Value(), ""});
     CHECK(!checkCompatibility(t.s, rt.registry()).ok());
+}
+
+// ---- the editors' shared part (EditorCore: no Qt) --------------------------------------------------------------------
+namespace {
+// The editor's thread of a test: what is posted waits in a queue until the test pumps it.
+struct PumpedThread : fged::core::UiThread {
+    std::mutex mu;
+    std::deque<std::function<void()>> queue;
+    std::function<void()> repeated;
+    void post(std::function<void()> fn) override {
+        std::lock_guard lk(mu);
+        queue.push_back(std::move(fn));
+    }
+    void startRepeating(int, std::function<void()> fn) override { repeated = std::move(fn); }
+    void stopRepeating() override { repeated = nullptr; }
+    void pump() {
+        std::deque<std::function<void()>> now;
+        {
+            std::lock_guard lk(mu);
+            now.swap(queue);
+        }
+        for (auto& fn : now) fn();
+        if (repeated) repeated();
+    }
+};
+} // namespace
+
+TEST(editor_core_document_undoes_coalesces_and_tells) {
+    TestRuntime rt;
+    fged::core::Document doc(rt);
+    std::vector<std::string> heard;
+    doc.changed.connect([&](bool structural) { heard.push_back(structural ? "changed" : "layout"); });
+    doc.titleChanged.connect([&] { heard.push_back("title"); });
+    CHECK(!doc.isDirty() && !doc.canUndo() && doc.script().findGraph("EventGraph"));
+    doc.edit("Add A", [](fg::Script& s) { s.variables.push_back({"A", "int", Value(int64_t(1)), "", ""}); });
+    CHECK(doc.isDirty() && doc.canUndo() && doc.undoLabel() == "Add A");
+    CHECK((heard == std::vector<std::string>{"title", "changed"}));        // dirty now, then the edit
+    // typing into a field: one step
+    for (int i = 2; i <= 5; ++i)
+        doc.edit("Type", [i](fg::Script& s) { s.variables[0].def = Value(int64_t(i)); }, fged::core::EditKind::Structural, "field");
+    doc.undo();
+    CHECK(doc.script().variables.size() == 1 && doc.script().variables[0].def.toInt() == 1);
+    doc.undo();
+    CHECK(doc.script().variables.empty() && !doc.canUndo() && doc.canRedo() && doc.redoLabel() == "Add A");
+    doc.redo();
+    CHECK(doc.script().variables.size() == 1);
+    // a layout edit does not compile
+    int compiled = 0;
+    doc.compiled.connect([&] { ++compiled; });
+    doc.edit("Move", [](fg::Script& s) { s.graphs[0].nodes.empty() ? void() : void(s.graphs[0].nodes[0].x += 10); }, fged::core::EditKind::Layout);
+    CHECK_EQ(compiled, 0);
+    // struct names
+    doc.edit("Struct", [](fg::Script& s) { s.structs.push_back({"Point", "", "", {}}); });
+    CHECK(doc.structNameProblem("Point") == fged::core::StructNameProblem::StructExists);
+    CHECK(doc.structNameProblem("Point", "Point") == fged::core::StructNameProblem::None);
+    CHECK(doc.structNameProblem("two words") == fged::core::StructNameProblem::NotAName);
+    CHECK(doc.structNameProblem("int") == fged::core::StructNameProblem::TypeExists);
+    // a file: saved, and loaded again into a new history
+    const std::string file = (std::filesystem::temp_directory_path() / "fg_editorcore_doc.flow").string();
+    CHECK(doc.save(file) && !doc.isDirty() && doc.path() == file);
+    fged::core::Document other(rt);
+    std::string error;
+    CHECK(other.load(file, &error) && other.script().structs.size() == 1 && !other.canUndo());
+    CHECK(!other.load(file + ".missing", &error) && !error.empty());
+    std::filesystem::remove(file);
+}
+
+TEST(editor_core_run_session_runs_reports_and_stops_on_edits) {
+    TestRuntime rt;
+    GoGraph t;
+    NodeId pr = t.node("util.print", {{"String", Value("hello")}});
+    t.link(t.ev, "Then", pr, "In");
+    fged::core::Document doc(rt);
+    doc.setScript(t.s, "Test");
+    PumpedThread ui;
+    fged::core::RunSession run(doc, ui);
+    std::vector<std::string> log;
+    bool done = false, ok = false;
+    std::vector<fged::core::RunState> states;
+    run.logMessage.connect([&](int, const std::string& text) { log.push_back(text); });
+    run.finished.connect([&](bool success, const std::string&) { done = true; ok = success; });
+    run.stateChanged.connect([&](fged::core::RunState s) { states.push_back(s); });
+    CHECK(run.start("Go", {}));
+    for (int i = 0; i < 500 && !done; ++i) {
+        ui.pump();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(done && ok && !run.isActive());
+    CHECK(std::find(log.begin(), log.end(), "hello") != log.end());
+    CHECK(!states.empty() && states.front() == fged::core::RunState::Running && states.back() == fged::core::RunState::Idle);
+
+    // a script with compile errors does not run: the editor is told, in its own words
+    std::vector<fged::core::RunNotice> notices;
+    run.notice.connect([&](fged::core::RunNotice n) { notices.push_back(n); });
+    doc.edit("Broken", [](fg::Script& s) { s.graphs[0].addNode("no.such.node"); });
+    CHECK(!run.start("Go", {}));
+    CHECK(notices.size() == 1 && notices[0] == fged::core::RunNotice::CompileErrors);
+    doc.undo();
+
+    // a run waiting in a Delay is stopped by an edit, before the views hear of it
+    GoGraph w;
+    NodeId delay = w.node("flow.delay", {{"Duration", Value(30.0)}});
+    w.link(w.ev, "Then", delay, "In");
+    doc.setScript(w.s, "Wait");
+    CHECK(run.start("Go", {}));
+    for (int i = 0; i < 100 && run.state() != fged::core::RunState::Waiting; ++i) {
+        ui.pump();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(run.state() == fged::core::RunState::Waiting);
+    bool activeWhenViewsHeard = true;
+    doc.changed.connect([&](bool) { activeWhenViewsHeard = run.isActive(); });
+    notices.clear();
+    doc.edit("Edit", [](fg::Script& s) { s.variables.push_back({"X", "int", Value(int64_t(0)), "", ""}); });
+    CHECK(!activeWhenViewsHeard && !run.isActive());
+    CHECK(notices.size() == 1 && notices[0] == fged::core::RunNotice::StoppedByEdit);
+
+    // what a user types, as a value of a type
+    const Registry& reg = rt.registry();
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.tInt(), " 42 ").toInt() == 42);
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.tInt(), "4x").toInt() == 0);
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.tFloat(), "2.5").toFloat() == 2.5);
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.tBool(), "Yes").toBool());
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.findType("bytes"), "48 65").bytesView() == "He");
 }
 
 int main(int argc, char** argv) {

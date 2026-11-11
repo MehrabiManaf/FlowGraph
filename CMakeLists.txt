@@ -35,6 +35,8 @@ endif()
 
 # ---- core: pure C++20, no Qt ------------------------------------------------
 add_subdirectory(Core)
+# the editors' shared part, without a user interface (Qt-free: built in every configuration, tested with Core)
+add_subdirectory(EditorCore)
 
 if(FG_BUILD_TESTS)
     enable_testing()

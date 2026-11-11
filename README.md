@@ -126,7 +126,7 @@ FlowGraph has two licenses; `LICENSE` lists which part has which, and every sour
 
 | Part | License |
 |-|-|
-| `Core/` (FlowGraphCore), `Apps/Flow/` (`flow`), `Plugins/FileSystem/`, the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
+| `Core/` (FlowGraphCore), `EditorCore/` (what the editors share), `Apps/Flow/` (`flow`), `Plugins/FileSystem/`, the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
 | `Editor/` (FlowGraphEditor, the ScriptEditor library), `Apps/Studio/` (`flowstudio`), `Examples/Embedded/` | **GPL-3.0-only** (`LICENSES/GPL-3.0.txt`) |
 
 The runtime can be used in any application, closed source included, and plugins may have any license. The editor is GPL

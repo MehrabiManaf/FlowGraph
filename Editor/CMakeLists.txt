@@ -31,6 +31,8 @@ target_link_libraries(FlowGraphEditor PUBLIC
     Qt6::Widgets Qt6::Svg Qt6::SvgWidgets)
 # KDDockWidgets is a static library: link it into the editor library only, so a shared FlowGraphEditor owns the one copy.
 target_link_libraries(FlowGraphEditor PRIVATE $<BUILD_INTERFACE:KDAB::kddockwidgets>)
+# the editors' shared part (Document, RunSession: Qt-free), static as well: its copy is in this library
+target_link_libraries(FlowGraphEditor PRIVATE $<BUILD_INTERFACE:FlowGraphEditorCore>)
 
 # ---- translations ----------------------------------------------------------------------------------------------------------
 # Translations/flowgraph_<code>.ts, one per language (a new language is a new file here). They are compiled into the editor's
@@ -63,9 +65,9 @@ if(FG_BUILD_TESTS)
         qt_add_resources(FlowGraphEditorTests flowgraph_node_translations_tests PREFIX /i18n FILES ${FG_NODE_CATALOGS})
         target_include_directories(FlowGraphEditorTests PRIVATE Include ${CMAKE_CURRENT_BINARY_DIR}/Include)
         target_compile_definitions(FlowGraphEditorTests PRIVATE FG_EDITOR_STATIC_DEFINE)
-        target_link_libraries(FlowGraphEditorTests PRIVATE FlowGraphCore Qt6::Widgets Qt6::Svg Qt6::SvgWidgets KDAB::kddockwidgets)
+        target_link_libraries(FlowGraphEditorTests PRIVATE FlowGraphCore FlowGraphEditorCore Qt6::Widgets Qt6::Svg Qt6::SvgWidgets KDAB::kddockwidgets)
     else()
-        target_link_libraries(FlowGraphEditorTests PRIVATE FlowGraph::ScriptEditor KDAB::kddockwidgets)
+        target_link_libraries(FlowGraphEditorTests PRIVATE FlowGraph::ScriptEditor FlowGraphEditorCore KDAB::kddockwidgets)
     endif()
     add_test(NAME FlowGraphEditorTests COMMAND FlowGraphEditorTests)
     set_tests_properties(FlowGraphEditorTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
