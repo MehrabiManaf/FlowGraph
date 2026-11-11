@@ -14,6 +14,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace glw {
 class Application;
@@ -28,6 +29,9 @@ struct StudioOptions {
     std::string settingsName = "FlowGraph Studio";
     // What a new script starts as (a template of the application); none: an empty event graph.
     std::function<void(fg::Script&)> newScript;
+    // What Run starts: an event of the application (the standard applications' Main), with these arguments.
+    std::string runEntry;
+    std::function<std::vector<fg::Value>()> runArguments;
 };
 
 class Studio {
@@ -43,6 +47,9 @@ public:
     void newScript();
     // The script of `path` (UTF-8), at once; false, and a message in the window, when it cannot be read.
     bool open(const std::string& path);
+    // What the Debug menu's Run does: the application's event started (the run's state in the status bar, what it prints in
+    // the Output Log).
+    void runScript();
 
 private:
     struct Impl;

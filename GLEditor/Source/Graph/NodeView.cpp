@@ -11,6 +11,7 @@
 #include <GLWidgets/Widgets/UiRoot.hpp>
 
 #include <algorithm>
+#include <chrono>
 
 namespace fged::gl {
 
@@ -61,6 +62,19 @@ void NodeView::setNode(const fg::CompiledNode& node, bool error, bool warning, s
     laidOut_ = false;
     invalidateLayout();
     invalidatePaint();
+}
+
+namespace {
+constexpr auto flashTime = std::chrono::milliseconds(600);
+} // namespace
+
+void NodeView::flash() {
+    flashed_ = graph_.now();
+    invalidatePaint();
+}
+
+bool NodeView::flashing() const {
+    return flashed_ && graph_.now() - *flashed_ < flashTime;
 }
 
 void NodeView::setSelected(bool selected) {
@@ -332,6 +346,13 @@ void NodeView::paint(glw::PaintContext& context) {
     } else if (warning_ && !selected_) {
         border = colors.warning;
     }
+    // a run came to it a moment ago: the border lit, fading
+    if (flashing()) {
+        const float k = 1 - std::chrono::duration<float>(graph_.now() - *flashed_) / std::chrono::duration<float>(flashTime);
+        border = {border.r + (colors.highlight.r - border.r) * k, border.g + (colors.highlight.g - border.g) * k,
+                  border.b + (colors.highlight.b - border.b) * k, 1};
+        borderWidth = 1 + 2 * k;
+    }
     if (debugHere) {
         border = colors.debug;
         borderWidth = 3;
@@ -468,8 +489,12 @@ void NodeView::onHoverChanged(bool hovered) {
 std::optional<glw::ToolTip> NodeView::toolTipAt(glw::Point point) const {
     if (const Pin* v = pinAtPoint(point)) {
         const std::string name = v->label.empty() ? v->name : v->label;
-        return glw::ToolTip{.title = glw::LocalizedText(v->typeName.empty() ? name : name + ": " + v->typeName),
-                            .text = glw::LocalizedText(v->doc)};
+        glw::ToolTip tip{.title = glw::LocalizedText(v->typeName.empty() ? name : name + ": " + v->typeName), .text = glw::LocalizedText(v->doc)};
+        // a run paused: its value
+        std::string value;
+        if (v->kind == fg::PinKind::Data && graph_.pinValue(id_, v->name, value))
+            tip.note = glw::tr("Value: {value}").arg("value", value);
+        return tip;
     }
     if (!diagnostics_.empty())
         return glw::ToolTip{.title = glw::LocalizedText(title_), .text = glw::LocalizedText(diagnostics_)};

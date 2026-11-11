@@ -8,6 +8,7 @@
 
 #include <FlowGraph/Program.hpp>
 #include <GLWidgets/Text/TextLayout.hpp>
+#include <GLWidgets/Widgets/Animation.hpp>
 #include <GLWidgets/Widgets/Widget.hpp>
 
 #include <optional>
@@ -28,6 +29,9 @@ public:
     // What it shows now: the compiled node, and what the compiler says of it (errors, warnings, their text).
     void setNode(const fg::CompiledNode& node, bool error, bool warning, std::string diagnostics);
     bool selected() const { return selected_; }
+    // A run came to it: its border lit for a moment.
+    void flash();
+    bool flashing() const;
     void setSelected(bool selected);
 
     // The middle of a pin's connector (its own coordinates); none when it has no such pin (shown).
@@ -107,6 +111,7 @@ private:
     float width_ = 0, height_ = 0;
     std::vector<Pin> inputs_, outputs_;     // execution pins first, each
     std::optional<PinHit> hovered_;
+    std::optional<glw::TimePoint> flashed_;
     std::string previewPin_;                // the box being typed in, and what is typed
     std::optional<std::string> previewText_;         // the pin under the mouse
     bool hoveredBody_ = false;

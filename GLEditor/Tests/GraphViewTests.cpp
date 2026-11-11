@@ -6,6 +6,7 @@
 #include "Graph/NodeView.hpp"
 
 #include <FlowGraph/Runtime.hpp>
+#include <GLWidgets/Paint/DrawList.hpp>
 #include <GLWidgets/Text/Font.hpp>
 #include <GLWidgets/Text/GlyphAtlas.hpp>
 #include <GLWidgets/Widgets/UiRoot.hpp>
@@ -426,6 +427,34 @@ TEST(theBoxAndItsNodeFollowWhatIsTypedAndASpaceIsTyped) {
     e.key(Key::Escape);
     e.root.layout();
     CHECK(node.valueRect("String")->width == boxBefore);
+}
+
+TEST(aRunLightsTheLinksItTakesAndANodeClickedTwiceIsOpened) {
+    Edited e;
+    e.drag(e.pin(e.ev, "Then", fg::PinDir::Out), e.pin(e.a, "In", fg::PinDir::In));
+    // the link taken: the node it goes to flashes; painted while lit
+    e.view->fireLink(e.ev, 0, e.a);
+    CHECK(e.view->nodeView(e.a)->flashing() && !e.view->nodeView(e.b)->flashing());
+    glw::paint::DrawList list;
+    e.root.paint(list);
+    // an output that is not there: nothing
+    e.view->fireLink(e.ev, 7, e.b);
+    CHECK(!e.view->nodeView(e.b)->flashing());
+    // clicked twice: told which
+    std::vector<fg::NodeId> opened;
+    e.view->setOnNodeActivated([&](fg::NodeId id) { opened.push_back(id); });
+    e.press(e.header(e.b));
+    e.release(e.header(e.b));
+    e.press(e.header(e.b), KeyModifiers::None, 2);
+    e.release(e.header(e.b));
+    CHECK(opened == std::vector<fg::NodeId>{e.b});
+    // while paused: a pin's value with its tooltip (asked of the run)
+    e.view->setPinValues([](fg::NodeId, const std::string& pin, std::string& out) {
+        out = "42";
+        return pin == "String";
+    });
+    std::string value;
+    CHECK(e.view->pinValue(e.a, "String", value) && value == "42");
 }
 
 int main() {

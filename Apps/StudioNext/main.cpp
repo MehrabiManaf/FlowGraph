@@ -3,10 +3,10 @@
 // flowstudio-next: FlowGraph Studio on GLWidgets, the editor and debugger of the standard applications (the ones `flow`
 // runs), while it grows to take the place of flowstudio.
 //
-//   flowstudio-next [script.flow] [--frames N]
+//   flowstudio-next [script.flow] [--frames N] [--run]
 //
 // Plugins are loaded like `flow` does: FLOW_PLUGIN_PATH and the plugins folder next to the program. --frames N draws N
-// frames and exits: a smoke test.
+// frames and exits: a smoke test. --run runs the script once it is open (what Debug > Run does).
 #include <FlowGraph/Runtime.hpp>
 #include <FlowGraph/StandardApp.hpp>
 #include <FlowGraphGLEditor/Studio.hpp>
@@ -58,8 +58,11 @@ int main(int argc, char** argv) {
     const std::vector<std::string> args = arguments(argc, argv);
     std::string script;
     int frames = -1;
+    bool runAtStart = false;
     for (std::size_t i = 1; i < args.size(); ++i) {
-        if (args[i] == "--frames" && i + 1 < args.size())
+        if (args[i] == "--run")
+            runAtStart = true;
+        else if (args[i] == "--frames" && i + 1 < args.size())
             frames = std::max(1, std::atoi(args[++i].c_str()));
         else
             script = args[i];
@@ -82,9 +85,14 @@ int main(int argc, char** argv) {
         fged::gl::Studio studio(app, rt,
                                 {.applicationName = "FlowGraph Studio",
                                  .settingsName = "FlowGraph Studio Next",
-                                 .newScript = [&rt](fg::Script& s) { fg::standard::createMainTemplate(s, rt.registry()); }});
+                                 .newScript = [&rt](fg::Script& s) { fg::standard::createMainTemplate(s, rt.registry()); },
+                                 // Run: Main, with no arguments (launch configurations come later)
+                                 .runEntry = fg::standard::kMainEvent,
+                                 .runArguments = [&rt] { return std::vector<fg::Value>{fg::standard::argsValue(rt.registry(), {})}; }});
         if (!script.empty())
             studio.open(script);
+        if (runAtStart)
+            studio.runScript();
         return app.run(frames);
     } catch (const std::exception& e) {
         std::fprintf(stderr, "flowstudio-next: %s\n", e.what());

@@ -4,6 +4,9 @@
 
 #include "Graph/GraphView.hpp"
 
+#include <FlowGraph/Vm.hpp>
+#include <FlowGraphEditorCore/RunSession.hpp>
+
 #include <GLWidgets/Platform/Platform.hpp>
 #include <GLWidgets/Widgets/Action.hpp>
 #include <GLWidgets/Widgets/Application.hpp>
@@ -14,6 +17,7 @@
 #include <GLWidgets/Widgets/Settings.hpp>
 #include <GLWidgets/Widgets/StatusBar.hpp>
 #include <GLWidgets/Widgets/TabView.hpp>
+#include <GLWidgets/Widgets/TextEdit.hpp>
 
 #include <algorithm>
 #include <array>
@@ -87,6 +91,31 @@ glw::Shortcut key(glw::platform::Key k, bool shift = false) {
     return {k, shift ? glw::platform::shortcutModifier | KeyModifiers::Shift : glw::platform::shortcutModifier};
 }
 
+// What a run reports comes to the editor's thread through the application (Application::post), its buffers emptied by a
+// timer of the application's scheduler. Nothing posted runs once it is gone.
+class AppThread final : public core::UiThread {
+public:
+    explicit AppThread(glw::Application& app) : app_(app) {}
+    ~AppThread() override { *alive_ = false; }
+
+    void post(std::function<void()> fn) override {
+        app_.post([alive = alive_, fn = std::move(fn)] {
+            if (*alive)
+                fn();
+        });
+    }
+    void startRepeating(int intervalMs, std::function<void()> fn) override {
+        if (glw::Scheduler* s = app_.context().scheduler)
+            timer_.start(*s, std::chrono::milliseconds(intervalMs), std::move(fn), true);
+    }
+    void stopRepeating() override { timer_.stop(); }
+
+private:
+    glw::Application& app_;
+    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
+    glw::Timer timer_;
+};
+
 } // namespace
 
 struct Studio::Impl {
@@ -95,6 +124,8 @@ struct Studio::Impl {
     StudioOptions options;
     core::Document doc;
     glw::Settings settings;
+    AppThread uiThread;
+    std::unique_ptr<core::RunSession> run;      // after the thread it posts to: gone before it
 
     glw::Window* window = nullptr;
     glw::DockArea* area = nullptr;
@@ -102,13 +133,15 @@ struct Studio::Impl {
     glw::Widget* myScript = nullptr;            // the panel's content: made again as the script changes
     glw::StatusBar* status = nullptr;
     glw::Label* runState = nullptr;
+    glw::TextEdit* log = nullptr;               // the Output Log
     std::vector<std::string> shownGraphs;       // the graphs in the tabs, in their order
 
     std::shared_ptr<glw::Action> newAction, openAction, saveAction, saveAsAction, quitAction, undoAction, redoAction;
     std::shared_ptr<glw::Action> cutAction, copyAction, pasteAction, duplicateAction, selectAllAction, snapAction;
+    std::shared_ptr<glw::Action> runAction, pauseAction, stopAction, stepOverAction, stepIntoAction, stepOutAction, breakpointAction;
     bool closing = false;                       // asked whether to save, and it goes: the window may close now
 
-    Impl(glw::Application& a, fg::Runtime& r, StudioOptions o) : app(a), rt(r), options(std::move(o)), doc(r) {}
+    Impl(glw::Application& a, fg::Runtime& r, StudioOptions o) : app(a), rt(r), options(std::move(o)), doc(r), uiThread(a) {}
 
     // ---- preferences ----
 
@@ -184,13 +217,13 @@ struct Studio::Impl {
                                        .padding(glw::Insets::all(12)),
                         .closable = false},
                        center, glw::DockSide::End, 0.24f);
-        area->addPanel({.id = "output",
-                        .title = tr("Output Log"),
-                        .content = ui::Label({.text = tr("What a run prints shows here."), .muted = true})
-                                       .alignment(glw::Alignment::Stretch, glw::Alignment::Start)
-                                       .padding(glw::Insets::all(10)),
-                        .closable = false},
-                       center, glw::DockSide::Bottom, 0.24f);
+        // what a run prints
+        auto output = std::make_unique<glw::TextEdit>();
+        log = output.get();
+        log->setReadOnly(true);
+        log->setLineNumbers(false);
+        area->addPanel({.id = "output", .title = tr("Output Log"), .content = std::move(output), .closable = false}, center,
+                       glw::DockSide::Bottom, 0.24f);
         const std::string layout = settings.string("layout");
         if (!layout.empty())
             area->restoreLayout(layout);
@@ -201,6 +234,7 @@ struct Studio::Impl {
         status->setText(tr("Ready"));
         runState = &status->addPermanent(std::make_unique<glw::Label>(glw::Label::Props{.text = tr("Idle"), .fontSize = 12, .muted = true}));
 
+        makeRun();
         makeActions();
         rebuildMenus();
 
@@ -252,6 +286,24 @@ struct Studio::Impl {
         });
         snapAction->setCheckable(true);
         snapAction->setChecked(settings.boolean("snapToGrid", false));
+
+        // running and debugging
+        runAction = action(tr("&Run"), [this] {
+            if (run->state() == core::RunState::Paused)
+                run->resume();
+            else if (!run->isActive())
+                startRun();
+        }, {Key::F5});
+        pauseAction = action(tr("&Pause"), [this] { run->pause(); }, {Key::F6});
+        stopAction = action(tr("S&top"), [this] { run->stop(); }, {Key::F5, glw::platform::KeyModifiers::Shift});
+        stepOverAction = action(tr("Step &Over"), [this] { run->stepOver(); }, {Key::F10});
+        stepIntoAction = action(tr("Step &Into"), [this] { run->stepInto(); }, {Key::F11});
+        stepOutAction = action(tr("Step O&ut"), [this] { run->stepOut(); }, {Key::F11, glw::platform::KeyModifiers::Shift});
+        breakpointAction = action(tr("Toggle &Breakpoint"), [this] {
+            if (GraphView* g = currentGraph())
+                g->toggleBreakpoints();
+        }, {Key::F9});
+        showRunState(core::RunState::Idle);
         showUndoState();
     }
 
@@ -317,6 +369,16 @@ struct Studio::Impl {
                        glw::MenuItem::separatorItem(),
                        {.text = tr("&Colors"), .items = std::move(colors)},
                        {.text = tr("&Style"), .items = std::move(looks)}}},
+            {.text = tr("&Debug"),
+             .items = {{.action = runAction},
+                       {.action = pauseAction},
+                       {.action = stopAction},
+                       glw::MenuItem::separatorItem(),
+                       {.action = stepOverAction},
+                       {.action = stepIntoAction},
+                       {.action = stepOutAction},
+                       glw::MenuItem::separatorItem(),
+                       {.action = breakpointAction}}},
             {.text = tr("&Help"), .items = {{.text = tr("&About FlowGraph Studio"), .onTriggered = [this] { about(); }}}},
         };
         if (!menuBar)
@@ -350,7 +412,112 @@ struct Studio::Impl {
         auto view = std::make_unique<GraphView>(doc, name);
         view->setSnapToGrid(snapAction && snapAction->checked());
         view->setOnMessage([this](glw::LocalizedText text) { status->showMessage(std::move(text), 4s); });
+        // while a run is paused: the values of pins, with their tooltips
+        GraphView* g = view.get();
+        view->setPinValues([this, g](fg::NodeId node, const std::string& pin, std::string& out) {
+            return run && run->state() == core::RunState::Paused && run->pinText(g->graphName(), node, pin, out);
+        });
+        // a call of a function clicked twice: the function's graph
+        view->setOnNodeActivated([this, g](fg::NodeId id) {
+            const NodeView* node = g->nodeView(id);
+            if (!node)
+                return;
+            const fg::CompiledNode& cn = node->compiled();
+            const auto function = cn.props.find("function");
+            if (cn.defId == "func.call" && function != cn.props.end())
+                showGraph(function->second);
+        });
         return view;
+    }
+
+    // The tab of `graph` shown; its view.
+    GraphView* showGraph(const std::string& graph) {
+        const auto it = std::find(shownGraphs.begin(), shownGraphs.end(), graph);
+        if (it == shownGraphs.end())
+            return nullptr;
+        graphs->setCurrent(std::size_t(it - shownGraphs.begin()));
+        return currentGraph();
+    }
+
+    GraphView* graphView(const std::string& graph) const {
+        for (GraphView* g : graphViews()) {
+            if (g->graphName() == graph)
+                return g;
+        }
+        return nullptr;
+    }
+
+    // ---- running ----
+
+    void makeRun() {
+        run = std::make_unique<core::RunSession>(doc, uiThread);
+        run->stateChanged.connect([this](core::RunState state) { showRunState(state); });
+        run->paused.connect([this](const std::string& graph, int node) {
+            // the graph it stopped in shown, the node in view
+            for (GraphView* g : graphViews())
+                g->setDebugNode(0);
+            if (GraphView* g = showGraph(graph)) {
+                g->setDebugNode(fg::NodeId(node));
+                g->showNode(fg::NodeId(node));
+            }
+            status->showMessage(tr("Paused at '{graph}'").arg("graph", graph), 5s);
+        });
+        run->resumed.connect([this] {
+            for (GraphView* g : graphViews())
+                g->setDebugNode(0);
+        });
+        run->finished.connect([this](bool ok, const std::string& message) {
+            for (GraphView* g : graphViews())
+                g->setDebugNode(0);
+            if (!message.empty())
+                log->append(message);
+            status->showMessage(ok ? tr("The run ended") : tr("The run failed: see the Output Log"), 4s);
+        });
+        run->logMessage.connect([this](int level, const std::string& text) {
+            switch (fg::LogLevel(level)) {
+            case fg::LogLevel::Warning: log->append(app.translator().resolve(tr("Warning: {text}").arg("text", text))); break;
+            case fg::LogLevel::Error: log->append(app.translator().resolve(tr("Error: {text}").arg("text", text))); break;
+            default: log->append(text); break;
+            }
+        });
+        run->notice.connect([this](core::RunNotice notice) {
+            switch (notice) {
+            case core::RunNotice::CompileErrors: status->showMessage(tr("The script has errors: it cannot run"), 5s); break;
+            case core::RunNotice::StoppedByEdit: status->showMessage(tr("The script was changed: the run was stopped"), 5s); break;
+            }
+        });
+        run->linkFired.connect([this](const std::string& graph, int from, int out, int to) {
+            if (GraphView* g = graphView(graph))
+                g->fireLink(fg::NodeId(from), out, fg::NodeId(to));
+        });
+    }
+
+    void startRun() {
+        if (options.runEntry.empty()) {
+            status->showMessage(tr("Nothing to run: the application has no event to start"), 4s);
+            return;
+        }
+        log->setText("");
+        run->start(options.runEntry, options.runArguments ? options.runArguments() : std::vector<fg::Value>{});
+    }
+
+    void showRunState(core::RunState state) {
+        const bool active = state != core::RunState::Idle, paused = state == core::RunState::Paused;
+        if (runAction) {
+            runAction->setText(paused ? tr("&Continue") : tr("&Run"));
+            runAction->setEnabled(!active || paused);
+            pauseAction->setEnabled(active && !paused);
+            stopAction->setEnabled(active);
+            stepOverAction->setEnabled(paused);
+            stepIntoAction->setEnabled(paused);
+            stepOutAction->setEnabled(paused);
+        }
+        switch (state) {
+        case core::RunState::Idle: runState->setText(tr("Idle")); break;
+        case core::RunState::Running: runState->setText(tr("Running")); break;
+        case core::RunState::Waiting: runState->setText(tr("Waiting")); break;
+        case core::RunState::Paused: runState->setText(tr("Paused")); break;
+        }
     }
 
     GraphView* currentGraph() const {
@@ -586,6 +753,11 @@ void Studio::newScript() {
 
 bool Studio::open(const std::string& path) {
     return impl_->open(path);
+}
+
+void Studio::runScript() {
+    if (!impl_->run->isActive())
+        impl_->startRun();
 }
 
 } // namespace fged::gl

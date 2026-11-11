@@ -22,6 +22,7 @@
 #include <FlowGraphEditorCore/Document.hpp>
 #include <FlowGraphEditorCore/GraphEdits.hpp>
 #include "Graph/NodeView.hpp"
+#include <GLWidgets/Widgets/Animation.hpp>
 #include <GLWidgets/Widgets/Canvas.hpp>
 #include <GLWidgets/Widgets/Localization.hpp>
 
@@ -53,6 +54,21 @@ public:
     bool isBreakpoint(fg::NodeId node) const;
 
     NodeView* nodeView(fg::NodeId id) const;
+
+    // ---- what a run shows ----
+
+    // A link of execution taken by the run (from `from`'s `execOut`th output to `to`): it lights up for a moment, dots
+    // running along it, and the node it goes to flashes.
+    void fireLink(fg::NodeId from, int execOut, fg::NodeId to);
+    // The node in view (panned to it, when it is not).
+    void showNode(fg::NodeId id);
+    // While a run is paused: the text of a data pin's last value (false: none), shown with its tooltip.
+    void setPinValues(std::function<bool(fg::NodeId, const std::string&, std::string&)> provider) { pinValues_ = std::move(provider); }
+    bool pinValue(fg::NodeId node, const std::string& pin, std::string& out) const { return pinValues_ && pinValues_(node, pin, out); }
+    // A node clicked twice (a call of a function: its graph opened).
+    void setOnNodeActivated(std::function<void(fg::NodeId)> handler) { onNodeActivated_ = std::move(handler); }
+    // The time of the animations (the scheduler's).
+    glw::TimePoint now() const;
     // What the document has of the graph, shown again: its nodes (made, changed, gone), their places, its comments.
     void refresh();
 
@@ -172,6 +188,18 @@ private:
     const fg::TypeDesc* editType_ = nullptr;
     std::string editText_;                  // what it showed when it opened
     int addSerial_ = 0;                     // the steps of nodes added (one each, with where they are put after)
+
+    // links fired, and when (they fade a while after the last time)
+    struct Firing {
+        fg::Connection link;
+        glw::TimePoint first, last;
+    };
+    std::vector<Firing> fired_;
+    glw::Timer animation_;                  // repaints while a link or a node is lit
+    void animate();
+    void paintFiring(glw::PaintContext& context, const Bezier& curve, const Firing& firing, bool exec, glw::Color color);
+    std::function<bool(fg::NodeId, const std::string&, std::string&)> pinValues_;
+    std::function<void(fg::NodeId)> onNodeActivated_;
 
     std::function<void(glw::LocalizedText)> onMessage_;
     std::function<void()> onSelectionChanged_;

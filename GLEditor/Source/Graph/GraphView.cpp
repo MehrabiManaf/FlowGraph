@@ -14,6 +14,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <array>
+#include <chrono>
 #include <unordered_set>
 
 namespace fged::gl {
@@ -364,6 +366,12 @@ void GraphView::nodeMouse(NodeView& node, glw::MouseEvent& event) {
             linkFrom_ = end;
             linkTo_ = at;
             invalidatePaint();
+            return;
+        }
+        // clicked twice: what it opens (a call of a function: its graph)
+        if (event.clicks == 2 && onNodeActivated_) {
+            select({node.id()});
+            onNodeActivated_(node.id());
             return;
         }
         // a click selects it (Ctrl, Shift: adds it or takes it out); pressed, the selection moves with it
@@ -759,8 +767,125 @@ void GraphView::paintUnderItems(glw::PaintContext& context) {
             color = colors.selection;
             width += 1;
         }
-        context.painter.drawBezier(bz->a, bz->c1, bz->c2, bz->b, width, color);
+        const auto firing = std::find_if(fired_.begin(), fired_.end(), [&](const Firing& f) { return f.link == c; });
+        if (firing != fired_.end())
+            paintFiring(context, *bz, *firing, exec, color);
+        else
+            context.painter.drawBezier(bz->a, bz->c1, bz->c2, bz->b, width, color);
     }
+}
+
+// ---- what a run shows ----
+
+namespace {
+constexpr auto fireTotal = std::chrono::milliseconds(1000);     // a link lit, after it was last taken
+constexpr auto fireFade = std::chrono::milliseconds(250);       // its coming and going
+constexpr float dotSpacing = 200;                               // dips between the dots running along it
+
+float seconds(glw::Duration d) {
+    return std::chrono::duration<float>(d).count();
+}
+glw::Color blend(glw::Color a, glw::Color b, float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return {a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t};
+}
+glw::Point bezierAt(glw::Point a, glw::Point c1, glw::Point c2, glw::Point b, float t) {
+    const float u = 1 - t;
+    return {u * u * u * a.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * b.x,
+            u * u * u * a.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * b.y};
+}
+} // namespace
+
+glw::TimePoint GraphView::now() const {
+    const glw::UiContext* ui = context();
+    return ui && ui->scheduler ? ui->scheduler->now() : glw::TimePoint{};
+}
+
+void GraphView::fireLink(fg::NodeId from, int execOut, fg::NodeId to) {
+    const NodeView* source = nodeView(from);
+    if (!source)
+        return;
+    const fg::CompiledNode& cn = source->compiled();
+    if (execOut < 0 || std::size_t(execOut) >= cn.execOut.size())
+        return;
+    const std::string& pin = cn.pins[std::size_t(cn.execOut[std::size_t(execOut)])].name;
+    const fg::Graph* graph = doc_.graph(graph_);
+    if (!graph)
+        return;
+    const glw::TimePoint t = now();
+    for (const fg::Connection& c : graph->connections) {
+        if (c.fromNode != from || c.fromPin != pin || c.toNode != to)
+            continue;
+        const auto it = std::find_if(fired_.begin(), fired_.end(), [&](const Firing& f) { return f.link == c; });
+        if (it == fired_.end())
+            fired_.push_back({c, t, t});
+        else
+            it->last = t;
+    }
+    if (NodeView* target = nodeView(to))
+        target->flash();
+    animate();
+}
+
+void GraphView::animate() {
+    const glw::UiContext* ui = context();
+    if (!ui || !ui->scheduler || animation_.active())
+        return;
+    animation_.start(*ui->scheduler, std::chrono::milliseconds(16), [this] {
+        const glw::TimePoint t = now();
+        std::erase_if(fired_, [&](const Firing& f) { return t - f.last > fireTotal; });
+        bool lit = !fired_.empty();
+        for (const auto& [id, view] : nodes_)
+            lit = lit || view->flashing();
+        invalidatePaint();
+        if (!lit)
+            animation_.stop();
+    }, true);
+}
+
+void GraphView::paintFiring(glw::PaintContext& context, const Bezier& curve, const Firing& firing, bool exec, glw::Color color) {
+    const glw::TimePoint t = now();
+    const glw::Duration since = t - firing.last;
+    // coming (from its first time), going (to the end of its last)
+    const float k = since > fireTotal - fireFade ? seconds(fireTotal - since) / seconds(fireFade) : seconds(t - firing.first) / seconds(fireFade);
+    const glw::Color lit = blend(color, context.ui.theme.palette.accent, k);
+    const float width = (exec ? 3.0f : 2.0f) + (6.0f - (exec ? 3.0f : 2.0f)) * std::clamp(k, 0.0f, 1.0f);
+    glw::paint::Painter& p = context.painter;
+    p.drawBezier(curve.a, curve.c1, curve.c2, curve.b, width, lit);
+    // dots running along it, dotSpacing apart: where they are along its length
+    constexpr int samples = 48;
+    std::array<glw::Point, samples + 1> points;
+    std::array<float, samples + 1> along{};
+    for (int i = 0; i <= samples; ++i) {
+        points[std::size_t(i)] = bezierAt(curve.a, curve.c1, curve.c2, curve.b, float(i) / samples);
+        if (i > 0) {
+            const glw::Point d = points[std::size_t(i)] - points[std::size_t(i - 1)];
+            along[std::size_t(i)] = along[std::size_t(i - 1)] + std::sqrt(d.x * d.x + d.y * d.y);
+        }
+    }
+    const float length = along[samples];
+    if (length < 10)
+        return;
+    const float phase = std::fmod(seconds(t - firing.first), seconds(fireTotal)) / seconds(fireTotal);
+    const float radius = 0.5f + 3.5f * std::clamp(k, 0.0f, 1.0f);
+    std::size_t at = 1;
+    for (float d = phase * dotSpacing; d <= length; d += dotSpacing) {
+        while (at < samples && along[at] < d)
+            ++at;
+        const float span = along[at] - along[at - 1];
+        const float f = span > 0 ? (d - along[at - 1]) / span : 0;
+        const glw::Point a = points[at - 1], b = points[at];
+        p.fillCircle({a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f}, radius, lit);
+    }
+}
+
+void GraphView::showNode(fg::NodeId id) {
+    const NodeView* view = nodeView(id);
+    if (!view)
+        return;
+    const glw::Rect r = itemRect(*view);
+    if (!visibleArea().inflated(-40).contains(r.center()))
+        centerOn(r.center());
 }
 
 void GraphView::paintOverItems(glw::PaintContext& context) {
