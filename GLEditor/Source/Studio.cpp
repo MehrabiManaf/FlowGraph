@@ -3,6 +3,7 @@
 #include <FlowGraphGLEditor/Studio.hpp>
 
 #include "Graph/GraphView.hpp"
+#include "Panels/DebugPanel.hpp"
 #include "Panels/DetailsPanel.hpp"
 #include "Panels/InfoPanels.hpp"
 #include "Panels/MyScriptPanel.hpp"
@@ -140,6 +141,7 @@ struct Studio::Impl {
     DetailsPanel* details = nullptr;
     CompileResultsPanel* compileResults = nullptr;
     FindPanel* find = nullptr;
+    DebugPanel* debugger = nullptr;
     glw::Label* compileState = nullptr;         // the status bar's: how many errors and warnings
     glw::StatusBar* status = nullptr;
     glw::Label* runState = nullptr;
@@ -163,6 +165,13 @@ struct Studio::Impl {
     bool closing = false;                       // asked whether to save, and it goes: the window may close now
 
     Impl(glw::Application& a, fg::Runtime& r, StudioOptions o) : app(a), rt(r), options(std::move(o)), doc(r), uiThread(a) {}
+    // The window's panels and graphs go first, while the document and the run they listen to are there (the application,
+    // and its windows, outlive the studio).
+    ~Impl() {
+        if (window)
+            window->ui().setContent(nullptr);
+        closedViews.clear();
+    }
 
     // ---- preferences ----
 
@@ -317,25 +326,37 @@ struct Studio::Impl {
             }
             showReferences(target);
         });
-        // what the compiler says, what was found: beside the Output Log. A layout saved before them does not know them: they
-        // are put there after it is restored (it would put them in its first stack)
-        std::vector<glw::DockPanel> info;
-        info.push_back({.id = "compileResults", .title = tr("Compile Results"), .content = std::move(results), .closable = false});
-        info.push_back({.id = "findResults", .title = tr("Find Results"), .content = std::move(findPanel), .closable = false});
+        // the debugger: the call stack, the variables and the watches of the run (the session made for it now)
+        run = std::make_unique<core::RunSession>(doc, uiThread);
+        auto debugPanel = std::make_unique<DebugPanel>(doc, *run);
+        debugger = debugPanel.get();
+        debugger->setWatchStore([this](const std::string& path) { return settings.strings("watches:" + path); },
+                                [this](const std::string& path, const std::vector<std::string>& watches) {
+                                    settings.setStrings("watches:" + path, watches);
+                                    saveSettings();
+                                });
+        debugger->setOnLocation([this](const std::string& graph, fg::NodeId node) { focusNode(graph, node); });
+        // what the compiler says, what was found: beside the Output Log; the debugger beside the Details. A layout saved
+        // before them does not know them: they are put there after it is restored (it would put them in its first stack)
+        std::vector<std::pair<glw::DockPanel, const char*>> added;
+        added.emplace_back(glw::DockPanel{.id = "compileResults", .title = tr("Compile Results"), .content = std::move(results), .closable = false}, "output");
+        added.emplace_back(glw::DockPanel{.id = "findResults", .title = tr("Find Results"), .content = std::move(findPanel), .closable = false}, "output");
+        added.emplace_back(glw::DockPanel{.id = "debugger", .title = tr("Debugger"), .content = std::move(debugPanel), .closable = false}, "details");
         const std::string layout = settings.string("layout");
         const std::vector<std::string> known = glw::DockArea::panelsIn(layout);
-        std::vector<glw::DockPanel> later;
-        for (glw::DockPanel& panel : info) {
+        std::vector<std::pair<glw::DockPanel, const char*>> later;
+        for (auto& [panel, beside] : added) {
             if (layout.empty() || std::find(known.begin(), known.end(), panel.id) != known.end())
-                area->addPanel(std::move(panel), area->tabsOf("output"));
+                area->addPanel(std::move(panel), area->tabsOf(beside));
             else
-                later.push_back(std::move(panel));
+                later.emplace_back(std::move(panel), beside);
         }
         if (!layout.empty())
             area->restoreLayout(layout);
-        for (glw::DockPanel& panel : later)
-            area->addPanel(std::move(panel), area->tabsOf("output"));
+        for (auto& [panel, beside] : later)
+            area->addPanel(std::move(panel), area->tabsOf(beside));
         showPanel("output");
+        showPanel("details");
 
         const glw::Size size{static_cast<float>(settings.number("windowWidth", 1280)), static_cast<float>(settings.number("windowHeight", 760))};
         window = &app.openWindow({.title = tr("FlowGraph Studio"), .size = size}, std::move(dock));
@@ -597,7 +618,8 @@ struct Studio::Impl {
     // ---- running ----
 
     void makeRun() {
-        run = std::make_unique<core::RunSession>(doc, uiThread);
+        if (!run)
+            run = std::make_unique<core::RunSession>(doc, uiThread);
         run->stateChanged.connect([this](core::RunState state) { showRunState(state); });
         run->paused.connect([this](const std::string& graph, int node) {
             // the graph it stopped in shown, the node in view
@@ -607,6 +629,7 @@ struct Studio::Impl {
                 g->setDebugNode(fg::NodeId(node));
                 g->showNode(fg::NodeId(node));
             }
+            showPanel("debugger");
             status->showMessage(tr("Paused at '{graph}'").arg("graph", graph), 5s);
         });
         run->resumed.connect([this] {

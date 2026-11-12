@@ -4,6 +4,7 @@
 // events given to it as a window would.
 #include "Graph/GraphView.hpp"
 #include "Graph/NodeView.hpp"
+#include "Panels/DebugPanel.hpp"
 #include "Panels/DetailsPanel.hpp"
 #include "Panels/InfoPanels.hpp"
 #include "Panels/MyScriptPanel.hpp"
@@ -20,7 +21,11 @@
 #include <GLWidgets/Widgets/ToolBar.hpp>
 #include <GLWidgets/Widgets/UiRoot.hpp>
 
+#include <chrono>
 #include <cstdio>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <functional>
 #include <memory>
 #include <string>
@@ -892,6 +897,91 @@ TEST(findResultsSearchAndFindReferences) {
     // they follow the edits
     doc.edit("x", [](fg::Script& sc) { sc.graphs[0].nodes.erase(sc.graphs[0].nodes.begin()); });
     CHECK(panel.resultCount() == 0);
+}
+
+namespace {
+
+// The editor's thread of a test: what the run posts, done when pumped.
+struct PumpedThread : fged::core::UiThread {
+    std::mutex mu;
+    std::deque<std::function<void()>> queue;
+    std::function<void()> repeated;
+    void post(std::function<void()> fn) override {
+        std::lock_guard lk(mu);
+        queue.push_back(std::move(fn));
+    }
+    void startRepeating(int, std::function<void()> fn) override { repeated = std::move(fn); }
+    void stopRepeating() override { repeated = nullptr; }
+    void pump() {
+        std::deque<std::function<void()>> now;
+        {
+            std::lock_guard lk(mu);
+            now.swap(queue);
+        }
+        for (auto& fn : now)
+            fn();
+        if (repeated)
+            repeated();
+    }
+};
+
+} // namespace
+
+TEST(theDebuggerShowsTheStackVariablesAndWatchesOfAPausedRun) {
+    fg::Runtime rt;
+    rt.registry().addEvent("Go");
+    fged::core::Document doc(rt);
+    fg::Script s;
+    s.variables.push_back({"Speed", "float", fg::Value(1.5), "", ""});
+    fg::Graph& g = s.addEventGraph();
+    const fg::NodeId go = g.addNode("event:Go", 0, 0).id;
+    fg::Node& print = g.addNode("util.print", 200, 0);
+    print.defaults["String"] = fg::Value(std::string("hello"));
+    const fg::NodeId printId = print.id;
+    g.connections.push_back({go, "Then", printId, "In"});
+    doc.setScript(s, "T");
+    doc.debugger().toggleBreakpoint("EventGraph", printId);
+    PumpedThread ui;
+    {
+        fged::core::RunSession run(doc, ui);
+        Host host;
+        glw::UiRoot root{context(), &host};
+        auto p = std::make_unique<fged::gl::DebugPanel>(doc, run);
+        fged::gl::DebugPanel& panel = *p;
+        std::vector<std::string> saved;
+        panel.setWatchStore([](const std::string&) { return std::vector<std::string>{}; },
+                            [&](const std::string&, const std::vector<std::string>& w) { saved = w; });
+        root.setContent(std::move(p));
+        root.setSize({400, 700});
+        root.layout();
+        // before a run: nothing, a watch not available
+        CHECK(panel.stackDepth() == 0 && !panel.valueOf("Speed"));
+        panel.addWatch("Speed");
+        CHECK(panel.watches() == std::vector<std::string>{"Speed"});
+        // paused at the breakpoint: the stack, the variable, the watch
+        CHECK(run.start("Go", {}));
+        for (int i = 0; i < 500 && run.state() != fged::core::RunState::Paused; ++i) {
+            ui.pump();
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        CHECK(run.state() == fged::core::RunState::Paused);
+        root.layout();
+        CHECK(panel.stackDepth() == 1);
+        const std::optional<std::string> speed = panel.valueOf("Speed");
+        CHECK(speed && speed->find("1.5") != std::string::npos);
+        const std::optional<std::string> watched = panel.valueOf("Speed", true);
+        CHECK(watched && watched->find("1.5") != std::string::npos);
+        // a watch that is no expression: its error
+        panel.addWatch("Nope");
+        const std::optional<std::string> nope = panel.valueOf("Nope", true);
+        CHECK(nope && !nope->empty() && nope->front() == '<');
+        panel.removeWatch("Nope");
+        CHECK(panel.watches() == std::vector<std::string>{"Speed"} && !panel.valueOf("Nope", true));
+        run.stop();
+        for (int i = 0; i < 50; ++i)
+            ui.pump();
+        root.setContent(nullptr);           // (the panel before the run it listens to)
+    }
 }
 
 int main() {
