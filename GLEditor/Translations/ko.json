@@ -45,6 +45,14 @@
       "Metal",
       "금속"
     ],
+    "Solid": [
+      "Solid",
+      "솔리드"
+    ],
+    "Glass": [
+      "Glass",
+      "유리"
+    ],
     "My Script": [
       "My Script",
       "내 스크립트"

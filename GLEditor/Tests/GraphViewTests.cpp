@@ -35,6 +35,7 @@
 #include <thread>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -1052,10 +1053,23 @@ TEST(launchConfigurationsAreKeptNextToTheScriptAndAppliedToARun) {
     const fs::path before = fs::current_path();
     launches.apply(launches.file().configs[0]);
     CHECK(fs::equivalent(fs::current_path(), folder / "work"));
-    const char* set = std::getenv("FG_LAUNCH_TEST");
-    CHECK(set && std::string(set) == "yes");
+    const auto variable = [](const char* name) -> std::optional<std::string> {
+#ifdef _WIN32
+        char* value = nullptr;
+        std::size_t size = 0;
+        if (_dupenv_s(&value, &size, name) != 0 || !value)
+            return std::nullopt;
+        std::string v = value;
+        std::free(value);
+        return v;
+#else
+        const char* value = std::getenv(name);
+        return value ? std::optional<std::string>(value) : std::nullopt;
+#endif
+    };
+    CHECK(variable("FG_LAUNCH_TEST") == "yes");
     launches.restore();
-    CHECK(fs::equivalent(fs::current_path(), before) && !std::getenv("FG_LAUNCH_TEST"));
+    CHECK(fs::equivalent(fs::current_path(), before) && !variable("FG_LAUNCH_TEST"));
     // saved as another file: the configurations go with it
     launches.scriptSaved((folder / "b.flow").string());
     CHECK(fs::exists(folder / "b.flowlaunch"));

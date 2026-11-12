@@ -65,8 +65,7 @@ void glyphItem(glw::paint::Painter& p, glw::Point c, float r, bool diamond, floa
     const float d = r * reach;
     const glw::Point points[] = {{c.x, c.y - d}, {c.x + d, c.y}, {c.x, c.y + d}, {c.x - d, c.y}};
     p.fillConvexPolygon(points, fill);
-    const glw::Point closed[] = {points[0], points[1], points[2], points[3], points[0]};
-    p.drawPolyline(closed, 1, line);
+    p.drawPolygon(points, 1, line);
 }
 
 } // namespace
@@ -100,8 +99,7 @@ void drawExecGlyph(glw::paint::Painter& p, glw::Point c, glw::Color color, bool 
     constexpr float hw = 6, hh = 7.5f;
     const glw::Point points[] = {{c.x - hw, c.y - hh}, {c.x, c.y - hh}, {c.x + hw, c.y}, {c.x, c.y + hh}, {c.x - hw, c.y + hh}};
     p.fillConvexPolygon(points, filled ? color : hollow);
-    const glw::Point closed[] = {points[0], points[1], points[2], points[3], points[4], points[0]};
-    p.drawPolyline(closed, 1.2f, color);
+    p.drawPolygon(points, 1.2f, color);         // (joined at every corner: a polyline back to its start left a notch)
 }
 
 std::string defaultText(const fg::CompiledPin& pin) {

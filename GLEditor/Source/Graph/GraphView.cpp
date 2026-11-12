@@ -756,39 +756,56 @@ void GraphView::paintUnderItems(glw::PaintContext& context) {
         return;
     const GraphColors colors = GraphColors::of(context.ui.theme);
     const glw::Rect shown = visibleArea();
-    for (const fg::Connection& c : graph->connections) {
-        const std::optional<Bezier> bz = linkCurve(c);
-        if (!bz)
-            continue;
-        // the color of its output (execution: the exec color), thicker for execution
-        bool exec = false;
-        glw::Color color = colors.mutedText;
-        if (compiled) {
-            if (const fg::CompiledNode* from = compiled->findNode(c.fromNode)) {
-                const int i = from->findPinIndex(c.fromPin, fg::PinDir::Out);
-                if (i >= 0) {
-                    const fg::CompiledPin& pin = from->pins[std::size_t(i)];
-                    exec = pin.kind == fg::PinKind::Exec;
-                    color = pinColor(registry(), pin, colors);
+    // every link under the nodes (paintUnderItems), the links of data under those of execution: two passes, the link being
+    // dragged in the pass of its kind, last
+    for (const bool execPass : {false, true}) {
+        for (const fg::Connection& c : graph->connections) {
+            const std::optional<Bezier> bz = linkCurve(c);
+            if (!bz)
+                continue;
+            // the color of its output (execution: the exec color), thicker for execution
+            bool exec = false;
+            glw::Color color = colors.mutedText;
+            if (compiled) {
+                if (const fg::CompiledNode* from = compiled->findNode(c.fromNode)) {
+                    const int i = from->findPinIndex(c.fromPin, fg::PinDir::Out);
+                    if (i >= 0) {
+                        const fg::CompiledPin& pin = from->pins[std::size_t(i)];
+                        exec = pin.kind == fg::PinKind::Exec;
+                        color = pinColor(registry(), pin, colors);
+                    }
                 }
             }
+            if (exec != execPass)
+                continue;
+            // what does not show is not drawn
+            const float left = std::min({bz->a.x, bz->b.x, bz->c1.x, bz->c2.x}), right = std::max({bz->a.x, bz->b.x, bz->c1.x, bz->c2.x});
+            const float top = std::min(bz->a.y, bz->b.y), bottom = std::max(bz->a.y, bz->b.y);
+            if (!glw::Rect{left, top, right - left, bottom - top}.inflated(8).intersects(shown))
+                continue;
+            const bool selected = selectedLink_ && *selectedLink_ == c;
+            float width = exec ? 3.0f : 2.0f;
+            if (selected) {
+                color = colors.selection;
+                width += 1;
+            }
+            const auto firing = std::find_if(fired_.begin(), fired_.end(), [&](const Firing& f) { return f.link == c; });
+            if (firing != fired_.end())
+                paintFiring(context, *bz, *firing, exec, color);
+            else
+                context.painter.drawBezier(bz->a, bz->c1, bz->c2, bz->b, width, color);
         }
-        // what does not show is not drawn
-        const float left = std::min({bz->a.x, bz->b.x, bz->c1.x, bz->c2.x}), right = std::max({bz->a.x, bz->b.x, bz->c1.x, bz->c2.x});
-        const float top = std::min(bz->a.y, bz->b.y), bottom = std::max(bz->a.y, bz->b.y);
-        if (!glw::Rect{left, top, right - left, bottom - top}.inflated(8).intersects(shown))
-            continue;
-        const bool selected = selectedLink_ && *selectedLink_ == c;
-        float width = exec ? 3.0f : 2.0f;
-        if (selected) {
-            color = colors.selection;
-            width += 1;
+        // the link being dragged, from its pin to the mouse: with those of its kind
+        if (drag_ == Drag::Link && (linkFrom_.kind == fg::PinKind::Exec) == execPass) {
+            if (const std::optional<glw::Point> pin = pinPoint(linkFrom_.node, linkFrom_.pin, linkFrom_.dir)) {
+                glw::Color color = linkFrom_.kind == fg::PinKind::Exec ? colors.exec
+                                   : linkFrom_.type && !linkFrom_.wildcard ? rgb(registry().typeColor(linkFrom_.type))
+                                                                            : rgb(160, 160, 168);
+                color.a *= 0.75f;
+                const Bezier bz = linkFrom_.dir == fg::PinDir::Out ? curve(*pin, linkTo_) : curve(linkTo_, *pin);
+                context.painter.drawBezier(bz.a, bz.c1, bz.c2, bz.b, linkFrom_.kind == fg::PinKind::Exec ? 3.0f : 2.0f, color);
+            }
         }
-        const auto firing = std::find_if(fired_.begin(), fired_.end(), [&](const Firing& f) { return f.link == c; });
-        if (firing != fired_.end())
-            paintFiring(context, *bz, *firing, exec, color);
-        else
-            context.painter.drawBezier(bz->a, bz->c1, bz->c2, bz->b, width, color);
     }
 }
 
@@ -921,17 +938,6 @@ void GraphView::paintOverItems(glw::PaintContext& context) {
             continue;
         p.fillRoundedRect(bubble, 4, colors.bubble);
         context.drawText(text, {bubble.x + 6, bubble.y + 2}, colors.bubbleText);
-    }
-    // the link being dragged, from its pin to the mouse
-    if (drag_ == Drag::Link) {
-        if (const std::optional<glw::Point> pin = pinPoint(linkFrom_.node, linkFrom_.pin, linkFrom_.dir)) {
-            glw::Color color = linkFrom_.kind == fg::PinKind::Exec ? colors.exec
-                               : linkFrom_.type && !linkFrom_.wildcard ? rgb(registry().typeColor(linkFrom_.type))
-                                                                        : rgb(160, 160, 168);
-            color.a *= 0.75f;
-            const Bezier bz = linkFrom_.dir == fg::PinDir::Out ? curve(*pin, linkTo_) : curve(linkTo_, *pin);
-            p.drawBezier(bz.a, bz.c1, bz.c2, bz.b, linkFrom_.kind == fg::PinKind::Exec ? 3.0f : 2.0f, color);
-        }
     }
     // the rectangle that selects
     if (band_) {

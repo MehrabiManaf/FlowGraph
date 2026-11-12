@@ -45,6 +45,14 @@
       "Metal",
       "Металл"
     ],
+    "Solid": [
+      "Solid",
+      "Объёмный"
+    ],
+    "Glass": [
+      "Glass",
+      "Стекло"
+    ],
     "My Script": [
       "My Script",
       "Мой скрипт"

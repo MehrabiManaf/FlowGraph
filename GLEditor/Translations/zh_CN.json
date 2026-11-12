@@ -45,6 +45,14 @@
       "Metal",
       "金属"
     ],
+    "Solid": [
+      "Solid",
+      "立体"
+    ],
+    "Glass": [
+      "Glass",
+      "玻璃"
+    ],
     "My Script": [
       "My Script",
       "我的脚本"

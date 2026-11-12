@@ -57,11 +57,13 @@ constexpr std::array<std::pair<std::string_view, glw::ColorScheme>, 5> schemes{{
                                                                                 {"dusk", glw::ColorScheme::Dusk},
                                                                                 {"sand", glw::ColorScheme::Sand},
                                                                                 {"turquoise", glw::ColorScheme::Turquoise}}};
-constexpr std::array<std::pair<std::string_view, glw::ThemeStyle>, 5> styles{{{"studio", glw::ThemeStyle::Studio},
+constexpr std::array<std::pair<std::string_view, glw::ThemeStyle>, 7> styles{{{"studio", glw::ThemeStyle::Studio},
                                                                               {"fluid", glw::ThemeStyle::Fluid},
                                                                               {"plain", glw::ThemeStyle::Plain},
                                                                               {"plastic", glw::ThemeStyle::Plastic},
-                                                                              {"metal", glw::ThemeStyle::Metal}}};
+                                                                              {"metal", glw::ThemeStyle::Metal},
+                                                                              {"solid", glw::ThemeStyle::Solid},
+                                                                              {"glass", glw::ThemeStyle::Glass}}};
 
 glw::LocalizedText schemeTitle(glw::ColorScheme scheme) {
     switch (scheme) {
@@ -81,6 +83,8 @@ glw::LocalizedText styleTitle(glw::ThemeStyle style) {
     case glw::ThemeStyle::Plain: return tr("Plain");
     case glw::ThemeStyle::Plastic: return tr("Plastic");
     case glw::ThemeStyle::Metal: return tr("Metal");
+    case glw::ThemeStyle::Solid: return tr("Solid");
+    case glw::ThemeStyle::Glass: return tr("Glass");
     }
     return {};
 }
@@ -255,6 +259,7 @@ struct Studio::Impl {
         // the graphs in the middle: dock tabs of the area's center stack (closed, moved, floated as any panel), the stack kept
         // with its room when none is open
         documents = &area->setCenterStack();
+        area->setCenterFixed(true);                 // the graphs stay there: not floated, no tool among them
         glw::Widget* center = area->center();
         area->setOnPanelShown([this](glw::DockTabs&, const std::string& id) {
             if (id.rfind(graphPrefix, 0) != 0)
