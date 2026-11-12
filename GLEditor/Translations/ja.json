@@ -1,0 +1,1159 @@
+{
+  "language": "ja",
+  "texts": {
+    "English": [
+      "English",
+      "日本語"
+    ],
+    "Dark": [
+      "Dark",
+      "ダーク"
+    ],
+    "Light": [
+      "Light",
+      "ライト"
+    ],
+    "Dusk": [
+      "Dusk",
+      "夕暮れ"
+    ],
+    "Sand": [
+      "Sand",
+      "サンド"
+    ],
+    "Turquoise": [
+      "Turquoise",
+      "ターコイズ"
+    ],
+    "Studio": [
+      "Studio",
+      "スタジオ"
+    ],
+    "Fluid": [
+      "Fluid",
+      "フルイド"
+    ],
+    "Plain": [
+      "Plain",
+      "プレーン"
+    ],
+    "Plastic": [
+      "Plastic",
+      "プラスチック"
+    ],
+    "Metal": [
+      "Metal",
+      "メタル"
+    ],
+    "My Script": [
+      "My Script",
+      "マイスクリプト"
+    ],
+    "Details": [
+      "Details",
+      "詳細"
+    ],
+    "Output Log": [
+      "Output Log",
+      "出力ログ"
+    ],
+    "Compile Results": [
+      "Compile Results",
+      "コンパイル結果"
+    ],
+    "Find Results": [
+      "Find Results",
+      "検索結果"
+    ],
+    "Debugger": [
+      "Debugger",
+      "デバッガー"
+    ],
+    "FlowGraph Studio": [
+      "FlowGraph Studio",
+      ""
+    ],
+    "Ready": [
+      "Ready",
+      "準備完了"
+    ],
+    "Idle": [
+      "Idle",
+      "待機中"
+    ],
+    "&New": [
+      "&New",
+      "新規(&N)"
+    ],
+    "&Open...": [
+      "&Open...",
+      "開く(&O)..."
+    ],
+    "&Save": [
+      "&Save",
+      "保存(&S)"
+    ],
+    "Save &As...": [
+      "Save &As...",
+      "名前を付けて保存(&A)..."
+    ],
+    "&Quit": [
+      "&Quit",
+      "終了(&Q)"
+    ],
+    "&Undo": [
+      "&Undo",
+      "元に戻す(&U)"
+    ],
+    "&Redo": [
+      "&Redo",
+      "やり直し(&R)"
+    ],
+    "Cu&t": [
+      "Cu&t",
+      "切り取り(&T)"
+    ],
+    "&Copy": [
+      "&Copy",
+      "コピー(&C)"
+    ],
+    "&Paste": [
+      "&Paste",
+      "貼り付け(&P)"
+    ],
+    "D&uplicate": [
+      "D&uplicate",
+      "複製(&U)"
+    ],
+    "Select &All": [
+      "Select &All",
+      "すべて選択(&A)"
+    ],
+    "&Snap to Grid": [
+      "&Snap to Grid",
+      "グリッドにスナップ(&S)"
+    ],
+    "&Find in Script...": [
+      "&Find in Script...",
+      "スクリプト内を検索(&F)..."
+    ],
+    "Find &References": [
+      "Find &References",
+      "参照を検索(&R)"
+    ],
+    "&Run": [
+      "&Run",
+      "実行(&R)"
+    ],
+    "&Pause": [
+      "&Pause",
+      "一時停止(&P)"
+    ],
+    "S&top": [
+      "S&top",
+      "停止(&T)"
+    ],
+    "Step &Over": [
+      "Step &Over",
+      "ステップ オーバー(&O)"
+    ],
+    "Step &Into": [
+      "Step &Into",
+      "ステップ イン(&I)"
+    ],
+    "Step O&ut": [
+      "Step O&ut",
+      "ステップ アウト(&U)"
+    ],
+    "Toggle &Breakpoint": [
+      "Toggle &Breakpoint",
+      "ブレークポイントの切り替え(&B)"
+    ],
+    "Clear the List": [
+      "Clear the List",
+      "一覧を消去"
+    ],
+    "As the System": [
+      "As the System",
+      "システムに合わせる"
+    ],
+    "&File": [
+      "&File",
+      "ファイル(&F)"
+    ],
+    "Open &Recent": [
+      "Open &Recent",
+      "最近使ったファイル(&R)"
+    ],
+    "&Edit": [
+      "&Edit",
+      "編集(&E)"
+    ],
+    "&Delete": [
+      "&Delete",
+      "削除(&D)"
+    ],
+    "Del": [
+      "Del",
+      ""
+    ],
+    "&View": [
+      "&View",
+      "表示(&V)"
+    ],
+    "&Frame Selection": [
+      "&Frame Selection",
+      "選択範囲に合わせる(&F)"
+    ],
+    "F": [
+      "F",
+      ""
+    ],
+    "&Colors": [
+      "&Colors",
+      "配色(&C)"
+    ],
+    "&Style": [
+      "&Style",
+      "スタイル(&S)"
+    ],
+    "&Language": [
+      "&Language",
+      "言語(&L)"
+    ],
+    "&Debug": [
+      "&Debug",
+      "デバッグ(&D)"
+    ],
+    "&Help": [
+      "&Help",
+      "ヘルプ(&H)"
+    ],
+    "&About FlowGraph Studio": [
+      "&About FlowGraph Studio",
+      "FlowGraph Studio について(&A)"
+    ],
+    "Untitled": [
+      "Untitled",
+      "無題"
+    ],
+    "{name}{dirty} - {application}": [
+      "{name}{dirty} - {application}",
+      ""
+    ],
+    "System": [
+      "System",
+      "システム"
+    ],
+    "&Undo {what}": [
+      "&Undo {what}",
+      "元に戻す: {what}(&U)"
+    ],
+    "&Redo {what}": [
+      "&Redo {what}",
+      "やり直し: {what}(&R)"
+    ],
+    "Paused at '{graph}'": [
+      "Paused at '{graph}'",
+      "'{graph}' で一時停止"
+    ],
+    "The run ended": [
+      "The run ended",
+      "実行が終了しました"
+    ],
+    "The run failed: see the Output Log": [
+      "The run failed: see the Output Log",
+      "実行に失敗しました: 出力ログを参照してください"
+    ],
+    "Warning: {text}": [
+      "Warning: {text}",
+      "警告: {text}"
+    ],
+    "Error: {text}": [
+      "Error: {text}",
+      "エラー: {text}"
+    ],
+    "The script has errors: it cannot run": [
+      "The script has errors: it cannot run",
+      "スクリプトにエラーがあるため実行できません"
+    ],
+    "The script was changed: the run was stopped": [
+      "The script was changed: the run was stopped",
+      "スクリプトが変更されたため実行を停止しました"
+    ],
+    "Nothing to run: the application has no event to start": [
+      "Nothing to run: the application has no event to start",
+      "実行するものがありません: アプリケーションに開始イベントがありません"
+    ],
+    "&Continue": [
+      "&Continue",
+      "続行(&C)"
+    ],
+    "Running": [
+      "Running",
+      "実行中"
+    ],
+    "Waiting": [
+      "Waiting",
+      "待機中"
+    ],
+    "Paused": [
+      "Paused",
+      "一時停止中"
+    ],
+    "{count} reference(s) of {what}": [
+      "{count} reference(s) of {what}",
+      "{what} の参照 {count} 件"
+    ],
+    "Select a node, or a variable, function or struct in My Script, to find its references": [
+      "Select a node, or a variable, function or struct in My Script, to find its references",
+      "参照を検索するには、ノード、またはマイスクリプトの変数、関数、構造体を選択してください"
+    ],
+    "{errors} error(s), {warnings} warning(s)": [
+      "{errors} error(s), {warnings} warning(s)",
+      "エラー {errors} 件、警告 {warnings} 件"
+    ],
+    "OK": [
+      "OK",
+      "OK"
+    ],
+    "A new script": [
+      "A new script",
+      "新しいスクリプト"
+    ],
+    "The script was not opened": [
+      "The script was not opened",
+      "スクリプトを開けませんでした"
+    ],
+    "Close": [
+      "Close",
+      "閉じる"
+    ],
+    "Opened {file}": [
+      "Opened {file}",
+      "{file} を開きました"
+    ],
+    "FlowGraph scripts": [
+      "FlowGraph scripts",
+      "FlowGraph スクリプト"
+    ],
+    "Open a Script": [
+      "Open a Script",
+      "スクリプトを開く"
+    ],
+    "No file dialog": [
+      "No file dialog",
+      "ファイル ダイアログがありません"
+    ],
+    "Save the Script": [
+      "Save the Script",
+      "スクリプトを保存"
+    ],
+    "The script was not saved": [
+      "The script was not saved",
+      "スクリプトを保存できませんでした"
+    ],
+    "Saved {file}": [
+      "Saved {file}",
+      "{file} を保存しました"
+    ],
+    "Save the changes?": [
+      "Save the changes?",
+      "変更を保存しますか?"
+    ],
+    "The changes to {name} are lost if they are not saved.": [
+      "The changes to {name} are lost if they are not saved.",
+      "保存しないと {name} への変更は失われます。"
+    ],
+    "Save": [
+      "Save",
+      "保存"
+    ],
+    "Don't Save": [
+      "Don't Save",
+      "保存しない"
+    ],
+    "Cancel": [
+      "Cancel",
+      "キャンセル"
+    ],
+    "About {application}": [
+      "About {application}",
+      "{application} について"
+    ],
+    "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets. A preview: it takes the place of the Qt editor once it does all that one does.": [
+      "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets. A preview: it takes the place of the Qt editor once it does all that one does.",
+      "GLWidgets で描画された、FlowGraph 標準アプリケーションのエディターとデバッガーです。プレビュー版: Qt エディターのすべての機能を備えた時点で置き換わります。"
+    ],
+    "The events of the application and the entry of a function cannot be deleted": [
+      "The events of the application and the entry of a function cannot be deleted",
+      "アプリケーションのイベントと関数の入口は削除できません"
+    ],
+    "Delete": [
+      "Delete",
+      "削除"
+    ],
+    "The clipboard has no nodes": [
+      "The clipboard has no nodes",
+      "クリップボードにノードがありません"
+    ],
+    "Paste": [
+      "Paste",
+      "貼り付け"
+    ],
+    "Duplicate": [
+      "Duplicate",
+      "複製"
+    ],
+    "Break links": [
+      "Break links",
+      "接続を切る"
+    ],
+    "Connect pins": [
+      "Connect pins",
+      "ピンを接続"
+    ],
+    "Connect an output pin to an input pin": [
+      "Connect an output pin to an input pin",
+      "出力ピンを入力ピンに接続してください"
+    ],
+    "A node cannot be connected to itself": [
+      "A node cannot be connected to itself",
+      "ノードを自分自身に接続することはできません"
+    ],
+    "Execution pins only connect to execution pins": [
+      "Execution pins only connect to execution pins",
+      "実行ピンは実行ピンにしか接続できません"
+    ],
+    "Cannot connect {from} to {to}": [
+      "Cannot connect {from} to {to}",
+      "{from} を {to} に接続できません"
+    ],
+    "This link would make the value depend on itself (the data links would form a cycle)": [
+      "This link would make the value depend on itself (the data links would form a cycle)",
+      "この接続では値が自分自身に依存してしまいます (データの接続が循環します)"
+    ],
+    "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first": [
+      "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first",
+      "この接続は無限ループになります: 先にループへ「分岐」(抜け道) か「遅延」を追加してください"
+    ],
+    "Comment": [
+      "Comment",
+      "コメント"
+    ],
+    "Edit comment": [
+      "Edit comment",
+      "コメントを編集"
+    ],
+    "Resize comment": [
+      "Resize comment",
+      "コメントのサイズ変更"
+    ],
+    "Move": [
+      "Move",
+      "移動"
+    ],
+    "Add reroute": [
+      "Add reroute",
+      "リルートを追加"
+    ],
+    "Reroute nodes are only for links of data": [
+      "Reroute nodes are only for links of data",
+      "リルート ノードはデータのリンク専用です"
+    ],
+    "No node fits that pin": [
+      "No node fits that pin",
+      "そのピンに合うノードはありません"
+    ],
+    "Search the nodes that fit the pin": [
+      "Search the nodes that fit the pin",
+      "ピンに合うノードを検索"
+    ],
+    "Search the nodes": [
+      "Search the nodes",
+      "ノードを検索"
+    ],
+    "Add node": [
+      "Add node",
+      "ノードを追加"
+    ],
+    "Add call to {function}": [
+      "Add call to {function}",
+      "{function} の呼び出しを追加"
+    ],
+    "Add Set variable": [
+      "Add Set variable",
+      "「変数を設定」を追加"
+    ],
+    "Add Get variable": [
+      "Add Get variable",
+      "「変数を取得」を追加"
+    ],
+    "Get {name}": [
+      "Get {name}",
+      "{name} を取得"
+    ],
+    "Set {name}": [
+      "Set {name}",
+      "{name} を設定"
+    ],
+    "Add comment": [
+      "Add comment",
+      "コメントを追加"
+    ],
+    "Edit Node Comment...": [
+      "Edit Node Comment...",
+      "ノードのコメントを編集..."
+    ],
+    "Node Comment": [
+      "Node Comment",
+      "ノードのコメント"
+    ],
+    "Edit node comment": [
+      "Edit node comment",
+      "ノードのコメントを編集"
+    ],
+    "Toggle Breakpoint": [
+      "Toggle Breakpoint",
+      "ブレークポイントの切り替え"
+    ],
+    "F9": [
+      "F9",
+      ""
+    ],
+    "Find References": [
+      "Find References",
+      "参照を検索"
+    ],
+    "Shift+F12": [
+      "Shift+F12",
+      ""
+    ],
+    "Edit Comment Text...": [
+      "Edit Comment Text...",
+      "コメントのテキストを編集..."
+    ],
+    "Delete Comment": [
+      "Delete Comment",
+      "コメントを削除"
+    ],
+    "Add Node...": [
+      "Add Node...",
+      "ノードを追加..."
+    ],
+    "Space": [
+      "Space",
+      ""
+    ],
+    "Add Comment": [
+      "Add Comment",
+      "コメントを追加"
+    ],
+    "Cut": [
+      "Cut",
+      "切り取り"
+    ],
+    "Copy": [
+      "Copy",
+      "コピー"
+    ],
+    "Add Comment Around": [
+      "Add Comment Around",
+      "選択範囲をコメントで囲む"
+    ],
+    "Frame": [
+      "Frame",
+      "全体を表示"
+    ],
+    "Edit value": [
+      "Edit value",
+      "値を編集"
+    ],
+    "Value: {value}": [
+      "Value: {value}",
+      "値: {value}"
+    ],
+    "Call Stack": [
+      "Call Stack",
+      "呼び出し履歴"
+    ],
+    "Node": [
+      "Node",
+      "ノード"
+    ],
+    "Value": [
+      "Value",
+      "値"
+    ],
+    "Type": [
+      "Type",
+      "型"
+    ],
+    "Variable": [
+      "Variable",
+      "変数"
+    ],
+    "Watch": [
+      "Watch",
+      "ウォッチ"
+    ],
+    "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)": [
+      "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)",
+      "ウォッチ: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter で追加)"
+    ],
+    "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.": [
+      "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.",
+      "ウォッチする式です。範囲 name[a..b] はその要素 (両端を含む) を読み込みます: 大きな配列が丸ごと読み込まれることはありません。"
+    ],
+    "The locals and parameters of the frame chosen are found first, then the variables of the script.": [
+      "The locals and parameters of the frame chosen are found first, then the variables of the script.",
+      "選択したフレームのローカル変数とパラメーターが先に検索され、次にスクリプトの変数が検索されます。"
+    ],
+    "{left} more - double-click to load {next} more": [
+      "{left} more - double-click to load {next} more",
+      "ほか {left} 件 - ダブルクリックでさらに {next} 件を読み込み"
+    ],
+    "(event)": [
+      "(event)",
+      "(イベント)"
+    ],
+    "Locals / Parameters": [
+      "Locals / Parameters",
+      "ローカル / パラメーター"
+    ],
+    "Variables": [
+      "Variables",
+      "変数"
+    ],
+    "(not available: run the script first)": [
+      "(not available: run the script first)",
+      "(利用できません: 先にスクリプトを実行してください)"
+    ],
+    "Load the next {count}": [
+      "Load the next {count}",
+      "次の {count} 件を読み込む"
+    ],
+    "Load the next {count} (of {left} left)": [
+      "Load the next {count} (of {left} left)",
+      "次の {count} 件を読み込む (残り {left} 件)"
+    ],
+    "Load all ({left} left)": [
+      "Load all ({left} left)",
+      "すべて読み込む (残り {left} 件)"
+    ],
+    "Watch a Range...": [
+      "Watch a Range...",
+      "範囲をウォッチ..."
+    ],
+    "Add to Watch": [
+      "Add to Watch",
+      "ウォッチに追加"
+    ],
+    "Copy Value": [
+      "Copy Value",
+      "値をコピー"
+    ],
+    "Edit Watch": [
+      "Edit Watch",
+      "ウォッチを編集"
+    ],
+    "Remove Watch": [
+      "Remove Watch",
+      "ウォッチを削除"
+    ],
+    "Remove All Watches": [
+      "Remove All Watches",
+      "すべてのウォッチを削除"
+    ],
+    "Array": [
+      "Array",
+      "配列"
+    ],
+    "Map": [
+      "Map",
+      "マップ"
+    ],
+    "Single": [
+      "Single",
+      "単一"
+    ],
+    "Name": [
+      "Name",
+      "名前"
+    ],
+    "Container": [
+      "Container",
+      "コンテナー"
+    ],
+    "Key": [
+      "Key",
+      "キー"
+    ],
+    "Ref": [
+      "Ref",
+      "参照"
+    ],
+    "Const": [
+      "Const",
+      "定数"
+    ],
+    "Search types": [
+      "Search types",
+      "型を検索"
+    ],
+    "Part of the definition of the node: it cannot be changed.": [
+      "Part of the definition of the node: it cannot be changed.",
+      "ノードの定義の一部です: 変更できません。"
+    ],
+    "Double-click or F2 to rename it.": [
+      "Double-click or F2 to rename it.",
+      "名前を変更するにはダブルクリックするか F2 を押します。"
+    ],
+    "Click to change it.": [
+      "Click to change it.",
+      "クリックで変更します。"
+    ],
+    "A single value, an array of it, or a map from a key type to it. Click to change it.": [
+      "A single value, an array of it, or a map from a key type to it. Click to change it.",
+      "単一の値、その配列、またはキー型からのマップです。クリックして変更します。"
+    ],
+    "(none)": [
+      "(none)",
+      "(なし)"
+    ],
+    "The key type of a map; only used when the container is a Map.": [
+      "The key type of a map; only used when the container is a Map.",
+      "マップのキーの型。コンテナーがマップのときだけ使われます。"
+    ],
+    "yes": [
+      "yes",
+      "はい"
+    ],
+    "no": [
+      "no",
+      "いいえ"
+    ],
+    "Passed by reference: the function reads and writes the caller's variable.": [
+      "Passed by reference: the function reads and writes the caller's variable.",
+      "参照渡し: 関数は呼び出し元の変数を読み書きします。"
+    ],
+    "The function may not modify the parameter (a const reference needs no variable and makes no copy).": [
+      "The function may not modify the parameter (a const reference needs no variable and makes no copy).",
+      "関数はこの引数を変更できません (定数参照は変数を必要とせず、コピーも作りません)。"
+    ],
+    "A name cannot be empty": [
+      "A name cannot be empty",
+      "名前は空にできません"
+    ],
+    "A graph named '{name}' already exists": [
+      "A graph named '{name}' already exists",
+      "'{name}' という名前のグラフは既にあります"
+    ],
+    "A variable named '{name}' already exists": [
+      "A variable named '{name}' already exists",
+      "'{name}' という名前の変数は既にあります"
+    ],
+    "The function has a local variable named '{name}' already": [
+      "The function has a local variable named '{name}' already",
+      "この関数には既に '{name}' という名前のローカル変数があります"
+    ],
+    "A struct's name is one word: letters, digits and _": [
+      "A struct's name is one word: letters, digits and _",
+      "構造体の名前は 1 語です: 英字、数字、_"
+    ],
+    "A struct named '{name}' already exists": [
+      "A struct named '{name}' already exists",
+      "'{name}' という名前の構造体は既にあります"
+    ],
+    "The application has a type named '{name}' already": [
+      "The application has a type named '{name}' already",
+      "アプリケーションには既に '{name}' という名前の型があります"
+    ],
+    "Search": [
+      "Search",
+      "検索"
+    ],
+    "The names must be different from each other": [
+      "The names must be different from each other",
+      "名前はそれぞれ異なっている必要があります"
+    ],
+    "Select a variable, function, struct or node to see its properties.": [
+      "Select a variable, function, struct or node to see its properties.",
+      "変数、関数、構造体、またはノードを選択するとそのプロパティが表示されます。"
+    ],
+    "Nothing matches the search.": [
+      "Nothing matches the search.",
+      "検索に一致するものはありません。"
+    ],
+    "Each field starts with the default of the struct.": [
+      "Each field starts with the default of the struct.",
+      "各フィールドは構造体の既定値で始まります。"
+    ],
+    "Containers start empty.": [
+      "Containers start empty.",
+      "コンテナーは空の状態で始まります。"
+    ],
+    "Objects start as null.": [
+      "Objects start as null.",
+      "オブジェクトは null で始まります。"
+    ],
+    "Default": [
+      "Default",
+      "既定値"
+    ],
+    "Hex, e.g. 48 65 6C 6C 6F": [
+      "Hex, e.g. 48 65 6C 6C 6F",
+      "16 進数（例: 48 65 6C 6C 6F）"
+    ],
+    "Add": [
+      "Add",
+      "追加"
+    ],
+    "The variable no longer exists.": [
+      "The variable no longer exists.",
+      "この変数はもう存在しません。"
+    ],
+    "Local variable": [
+      "Local variable",
+      "ローカル変数"
+    ],
+    "Rename local variable": [
+      "Rename local variable",
+      "ローカル変数名の変更"
+    ],
+    "Rename variable": [
+      "Rename variable",
+      "変数名の変更"
+    ],
+    "Change variable type": [
+      "Change variable type",
+      "変数の型を変更"
+    ],
+    "Key type": [
+      "Key type",
+      "キーの型"
+    ],
+    "Edit default value": [
+      "Edit default value",
+      "既定値を編集"
+    ],
+    "Category": [
+      "Category",
+      "カテゴリ"
+    ],
+    "Edit category": [
+      "Edit category",
+      "カテゴリを編集"
+    ],
+    "Description": [
+      "Description",
+      "説明"
+    ],
+    "Edit description": [
+      "Edit description",
+      "説明を編集"
+    ],
+    "The graph no longer exists.": [
+      "The graph no longer exists.",
+      "このグラフはもう存在しません。"
+    ],
+    "Function": [
+      "Function",
+      "関数"
+    ],
+    "Event graph": [
+      "Event graph",
+      "イベントグラフ"
+    ],
+    "Rename function": [
+      "Rename function",
+      "関数名の変更"
+    ],
+    "Rename graph": [
+      "Rename graph",
+      "グラフ名の変更"
+    ],
+    "Inputs": [
+      "Inputs",
+      "入力"
+    ],
+    "Outputs": [
+      "Outputs",
+      "出力"
+    ],
+    "Add parameter": [
+      "Add parameter",
+      "引数を追加"
+    ],
+    "The struct no longer exists.": [
+      "The struct no longer exists.",
+      "この構造体はもう存在しません。"
+    ],
+    "Struct": [
+      "Struct",
+      "構造体"
+    ],
+    "Rename struct": [
+      "Rename struct",
+      "構造体名の変更"
+    ],
+    "Fields": [
+      "Fields",
+      "フィールド"
+    ],
+    "Add field": [
+      "Add field",
+      "フィールドを追加"
+    ],
+    "Add a field with the + of Fields.": [
+      "Add a field with the + of Fields.",
+      "「フィールド」の + でフィールドを追加します。"
+    ],
+    "Field: {name}": [
+      "Field: {name}",
+      "フィールド: {name}"
+    ],
+    "{count} nodes selected": [
+      "{count} nodes selected",
+      "{count} 個のノードを選択中"
+    ],
+    "Function entry node": [
+      "Function entry node",
+      "関数の入口ノード"
+    ],
+    "Definition": [
+      "Definition",
+      "定義"
+    ],
+    "Event": [
+      "Event",
+      "イベント"
+    ],
+    "Arguments": [
+      "Arguments",
+      "引数"
+    ],
+    "unknown": [
+      "unknown",
+      "不明"
+    ],
+    "This event is raised by the application. A script can only handle it.": [
+      "This event is raised by the application. A script can only handle it.",
+      "このイベントはアプリケーションが発生させます。スクリプトはこれを処理することしかできません。"
+    ],
+    "Change field": [
+      "Change field",
+      "フィールドを変更"
+    ],
+    "Field": [
+      "Field",
+      "フィールド"
+    ],
+    "Change {setting}": [
+      "Change {setting}",
+      "{setting} を変更"
+    ],
+    "Auto": [
+      "Auto",
+      "自動"
+    ],
+    "Auto ({type})": [
+      "Auto ({type})",
+      "自動 ({type})"
+    ],
+    "Change node type": [
+      "Change node type",
+      "ノードの型を変更"
+    ],
+    "Type {name}": [
+      "Type {name}",
+      "型 {name}"
+    ],
+    "Add pin": [
+      "Add pin",
+      "ピンを追加"
+    ],
+    "Edit parameters": [
+      "Edit parameters",
+      "引数を編集"
+    ],
+    "Edit fields": [
+      "Edit fields",
+      "フィールドを編集"
+    ],
+    "Edit node pins": [
+      "Edit node pins",
+      "ノードのピンを編集"
+    ],
+    "Rename": [
+      "Rename",
+      "名前の変更"
+    ],
+    "F2": [
+      "F2",
+      ""
+    ],
+    "Move field": [
+      "Move field",
+      "フィールドを移動"
+    ],
+    "Move pin": [
+      "Move pin",
+      "ピンを移動"
+    ],
+    "Move Up": [
+      "Move Up",
+      "上へ移動"
+    ],
+    "Move Down": [
+      "Move Down",
+      "下へ移動"
+    ],
+    "Remove": [
+      "Remove",
+      "削除"
+    ],
+    "Remove parameter": [
+      "Remove parameter",
+      "引数を削除"
+    ],
+    "Remove field": [
+      "Remove field",
+      "フィールドを削除"
+    ],
+    "Remove pin": [
+      "Remove pin",
+      "ピンを削除"
+    ],
+    "EventGraph": [
+      "EventGraph",
+      "イベントグラフ"
+    ],
+    "Graph": [
+      "Graph",
+      "グラフ"
+    ],
+    "Message": [
+      "Message",
+      "メッセージ"
+    ],
+    "Compiled successfully.": [
+      "Compiled successfully.",
+      "コンパイルに成功しました。"
+    ],
+    "Find in script (node titles, comments, values)": [
+      "Find in script (node titles, comments, values)",
+      "スクリプト内を検索 (ノードのタイトル、コメント、値)"
+    ],
+    "Where": [
+      "Where",
+      "場所"
+    ],
+    "References of {what}": [
+      "References of {what}",
+      "{what} の参照"
+    ],
+    "\"{text}\"": [
+      "\"{text}\"",
+      "「{text}」"
+    ],
+    "Type to search, or use Find References on a node, variable, function or struct.": [
+      "Type to search, or use Find References on a node, variable, function or struct.",
+      "入力して検索するか、ノード、変数、関数、構造体に対して「参照を検索」を使います。"
+    ],
+    "{what}: nothing found": [
+      "{what}: nothing found",
+      "{what}: 見つかりませんでした"
+    ],
+    "{what}: {count} found": [
+      "{what}: {count} found",
+      "{what}: {count} 件見つかりました"
+    ],
+    "Add a function": [
+      "Add a function",
+      "関数を追加"
+    ],
+    "Add a variable": [
+      "Add a variable",
+      "変数を追加"
+    ],
+    "Add a local variable": [
+      "Add a local variable",
+      "ローカル変数を追加"
+    ],
+    "Add a struct": [
+      "Add a struct",
+      "構造体を追加"
+    ],
+    "Event Graphs": [
+      "Event Graphs",
+      "イベントグラフ"
+    ],
+    "Functions": [
+      "Functions",
+      "関数"
+    ],
+    "Local Variables": [
+      "Local Variables",
+      "ローカル変数"
+    ],
+    "Structs": [
+      "Structs",
+      "構造体"
+    ],
+    "Local Variables of {function}": [
+      "Local Variables of {function}",
+      "{function} のローカル変数"
+    ],
+    "Go to the Handler": [
+      "Go to the Handler",
+      "ハンドラーへ移動"
+    ],
+    "Open": [
+      "Open",
+      "開く"
+    ],
+    "Duplicate function": [
+      "Duplicate function",
+      "関数を複製"
+    ],
+    "Add function": [
+      "Add function",
+      "関数を追加"
+    ],
+    "Add variable": [
+      "Add variable",
+      "変数を追加"
+    ],
+    "Add local variable": [
+      "Add local variable",
+      "ローカル変数を追加"
+    ],
+    "Add struct": [
+      "Add struct",
+      "構造体を追加"
+    ],
+    "Dock": [
+      "Dock",
+      "ドッキング"
+    ],
+    "Float": [
+      "Float",
+      "フローティング"
+    ],
+    "Hide the tab bar": [
+      "Hide the tab bar",
+      "タブ バーを隠す"
+    ]
+  },
+  "obsolete": {
+    "Language": [
+      "Language",
+      "言語"
+    ],
+    "{application} shows the new language when it is started again.": [
+      "{application} shows the new language when it is started again.",
+      "{application} は次回の起動時に新しい言語で表示されます。"
+    ]
+  }
+}

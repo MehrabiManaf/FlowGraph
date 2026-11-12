@@ -3,6 +3,7 @@
 #include <FlowGraphGLEditor/Studio.hpp>
 
 #include "Graph/GraphView.hpp"
+#include "Language.hpp"
 #include "Panels/DebugPanel.hpp"
 #include "Panels/DetailsPanel.hpp"
 #include "Panels/InfoPanels.hpp"
@@ -182,6 +183,13 @@ struct Studio::Impl {
         settings.setPath(folder + "settings.json");
         settings.load();
         applyTheme(false);
+    }
+
+    // The texts in the language chosen (the system's at first); the nodes' too, and the plugins' as they are loaded.
+    void applyLanguage() {
+        gl::applyLanguage(app, settings.string("language", "system"));
+        loadPluginTexts(rt);
+        doc.setBeforeCompile([this] { loadPluginTexts(rt); });
     }
 
     void saveSettings() {
@@ -509,7 +517,8 @@ struct Studio::Impl {
                        {.action = snapAction},
                        glw::MenuItem::separatorItem(),
                        {.text = tr("&Colors"), .items = std::move(colors)},
-                       {.text = tr("&Style"), .items = std::move(looks)}}},
+                       {.text = tr("&Style"), .items = std::move(looks)},
+                       {.text = tr("&Language"), .items = languageItems()}}},
             {.text = tr("&Debug"),
              .items = {{.action = runAction},
                        {.action = pauseAction},
@@ -538,6 +547,34 @@ struct Studio::Impl {
                              .arg("name", app.translator().resolve(title))
                              .arg("dirty", dirty)
                              .arg("application", options.applicationName));
+    }
+
+    // System, then every language there is a translation of, each in its own; chosen, it shows at once
+    std::vector<glw::MenuItem> languageItems() {
+        const std::string chosen = settings.string("language", "system");
+        std::vector<glw::MenuItem> items{{.text = tr("System"), .onTriggered = [this] { chooseLanguage("system"); }, .checked = chosen == "system"},
+                                         glw::MenuItem::separatorItem()};
+        for (const std::string& code : availableLanguages())
+            items.push_back({.text = glw::LocalizedText(languageName(code)), .onTriggered = [this, code] { chooseLanguage(code); }, .checked = chosen == code});
+        return items;
+    }
+
+    void chooseLanguage(const std::string& code) {
+        if (settings.string("language", "system") == code)
+            return;
+        settings.setString("language", code);
+        saveSettings();
+        // at once: what GLWidgets shows of the texts follows by itself; what was made of them (the nodes' titles and pins,
+        // the panels' rows, the window's title) is made again
+        applyLanguage();
+        for (GraphView* g : graphViews())
+            g->refresh();
+        details->rebuild();
+        compileResults->refresh();
+        find->refresh();
+        debugger->refresh();
+        showTitle();
+        rebuildMenus();
     }
 
     void showUndoState() {
@@ -925,6 +962,7 @@ struct Studio::Impl {
 
 Studio::Studio(glw::Application& app, fg::Runtime& rt, StudioOptions options) : impl_(std::make_unique<Impl>(app, rt, std::move(options))) {
     impl_->loadSettings();
+    impl_->applyLanguage();
     impl_->build();
     impl_->newScript();
     impl_->showTitle();

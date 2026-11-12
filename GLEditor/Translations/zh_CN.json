@@ -1,0 +1,1159 @@
+{
+  "language": "zh_CN",
+  "texts": {
+    "English": [
+      "English",
+      "简体中文"
+    ],
+    "Dark": [
+      "Dark",
+      "深色"
+    ],
+    "Light": [
+      "Light",
+      "浅色"
+    ],
+    "Dusk": [
+      "Dusk",
+      "黄昏"
+    ],
+    "Sand": [
+      "Sand",
+      "沙色"
+    ],
+    "Turquoise": [
+      "Turquoise",
+      "绿松石"
+    ],
+    "Studio": [
+      "Studio",
+      "工作室"
+    ],
+    "Fluid": [
+      "Fluid",
+      "流畅"
+    ],
+    "Plain": [
+      "Plain",
+      "简洁"
+    ],
+    "Plastic": [
+      "Plastic",
+      "塑料"
+    ],
+    "Metal": [
+      "Metal",
+      "金属"
+    ],
+    "My Script": [
+      "My Script",
+      "我的脚本"
+    ],
+    "Details": [
+      "Details",
+      "详细信息"
+    ],
+    "Output Log": [
+      "Output Log",
+      "输出日志"
+    ],
+    "Compile Results": [
+      "Compile Results",
+      "编译结果"
+    ],
+    "Find Results": [
+      "Find Results",
+      "查找结果"
+    ],
+    "Debugger": [
+      "Debugger",
+      "调试器"
+    ],
+    "FlowGraph Studio": [
+      "FlowGraph Studio",
+      ""
+    ],
+    "Ready": [
+      "Ready",
+      "就绪"
+    ],
+    "Idle": [
+      "Idle",
+      "空闲"
+    ],
+    "&New": [
+      "&New",
+      "新建(&N)"
+    ],
+    "&Open...": [
+      "&Open...",
+      "打开(&O)..."
+    ],
+    "&Save": [
+      "&Save",
+      "保存(&S)"
+    ],
+    "Save &As...": [
+      "Save &As...",
+      "另存为(&A)..."
+    ],
+    "&Quit": [
+      "&Quit",
+      "退出(&Q)"
+    ],
+    "&Undo": [
+      "&Undo",
+      "撤销(&U)"
+    ],
+    "&Redo": [
+      "&Redo",
+      "重做(&R)"
+    ],
+    "Cu&t": [
+      "Cu&t",
+      "剪切(&T)"
+    ],
+    "&Copy": [
+      "&Copy",
+      "复制(&C)"
+    ],
+    "&Paste": [
+      "&Paste",
+      "粘贴(&P)"
+    ],
+    "D&uplicate": [
+      "D&uplicate",
+      "复制一份(&U)"
+    ],
+    "Select &All": [
+      "Select &All",
+      "全选(&A)"
+    ],
+    "&Snap to Grid": [
+      "&Snap to Grid",
+      "对齐网格(&S)"
+    ],
+    "&Find in Script...": [
+      "&Find in Script...",
+      "在脚本中查找(&F)..."
+    ],
+    "Find &References": [
+      "Find &References",
+      "查找引用(&R)"
+    ],
+    "&Run": [
+      "&Run",
+      "运行(&R)"
+    ],
+    "&Pause": [
+      "&Pause",
+      "暂停(&P)"
+    ],
+    "S&top": [
+      "S&top",
+      "停止(&T)"
+    ],
+    "Step &Over": [
+      "Step &Over",
+      "逐过程(&O)"
+    ],
+    "Step &Into": [
+      "Step &Into",
+      "逐语句(&I)"
+    ],
+    "Step O&ut": [
+      "Step O&ut",
+      "跳出(&U)"
+    ],
+    "Toggle &Breakpoint": [
+      "Toggle &Breakpoint",
+      "切换断点(&B)"
+    ],
+    "Clear the List": [
+      "Clear the List",
+      "清除列表"
+    ],
+    "As the System": [
+      "As the System",
+      "跟随系统"
+    ],
+    "&File": [
+      "&File",
+      "文件(&F)"
+    ],
+    "Open &Recent": [
+      "Open &Recent",
+      "最近打开(&R)"
+    ],
+    "&Edit": [
+      "&Edit",
+      "编辑(&E)"
+    ],
+    "&Delete": [
+      "&Delete",
+      "删除(&D)"
+    ],
+    "Del": [
+      "Del",
+      ""
+    ],
+    "&View": [
+      "&View",
+      "视图(&V)"
+    ],
+    "&Frame Selection": [
+      "&Frame Selection",
+      "显示所选(&F)"
+    ],
+    "F": [
+      "F",
+      ""
+    ],
+    "&Colors": [
+      "&Colors",
+      "颜色(&C)"
+    ],
+    "&Style": [
+      "&Style",
+      "样式(&S)"
+    ],
+    "&Language": [
+      "&Language",
+      "语言(&L)"
+    ],
+    "&Debug": [
+      "&Debug",
+      "调试(&D)"
+    ],
+    "&Help": [
+      "&Help",
+      "帮助(&H)"
+    ],
+    "&About FlowGraph Studio": [
+      "&About FlowGraph Studio",
+      "关于 FlowGraph Studio(&A)"
+    ],
+    "Untitled": [
+      "Untitled",
+      "未命名"
+    ],
+    "{name}{dirty} - {application}": [
+      "{name}{dirty} - {application}",
+      ""
+    ],
+    "System": [
+      "System",
+      "跟随系统"
+    ],
+    "&Undo {what}": [
+      "&Undo {what}",
+      "撤销 {what}(&U)"
+    ],
+    "&Redo {what}": [
+      "&Redo {what}",
+      "重做 {what}(&R)"
+    ],
+    "Paused at '{graph}'": [
+      "Paused at '{graph}'",
+      "已暂停于“{graph}”"
+    ],
+    "The run ended": [
+      "The run ended",
+      "运行已结束"
+    ],
+    "The run failed: see the Output Log": [
+      "The run failed: see the Output Log",
+      "运行失败：请查看输出日志"
+    ],
+    "Warning: {text}": [
+      "Warning: {text}",
+      "警告：{text}"
+    ],
+    "Error: {text}": [
+      "Error: {text}",
+      "错误：{text}"
+    ],
+    "The script has errors: it cannot run": [
+      "The script has errors: it cannot run",
+      "脚本有错误：无法运行"
+    ],
+    "The script was changed: the run was stopped": [
+      "The script was changed: the run was stopped",
+      "脚本已更改：运行已停止"
+    ],
+    "Nothing to run: the application has no event to start": [
+      "Nothing to run: the application has no event to start",
+      "没有可运行的内容：应用程序没有启动事件"
+    ],
+    "&Continue": [
+      "&Continue",
+      "继续(&C)"
+    ],
+    "Running": [
+      "Running",
+      "运行中"
+    ],
+    "Waiting": [
+      "Waiting",
+      "等待中"
+    ],
+    "Paused": [
+      "Paused",
+      "已暂停"
+    ],
+    "{count} reference(s) of {what}": [
+      "{count} reference(s) of {what}",
+      "{what} 的 {count} 个引用"
+    ],
+    "Select a node, or a variable, function or struct in My Script, to find its references": [
+      "Select a node, or a variable, function or struct in My Script, to find its references",
+      "选择一个节点，或“我的脚本”中的变量、函数或结构体，以查找其引用"
+    ],
+    "{errors} error(s), {warnings} warning(s)": [
+      "{errors} error(s), {warnings} warning(s)",
+      "{errors} 个错误，{warnings} 个警告"
+    ],
+    "OK": [
+      "OK",
+      "确定"
+    ],
+    "A new script": [
+      "A new script",
+      "新脚本"
+    ],
+    "The script was not opened": [
+      "The script was not opened",
+      "未能打开脚本"
+    ],
+    "Close": [
+      "Close",
+      "关闭"
+    ],
+    "Opened {file}": [
+      "Opened {file}",
+      "已打开 {file}"
+    ],
+    "FlowGraph scripts": [
+      "FlowGraph scripts",
+      "FlowGraph 脚本"
+    ],
+    "Open a Script": [
+      "Open a Script",
+      "打开脚本"
+    ],
+    "No file dialog": [
+      "No file dialog",
+      "没有文件对话框"
+    ],
+    "Save the Script": [
+      "Save the Script",
+      "保存脚本"
+    ],
+    "The script was not saved": [
+      "The script was not saved",
+      "未能保存脚本"
+    ],
+    "Saved {file}": [
+      "Saved {file}",
+      "已保存 {file}"
+    ],
+    "Save the changes?": [
+      "Save the changes?",
+      "保存更改吗？"
+    ],
+    "The changes to {name} are lost if they are not saved.": [
+      "The changes to {name} are lost if they are not saved.",
+      "如果不保存，对 {name} 的更改将会丢失。"
+    ],
+    "Save": [
+      "Save",
+      "保存"
+    ],
+    "Don't Save": [
+      "Don't Save",
+      "不保存"
+    ],
+    "Cancel": [
+      "Cancel",
+      "取消"
+    ],
+    "About {application}": [
+      "About {application}",
+      "关于 {application}"
+    ],
+    "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets. A preview: it takes the place of the Qt editor once it does all that one does.": [
+      "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets. A preview: it takes the place of the Qt editor once it does all that one does.",
+      "FlowGraph 标准应用程序的编辑器和调试器，由 GLWidgets 绘制。预览版：当它能完成 Qt 编辑器的所有工作时，将取而代之。"
+    ],
+    "The events of the application and the entry of a function cannot be deleted": [
+      "The events of the application and the entry of a function cannot be deleted",
+      "无法删除应用程序的事件和函数的入口"
+    ],
+    "Delete": [
+      "Delete",
+      "删除"
+    ],
+    "The clipboard has no nodes": [
+      "The clipboard has no nodes",
+      "剪贴板中没有节点"
+    ],
+    "Paste": [
+      "Paste",
+      "粘贴"
+    ],
+    "Duplicate": [
+      "Duplicate",
+      "创建副本"
+    ],
+    "Break links": [
+      "Break links",
+      "断开连线"
+    ],
+    "Connect pins": [
+      "Connect pins",
+      "连接引脚"
+    ],
+    "Connect an output pin to an input pin": [
+      "Connect an output pin to an input pin",
+      "将输出引脚连接到输入引脚"
+    ],
+    "A node cannot be connected to itself": [
+      "A node cannot be connected to itself",
+      "节点不能连接到自身"
+    ],
+    "Execution pins only connect to execution pins": [
+      "Execution pins only connect to execution pins",
+      "执行引脚只能连接到执行引脚"
+    ],
+    "Cannot connect {from} to {to}": [
+      "Cannot connect {from} to {to}",
+      "无法将 {from} 连接到 {to}"
+    ],
+    "This link would make the value depend on itself (the data links would form a cycle)": [
+      "This link would make the value depend on itself (the data links would form a cycle)",
+      "此连线会使值依赖于自身（数据连线将形成环路）"
+    ],
+    "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first": [
+      "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first",
+      "此连线会造成无限循环：请先在循环中添加“分支”（出口）或“延迟”"
+    ],
+    "Comment": [
+      "Comment",
+      "注释"
+    ],
+    "Edit comment": [
+      "Edit comment",
+      "编辑注释"
+    ],
+    "Resize comment": [
+      "Resize comment",
+      "调整注释大小"
+    ],
+    "Move": [
+      "Move",
+      "移动"
+    ],
+    "Add reroute": [
+      "Add reroute",
+      "添加重路由"
+    ],
+    "Reroute nodes are only for links of data": [
+      "Reroute nodes are only for links of data",
+      "转接节点仅适用于数据连线"
+    ],
+    "No node fits that pin": [
+      "No node fits that pin",
+      "没有适合该引脚的节点"
+    ],
+    "Search the nodes that fit the pin": [
+      "Search the nodes that fit the pin",
+      "搜索适合该引脚的节点"
+    ],
+    "Search the nodes": [
+      "Search the nodes",
+      "搜索节点"
+    ],
+    "Add node": [
+      "Add node",
+      "添加节点"
+    ],
+    "Add call to {function}": [
+      "Add call to {function}",
+      "添加对 {function} 的调用"
+    ],
+    "Add Set variable": [
+      "Add Set variable",
+      "添加“设置变量”"
+    ],
+    "Add Get variable": [
+      "Add Get variable",
+      "添加“获取变量”"
+    ],
+    "Get {name}": [
+      "Get {name}",
+      "获取 {name}"
+    ],
+    "Set {name}": [
+      "Set {name}",
+      "设置 {name}"
+    ],
+    "Add comment": [
+      "Add comment",
+      "添加注释"
+    ],
+    "Edit Node Comment...": [
+      "Edit Node Comment...",
+      "编辑节点注释..."
+    ],
+    "Node Comment": [
+      "Node Comment",
+      "节点注释"
+    ],
+    "Edit node comment": [
+      "Edit node comment",
+      "编辑节点注释"
+    ],
+    "Toggle Breakpoint": [
+      "Toggle Breakpoint",
+      "切换断点"
+    ],
+    "F9": [
+      "F9",
+      ""
+    ],
+    "Find References": [
+      "Find References",
+      "查找引用"
+    ],
+    "Shift+F12": [
+      "Shift+F12",
+      ""
+    ],
+    "Edit Comment Text...": [
+      "Edit Comment Text...",
+      "编辑注释文本..."
+    ],
+    "Delete Comment": [
+      "Delete Comment",
+      "删除注释"
+    ],
+    "Add Node...": [
+      "Add Node...",
+      "添加节点..."
+    ],
+    "Space": [
+      "Space",
+      ""
+    ],
+    "Add Comment": [
+      "Add Comment",
+      "添加注释"
+    ],
+    "Cut": [
+      "Cut",
+      "剪切"
+    ],
+    "Copy": [
+      "Copy",
+      "复制"
+    ],
+    "Add Comment Around": [
+      "Add Comment Around",
+      "在周围添加注释"
+    ],
+    "Frame": [
+      "Frame",
+      "适应视图"
+    ],
+    "Edit value": [
+      "Edit value",
+      "编辑值"
+    ],
+    "Value: {value}": [
+      "Value: {value}",
+      "值：{value}"
+    ],
+    "Call Stack": [
+      "Call Stack",
+      "调用堆栈"
+    ],
+    "Node": [
+      "Node",
+      "节点"
+    ],
+    "Value": [
+      "Value",
+      "值"
+    ],
+    "Type": [
+      "Type",
+      "类型"
+    ],
+    "Variable": [
+      "Variable",
+      "变量"
+    ],
+    "Watch": [
+      "Watch",
+      "监视"
+    ],
+    "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)": [
+      "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)",
+      "监视：name、name[3].Prop、name[\"key\"]、name[1000..1099]（按 Enter 添加）"
+    ],
+    "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.": [
+      "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.",
+      "要监视的表达式。范围 name[a..b] 加载这些元素（含两端）：大型数组永远不会被整体加载。"
+    ],
+    "The locals and parameters of the frame chosen are found first, then the variables of the script.": [
+      "The locals and parameters of the frame chosen are found first, then the variables of the script.",
+      "先查找所选帧的局部变量和参数，然后查找脚本的变量。"
+    ],
+    "{left} more - double-click to load {next} more": [
+      "{left} more - double-click to load {next} more",
+      "还有 {left} 项 - 双击再加载 {next} 项"
+    ],
+    "(event)": [
+      "(event)",
+      "（事件）"
+    ],
+    "Locals / Parameters": [
+      "Locals / Parameters",
+      "局部变量 / 参数"
+    ],
+    "Variables": [
+      "Variables",
+      "变量"
+    ],
+    "(not available: run the script first)": [
+      "(not available: run the script first)",
+      "（不可用：请先运行脚本）"
+    ],
+    "Load the next {count}": [
+      "Load the next {count}",
+      "加载接下来的 {count} 项"
+    ],
+    "Load the next {count} (of {left} left)": [
+      "Load the next {count} (of {left} left)",
+      "加载接下来的 {count} 项（剩余 {left} 项）"
+    ],
+    "Load all ({left} left)": [
+      "Load all ({left} left)",
+      "全部加载（剩余 {left} 项）"
+    ],
+    "Watch a Range...": [
+      "Watch a Range...",
+      "监视范围..."
+    ],
+    "Add to Watch": [
+      "Add to Watch",
+      "添加到监视"
+    ],
+    "Copy Value": [
+      "Copy Value",
+      "复制值"
+    ],
+    "Edit Watch": [
+      "Edit Watch",
+      "编辑监视"
+    ],
+    "Remove Watch": [
+      "Remove Watch",
+      "删除监视"
+    ],
+    "Remove All Watches": [
+      "Remove All Watches",
+      "删除所有监视"
+    ],
+    "Array": [
+      "Array",
+      "数组"
+    ],
+    "Map": [
+      "Map",
+      "映射"
+    ],
+    "Single": [
+      "Single",
+      "单个"
+    ],
+    "Name": [
+      "Name",
+      "名称"
+    ],
+    "Container": [
+      "Container",
+      "容器"
+    ],
+    "Key": [
+      "Key",
+      "键"
+    ],
+    "Ref": [
+      "Ref",
+      "引用"
+    ],
+    "Const": [
+      "Const",
+      "常量"
+    ],
+    "Search types": [
+      "Search types",
+      "搜索类型"
+    ],
+    "Part of the definition of the node: it cannot be changed.": [
+      "Part of the definition of the node: it cannot be changed.",
+      "属于节点定义的一部分：无法更改。"
+    ],
+    "Double-click or F2 to rename it.": [
+      "Double-click or F2 to rename it.",
+      "双击或按 F2 重命名。"
+    ],
+    "Click to change it.": [
+      "Click to change it.",
+      "单击以更改。"
+    ],
+    "A single value, an array of it, or a map from a key type to it. Click to change it.": [
+      "A single value, an array of it, or a map from a key type to it. Click to change it.",
+      "单个值、它的数组，或从键类型到它的映射。单击可更改。"
+    ],
+    "(none)": [
+      "(none)",
+      "（无）"
+    ],
+    "The key type of a map; only used when the container is a Map.": [
+      "The key type of a map; only used when the container is a Map.",
+      "映射的键类型；仅在容器为“映射”时使用。"
+    ],
+    "yes": [
+      "yes",
+      "是"
+    ],
+    "no": [
+      "no",
+      "否"
+    ],
+    "Passed by reference: the function reads and writes the caller's variable.": [
+      "Passed by reference: the function reads and writes the caller's variable.",
+      "按引用传递：函数读写调用者的变量。"
+    ],
+    "The function may not modify the parameter (a const reference needs no variable and makes no copy).": [
+      "The function may not modify the parameter (a const reference needs no variable and makes no copy).",
+      "函数不能修改该参数（常量引用不需要变量，也不会复制）。"
+    ],
+    "A name cannot be empty": [
+      "A name cannot be empty",
+      "名称不能为空"
+    ],
+    "A graph named '{name}' already exists": [
+      "A graph named '{name}' already exists",
+      "名为“{name}”的图已存在"
+    ],
+    "A variable named '{name}' already exists": [
+      "A variable named '{name}' already exists",
+      "名为“{name}”的变量已存在"
+    ],
+    "The function has a local variable named '{name}' already": [
+      "The function has a local variable named '{name}' already",
+      "该函数已有名为“{name}”的局部变量"
+    ],
+    "A struct's name is one word: letters, digits and _": [
+      "A struct's name is one word: letters, digits and _",
+      "结构体名称是一个单词：字母、数字和 _"
+    ],
+    "A struct named '{name}' already exists": [
+      "A struct named '{name}' already exists",
+      "名为“{name}”的结构体已存在"
+    ],
+    "The application has a type named '{name}' already": [
+      "The application has a type named '{name}' already",
+      "应用程序已有名为“{name}”的类型"
+    ],
+    "Search": [
+      "Search",
+      "搜索"
+    ],
+    "The names must be different from each other": [
+      "The names must be different from each other",
+      "名称必须互不相同"
+    ],
+    "Select a variable, function, struct or node to see its properties.": [
+      "Select a variable, function, struct or node to see its properties.",
+      "选择一个变量、函数、结构体或节点以查看其属性。"
+    ],
+    "Nothing matches the search.": [
+      "Nothing matches the search.",
+      "没有匹配的结果。"
+    ],
+    "Each field starts with the default of the struct.": [
+      "Each field starts with the default of the struct.",
+      "每个字段以结构体中的默认值开始。"
+    ],
+    "Containers start empty.": [
+      "Containers start empty.",
+      "容器初始为空。"
+    ],
+    "Objects start as null.": [
+      "Objects start as null.",
+      "对象初始为 null。"
+    ],
+    "Default": [
+      "Default",
+      "默认值"
+    ],
+    "Hex, e.g. 48 65 6C 6C 6F": [
+      "Hex, e.g. 48 65 6C 6C 6F",
+      "十六进制，例如 48 65 6C 6C 6F"
+    ],
+    "Add": [
+      "Add",
+      "添加"
+    ],
+    "The variable no longer exists.": [
+      "The variable no longer exists.",
+      "该变量已不存在。"
+    ],
+    "Local variable": [
+      "Local variable",
+      "局部变量"
+    ],
+    "Rename local variable": [
+      "Rename local variable",
+      "重命名局部变量"
+    ],
+    "Rename variable": [
+      "Rename variable",
+      "重命名变量"
+    ],
+    "Change variable type": [
+      "Change variable type",
+      "更改变量类型"
+    ],
+    "Key type": [
+      "Key type",
+      "键类型"
+    ],
+    "Edit default value": [
+      "Edit default value",
+      "编辑默认值"
+    ],
+    "Category": [
+      "Category",
+      "类别"
+    ],
+    "Edit category": [
+      "Edit category",
+      "编辑类别"
+    ],
+    "Description": [
+      "Description",
+      "描述"
+    ],
+    "Edit description": [
+      "Edit description",
+      "编辑描述"
+    ],
+    "The graph no longer exists.": [
+      "The graph no longer exists.",
+      "该图已不存在。"
+    ],
+    "Function": [
+      "Function",
+      "函数"
+    ],
+    "Event graph": [
+      "Event graph",
+      "事件图"
+    ],
+    "Rename function": [
+      "Rename function",
+      "重命名函数"
+    ],
+    "Rename graph": [
+      "Rename graph",
+      "重命名图"
+    ],
+    "Inputs": [
+      "Inputs",
+      "输入"
+    ],
+    "Outputs": [
+      "Outputs",
+      "输出"
+    ],
+    "Add parameter": [
+      "Add parameter",
+      "添加参数"
+    ],
+    "The struct no longer exists.": [
+      "The struct no longer exists.",
+      "该结构体已不存在。"
+    ],
+    "Struct": [
+      "Struct",
+      "结构体"
+    ],
+    "Rename struct": [
+      "Rename struct",
+      "重命名结构体"
+    ],
+    "Fields": [
+      "Fields",
+      "字段"
+    ],
+    "Add field": [
+      "Add field",
+      "添加字段"
+    ],
+    "Add a field with the + of Fields.": [
+      "Add a field with the + of Fields.",
+      "用“字段”的 + 添加字段。"
+    ],
+    "Field: {name}": [
+      "Field: {name}",
+      "字段：{name}"
+    ],
+    "{count} nodes selected": [
+      "{count} nodes selected",
+      "已选择 {count} 个节点"
+    ],
+    "Function entry node": [
+      "Function entry node",
+      "函数入口节点"
+    ],
+    "Definition": [
+      "Definition",
+      "定义"
+    ],
+    "Event": [
+      "Event",
+      "事件"
+    ],
+    "Arguments": [
+      "Arguments",
+      "参数"
+    ],
+    "unknown": [
+      "unknown",
+      "未知"
+    ],
+    "This event is raised by the application. A script can only handle it.": [
+      "This event is raised by the application. A script can only handle it.",
+      "此事件由应用程序触发。脚本只能处理它。"
+    ],
+    "Change field": [
+      "Change field",
+      "更改字段"
+    ],
+    "Field": [
+      "Field",
+      "字段"
+    ],
+    "Change {setting}": [
+      "Change {setting}",
+      "更改{setting}"
+    ],
+    "Auto": [
+      "Auto",
+      "自动"
+    ],
+    "Auto ({type})": [
+      "Auto ({type})",
+      "自动（{type}）"
+    ],
+    "Change node type": [
+      "Change node type",
+      "更改节点类型"
+    ],
+    "Type {name}": [
+      "Type {name}",
+      "类型 {name}"
+    ],
+    "Add pin": [
+      "Add pin",
+      "添加引脚"
+    ],
+    "Edit parameters": [
+      "Edit parameters",
+      "编辑参数"
+    ],
+    "Edit fields": [
+      "Edit fields",
+      "编辑字段"
+    ],
+    "Edit node pins": [
+      "Edit node pins",
+      "编辑节点引脚"
+    ],
+    "Rename": [
+      "Rename",
+      "重命名"
+    ],
+    "F2": [
+      "F2",
+      ""
+    ],
+    "Move field": [
+      "Move field",
+      "移动字段"
+    ],
+    "Move pin": [
+      "Move pin",
+      "移动引脚"
+    ],
+    "Move Up": [
+      "Move Up",
+      "上移"
+    ],
+    "Move Down": [
+      "Move Down",
+      "下移"
+    ],
+    "Remove": [
+      "Remove",
+      "移除"
+    ],
+    "Remove parameter": [
+      "Remove parameter",
+      "移除参数"
+    ],
+    "Remove field": [
+      "Remove field",
+      "移除字段"
+    ],
+    "Remove pin": [
+      "Remove pin",
+      "移除引脚"
+    ],
+    "EventGraph": [
+      "EventGraph",
+      "事件图"
+    ],
+    "Graph": [
+      "Graph",
+      "图"
+    ],
+    "Message": [
+      "Message",
+      "消息"
+    ],
+    "Compiled successfully.": [
+      "Compiled successfully.",
+      "编译成功。"
+    ],
+    "Find in script (node titles, comments, values)": [
+      "Find in script (node titles, comments, values)",
+      "在脚本中查找（节点标题、注释、值）"
+    ],
+    "Where": [
+      "Where",
+      "位置"
+    ],
+    "References of {what}": [
+      "References of {what}",
+      "{what} 的引用"
+    ],
+    "\"{text}\"": [
+      "\"{text}\"",
+      "“{text}”"
+    ],
+    "Type to search, or use Find References on a node, variable, function or struct.": [
+      "Type to search, or use Find References on a node, variable, function or struct.",
+      "输入内容以搜索，或对节点、变量、函数或结构体使用“查找引用”。"
+    ],
+    "{what}: nothing found": [
+      "{what}: nothing found",
+      "{what}：未找到"
+    ],
+    "{what}: {count} found": [
+      "{what}: {count} found",
+      "{what}：找到 {count} 项"
+    ],
+    "Add a function": [
+      "Add a function",
+      "添加函数"
+    ],
+    "Add a variable": [
+      "Add a variable",
+      "添加变量"
+    ],
+    "Add a local variable": [
+      "Add a local variable",
+      "添加局部变量"
+    ],
+    "Add a struct": [
+      "Add a struct",
+      "添加结构体"
+    ],
+    "Event Graphs": [
+      "Event Graphs",
+      "事件图"
+    ],
+    "Functions": [
+      "Functions",
+      "函数"
+    ],
+    "Local Variables": [
+      "Local Variables",
+      "局部变量"
+    ],
+    "Structs": [
+      "Structs",
+      "结构体"
+    ],
+    "Local Variables of {function}": [
+      "Local Variables of {function}",
+      "{function} 的局部变量"
+    ],
+    "Go to the Handler": [
+      "Go to the Handler",
+      "转到处理程序"
+    ],
+    "Open": [
+      "Open",
+      "打开"
+    ],
+    "Duplicate function": [
+      "Duplicate function",
+      "创建函数副本"
+    ],
+    "Add function": [
+      "Add function",
+      "添加函数"
+    ],
+    "Add variable": [
+      "Add variable",
+      "添加变量"
+    ],
+    "Add local variable": [
+      "Add local variable",
+      "添加局部变量"
+    ],
+    "Add struct": [
+      "Add struct",
+      "添加结构体"
+    ],
+    "Dock": [
+      "Dock",
+      "停靠"
+    ],
+    "Float": [
+      "Float",
+      "浮动"
+    ],
+    "Hide the tab bar": [
+      "Hide the tab bar",
+      "隐藏标签栏"
+    ]
+  },
+  "obsolete": {
+    "Language": [
+      "Language",
+      "语言"
+    ],
+    "{application} shows the new language when it is started again.": [
+      "{application} shows the new language when it is started again.",
+      "{application} 将在下次启动时显示新语言。"
+    ]
+  }
+}

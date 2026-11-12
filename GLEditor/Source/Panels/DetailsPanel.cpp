@@ -512,15 +512,15 @@ private:
     glw::TableView* view_ = nullptr;
 };
 
-std::string nameProblemText(core::NameProblem why) {
+glw::LocalizedText nameProblemText(core::NameProblem why) {
     switch (why) {
-    case core::NameProblem::Empty: return "A name cannot be empty";
-    case core::NameProblem::GraphExists: return "A graph named '{name}' already exists";
-    case core::NameProblem::VariableExists: return "A variable named '{name}' already exists";
-    case core::NameProblem::LocalExists: return "The function has a local variable named '{name}' already";
-    case core::NameProblem::NotAName: return "A struct's name is one word: letters, digits and _";
-    case core::NameProblem::StructExists: return "A struct named '{name}' already exists";
-    case core::NameProblem::TypeExists: return "The application has a type named '{name}' already";
+    case core::NameProblem::Empty: return tr("A name cannot be empty");
+    case core::NameProblem::GraphExists: return tr("A graph named '{name}' already exists");
+    case core::NameProblem::VariableExists: return tr("A variable named '{name}' already exists");
+    case core::NameProblem::LocalExists: return tr("The function has a local variable named '{name}' already");
+    case core::NameProblem::NotAName: return tr("A struct's name is one word: letters, digits and _");
+    case core::NameProblem::StructExists: return tr("A struct named '{name}' already exists");
+    case core::NameProblem::TypeExists: return tr("The application has a type named '{name}' already");
     case core::NameProblem::None: break;
     }
     return {};
@@ -1034,7 +1034,7 @@ void DetailsPanel::buildVariable() {
                    edited(true);
                    return;
                }
-               tell(glw::LocalizedText(nameProblemText(why)).arg("name", to));
+               tell(nameProblemText(why).arg("name", to));
                shown_.clear();
                scheduleRebuild();
            }), "name");
@@ -1130,7 +1130,7 @@ void DetailsPanel::buildGraph(const std::string& graphName) {
                        onGraphRenamed_(graphName, to);
                    return;
                }
-               tell(glw::LocalizedText(nameProblemText(why)).arg("name", to));
+               tell(nameProblemText(why).arg("name", to));
                shown_.clear();
                scheduleRebuild();
            }), "name");
@@ -1195,7 +1195,7 @@ void DetailsPanel::buildStruct() {
                    edited(true);
                    return;
                }
-               tell(glw::LocalizedText(nameProblemText(why)).arg("name", to));
+               tell(nameProblemText(why).arg("name", to));
                shown_.clear();
                scheduleRebuild();
            }), "name");

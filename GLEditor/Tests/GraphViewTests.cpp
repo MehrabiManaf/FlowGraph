@@ -4,12 +4,14 @@
 // events given to it as a window would.
 #include "Graph/GraphView.hpp"
 #include "Graph/NodeView.hpp"
+#include "Language.hpp"
 #include "Panels/DebugPanel.hpp"
 #include "Panels/DetailsPanel.hpp"
 #include "Panels/InfoPanels.hpp"
 #include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Runtime.hpp>
+#include <FlowGraph/Translations.hpp>
 #include <GLWidgets/Paint/DrawList.hpp>
 #include <GLWidgets/Text/Font.hpp>
 #include <GLWidgets/Text/GlyphAtlas.hpp>
@@ -982,6 +984,37 @@ TEST(theDebuggerShowsTheStackVariablesAndWatchesOfAPausedRun) {
             ui.pump();
         root.setContent(nullptr);           // (the panel before the run it listens to)
     }
+}
+
+TEST(theTranslationsAreCompiledIn) {
+    // the editor's catalogs, each language named in itself; the nodes' too
+    const std::vector<std::string> languages = fged::gl::availableLanguages();
+    CHECK(languages.size() >= 10 && languages.front() == "en");
+    CHECK(fged::gl::languageName("de") == "Deutsch" && fged::gl::languageName("en") == "English");
+    CHECK(fged::gl::resolveLanguage("fa-IR") == "fa" && fged::gl::resolveLanguage("zh-Hans-CN") == "zh_CN" && fged::gl::resolveLanguage("pt") == "pt_BR");
+    CHECK(fged::gl::resolveLanguage("xx") == "en");
+    // every catalog whole (they are compiled in in pieces: a piece cut inside a character broke them)
+    fg::Runtime rt;
+    const fg::NodeDef* def = rt.registry().findNode("flow.foreach");
+    std::size_t nodes = 0;
+    for (const fged::gl::EmbeddedCatalog& c : fged::gl::embeddedCatalogs()) {
+        std::string error;
+        if (std::string_view(c.kind) == "editor") {
+            glw::Translator t;
+            const bool loaded = t.loadCatalog(c.text(), &error);
+            if (!loaded)
+                std::printf("  the editor's catalog of %s: %s\n", c.language, error.c_str());
+            CHECK(loaded);
+            continue;
+        }
+        fg::Translations t;
+        const bool loaded = t.loadJson(c.text(), &error);
+        if (!loaded)
+            std::printf("  the nodes' catalog of %s: %s\n", c.language, error.c_str());
+        CHECK(loaded && def && t.nodeDoc(*def) != def->doc);       // (a title may stay as it is: For Each in Japanese)
+        ++nodes;
+    }
+    CHECK(nodes + 1 == languages.size());
 }
 
 int main() {
