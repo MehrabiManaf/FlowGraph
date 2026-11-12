@@ -169,6 +169,18 @@
       "Launch &Configurations...",
       "실행 구성(&C)..."
     ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "함수로 접기(&F)..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "전체 화면(&U)"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "선택한 노드를 새 함수로 옮기고 그 자리에서 함수를 호출합니다"
+    ],
     "Edit the launch configurations of this script": [
       "Edit the launch configurations of this script",
       "이 스크립트의 실행 구성을 편집합니다"
@@ -216,6 +228,18 @@
     "F": [
       "F",
       ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "모두 보기(&F)"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "격자 맞춤 크기(&Z)"
     ],
     "&Colors": [
       "&Colors",
@@ -273,6 +297,10 @@
       "Step by Step (1 s / node)",
       "한 단계씩 (노드당 1초)"
     ],
+    "{step} units": [
+      "{step} units",
+      "{step} 단위"
+    ],
     "&Undo {what}": [
       "&Undo {what}",
       "실행 취소: {what}(&U)"
@@ -328,6 +356,18 @@
     "&Continue": [
       "&Continue",
       "계속(&C)"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "일시 중지 (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "계속 (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "실행 (F5)"
     ],
     "Running": [
       "Running",
@@ -541,6 +581,26 @@
       "Add comment",
       "주석 추가"
     ],
+    "Delete Link": [
+      "Delete Link",
+      "연결 삭제"
+    ],
+    "Delete link": [
+      "Delete link",
+      "연결 삭제"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "경로 변경 노드 추가"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "모든 연결 끊기"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
     "Edit Node Comment...": [
       "Edit Node Comment...",
       "노드 주석 편집..."
@@ -560,6 +620,10 @@
     "F9": [
       "F9",
       ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "함수로 접기..."
     ],
     "Find References": [
       "Find References",
@@ -604,6 +668,34 @@
     "Frame": [
       "Frame",
       "맞추기"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "함수로 접으려면 노드를 두 개 이상 선택하세요"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "함수로 접기"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "이 노드들은 함수로 접을 수 없습니다: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "새 함수의 이름"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "함수로 접기"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "함수로 접기: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "노드 {count}개를 {function}(으)로 접었습니다"
     ],
     "Edit value": [
       "Edit value",

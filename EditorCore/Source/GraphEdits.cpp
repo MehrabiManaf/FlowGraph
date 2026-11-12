@@ -362,6 +362,16 @@ void GraphEdits::setCommentText(int comment, const std::string& text, const std:
     }, EditKind::Layout, "comment-box:" + graph_ + ":" + std::to_string(comment));
 }
 
+fg::CollapseResult GraphEdits::collapse(const std::set<fg::NodeId>& nodes, const std::string& function, const std::string& label) {
+    const std::vector<fg::NodeId> ids(nodes.begin(), nodes.end());
+    fg::Script trial = doc_.script();
+    fg::CollapseResult result = fg::collapseToFunction(trial, doc_.registry(), graph_, ids, function);
+    if (!result.ok)
+        return result;
+    doc_.edit(label, [&](fg::Script& s) { result = fg::collapseToFunction(s, doc_.registry(), graph_, ids, function); });
+    return result;
+}
+
 void GraphEdits::setNodeComment(fg::NodeId node, const std::string& text, const std::string& label) {
     doc_.edit(label, [&](fg::Script& s) {
         if (fg::Graph* g = graphOf(s))

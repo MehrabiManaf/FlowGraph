@@ -5,6 +5,7 @@
 // breaking links, adding, deleting, moving, copying and pasting nodes, values of pins, comments. Each is one undoable step
 // of the document (Document::edit) called `label` - the editor's words, in its language.
 #include <FlowGraph/Program.hpp>
+#include <FlowGraph/Refactor.hpp>
 #include <FlowGraphEditorCore/Document.hpp>
 
 #include <set>
@@ -101,6 +102,12 @@ public:
     int addComment(double x, double y, double w, double h, const std::string& text, const std::string& label);
     void setCommentText(int comment, const std::string& text, const std::string& label);
     void setNodeComment(fg::NodeId node, const std::string& text, const std::string& label);
+
+    // ---- refactoring ----
+
+    // Collapse to Function (fg::collapseToFunction): the nodes moved into a new function `function` (made unique), a call
+    // of it in their place. Tried on a copy first: nodes that cannot be collapsed leave no step (the result says why).
+    fg::CollapseResult collapse(const std::set<fg::NodeId>& nodes, const std::string& function, const std::string& label);
 
 private:
     fg::Graph* graphOf(fg::Script& s) const { return s.findGraph(graph_); }

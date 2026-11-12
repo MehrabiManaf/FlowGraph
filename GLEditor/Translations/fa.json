@@ -169,6 +169,18 @@
       "Launch &Configurations...",
       "پیکربندی‌های اجرا(&C)..."
     ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "تبدیل به تابع(&F)..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "تمام‌صفحه(&U)"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "گره‌های انتخاب‌شده را به یک تابع تازه می‌برد و آن تابع را به جای آن‌ها فرامی‌خواند"
+    ],
     "Edit the launch configurations of this script": [
       "Edit the launch configurations of this script",
       "ویرایش پیکربندی‌های اجرای این اسکریپت"
@@ -216,6 +228,18 @@
     "F": [
       "F",
       ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "نمایش همه(&F)"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "اندازهٔ شبکه(&Z)"
     ],
     "&Colors": [
       "&Colors",
@@ -273,6 +297,10 @@
       "Step by Step (1 s / node)",
       "گام‌به‌گام (1 ثانیه برای هر گره)"
     ],
+    "{step} units": [
+      "{step} units",
+      "{step} واحد"
+    ],
     "&Undo {what}": [
       "&Undo {what}",
       "واگرد {what}(&U)"
@@ -328,6 +356,18 @@
     "&Continue": [
       "&Continue",
       "ادامه(&C)"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "مکث (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "ادامه (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "اجرا (F5)"
     ],
     "Running": [
       "Running",
@@ -541,6 +581,26 @@
       "Add comment",
       "افزودن یادداشت"
     ],
+    "Delete Link": [
+      "Delete Link",
+      "حذف اتصال"
+    ],
+    "Delete link": [
+      "Delete link",
+      "حذف اتصال"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "افزودن گره تغییر مسیر"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "قطع همهٔ اتصال‌ها"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
     "Edit Node Comment...": [
       "Edit Node Comment...",
       "ویرایش یادداشت گره..."
@@ -560,6 +620,10 @@
     "F9": [
       "F9",
       ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "تبدیل به تابع..."
     ],
     "Find References": [
       "Find References",
@@ -604,6 +668,34 @@
     "Frame": [
       "Frame",
       "نمایش"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "برای تبدیل به تابع، دست‌کم دو گره را انتخاب کنید"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "تبدیل به تابع"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "این گره‌ها را نمی‌توان به تابع تبدیل کرد: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "نام تابع تازه"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "تبدیل به تابع"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "تبدیل به تابع: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "{count} گره به {function} تبدیل شد"
     ],
     "Edit value": [
       "Edit value",

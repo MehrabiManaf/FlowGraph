@@ -12,6 +12,7 @@
 
 #include <FlowGraph/Runtime.hpp>
 #include <FlowGraph/StandardApp.hpp>
+#include <FlowGraphEditorCore/GraphEdits.hpp>
 #include <FlowGraphEditorCore/Launches.hpp>
 #include <FlowGraph/Translations.hpp>
 #include <GLWidgets/Paint/DrawList.hpp>
@@ -1059,6 +1060,32 @@ TEST(launchConfigurationsAreKeptNextToTheScriptAndAppliedToARun) {
     launches.scriptSaved((folder / "b.flow").string());
     CHECK(fs::exists(folder / "b.flowlaunch"));
     fs::remove_all(folder);
+}
+
+TEST(nodesAreCollapsedIntoAFunctionOrNothingIsDone) {
+    fg::Runtime rt;
+    rt.registry().addEvent("Go");
+    fged::core::Document doc(rt);
+    fg::Script s;
+    fg::Graph& g = s.addEventGraph();
+    const fg::NodeId go = g.addNode("event:Go", 0, 0).id;
+    const fg::NodeId a = g.addNode("util.print", 200, 0).id;
+    const fg::NodeId b = g.addNode("util.print", 400, 0).id;
+    g.connections.push_back({go, "Then", a, "In"});
+    g.connections.push_back({a, "Then", b, "In"});
+    doc.setScript(s, "T");
+    fged::core::GraphEdits edits(doc, "EventGraph");
+    // an event cannot be moved: nothing done, no step to undo
+    const fg::CollapseResult refused = edits.collapse({go, a}, "Greet", "Collapse");
+    CHECK(!refused.ok && !refused.error.empty() && !doc.canUndo());
+    // two prints: a function of them, a call where they were, one step
+    const fg::CollapseResult done = edits.collapse({a, b}, "Greet", "Collapse");
+    CHECK(done.ok && done.function == "Greet" && doc.script().findGraph("Greet") && done.callNode != 0);
+    const fg::Graph* event = doc.script().findGraph("EventGraph");
+    CHECK(event && !event->findNode(a) && !event->findNode(b) && event->findNode(done.callNode));
+    CHECK(doc.undoLabel() == "Collapse");
+    doc.undo();
+    CHECK(!doc.script().findGraph("Greet") && doc.script().findGraph("EventGraph")->findNode(a));
 }
 
 int main() {

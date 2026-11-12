@@ -156,6 +156,7 @@ struct Studio::Impl {
     glw::ComboBox* launchBox = nullptr;         // the toolbar's: the configuration Run starts
     int speedMs = 0;                            // the Debug menu's execution speed: a delay between two nodes
     glw::TextEdit* log = nullptr;               // the Output Log
+    std::set<std::string> knownGraphs;          // the script's graphs when it was shown last (a rename: one gone, one new)
     std::map<std::string, GraphView*> views;    // the graphs open, by name (in the center stack, or docked or floated elsewhere)
     std::string currentGraphName;               // the one shown last
     // Views closed while the document tells its listeners (they among them): destroyed once that is over.
@@ -171,7 +172,9 @@ struct Studio::Impl {
     std::shared_ptr<glw::Action> newAction, openAction, saveAction, saveAsAction, quitAction, undoAction, redoAction;
     std::shared_ptr<glw::Action> cutAction, copyAction, pasteAction, duplicateAction, selectAllAction, snapAction;
     std::shared_ptr<glw::Action> findAction, findReferencesAction;
-    std::shared_ptr<glw::Action> configureAction;
+    std::shared_ptr<glw::Action> configureAction, collapseAction, fullScreenAction;
+    // The toolbar's Run, Pause and Continue in one button: what the run's state allows (the Debug menu has each)
+    std::shared_ptr<glw::Action> runPauseAction;
     std::shared_ptr<glw::Action> runAction, pauseAction, stopAction, stepOverAction, stepIntoAction, stepOutAction, breakpointAction;
     bool closing = false;                       // asked whether to save, and it goes: the window may close now
 
@@ -452,11 +455,24 @@ struct Studio::Impl {
                 startRun();
         }, {Key::F5});
         pauseAction = action(tr("&Pause"), [this] { run->pause(); }, {Key::F6});
+        runPauseAction = action(tr("&Run"), [this] {
+            if (run->state() == core::RunState::Running || run->state() == core::RunState::Waiting)
+                run->pause();
+            else
+                runAction->trigger();
+        });          // (no shortcut of its own: F5 and F6 are the menu's)
         stopAction = action(tr("S&top"), [this] { run->stop(); }, {Key::F5, glw::platform::KeyModifiers::Shift});
         stepOverAction = action(tr("Step &Over"), [this] { run->stepOver(); }, {Key::F10});
         stepIntoAction = action(tr("Step &Into"), [this] { run->stepInto(); }, {Key::F11});
         stepOutAction = action(tr("Step O&ut"), [this] { run->stepOut(); }, {Key::F11, glw::platform::KeyModifiers::Shift});
         configureAction = action(tr("Launch &Configurations..."), [this] { editLaunches(); });
+        collapseAction = action(tr("Collapse to &Function..."), onGraph(&GraphView::collapseSelection));
+        fullScreenAction = action(tr("F&ull Screen"), [this] {
+            window->setFullScreen(!window->fullScreen());
+            fullScreenAction->setChecked(window->fullScreen());
+        }, {Key::Enter, glw::platform::KeyModifiers::Shift | glw::platform::KeyModifiers::Alt});
+        fullScreenAction->setCheckable(true);
+        collapseAction->setToolTip(tr("Moves the selected nodes into a new function and calls it in their place"));
         configureAction->setToolTip(tr("Edit the launch configurations of this script"));
         for (auto [a, icon] : {std::pair{newAction, "new"}, {openAction, "open"}, {saveAction, "save"}, {runAction, "continue"},
                                {pauseAction, "interrupt"}, {stopAction, "stop"}, {stepOverAction, "step-over"},
@@ -525,13 +541,22 @@ struct Studio::Impl {
                        {.action = selectAllAction},
                        glw::MenuItem::separatorItem(),
                        {.action = findAction},
-                       {.action = findReferencesAction}}},
+                       {.action = findReferencesAction},
+                       glw::MenuItem::separatorItem(),
+                       {.action = collapseAction}}},
             {.text = tr("&View"),
              .items = {{.text = tr("&Frame Selection"), .onTriggered = [this] {
                             if (GraphView* g = currentGraph())
                                 g->frameSelection();
                         }, .shortcut = tr("F")},
+                       {.text = tr("&Frame All"), .onTriggered = [this] {
+                            if (GraphView* g = currentGraph())
+                                g->frameAll();
+                        }, .shortcut = tr("Home")},
+                       {.action = fullScreenAction},
+                       glw::MenuItem::separatorItem(),
                        {.action = snapAction},
+                       {.text = tr("Grid Snap Si&ze"), .items = snapStepItems()},
                        glw::MenuItem::separatorItem(),
                        {.text = tr("&Colors"), .items = std::move(colors)},
                        {.text = tr("&Style"), .items = std::move(looks)},
@@ -610,6 +635,21 @@ struct Studio::Impl {
         return items;
     }
 
+    // The grid the nodes snap to: 10, 20 or 40 units (kept in the settings)
+    std::vector<glw::MenuItem> snapStepItems() {
+        std::vector<glw::MenuItem> items;
+        const double now = settings.number("snapStep", 20);
+        for (int step : {10, 20, 40})
+            items.push_back({.text = tr("{step} units").arg("step", step), .onTriggered = [this, step] {
+                                 settings.setNumber("snapStep", step);
+                                 saveSettings();
+                                 for (GraphView* g : graphViews())
+                                     g->setSnapStep(float(step));
+                                 rebuildMenus();
+                             }, .checked = int(now) == step});
+        return items;
+    }
+
     void showUndoState() {
         undoAction->setEnabled(doc.canUndo());
         redoAction->setEnabled(doc.canRedo());
@@ -622,6 +662,7 @@ struct Studio::Impl {
     std::unique_ptr<GraphView> makeGraphView(const std::string& name) {
         auto view = std::make_unique<GraphView>(doc, name);
         view->setSnapToGrid(snapAction && snapAction->checked());
+        view->setSnapStep(float(settings.number("snapStep", 20)));
         view->setOnMessage([this](glw::LocalizedText text) { status->showMessage(std::move(text), 4s); });
         // while a run is paused: the values of pins, with their tooltips
         GraphView* g = view.get();
@@ -669,7 +710,7 @@ struct Studio::Impl {
             std::unique_ptr<GraphView> view = makeGraphView(graph);
             views[graph] = view.get();
             // a function's tab says so, as the Qt editor's
-            area->addPanel({.id = id, .title = glw::LocalizedText(g->kind == fg::GraphKind::Function ? "\u0192 " + graph : graph), .content = std::move(view)},
+            area->addPanel({.id = id, .title = tabTitle(*g), .content = std::move(view)},
                            documents, glw::DockSide::Center);
         }
         if (glw::DockTabs* tabs = area->tabsOf(id))
@@ -777,8 +818,7 @@ struct Studio::Impl {
             launchBox = &bar->addWidget(std::move(box));
             bar->addAction(configureAction);
         }
-        bar->addAction(runAction);
-        bar->addAction(pauseAction);
+        bar->addAction(runPauseAction);
         bar->addAction(stopAction);
         bar->addSeparator();
         bar->addAction(stepOverAction);
@@ -830,6 +870,11 @@ struct Studio::Impl {
             stepOverAction->setEnabled(paused);
             stepIntoAction->setEnabled(paused);
             stepOutAction->setEnabled(paused);
+            // the toolbar's: Pause while it runs, Continue while it is paused, Run otherwise
+            const bool pauses = active && !paused;
+            runPauseAction->setText(pauses ? tr("&Pause") : paused ? tr("&Continue") : tr("&Run"));
+            runPauseAction->setToolTip(pauses ? tr("Pause (F6)") : paused ? tr("Continue (F5)") : tr("Run (F5)"));
+            runPauseAction->setIcon(studioIcon(pauses ? "interrupt" : "continue"));
         }
         switch (state) {
         case core::RunState::Idle: runState->setText(tr("Idle")); break;
@@ -926,12 +971,32 @@ struct Studio::Impl {
     }
 
     // The graphs open follow the script: a graph gone, its tab closed; a script just opened, its event graphs open.
+    // A graph's tab: its name (a function's says so, as the Qt editor's).
+    static glw::LocalizedText tabTitle(const fg::Graph& g) {
+        return glw::LocalizedText(g.kind == fg::GraphKind::Function ? "\u0192 " + g.name : g.name);
+    }
+
     void showScript() {
         const fg::Script& script = doc.script();
-        for (const auto& [name, view] : std::map<std::string, GraphView*>(views)) {
+        // a graph renamed (in My Script, the Details, by an undo): one open graph's name gone, one graph not known before of
+        // the same kind - its tab stays, with the new name
+        std::vector<std::string> gone;
+        for (const auto& [name, view] : views)
             if (!script.findGraph(name))
-                closeGraph(name);
+                gone.push_back(name);
+        std::vector<const fg::Graph*> added;
+        for (const fg::Graph& g : script.graphs)
+            if (!knownGraphs.contains(g.name))
+                added.push_back(&g);
+        if (gone.size() == 1 && added.size() == 1 && views[gone[0]]->kindOfGraph() == added[0]->kind) {
+            renameGraphView(gone[0], *added[0]);
+            gone.clear();
         }
+        for (const std::string& name : gone)
+            closeGraph(name);
+        knownGraphs.clear();
+        for (const fg::Graph& g : script.graphs)
+            knownGraphs.insert(g.name);
         if (views.empty()) {
             for (const fg::Graph& g : script.graphs)
                 if (g.kind == fg::GraphKind::Event)
@@ -940,6 +1005,18 @@ struct Studio::Impl {
         if (!views.contains(currentGraphName))
             currentGraphName = views.empty() ? std::string() : views.begin()->first;
         myScript->setCurrentGraph(currentGraphName);
+    }
+
+    void renameGraphView(const std::string& from, const fg::Graph& to) {
+        GraphView* view = views[from];
+        views.erase(from);
+        views[to.name] = view;
+        area->renamePanel(graphPrefix + from, graphPrefix + to.name, tabTitle(to));
+        view->setGraphName(to.name);
+        if (currentGraphName == from) {
+            currentGraphName = to.name;
+            myScript->setCurrentGraph(to.name);
+        }
     }
 
     // ---- files ----

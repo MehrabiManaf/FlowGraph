@@ -46,6 +46,8 @@ public:
     const std::string& graphName() const { return graph_; }
     // The graph was renamed: its view goes on with it.
     void setGraphName(std::string name);
+    // What its graph is (an event graph, a function's), as it was when last shown.
+    fg::GraphKind kindOfGraph() const { return kind_; }
     const fg::Registry& registry() const { return doc_.registry(); }
 
     // The node a paused run is at (0: none), shown so; a node with a breakpoint.
@@ -91,16 +93,23 @@ public:
     void paste();
     // A copy of the selection beside it.
     void duplicateSelection();
+    // The nodes selected (two or more) moved into a new function, its name asked; a call of it in their place, selected.
+    void collapseSelection();
     // The nodes to add at `at` (the canvas's), searched by name; those that fit `from` (a pin a link was dragged from), and
     // the one added linked to it.
     void openPalette(glw::Point at, const core::PinEnd* from = nullptr);
     // A comment around the selected nodes, or at `at` (the canvas's) when none is.
     void addComment(glw::Point at);
+    // Every node and comment in view (Home).
+    void frameAll();
     void toggleBreakpoints();
 
     // Nodes moved by the user land on a grid of `step` dips (Alt moves them freely).
     void setSnapToGrid(bool snap) { snap_ = snap; }
     bool snapToGrid() const { return snap_; }
+    // The grid's step when it snaps (20 by default).
+    void setSnapStep(float step) { snapStep_ = step; }
+    float snapStep() const { return snapStep_; }
 
     // What to tell the user (why two pins cannot be linked): the status bar's.
     void setOnMessage(std::function<void(glw::LocalizedText)> handler) { onMessage_ = std::move(handler); }
@@ -161,6 +170,7 @@ private:
 
     core::Document& doc_;
     std::string graph_;
+    fg::GraphKind kind_ = fg::GraphKind::Event;
     core::GraphEdits edits_;
     std::unordered_map<fg::NodeId, NodeView*> nodes_;
     std::vector<CommentView*> comments_;

@@ -169,6 +169,18 @@
       "Launch &Configurations...",
       "&Конфигурации запуска..."
     ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "Свернуть в &функцию..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "Во весь &экран"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "Переносит выбранные узлы в новую функцию и вызывает её на их месте"
+    ],
     "Edit the launch configurations of this script": [
       "Edit the launch configurations of this script",
       "Изменить конфигурации запуска этого скрипта"
@@ -216,6 +228,18 @@
     "F": [
       "F",
       ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "Показать &всё"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "&Шаг сетки"
     ],
     "&Colors": [
       "&Colors",
@@ -273,6 +297,10 @@
       "Step by Step (1 s / node)",
       "Пошагово (1 с / узел)"
     ],
+    "{step} units": [
+      "{step} units",
+      "{step} ед."
+    ],
     "&Undo {what}": [
       "&Undo {what}",
       "&Отменить: {what}"
@@ -328,6 +356,18 @@
     "&Continue": [
       "&Continue",
       "&Продолжить"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "Пауза (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "Продолжить (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "Запуск (F5)"
     ],
     "Running": [
       "Running",
@@ -541,6 +581,26 @@
       "Add comment",
       "Добавить комментарий"
     ],
+    "Delete Link": [
+      "Delete Link",
+      "Удалить связь"
+    ],
+    "Delete link": [
+      "Delete link",
+      "Удалить связь"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "Добавить узел перенаправления"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "Разорвать все связи"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
     "Edit Node Comment...": [
       "Edit Node Comment...",
       "Изменить комментарий узла..."
@@ -560,6 +620,10 @@
     "F9": [
       "F9",
       ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "Свернуть в функцию..."
     ],
     "Find References": [
       "Find References",
@@ -604,6 +668,34 @@
     "Frame": [
       "Frame",
       "Показать"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "Выберите хотя бы два узла, чтобы свернуть их в функцию"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "Свернуть в функцию"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "Эти узлы нельзя свернуть в функцию: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "Имя новой функции"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "Свернуть в функцию"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "Свернуть в функцию: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "Узлов свёрнуто в {function}: {count}"
     ],
     "Edit value": [
       "Edit value",

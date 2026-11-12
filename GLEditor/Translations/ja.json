@@ -169,6 +169,18 @@
       "Launch &Configurations...",
       "起動構成(&C)..."
     ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "関数にまとめる(&F)..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "全画面表示(&U)"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "選択したノードを新しい関数に移し、元の場所でその関数を呼び出します"
+    ],
     "Edit the launch configurations of this script": [
       "Edit the launch configurations of this script",
       "このスクリプトの起動構成を編集します"
@@ -216,6 +228,18 @@
     "F": [
       "F",
       ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "すべて表示(&F)"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "グリッドスナップの間隔(&Z)"
     ],
     "&Colors": [
       "&Colors",
@@ -273,6 +297,10 @@
       "Step by Step (1 s / node)",
       "1 ステップずつ (1 秒 / ノード)"
     ],
+    "{step} units": [
+      "{step} units",
+      "{step} 単位"
+    ],
     "&Undo {what}": [
       "&Undo {what}",
       "元に戻す: {what}(&U)"
@@ -328,6 +356,18 @@
     "&Continue": [
       "&Continue",
       "続行(&C)"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "一時停止 (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "続行 (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "実行 (F5)"
     ],
     "Running": [
       "Running",
@@ -541,6 +581,26 @@
       "Add comment",
       "コメントを追加"
     ],
+    "Delete Link": [
+      "Delete Link",
+      "リンクを削除"
+    ],
+    "Delete link": [
+      "Delete link",
+      "接続を削除"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "リルート ノードを追加"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "すべてのリンクを切断"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
     "Edit Node Comment...": [
       "Edit Node Comment...",
       "ノードのコメントを編集..."
@@ -560,6 +620,10 @@
     "F9": [
       "F9",
       ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "関数にまとめる..."
     ],
     "Find References": [
       "Find References",
@@ -604,6 +668,34 @@
     "Frame": [
       "Frame",
       "全体を表示"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "関数にまとめるには、少なくとも 2 つのノードを選択してください"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "関数にまとめる"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "これらのノードは関数にまとめられません: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "新しい関数の名前"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "関数にまとめる"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "関数にまとめる: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "{count} 個のノードを {function} にまとめました"
     ],
     "Edit value": [
       "Edit value",

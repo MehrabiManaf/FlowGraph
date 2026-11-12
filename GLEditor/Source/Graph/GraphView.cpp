@@ -98,6 +98,8 @@ void GraphView::onRootChanged() {
 void GraphView::refresh() {
     const fg::Graph* graph = doc_.graph(graph_);
     const fg::CompiledGraph* compiled = doc_.compiledGraph(graph_);
+    if (graph)
+        kind_ = graph->kind;
 
     // the nodes: as the compiler made them, where the script places them
     std::unordered_set<fg::NodeId> seen;
@@ -226,6 +228,10 @@ void GraphView::frameSelection() {
         frame(area, 64);
     else
         frameItems(48);
+}
+
+void GraphView::frameAll() {
+    frameItems(48);
 }
 
 // ---- commands ----
@@ -717,6 +723,17 @@ void GraphView::onKey(glw::KeyEvent& event) {
         openPalette(toCanvas(mouseIn_ ? mouse_ : glw::Point{size().width / 2, size().height / 2}));
         break;
     case Key::F9: toggleBreakpoints(); break;
+    case Key::Home:
+        if (command)
+            return;
+        frameAll();
+        break;
+    case Key::C:
+        // a comment under the mouse (around the selection, when there is one); Ctrl+C copies
+        if (command)
+            return;
+        addComment(toCanvas(mouseIn_ ? mouse_ : glw::Point{size().width / 2, size().height / 2}));
+        break;
     case Key::Escape:
         if (drag_ == Drag::Link) {
             drag_ = Drag::None;

@@ -169,6 +169,18 @@
       "Launch &Configurations...",
       "启动配置(&C)..."
     ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "折叠为函数(&F)..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "全屏(&U)"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "将所选节点移入一个新函数，并在原处调用它"
+    ],
     "Edit the launch configurations of this script": [
       "Edit the launch configurations of this script",
       "编辑此脚本的启动配置"
@@ -216,6 +228,18 @@
     "F": [
       "F",
       ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "全部显示(&F)"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "网格对齐大小(&Z)"
     ],
     "&Colors": [
       "&Colors",
@@ -273,6 +297,10 @@
       "Step by Step (1 s / node)",
       "逐步（每个节点 1 秒）"
     ],
+    "{step} units": [
+      "{step} units",
+      "{step} 单位"
+    ],
     "&Undo {what}": [
       "&Undo {what}",
       "撤销 {what}(&U)"
@@ -328,6 +356,18 @@
     "&Continue": [
       "&Continue",
       "继续(&C)"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "暂停 (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "继续 (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "运行 (F5)"
     ],
     "Running": [
       "Running",
@@ -541,6 +581,26 @@
       "Add comment",
       "添加注释"
     ],
+    "Delete Link": [
+      "Delete Link",
+      "删除连线"
+    ],
+    "Delete link": [
+      "Delete link",
+      "删除连线"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "添加转接节点"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "断开所有连线"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
     "Edit Node Comment...": [
       "Edit Node Comment...",
       "编辑节点注释..."
@@ -560,6 +620,10 @@
     "F9": [
       "F9",
       ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "折叠为函数..."
     ],
     "Find References": [
       "Find References",
@@ -604,6 +668,34 @@
     "Frame": [
       "Frame",
       "适应视图"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "至少选择两个节点才能将它们折叠为函数"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "折叠为函数"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "这些节点无法折叠为函数：{why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "新函数的名称"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "折叠为函数"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "折叠为函数：{warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "已将 {count} 个节点折叠为 {function}"
     ],
     "Edit value": [
       "Edit value",

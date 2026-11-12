@@ -169,6 +169,18 @@
       "Launch &Configurations...",
       "Start&konfigurationen..."
     ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "Zu &Funktion zusammenfassen..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "&Vollbild"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "Verschiebt die gewählten Knoten in eine neue Funktion und ruft diese an ihrer Stelle auf"
+    ],
     "Edit the launch configurations of this script": [
       "Edit the launch configurations of this script",
       "Die Startkonfigurationen dieses Skripts bearbeiten"
@@ -216,6 +228,18 @@
     "F": [
       "F",
       ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "Alles ein&passen"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "Raster&größe"
     ],
     "&Colors": [
       "&Colors",
@@ -273,6 +297,10 @@
       "Step by Step (1 s / node)",
       "Schritt für Schritt (1 s / Knoten)"
     ],
+    "{step} units": [
+      "{step} units",
+      "{step} Einheiten"
+    ],
     "&Undo {what}": [
       "&Undo {what}",
       "&Rückgängig: {what}"
@@ -328,6 +356,18 @@
     "&Continue": [
       "&Continue",
       "&Fortsetzen"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "Pause (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "Fortsetzen (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "Ausführen (F5)"
     ],
     "Running": [
       "Running",
@@ -541,6 +581,26 @@
       "Add comment",
       "Kommentar hinzufügen"
     ],
+    "Delete Link": [
+      "Delete Link",
+      "Verbindung löschen"
+    ],
+    "Delete link": [
+      "Delete link",
+      "Verbindung löschen"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "Umleitungsknoten hinzufügen"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "Alle Verbindungen trennen"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
     "Edit Node Comment...": [
       "Edit Node Comment...",
       "Knotenkommentar bearbeiten..."
@@ -560,6 +620,10 @@
     "F9": [
       "F9",
       ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "Zu Funktion zusammenfassen..."
     ],
     "Find References": [
       "Find References",
@@ -604,6 +668,34 @@
     "Frame": [
       "Frame",
       "Einpassen"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "Wählen Sie mindestens zwei Knoten, um sie zu einer Funktion zusammenzufassen"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "Zu Funktion zusammenfassen"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "Diese Knoten können nicht in eine Funktion zusammengefasst werden: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "Name der neuen Funktion"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "Zu Funktion zusammenfassen"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "Zu Funktion zusammenfassen: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "{count} Knoten zu {function} zusammengefasst"
     ],
     "Edit value": [
       "Edit value",

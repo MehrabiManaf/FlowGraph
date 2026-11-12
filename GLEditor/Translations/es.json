@@ -169,6 +169,18 @@
       "Launch &Configurations...",
       "&Configuraciones de inicio..."
     ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "Contraer en &función..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "&Pantalla completa"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "Mueve los nodos seleccionados a una nueva función y la llama en su lugar"
+    ],
     "Edit the launch configurations of this script": [
       "Edit the launch configurations of this script",
       "Editar las configuraciones de inicio de este script"
@@ -216,6 +228,18 @@
     "F": [
       "F",
       ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "&Encuadrar todo"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "Tamaño del a&juste a la cuadrícula"
     ],
     "&Colors": [
       "&Colors",
@@ -273,6 +297,10 @@
       "Step by Step (1 s / node)",
       "Paso a paso (1 s / nodo)"
     ],
+    "{step} units": [
+      "{step} units",
+      "{step} unidades"
+    ],
     "&Undo {what}": [
       "&Undo {what}",
       "&Deshacer {what}"
@@ -328,6 +356,18 @@
     "&Continue": [
       "&Continue",
       "&Continuar"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "Pausa (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "Continuar (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "Ejecutar (F5)"
     ],
     "Running": [
       "Running",
@@ -541,6 +581,26 @@
       "Add comment",
       "Añadir comentario"
     ],
+    "Delete Link": [
+      "Delete Link",
+      "Eliminar el enlace"
+    ],
+    "Delete link": [
+      "Delete link",
+      "Eliminar enlace"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "Añadir nodo de redirección"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "Romper todos los enlaces"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
     "Edit Node Comment...": [
       "Edit Node Comment...",
       "Editar el comentario del nodo..."
@@ -560,6 +620,10 @@
     "F9": [
       "F9",
       ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "Contraer en función..."
     ],
     "Find References": [
       "Find References",
@@ -604,6 +668,34 @@
     "Frame": [
       "Frame",
       "Encuadrar"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "Seleccione al menos dos nodos para contraerlos en una función"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "Contraer en función"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "Estos nodos no se pueden contraer en una función: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "Nombre de la nueva función"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "Contraer en función"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "Contraer en función: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "Se contrajeron {count} nodo(s) en {function}"
     ],
     "Edit value": [
       "Edit value",

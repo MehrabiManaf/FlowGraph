@@ -221,12 +221,41 @@ void GraphView::contextMenu(glw::Point at) {
                 comment = c;
         }
     }
+    // a link (not on a node or a comment): what is done with it alone
+    if (!node && !comment) {
+        if (const std::optional<fg::Connection> link = linkAt(at)) {
+            selectedNodes_.clear();
+            selectedComments_.clear();
+            selectedLink_ = link;
+            showSelection();
+            selectionChanged();
+            const fg::Connection c = *link;
+            glw::showContextMenu(*this, fromCanvas(at),
+                                 {{.text = tr("Delete Link"), .onTriggered = [this, c] { edits_.remove({}, {c}, {}, words(tr("Delete link"))); },
+                                   .shortcut = tr("Del")},
+                                  {.text = tr("Add Reroute Node"), .onTriggered = [this, c, at] {
+                                       if (!edits_.insertReroute(c, at.x - 18, at.y - 9, words(tr("Add reroute"))))
+                                           tell(tr("Reroute nodes are only for links of data"));
+                                   }}});
+            return;
+        }
+    }
     if (node && !selectedNodes_.contains(node->id()))
         select({node->id()});
     std::vector<glw::MenuItem> items;
     const bool selection = !selectedNodes_.empty();
     if (node) {
         const fg::NodeId id = node->id();
+        // a pin there: its links broken (Alt and a click does it too)
+        if (const std::optional<NodeView::PinHit> pin = node->pinAt(at - itemPosition(*node))) {
+            const core::PinEnd end = core::PinEnd::of(node->compiled(), pin->name, pin->dir);
+            const fg::CompiledNode& cn = node->compiled();
+            const int index = cn.findPinIndex(pin->name, pin->dir);
+            const bool linked = index >= 0 && cn.pins[std::size_t(index)].connected;
+            items.push_back({.text = tr("Break All Links"), .onTriggered = [this, end] { edits_.breakLinks(end, words(tr("Break links"))); },
+                             .shortcut = tr("Alt+Click"), .enabled = linked});
+            items.push_back(glw::MenuItem::separatorItem());
+        }
         items.push_back({.text = tr("Edit Node Comment..."), .onTriggered = [this, id] {
                              const fg::Node* n = doc_.graph(graph_) ? doc_.graph(graph_)->findNode(id) : nullptr;
                              askText(tr("Node Comment"), n ? n->comment : std::string(), [this, id](std::string text) {
@@ -235,6 +264,8 @@ void GraphView::contextMenu(glw::Point at) {
                          }});
         items.push_back({.text = tr("Toggle Breakpoint"), .onTriggered = [this] { toggleBreakpoints(); }, .shortcut = tr("F9"),
                          .checked = isBreakpoint(id)});
+        if (selectedNodes_.size() >= 2)
+            items.push_back({.text = tr("Collapse to Function..."), .onTriggered = [this] { collapseSelection(); }});
         if (onFindReferences_)
             items.push_back({.text = tr("Find References"), .onTriggered = [this, id] {
                                  if (onFindReferences_)
@@ -279,6 +310,40 @@ void GraphView::contextMenu(glw::Point at) {
     items.push_back(glw::MenuItem::separatorItem());
     items.push_back({.text = tr("Frame"), .onTriggered = [this] { frameSelection(); }, .shortcut = tr("F")});
     glw::showContextMenu(*this, fromCanvas(at), std::move(items));
+}
+
+void GraphView::collapseSelection() {
+    const std::set<fg::NodeId> nodes = selectedNodes_;
+    if (nodes.size() < 2) {
+        tell(tr("Select at least two nodes to collapse them into a function"));
+        return;
+    }
+    // what cannot be collapsed is said before the name is asked
+    fg::Script trial = doc_.script();
+    const fg::CollapseResult probe = fg::collapseToFunction(trial, doc_.registry(), graph_, {nodes.begin(), nodes.end()});
+    if (!probe.ok) {
+        glw::showMessage(*this, tr("Collapse to Function"), tr("These nodes cannot be collapsed into a function: {why}").arg("why", probe.error),
+                         {tr("Close")});
+        return;
+    }
+    askText(tr("Name of the New Function"), doc_.script().uniqueGraphName("NewFunction"), [this, nodes](std::string name) {
+        while (!name.empty() && name.back() == ' ')
+            name.pop_back();
+        while (!name.empty() && name.front() == ' ')
+            name.erase(name.begin());
+        if (name.empty())
+            return;
+        const fg::CollapseResult result = edits_.collapse(nodes, name, words(tr("Collapse to function")));
+        if (!result.ok) {
+            tell(glw::LocalizedText(result.error));
+            return;
+        }
+        for (const std::string& w : result.warnings)
+            tell(tr("Collapse to Function: {warning}").arg("warning", w));
+        if (result.warnings.empty())
+            tell(tr("Collapsed {count} node(s) into {function}").arg("count", nodes.size()).arg("function", result.function));
+        select({result.callNode});
+    });
 }
 
 void GraphView::askText(glw::LocalizedText title, std::string text, std::function<void(std::string)> done) {
