@@ -21,11 +21,18 @@ endforeach()
 foreach(catalog ${FGGLED_NODE_CATALOGS})
     list(APPEND FGGLED_CATALOG_LIST "nodes=${catalog}")
 endforeach()
+# the icons of its toolbar and menus: the Qt editor's (Editor/Resources/Icons), compiled in the same way (Source/Icons.cpp)
+set(FGGLED_ICONS new open save continue interrupt stop step-over step-into step-out configure)
+set(FGGLED_ICON_FILES "")
+foreach(icon ${FGGLED_ICONS})
+    list(APPEND FGGLED_CATALOG_LIST "icon=${CMAKE_SOURCE_DIR}/Editor/Resources/Icons/${icon}.svg")
+    list(APPEND FGGLED_ICON_FILES ${CMAKE_SOURCE_DIR}/Editor/Resources/Icons/${icon}.svg)
+endforeach()
 list(JOIN FGGLED_CATALOG_LIST "|" FGGLED_CATALOG_ARG)        # (a list through a command line)
 set(FGGLED_EMBEDDED ${CMAKE_CURRENT_BINARY_DIR}/EmbeddedCatalogs.cpp)
 add_custom_command(OUTPUT ${FGGLED_EMBEDDED}
     COMMAND ${CMAKE_COMMAND} -DOUTPUT=${FGGLED_EMBEDDED} "-DCATALOGS=${FGGLED_CATALOG_ARG}" -P ${CMAKE_CURRENT_SOURCE_DIR}/EmbedCatalogs.cmake
-    DEPENDS ${FGGLED_CATALOGS} ${FGGLED_NODE_CATALOGS} ${CMAKE_CURRENT_SOURCE_DIR}/EmbedCatalogs.cmake
+    DEPENDS ${FGGLED_CATALOGS} ${FGGLED_NODE_CATALOGS} ${FGGLED_ICON_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/EmbedCatalogs.cmake
     COMMENT "Compiling the translations into the GLWidgets editor"
     VERBATIM)
 target_sources(FlowGraphGLEditor PRIVATE ${FGGLED_EMBEDDED})

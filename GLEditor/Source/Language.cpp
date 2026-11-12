@@ -136,7 +136,7 @@ std::string applyLanguage(glw::Application& app, const std::string& choice) {
             continue;
         if (std::string_view(c.kind) == "editor")
             app.translator().loadCatalog(c.text());
-        else
+        else if (std::string_view(c.kind) == "nodes")
             editableNodeTexts().loadJson(c.text());
     }
     app.setLanguage(g_current);

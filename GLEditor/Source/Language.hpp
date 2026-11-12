@@ -18,8 +18,8 @@ namespace fged::gl {
 
 // A catalog compiled into the editor (GLEditor/EmbedCatalogs.cmake): its text in parts, null-terminated.
 struct EmbeddedCatalog {
-    const char* kind;               // "editor", "nodes"
-    const char* language;           // fa, pt_BR...
+    const char* kind;               // "editor", "nodes", "icon"
+    const char* language;           // fa, pt_BR... (an icon's: its name)
     const char* const* parts;
 
     std::string text() const;

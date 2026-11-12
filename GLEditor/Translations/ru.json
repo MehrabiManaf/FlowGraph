@@ -165,6 +165,14 @@
       "Step O&ut",
       "Шаг с &выходом"
     ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "&Конфигурации запуска..."
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "Изменить конфигурации запуска этого скрипта"
+    ],
     "Toggle &Breakpoint": [
       "Toggle &Breakpoint",
       "Точка о&станова"
@@ -225,6 +233,10 @@
       "&Debug",
       "&Отладка"
     ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "&Скорость выполнения"
+    ],
     "&Help": [
       "&Help",
       "&Справка"
@@ -244,6 +256,22 @@
     "System": [
       "System",
       "Системный"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "Полная скорость"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "Медленно (100 мс / узел)"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "Медленнее (300 мс / узел)"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "Пошагово (1 с / узел)"
     ],
     "&Undo {what}": [
       "&Undo {what}",
@@ -284,6 +312,18 @@
     "Nothing to run: the application has no event to start": [
       "Nothing to run: the application has no event to start",
       "Нечего запускать: у приложения нет события для запуска"
+    ],
+    "Run:": [
+      "Run:",
+      "Запуск:"
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "Конфигурация запуска, которую запускает «Запуск»"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "Конфигурации запуска сохраняются вместе со скриптом"
     ],
     "&Continue": [
       "&Continue",
@@ -1068,6 +1108,46 @@
     "{what}: {count} found": [
       "{what}: {count} found",
       "{what}: найдено {count}"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "Аргументы Main, по одному в строке"
+    ],
+    "Working directory": [
+      "Working directory",
+      "Рабочий каталог"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "относительно папки скрипта; пусто — без изменений"
+    ],
+    "Environment": [
+      "Environment",
+      "Окружение"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "ИМЯ=значение, по одному в строке: действуют, пока выполняется скрипт"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "Папки плагинов"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "Папки плагинов относительно папки скрипта, по одной в строке"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "Задержка шага (мс)"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "Задержка между двумя узлами при выполнении: замедленное воспроизведение, чтобы следить за связями"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "Конфигурации запуска"
     ],
     "Add a function": [
       "Add a function",

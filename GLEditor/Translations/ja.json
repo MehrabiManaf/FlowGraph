@@ -165,6 +165,14 @@
       "Step O&ut",
       "ステップ アウト(&U)"
     ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "起動構成(&C)..."
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "このスクリプトの起動構成を編集します"
+    ],
     "Toggle &Breakpoint": [
       "Toggle &Breakpoint",
       "ブレークポイントの切り替え(&B)"
@@ -225,6 +233,10 @@
       "&Debug",
       "デバッグ(&D)"
     ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "実行速度(&S)"
+    ],
     "&Help": [
       "&Help",
       "ヘルプ(&H)"
@@ -244,6 +256,22 @@
     "System": [
       "System",
       "システム"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "最高速度"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "遅い (100 ms / ノード)"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "もっと遅い (300 ms / ノード)"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "1 ステップずつ (1 秒 / ノード)"
     ],
     "&Undo {what}": [
       "&Undo {what}",
@@ -284,6 +312,18 @@
     "Nothing to run: the application has no event to start": [
       "Nothing to run: the application has no event to start",
       "実行するものがありません: アプリケーションに開始イベントがありません"
+    ],
+    "Run:": [
+      "Run:",
+      "実行:"
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "実行で開始する起動構成"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "起動構成はスクリプトと一緒に保存されます"
     ],
     "&Continue": [
       "&Continue",
@@ -1068,6 +1108,46 @@
     "{what}: {count} found": [
       "{what}: {count} found",
       "{what}: {count} 件見つかりました"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "Main の引数 (1 行に 1 つ)"
+    ],
+    "Working directory": [
+      "Working directory",
+      "作業ディレクトリ"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "スクリプトのフォルダーからの相対パス。空: 変更なし"
+    ],
+    "Environment": [
+      "Environment",
+      "環境変数"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "NAME=値 (1 行に 1 つ): スクリプトの実行中に設定されます"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "プラグイン フォルダー"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "プラグインのフォルダー (スクリプトのフォルダーからの相対パス、1 行に 1 つ)"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "ステップ間の遅延 (ms)"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "実行中のノード間の遅延: リンクを観察するためのスロー モーション"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "起動構成"
     ],
     "Add a function": [
       "Add a function",

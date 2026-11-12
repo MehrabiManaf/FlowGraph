@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Writes OUTPUT, a C++ source with the catalogs of translations in it (Source/Language.cpp reads them): CATALOGS is kind=path
 # items separated by |, the kind "editor" (GLEditor/Translations/<code>.json, the texts of the editor and of GLWidgets) or "nodes"
-# (Core/Translations/<code>.json, the texts of the built-in nodes). Each file goes in as raw string literals of a few
+# (Core/Translations/<code>.json, the texts of the built-in nodes), or "icon" (an SVG file: Source/Icons.cpp). Each file goes in as raw string literals of a few
 # thousand bytes (a compiler takes no longer literal), joined when it is read.
 #   cmake -DOUTPUT=<file.cpp> "-DCATALOGS=editor=a.json|nodes=b.json" -P EmbedCatalogs.cmake
 set(chunk 4000)

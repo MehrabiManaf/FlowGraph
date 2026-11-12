@@ -165,6 +165,14 @@
       "Step O&ut",
       "Ausf&ühren bis Rücksprung"
     ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "Start&konfigurationen..."
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "Die Startkonfigurationen dieses Skripts bearbeiten"
+    ],
     "Toggle &Breakpoint": [
       "Toggle &Breakpoint",
       "&Haltepunkt umschalten"
@@ -225,6 +233,10 @@
       "&Debug",
       "Debu&ggen"
     ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "Ausführungs&geschwindigkeit"
+    ],
     "&Help": [
       "&Help",
       "&Hilfe"
@@ -244,6 +256,22 @@
     "System": [
       "System",
       "System"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "Volle Geschwindigkeit"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "Langsam (100 ms / Knoten)"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "Langsamer (300 ms / Knoten)"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "Schritt für Schritt (1 s / Knoten)"
     ],
     "&Undo {what}": [
       "&Undo {what}",
@@ -284,6 +312,18 @@
     "Nothing to run: the application has no event to start": [
       "Nothing to run: the application has no event to start",
       "Nichts auszuführen: die Anwendung hat kein Ereignis zum Starten"
+    ],
+    "Run:": [
+      "Run:",
+      "Ausführen:"
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "Die Startkonfiguration, die Ausführen startet"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "Die Startkonfigurationen werden mit dem Skript gespeichert"
     ],
     "&Continue": [
       "&Continue",
@@ -1068,6 +1108,46 @@
     "{what}: {count} found": [
       "{what}: {count} found",
       "{what}: {count} gefunden"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "Die Argumente von Main, eines pro Zeile"
+    ],
+    "Working directory": [
+      "Working directory",
+      "Arbeitsverzeichnis"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "relativ zum Ordner des Skripts; leer: unverändert"
+    ],
+    "Environment": [
+      "Environment",
+      "Umgebung"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "NAME=Wert, eines pro Zeile: gesetzt, solange das Skript läuft"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "Plugin-Ordner"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "Ordner mit Plugins, relativ zu dem des Skripts, einer pro Zeile"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "Schrittverzögerung (ms)"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "Eine Verzögerung zwischen zwei Knoten beim Ausführen: Zeitlupe, um die Verbindungen zu verfolgen"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "Startkonfigurationen"
     ],
     "Add a function": [
       "Add a function",

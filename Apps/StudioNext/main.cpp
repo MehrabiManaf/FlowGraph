@@ -88,7 +88,8 @@ int main(int argc, char** argv) {
                                  .newScript = [&rt](fg::Script& s) { fg::standard::createMainTemplate(s, rt.registry()); },
                                  // Run: Main, with no arguments (launch configurations come later)
                                  .runEntry = fg::standard::kMainEvent,
-                                 .runArguments = [&rt] { return std::vector<fg::Value>{fg::standard::argsValue(rt.registry(), {})}; }});
+                                 .runArguments = [&rt] { return std::vector<fg::Value>{fg::standard::argsValue(rt.registry(), {})}; },
+                                 .launchConfigurations = true});
         if (!script.empty())
             studio.open(script);
         if (runAtStart)

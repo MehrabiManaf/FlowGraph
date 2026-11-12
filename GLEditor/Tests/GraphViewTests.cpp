@@ -11,6 +11,8 @@
 #include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Runtime.hpp>
+#include <FlowGraph/StandardApp.hpp>
+#include <FlowGraphEditorCore/Launches.hpp>
 #include <FlowGraph/Translations.hpp>
 #include <GLWidgets/Paint/DrawList.hpp>
 #include <GLWidgets/Text/Font.hpp>
@@ -25,6 +27,8 @@
 
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -999,6 +1003,8 @@ TEST(theTranslationsAreCompiledIn) {
     std::size_t nodes = 0;
     for (const fged::gl::EmbeddedCatalog& c : fged::gl::embeddedCatalogs()) {
         std::string error;
+        if (std::string_view(c.kind) == "icon")
+            continue;
         if (std::string_view(c.kind) == "editor") {
             glw::Translator t;
             const bool loaded = t.loadCatalog(c.text(), &error);
@@ -1015,6 +1021,44 @@ TEST(theTranslationsAreCompiledIn) {
         ++nodes;
     }
     CHECK(nodes + 1 == languages.size());
+}
+
+TEST(launchConfigurationsAreKeptNextToTheScriptAndAppliedToARun) {
+    namespace fs = std::filesystem;
+    const fs::path folder = fs::temp_directory_path() / "fg_launches_test";
+    fs::remove_all(folder);
+    fs::create_directories(folder / "work");
+    const std::string script = (folder / "a.flow").string();
+    fg::Runtime rt;
+    fged::core::Launches launches(rt);
+    // a script without a launch file: one default configuration
+    std::vector<std::string> problems;
+    CHECK(!launches.scriptOpened(script, &problems) && problems.empty());
+    CHECK(launches.file().configs.size() == 1);
+    // edited: names made unique, saved next to the script
+    fg::standard::LaunchFile file;
+    file.configs.push_back({.name = "Fast", .args = {"one", "two"}, .cwd = "work", .env = {{"FG_LAUNCH_TEST", "yes"}}});
+    file.configs.push_back({.name = "Fast"});
+    file.selected = "Fast";
+    launches.setFile(file);
+    CHECK(launches.file().configs[1].name != "Fast" && fs::exists(folder / "a.flowlaunch"));
+    launches.select(launches.file().configs[1].name);
+    // read again, as another editor would
+    fged::core::Launches again(rt);
+    again.scriptOpened(script);
+    CHECK(again.file().configs.size() == 2 && again.file().selected == launches.file().configs[1].name);
+    // a run: its working directory and its variables, then as they were
+    const fs::path before = fs::current_path();
+    launches.apply(launches.file().configs[0]);
+    CHECK(fs::equivalent(fs::current_path(), folder / "work"));
+    const char* set = std::getenv("FG_LAUNCH_TEST");
+    CHECK(set && std::string(set) == "yes");
+    launches.restore();
+    CHECK(fs::equivalent(fs::current_path(), before) && !std::getenv("FG_LAUNCH_TEST"));
+    // saved as another file: the configurations go with it
+    launches.scriptSaved((folder / "b.flow").string());
+    CHECK(fs::exists(folder / "b.flowlaunch"));
+    fs::remove_all(folder);
 }
 
 int main() {

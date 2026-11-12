@@ -3,10 +3,12 @@
 #include <FlowGraphGLEditor/Studio.hpp>
 
 #include "Graph/GraphView.hpp"
+#include "Icons.hpp"
 #include "Language.hpp"
 #include "Panels/DebugPanel.hpp"
 #include "Panels/DetailsPanel.hpp"
 #include "Panels/InfoPanels.hpp"
+#include "Panels/LaunchDialog.hpp"
 #include "Panels/MyScriptPanel.hpp"
 
 #include <FlowGraph/Vm.hpp>
@@ -20,6 +22,10 @@
 #include <GLWidgets/Widgets/Docking.hpp>
 #include <GLWidgets/Widgets/MenuBar.hpp>
 #include <GLWidgets/Widgets/Settings.hpp>
+#include <FlowGraphEditorCore/Launches.hpp>
+#include <FlowGraph/StandardApp.hpp>
+#include <GLWidgets/Widgets/ToolBar.hpp>
+#include <GLWidgets/Widgets/ComboBox.hpp>
 #include <GLWidgets/Widgets/StatusBar.hpp>
 #include <GLWidgets/Widgets/TabView.hpp>
 #include <GLWidgets/Widgets/TextEdit.hpp>
@@ -131,6 +137,7 @@ struct Studio::Impl {
     fg::Runtime& rt;
     StudioOptions options;
     core::Document doc;
+    core::Launches launches;                    // the script's launch configurations
     glw::Settings settings;
     AppThread uiThread;
     std::unique_ptr<core::RunSession> run;      // after the thread it posts to: gone before it
@@ -146,6 +153,8 @@ struct Studio::Impl {
     glw::Label* compileState = nullptr;         // the status bar's: how many errors and warnings
     glw::StatusBar* status = nullptr;
     glw::Label* runState = nullptr;
+    glw::ComboBox* launchBox = nullptr;         // the toolbar's: the configuration Run starts
+    int speedMs = 0;                            // the Debug menu's execution speed: a delay between two nodes
     glw::TextEdit* log = nullptr;               // the Output Log
     std::map<std::string, GraphView*> views;    // the graphs open, by name (in the center stack, or docked or floated elsewhere)
     std::string currentGraphName;               // the one shown last
@@ -162,10 +171,11 @@ struct Studio::Impl {
     std::shared_ptr<glw::Action> newAction, openAction, saveAction, saveAsAction, quitAction, undoAction, redoAction;
     std::shared_ptr<glw::Action> cutAction, copyAction, pasteAction, duplicateAction, selectAllAction, snapAction;
     std::shared_ptr<glw::Action> findAction, findReferencesAction;
+    std::shared_ptr<glw::Action> configureAction;
     std::shared_ptr<glw::Action> runAction, pauseAction, stopAction, stepOverAction, stepIntoAction, stepOutAction, breakpointAction;
     bool closing = false;                       // asked whether to save, and it goes: the window may close now
 
-    Impl(glw::Application& a, fg::Runtime& r, StudioOptions o) : app(a), rt(r), options(std::move(o)), doc(r), uiThread(a) {}
+    Impl(glw::Application& a, fg::Runtime& r, StudioOptions o) : app(a), rt(r), options(std::move(o)), doc(r), launches(r), uiThread(a) {}
     // The window's panels and graphs go first, while the document and the run they listen to are there (the application,
     // and its windows, outlive the studio).
     ~Impl() {
@@ -376,6 +386,7 @@ struct Studio::Impl {
 
         makeRun();
         makeActions();
+        makeToolBar();
         rebuildMenus();
 
         // closing the window, quitting: what was not saved first
@@ -445,6 +456,12 @@ struct Studio::Impl {
         stepOverAction = action(tr("Step &Over"), [this] { run->stepOver(); }, {Key::F10});
         stepIntoAction = action(tr("Step &Into"), [this] { run->stepInto(); }, {Key::F11});
         stepOutAction = action(tr("Step O&ut"), [this] { run->stepOut(); }, {Key::F11, glw::platform::KeyModifiers::Shift});
+        configureAction = action(tr("Launch &Configurations..."), [this] { editLaunches(); });
+        configureAction->setToolTip(tr("Edit the launch configurations of this script"));
+        for (auto [a, icon] : {std::pair{newAction, "new"}, {openAction, "open"}, {saveAction, "save"}, {runAction, "continue"},
+                               {pauseAction, "interrupt"}, {stopAction, "stop"}, {stepOverAction, "step-over"},
+                               {stepIntoAction, "step-into"}, {stepOutAction, "step-out"}, {configureAction, "configure"}})
+            a->setIcon(studioIcon(icon));
         breakpointAction = action(tr("Toggle &Breakpoint"), [this] {
             if (GraphView* g = currentGraph())
                 g->toggleBreakpoints();
@@ -528,7 +545,10 @@ struct Studio::Impl {
                        {.action = stepIntoAction},
                        {.action = stepOutAction},
                        glw::MenuItem::separatorItem(),
-                       {.action = breakpointAction}}},
+                       {.action = breakpointAction},
+                       glw::MenuItem::separatorItem(),
+                       {.text = tr("Execution &Speed"), .items = speedItems()},
+                       {.enabled = options.launchConfigurations, .action = configureAction}}},
             {.text = tr("&Help"), .items = {{.text = tr("&About FlowGraph Studio"), .onTriggered = [this] { about(); }}}},
         };
         if (!menuBar)
@@ -575,6 +595,19 @@ struct Studio::Impl {
         debugger->refresh();
         showTitle();
         rebuildMenus();
+    }
+
+    // Full speed, or a delay between two nodes: slow motion, to watch the links (it applies at once, to a run too)
+    std::vector<glw::MenuItem> speedItems() {
+        std::vector<glw::MenuItem> items;
+        for (auto [label, ms] : {std::pair{tr("Full Speed"), 0}, {tr("Slow (100 ms / node)"), 100}, {tr("Slower (300 ms / node)"), 300},
+                                 {tr("Step by Step (1 s / node)"), 1000}})
+            items.push_back({.text = label, .onTriggered = [this, ms] {
+                                 speedMs = ms;
+                                 run->setStepDelay(ms);
+                                 rebuildMenus();
+                             }, .checked = speedMs == ms});
+        return items;
     }
 
     void showUndoState() {
@@ -657,7 +690,11 @@ struct Studio::Impl {
     void makeRun() {
         if (!run)
             run = std::make_unique<core::RunSession>(doc, uiThread);
-        run->stateChanged.connect([this](core::RunState state) { showRunState(state); });
+        run->stateChanged.connect([this](core::RunState state) {
+            showRunState(state);
+            if (state == core::RunState::Idle)
+                launches.restore();         // the working directory and the variables of the run, put back
+        });
         run->paused.connect([this](const std::string& graph, int node) {
             // the graph it stopped in shown, the node in view
             for (GraphView* g : graphViews())
@@ -704,8 +741,83 @@ struct Studio::Impl {
             status->showMessage(tr("Nothing to run: the application has no event to start"), 4s);
             return;
         }
+        std::vector<fg::Value> args = options.runArguments ? options.runArguments() : std::vector<fg::Value>{};
+        int delay = speedMs;
+        if (options.launchConfigurations) {
+            // the configuration chosen: Main's arguments, its slow motion (unless the menu's speed says otherwise), its
+            // working directory and variables while it runs
+            const fg::standard::LaunchConfig& config = launches.current();
+            args = {fg::standard::argsValue(rt.registry(), config.args)};
+            if (delay == 0)
+                delay = config.stepDelayMs;
+            launches.apply(config);
+        }
+        run->setStepDelay(delay);
         log->setText("");
-        run->start(options.runEntry, options.runArguments ? options.runArguments() : std::vector<fg::Value>{});
+        if (!run->start(options.runEntry, args))
+            launches.restore();
+    }
+
+    // ---- launch configurations ----
+
+    void makeToolBar() {
+        auto bar = std::make_unique<glw::ToolBar>();
+        bar->setButtonSizes(34.0f, 22.0f);         // as the Qt editor's (its icons 22)
+        bar->addAction(newAction);
+        bar->addAction(openAction);
+        bar->addAction(saveAction);
+        bar->addSeparator();
+        if (options.launchConfigurations) {
+            auto box = std::make_unique<glw::ComboBox>();
+            box->setToolTip(glw::ToolTip{.title = tr("Run:"), .text = tr("The launch configuration Run starts")});
+            box->setOnChanged([this](std::size_t i) {
+                if (i < launches.file().configs.size())
+                    launches.select(launches.file().configs[i].name);
+            });
+            launchBox = &bar->addWidget(std::move(box));
+            bar->addAction(configureAction);
+        }
+        bar->addAction(runAction);
+        bar->addAction(pauseAction);
+        bar->addAction(stopAction);
+        bar->addSeparator();
+        bar->addAction(stepOverAction);
+        bar->addAction(stepIntoAction);
+        bar->addAction(stepOutAction);
+        window->setToolBar(std::move(bar));
+        showLaunches();
+    }
+
+    // The configurations in the toolbar's box: each name, with Main's arguments.
+    void showLaunches() {
+        if (!launchBox)
+            return;
+        const fg::standard::LaunchFile& file = launches.file();
+        std::vector<glw::LocalizedText> items;
+        std::size_t current = 0;
+        for (std::size_t i = 0; i < file.configs.size(); ++i) {
+            std::string args;
+            for (const std::string& a : file.configs[i].args)
+                args += (args.empty() ? "" : " ") + a;
+            items.emplace_back(file.configs[i].name + (args.empty() ? std::string() : "  (" + args + ")"));
+            if (file.configs[i].name == file.selected)
+                current = i;
+        }
+        launchBox->setItems(std::move(items));
+        launchBox->setCurrent(current);
+    }
+
+    void editLaunches() {
+        showLaunchConfigurations(*area, launches.file(), [this](fg::standard::LaunchFile file) {
+            std::vector<std::string> problems;
+            if (launches.setFile(std::move(file), &problems))
+                doc.refresh();
+            for (const std::string& p : problems)
+                log->append(app.translator().resolve(tr("Warning: {text}").arg("text", p)));
+            showLaunches();
+            if (doc.path().empty())
+                status->showMessage(tr("The launch configurations are saved with the script"), 4s);
+        });
     }
 
     void showRunState(core::RunState state) {
@@ -834,6 +946,8 @@ struct Studio::Impl {
 
     void newScript() {
         doc.newScript(options.newScript);
+        launches.scriptCreated();
+        showLaunches();
         status->showMessage(tr("A new script"), 3s);
     }
 
@@ -848,6 +962,13 @@ struct Studio::Impl {
             glw::showMessage(*area, tr("The script was not opened"), glw::LocalizedText(error), {tr("Close")});
             return false;
         }
+        // its launch configurations, and the plugins they name (the script compiled again when they bring nodes)
+        std::vector<std::string> problems;
+        if (launches.scriptOpened(path, &problems))
+            doc.refresh();
+        for (const std::string& p : problems)
+            log->append(app.translator().resolve(tr("Warning: {text}").arg("text", p)));
+        showLaunches();
         addRecent(path);
         status->showMessage(tr("Opened {file}").arg("file", path), 3s);
         return true;
@@ -917,6 +1038,7 @@ struct Studio::Impl {
             glw::showMessage(*area, tr("The script was not saved"), glw::LocalizedText(error), {tr("Close")});
             return;
         }
+        launches.scriptSaved(path);
         addRecent(path);
         status->showMessage(tr("Saved {file}").arg("file", path), 3s);
         if (then)

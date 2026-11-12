@@ -165,6 +165,14 @@
       "Step O&ut",
       "跳出(&U)"
     ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "启动配置(&C)..."
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "编辑此脚本的启动配置"
+    ],
     "Toggle &Breakpoint": [
       "Toggle &Breakpoint",
       "切换断点(&B)"
@@ -225,6 +233,10 @@
       "&Debug",
       "调试(&D)"
     ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "执行速度(&S)"
+    ],
     "&Help": [
       "&Help",
       "帮助(&H)"
@@ -244,6 +256,22 @@
     "System": [
       "System",
       "跟随系统"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "全速"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "慢（100 毫秒/节点）"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "更慢（300 毫秒/节点）"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "逐步（每个节点 1 秒）"
     ],
     "&Undo {what}": [
       "&Undo {what}",
@@ -284,6 +312,18 @@
     "Nothing to run: the application has no event to start": [
       "Nothing to run: the application has no event to start",
       "没有可运行的内容：应用程序没有启动事件"
+    ],
+    "Run:": [
+      "Run:",
+      "运行："
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "“运行”所启动的启动配置"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "启动配置随脚本一起保存"
     ],
     "&Continue": [
       "&Continue",
@@ -1068,6 +1108,46 @@
     "{what}: {count} found": [
       "{what}: {count} found",
       "{what}：找到 {count} 项"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "Main 的参数，每行一个"
+    ],
+    "Working directory": [
+      "Working directory",
+      "工作目录"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "相对于脚本所在文件夹；留空：不变"
+    ],
+    "Environment": [
+      "Environment",
+      "环境变量"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "NAME=值，每行一个：在脚本运行期间设置"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "插件文件夹"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "插件文件夹，相对于脚本所在文件夹，每行一个"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "每步延迟（毫秒）"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "运行时两个节点之间的延迟：慢动作，便于观察连线"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "启动配置"
     ],
     "Add a function": [
       "Add a function",

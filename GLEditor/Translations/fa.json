@@ -165,6 +165,14 @@
       "Step O&ut",
       "خروج از تابع(&U)"
     ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "پیکربندی‌های اجرا(&C)..."
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "ویرایش پیکربندی‌های اجرای این اسکریپت"
+    ],
     "Toggle &Breakpoint": [
       "Toggle &Breakpoint",
       "نقطهٔ توقف(&B)"
@@ -225,6 +233,10 @@
       "&Debug",
       "اشکال‌زدایی(&D)"
     ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "سرعت اجرا(&S)"
+    ],
     "&Help": [
       "&Help",
       "راهنما(&H)"
@@ -244,6 +256,22 @@
     "System": [
       "System",
       "سیستم"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "حداکثر سرعت"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "آهسته (100 میلی‌ثانیه برای هر گره)"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "آهسته‌تر (300 میلی‌ثانیه برای هر گره)"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "گام‌به‌گام (1 ثانیه برای هر گره)"
     ],
     "&Undo {what}": [
       "&Undo {what}",
@@ -284,6 +312,18 @@
     "Nothing to run: the application has no event to start": [
       "Nothing to run: the application has no event to start",
       "چیزی برای اجرا نیست: برنامه رویدادی برای شروع ندارد"
+    ],
+    "Run:": [
+      "Run:",
+      "اجرا:"
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "پیکربندی اجرایی که «اجرا» شروع می‌کند"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "پیکربندی‌های اجرا همراه با اسکریپت ذخیره می‌شوند"
     ],
     "&Continue": [
       "&Continue",
@@ -1068,6 +1108,46 @@
     "{what}: {count} found": [
       "{what}: {count} found",
       "{what}: {count} مورد پیدا شد"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "آرگومان‌های Main، هر کدام در یک سطر"
+    ],
+    "Working directory": [
+      "Working directory",
+      "پوشهٔ کاری"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "نسبت به پوشهٔ اسکریپت؛ خالی: بدون تغییر"
+    ],
+    "Environment": [
+      "Environment",
+      "متغیرهای محیطی"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "NAME=value، هر کدام در یک سطر: در مدت اجرای اسکریپت تنظیم می‌شوند"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "پوشه‌های افزونه"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "پوشه‌های افزونه نسبت به پوشهٔ اسکریپت، هر کدام در یک سطر"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "مکث هر گام (میلی‌ثانیه)"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "مکث بین دو گره هنگام اجرا: حرکت آهسته، برای دیدن اتصال‌ها"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "پیکربندی‌های اجرا"
     ],
     "Add a function": [
       "Add a function",

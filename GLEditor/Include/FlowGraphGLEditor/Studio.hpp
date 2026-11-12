@@ -32,6 +32,9 @@ struct StudioOptions {
     // What Run starts: an event of the application (the standard applications' Main), with these arguments.
     std::string runEntry;
     std::function<std::vector<fg::Value>()> runArguments;
+    // The standard applications' launch configurations (fg::standard::LaunchFile, next to the script): Run starts runEntry
+    // with the arguments, working directory, environment and plugins of the configuration chosen in the toolbar.
+    bool launchConfigurations = false;
 };
 
 class Studio {

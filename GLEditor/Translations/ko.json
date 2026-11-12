@@ -165,6 +165,14 @@
       "Step O&ut",
       "프로시저 나가기(&U)"
     ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "실행 구성(&C)..."
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "이 스크립트의 실행 구성을 편집합니다"
+    ],
     "Toggle &Breakpoint": [
       "Toggle &Breakpoint",
       "중단점 설정/해제(&B)"
@@ -225,6 +233,10 @@
       "&Debug",
       "디버그(&D)"
     ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "실행 속도(&S)"
+    ],
     "&Help": [
       "&Help",
       "도움말(&H)"
@@ -244,6 +256,22 @@
     "System": [
       "System",
       "시스템"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "최고 속도"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "느리게(노드당 100 ms)"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "더 느리게(노드당 300 ms)"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "한 단계씩 (노드당 1초)"
     ],
     "&Undo {what}": [
       "&Undo {what}",
@@ -284,6 +312,18 @@
     "Nothing to run: the application has no event to start": [
       "Nothing to run: the application has no event to start",
       "실행할 것이 없습니다: 애플리케이션에 시작 이벤트가 없습니다"
+    ],
+    "Run:": [
+      "Run:",
+      "실행:"
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "실행이 시작하는 시작 구성"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "시작 구성은 스크립트와 함께 저장됩니다"
     ],
     "&Continue": [
       "&Continue",
@@ -1068,6 +1108,46 @@
     "{what}: {count} found": [
       "{what}: {count} found",
       "{what}: {count}개 찾음"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "Main의 인수, 한 줄에 하나씩"
+    ],
+    "Working directory": [
+      "Working directory",
+      "작업 디렉터리"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "스크립트 폴더 기준 상대 경로; 비우면 변경 없음"
+    ],
+    "Environment": [
+      "Environment",
+      "환경 변수"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "NAME=값, 한 줄에 하나씩: 스크립트가 실행되는 동안 설정됩니다"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "플러그인 폴더"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "플러그인 폴더, 스크립트 폴더 기준 상대 경로, 한 줄에 하나씩"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "단계 지연 (ms)"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "실행 중 두 노드 사이의 지연: 연결을 지켜보기 위한 느린 동작"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "실행 구성"
     ],
     "Add a function": [
       "Add a function",
