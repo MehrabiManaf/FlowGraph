@@ -549,6 +549,10 @@
       "Reroute nodes are only for links of data",
       "Los nodos de redirección solo son para enlaces de datos"
     ],
+    "Paused here": [
+      "Paused here",
+      "En pausa aquí"
+    ],
     "No node fits that pin": [
       "No node fits that pin",
       "Ningún nodo encaja con ese pin"

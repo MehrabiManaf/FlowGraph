@@ -22,7 +22,10 @@ foreach(catalog ${FGGLED_NODE_CATALOGS})
     list(APPEND FGGLED_CATALOG_LIST "nodes=${catalog}")
 endforeach()
 # the icons of its toolbar and menus: the Qt editor's (Editor/Resources/Icons), compiled in the same way (Source/Icons.cpp)
-set(FGGLED_ICONS new open save continue interrupt stop step-over step-into step-out configure)
+set(FGGLED_ICONS new open save save-as exit undo redo cut copy paste duplicate delete select-all comment edit-comment
+    continue interrupt stop step-over step-into step-out configure breakpoint-add find find-references function rename
+    open-function goto add reroute break-links variable-get variable-set watch-add watch-range watch-edit watch-remove
+    watch-clear load-more clear)
 set(FGGLED_ICON_FILES "")
 foreach(icon ${FGGLED_ICONS})
     list(APPEND FGGLED_CATALOG_LIST "icon=${CMAKE_SOURCE_DIR}/Editor/Resources/Icons/${icon}.svg")

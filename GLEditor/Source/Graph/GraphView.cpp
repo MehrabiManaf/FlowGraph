@@ -758,6 +758,11 @@ void GraphView::paintUnderItems(glw::PaintContext& context) {
     const glw::Rect shown = visibleArea();
     // every link under the nodes (paintUnderItems), the links of data under those of execution: two passes, the link being
     // dragged in the pass of its kind, last
+    // where a paused run is: a glow around its node, under it (its banner is over the nodes)
+    if (const NodeView* paused = nodeView(debugNode_)) {
+        const glw::Rect r = itemRect(*paused);
+        context.painter.drawShadow(r.inflated(6), 10, 18, {colors.debug.r, colors.debug.g, colors.debug.b, 0.85f});
+    }
     for (const bool execPass : {false, true}) {
         for (const fg::Connection& c : graph->connections) {
             const std::optional<Bezier> bz = linkCurve(c);
@@ -918,8 +923,8 @@ void GraphView::showNode(fg::NodeId id) {
     if (!view)
         return;
     const glw::Rect r = itemRect(*view);
-    if (!visibleArea().inflated(-40).contains(r.center()))
-        centerOn(r.center());
+    if (size().width <= 0 || size().height <= 0 || !visibleArea().inflated(-40).contains(r.center()))
+        centerOn(r.center(), true);         // eased there; a view not laid out yet: when it is
 }
 
 void GraphView::paintOverItems(glw::PaintContext& context) {
@@ -938,6 +943,35 @@ void GraphView::paintOverItems(glw::PaintContext& context) {
             continue;
         p.fillRoundedRect(bubble, 4, colors.bubble);
         context.drawText(text, {bubble.x + 6, bubble.y + 2}, colors.bubbleText);
+    }
+    // where a paused run is: a banner over its node (over its comment, when it has one), pointing at it - as big on the
+    // screen whatever the zoom (the canvas's dips divided by it), to be seen from afar
+    if (const NodeView* paused = nodeView(debugNode_)) {
+        const float k = 1 / std::max(zoom(), 0.25f);
+        const glw::Point at = itemPosition(*paused);
+        const glw::Rect node = itemRect(*paused);
+        float top = at.y;
+        if (const std::string& comment = paused->compiled().comment; !comment.empty()) {
+            const glw::text::TextLayout text(comment, glw::text::TextStyle{{&context.ui.fonts.defaultFont()}, context.ui.theme.fontSize});
+            top -= text.size().height + 10;
+        }
+        const glw::text::TextLayout label(context.ui.translator.resolve(tr("Paused here")),
+                                          glw::text::TextStyle{{&context.ui.fonts.defaultFont()}, (context.ui.theme.fontSize + 1) * k});
+        const glw::Size s = label.size();
+        const float w = s.width + 34 * k, h = s.height + 10 * k;
+        const glw::Rect banner{node.x + (node.width - w) / 2, top - h - 12 * k, w, h};
+        p.drawShadow({banner.x, banner.y + 2 * k, banner.width, banner.height}, h / 2, 8 * k, {0, 0, 0, 0.45f});
+        p.fillRoundedRect(banner, h / 2, colors.debug);
+        // its arrow down to the node
+        const float tip = banner.x + banner.width / 2;
+        const glw::Point arrow[] = {{tip - 7 * k, banner.bottom() - 0.5f * k}, {tip + 7 * k, banner.bottom() - 0.5f * k}, {tip, banner.bottom() + 8 * k}};
+        p.fillConvexPolygon(arrow, colors.debug);
+        // a pause mark, then the words
+        const glw::Color ink{0.08f, 0.06f, 0.02f, 1};
+        const float mark = banner.x + 12 * k, middle = banner.y + h / 2;
+        p.fillRoundedRect({mark, middle - 5 * k, 3 * k, 10 * k}, k, ink);
+        p.fillRoundedRect({mark + 5 * k, middle - 5 * k, 3 * k, 10 * k}, k, ink);
+        context.drawText(label, {banner.x + 24 * k, banner.y + (h - s.height) / 2 + label.opticalOffset()}, ink);
     }
     // the rectangle that selects
     if (band_) {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The graph's search of nodes to add, its menus of the right button, the boxes its values are typed in, its dialogs.
 #include "Graph/CommentView.hpp"
+#include "Icons.hpp"
 #include "Graph/GraphStyle.hpp"
 #include "Graph/GraphView.hpp"
 #include "Graph/NodeView.hpp"
@@ -173,9 +174,10 @@ glw::DropAction GraphView::onDrop(const glw::DragEvent& event) {
         make(true);
     else if (glw::UiRoot* r = root())
         r->defer([this, make, name, shown = event.position] {
-            glw::showContextMenu(*this, shown,
-                                 {{.text = tr("Get {name}").arg("name", name), .onTriggered = [make] { make(false); }},
-                                  {.text = tr("Set {name}").arg("name", name), .onTriggered = [make] { make(true); }}});
+            std::vector<glw::MenuItem> items{{.text = tr("Get {name}").arg("name", name), .onTriggered = [make] { make(false); }},
+                                             {.text = tr("Set {name}").arg("name", name), .onTriggered = [make] { make(true); }}};
+            giveIcons(items);
+            glw::showContextMenu(*this, shown, std::move(items));
         });
     return glw::DropAction::Copy;
 }
@@ -230,13 +232,14 @@ void GraphView::contextMenu(glw::Point at) {
             showSelection();
             selectionChanged();
             const fg::Connection c = *link;
-            glw::showContextMenu(*this, fromCanvas(at),
-                                 {{.text = tr("Delete Link"), .onTriggered = [this, c] { edits_.remove({}, {c}, {}, words(tr("Delete link"))); },
-                                   .shortcut = tr("Del")},
-                                  {.text = tr("Add Reroute Node"), .onTriggered = [this, c, at] {
-                                       if (!edits_.insertReroute(c, at.x - 18, at.y - 9, words(tr("Add reroute"))))
-                                           tell(tr("Reroute nodes are only for links of data"));
-                                   }}});
+            std::vector<glw::MenuItem> items{
+                {.text = tr("Delete Link"), .onTriggered = [this, c] { edits_.remove({}, {c}, {}, words(tr("Delete link"))); }, .shortcut = tr("Del")},
+                {.text = tr("Add Reroute Node"), .onTriggered = [this, c, at] {
+                     if (!edits_.insertReroute(c, at.x - 18, at.y - 9, words(tr("Add reroute"))))
+                         tell(tr("Reroute nodes are only for links of data"));
+                 }}};
+            giveIcons(items);
+            glw::showContextMenu(*this, fromCanvas(at), std::move(items));
             return;
         }
     }
@@ -309,6 +312,7 @@ void GraphView::contextMenu(glw::Point at) {
                      }, .enabled = pasteable});
     items.push_back(glw::MenuItem::separatorItem());
     items.push_back({.text = tr("Frame"), .onTriggered = [this] { frameSelection(); }, .shortcut = tr("F")});
+    giveIcons(items);
     glw::showContextMenu(*this, fromCanvas(at), std::move(items));
 }
 

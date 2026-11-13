@@ -549,6 +549,10 @@
       "Reroute nodes are only for links of data",
       "Les nœuds de réacheminement ne servent qu'aux liens de données"
     ],
+    "Paused here": [
+      "Paused here",
+      "En pause ici"
+    ],
     "No node fits that pin": [
       "No node fits that pin",
       "Aucun nœud ne convient à cette broche"

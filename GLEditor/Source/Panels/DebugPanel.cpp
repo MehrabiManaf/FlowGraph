@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Panels/DebugPanel.hpp"
+#include "Icons.hpp"
 
 #include "NodeTexts.hpp"
 #include "Panels/InfoPanels.hpp"
@@ -701,8 +702,10 @@ void DebugPanel::menu(ValueModel& model, std::uint64_t nodeId, glw::Point at, gl
                              refreshWatches();
                          }});
     }
-    if (!items.empty())
+    if (!items.empty()) {
+        giveIcons(items);
         glw::showContextMenu(from, at, std::move(items));
+    }
 }
 
 } // namespace fged::gl

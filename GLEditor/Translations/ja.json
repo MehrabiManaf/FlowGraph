@@ -549,6 +549,10 @@
       "Reroute nodes are only for links of data",
       "リルート ノードはデータのリンク専用です"
     ],
+    "Paused here": [
+      "Paused here",
+      "ここで一時停止"
+    ],
     "No node fits that pin": [
       "No node fits that pin",
       "そのピンに合うノードはありません"

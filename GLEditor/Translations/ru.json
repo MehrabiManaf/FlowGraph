@@ -549,6 +549,10 @@
       "Reroute nodes are only for links of data",
       "Узлы перенаправления — только для связей данных"
     ],
+    "Paused here": [
+      "Paused here",
+      "Пауза здесь"
+    ],
     "No node fits that pin": [
       "No node fits that pin",
       "Нет узла, подходящего к этому выводу"

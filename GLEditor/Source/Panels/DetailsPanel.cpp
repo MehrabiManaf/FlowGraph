@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Panels/DetailsPanel.hpp"
+#include "Icons.hpp"
 
 #include "Graph/GraphStyle.hpp"
 #include "NodeTexts.hpp"
@@ -1554,6 +1555,7 @@ void DetailsPanel::tableMenu(Table& t, std::size_t row, glw::Point at) {
                          }
                          edited(true);
                      })});
+    giveIcons(items);
     glw::showContextMenu(*t.view, at, std::move(items));
 }
 

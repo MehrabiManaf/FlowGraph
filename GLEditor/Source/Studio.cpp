@@ -89,6 +89,17 @@ glw::LocalizedText styleTitle(glw::ThemeStyle style) {
     return {};
 }
 
+// A panel's content a little inside its stack, as the other panels' are (their padding): what fills all it is given (a
+// graph, a log) shows on the stack's body - in the styles of reliefs its slab - not over it.
+std::unique_ptr<glw::Widget> inset(std::unique_ptr<glw::Widget> content) {
+    auto box = std::make_unique<glw::Widget>();
+    box->setLayout(std::make_unique<glw::StackLayout>(glw::Orientation::Vertical));
+    box->setPadding(glw::Insets::all(6));
+    content->setStretch(1);
+    box->add(std::move(content));
+    return box;
+}
+
 std::string fileName(const std::string& path) {
     const std::filesystem::path p(std::u8string(path.begin(), path.end()));
     const std::u8string name = p.filename().u8string();
@@ -328,7 +339,7 @@ struct Studio::Impl {
         log = output.get();
         log->setReadOnly(true);
         log->setLineNumbers(false);
-        area->addPanel({.id = "output", .title = tr("Output Log"), .content = std::move(output), .closable = false}, center,
+        area->addPanel({.id = "output", .title = tr("Output Log"), .content = inset(std::move(output)), .closable = false}, center,
                        glw::DockSide::Bottom, 0.24f);
         // what the compiler says, what was found: beside it
         auto results = std::make_unique<CompileResultsPanel>(doc);
@@ -367,7 +378,7 @@ struct Studio::Impl {
         std::vector<std::pair<glw::DockPanel, const char*>> added;
         added.emplace_back(glw::DockPanel{.id = "compileResults", .title = tr("Compile Results"), .content = std::move(results), .closable = false}, "output");
         added.emplace_back(glw::DockPanel{.id = "findResults", .title = tr("Find Results"), .content = std::move(findPanel), .closable = false}, "output");
-        added.emplace_back(glw::DockPanel{.id = "debugger", .title = tr("Debugger"), .content = std::move(debugPanel), .closable = false}, "details");
+        added.emplace_back(glw::DockPanel{.id = "debugger", .title = tr("Debugger"), .content = inset(std::move(debugPanel)), .closable = false}, "details");
         const std::string layout = settings.string("layout");
         const std::vector<std::string> known = glw::DockArea::panelsIn(layout);
         std::vector<std::pair<glw::DockPanel, const char*>> later;
@@ -481,12 +492,17 @@ struct Studio::Impl {
         configureAction->setToolTip(tr("Edit the launch configurations of this script"));
         for (auto [a, icon] : {std::pair{newAction, "new"}, {openAction, "open"}, {saveAction, "save"}, {runAction, "continue"},
                                {pauseAction, "interrupt"}, {stopAction, "stop"}, {stepOverAction, "step-over"},
-                               {stepIntoAction, "step-into"}, {stepOutAction, "step-out"}, {configureAction, "configure"}})
+                               {stepIntoAction, "step-into"}, {stepOutAction, "step-out"}, {configureAction, "configure"},
+                               {saveAsAction, "save-as"}, {quitAction, "exit"}, {undoAction, "undo"}, {redoAction, "redo"},
+                               {cutAction, "cut"}, {copyAction, "copy"}, {pasteAction, "paste"}, {duplicateAction, "duplicate"},
+                               {selectAllAction, "select-all"}, {findAction, "find"}, {findReferencesAction, "find-references"},
+                               {collapseAction, "function"}})
             a->setIcon(studioIcon(icon));
         breakpointAction = action(tr("Toggle &Breakpoint"), [this] {
             if (GraphView* g = currentGraph())
                 g->toggleBreakpoints();
         }, {Key::F9});
+        breakpointAction->setIcon(studioIcon("breakpoint-add"));
         showRunState(core::RunState::Idle);
         showUndoState();
     }
@@ -583,6 +599,7 @@ struct Studio::Impl {
         };
         if (!menuBar)
             menuBar = &window->setMenuBar(std::make_unique<glw::MenuBar>());
+        giveIcons(menus);
         menuBar->setMenus(std::move(menus));
     }
     glw::MenuBar* menuBar = nullptr;
@@ -715,7 +732,7 @@ struct Studio::Impl {
             std::unique_ptr<GraphView> view = makeGraphView(graph);
             views[graph] = view.get();
             // a function's tab says so, as the Qt editor's
-            area->addPanel({.id = id, .title = tabTitle(*g), .content = std::move(view)},
+            area->addPanel({.id = id, .title = tabTitle(*g), .content = inset(std::move(view))},
                            documents, glw::DockSide::Center);
         }
         if (glw::DockTabs* tabs = area->tabsOf(id))

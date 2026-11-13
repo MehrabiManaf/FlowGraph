@@ -549,6 +549,10 @@
       "Reroute nodes are only for links of data",
       "Umleitungsknoten gibt es nur für Datenverbindungen"
     ],
+    "Paused here": [
+      "Paused here",
+      "Hier angehalten"
+    ],
     "No node fits that pin": [
       "No node fits that pin",
       "Kein Knoten passt zu diesem Pin"

@@ -549,6 +549,10 @@
       "Reroute nodes are only for links of data",
       "گره تغییر مسیر فقط برای اتصال‌های داده است"
     ],
+    "Paused here": [
+      "Paused here",
+      "اینجا متوقف است"
+    ],
     "No node fits that pin": [
       "No node fits that pin",
       "هیچ گرهی با این پایه سازگار نیست"

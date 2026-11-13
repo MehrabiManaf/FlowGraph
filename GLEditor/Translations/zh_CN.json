@@ -549,6 +549,10 @@
       "Reroute nodes are only for links of data",
       "转接节点仅适用于数据连线"
     ],
+    "Paused here": [
+      "Paused here",
+      "在此暂停"
+    ],
     "No node fits that pin": [
       "No node fits that pin",
       "没有适合该引脚的节点"

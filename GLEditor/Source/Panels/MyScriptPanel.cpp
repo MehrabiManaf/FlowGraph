@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Panels/MyScriptPanel.hpp"
+#include "Icons.hpp"
 
 #include "Graph/GraphStyle.hpp"
 #include "NodeTexts.hpp"
@@ -115,9 +116,29 @@ protected:
                 p.fillCircle({x + 4, size().height / 2}, 3, missing_ ? glw::Color{0.9f, 0.3f, 0.3f, 1} : headerColor(fg::NodeStyle::Event));
             x += 14;
         }
-        if (!layout_)
-            layout_.emplace(text_, glw::text::TextStyle{{&context.ui.fonts.defaultFont()}, detail_ ? t.fontSize - 1 : t.fontSize});
-        p.pushClip({x, 0, std::max(0.0f, size().width - x - 4), size().height});
+        const glw::text::TextStyle style{{&context.ui.fonts.defaultFont()}, detail_ ? t.fontSize - 1 : t.fontSize};
+        const float room = std::max(0.0f, size().width - x - 4);
+        if (!layout_ || laidFor_ != room) {
+            layout_.emplace(text_, style);
+            laidFor_ = room;
+            // narrower than its text: as much of it as fits, then "..."
+            if (layout_->size().width > room) {
+                std::vector<std::size_t> ends;           // where each character ends (UTF-8)
+                for (std::size_t i = 1; i <= text_.size(); ++i)
+                    if (i == text_.size() || (static_cast<unsigned char>(text_[i]) & 0xC0) != 0x80)
+                        ends.push_back(i);
+                std::size_t low = 0, high = ends.size();
+                while (low < high) {
+                    const std::size_t mid = (low + high + 1) / 2;
+                    if (glw::text::TextLayout(text_.substr(0, ends[mid - 1]) + ellipsis, style).size().width <= room)
+                        low = mid;
+                    else
+                        high = mid - 1;
+                }
+                layout_.emplace((low > 0 ? text_.substr(0, ends[low - 1]) : std::string()) + ellipsis, style);
+            }
+        }
+        p.pushClip({x, 0, room, size().height});
         context.drawText(*layout_, {x, (size().height - layout_->size().height) / 2 + layout_->opticalOffset()},
                          detail_ || missing_ ? t.palette.mutedText : t.palette.text);
         p.popClip();
@@ -128,6 +149,8 @@ private:
     std::optional<glw::Color> color_;
     bool detail_ = false, missing_ = false, event_ = false;
     std::optional<glw::text::TextLayout> layout_;
+    float laidFor_ = -1;                    // the room it was laid out (cut) for
+    static constexpr const char* ellipsis = "\u2026";
 };
 
 } // namespace
@@ -264,10 +287,20 @@ MyScriptPanel::MyScriptPanel(core::Document& doc) : doc_(doc), edits_(doc) {
         t.setRowHeight(rowHeight);
         t.setSelectionMode(glw::SelectionMode::Single);
         t.setEditTriggers(glw::EditTriggers::F2);           // a double click opens it
-        // the name all the room what it is leaves: that as wide as the widest (measured again as they change)
-        t.setColumnSizing(0, glw::ColumnSizing::Stretch);
-        if (details)
-            t.setColumnSizing(1, glw::ColumnSizing::FitContent);
+        // a variable's: the name at least as wide as the widest (rebuild) and all the room its type leaves, the type as
+        // wide as the widest (measured again as they change); a struct's: the name as wide as it needs, its fields all the rest (as the Details' tables). What does
+        // not fit gives way - the type, the name - cut with "...", before the table would scroll across
+        if (member == core::Member::Struct) {
+            t.setColumnSizing(0, glw::ColumnSizing::FitContent);
+            t.setColumnYields(0, true);
+            t.setColumnSizing(1, glw::ColumnSizing::Stretch);
+        } else {
+            t.setColumnSizing(0, glw::ColumnSizing::Stretch);
+            if (details) {
+                t.setColumnSizing(1, glw::ColumnSizing::FitContent);
+                t.setColumnYields(1, true);
+            }
+        }
         t.setOnCurrentChanged([this, raw](std::optional<std::size_t>) { selected(*raw); });
         t.setOnActivated([this, raw](std::size_t row) { activated(*raw, row); });
         s->table = &t;
@@ -417,6 +450,17 @@ void MyScriptPanel::rebuild() {
     sectionOf(core::Member::Variable)->model->set(std::move(variables));
     sectionOf(core::Member::Local)->model->set(std::move(locals));
     sectionOf(core::Member::Struct)->model->set(std::move(structs));
+    // a variable's name: at least as wide as the widest (as the Details' tables), its type giving way first
+    if (const glw::UiContext* ui = context())
+        for (core::Member member : {core::Member::Variable, core::Member::Local}) {
+            Section& section = *sectionOf(member);
+            float widest = glw::TableView::minimumColumnWidth;
+            for (const Entry& e : section.model->rows) {
+                const glw::text::TextLayout text(e.name, glw::text::TextStyle{{&ui->fonts.defaultFont()}, ui->theme.fontSize});
+                widest = std::max(widest, std::ceil(text.size().width) + 28);       // (a cell's: its color's room, its margins)
+            }
+            section.table->setColumnWidth(0, widest);
+        }
     Section& localSection = *sectionOf(core::Member::Local);
     localSection.panel->setVisible(hasLocals);
     if (hasLocals)
@@ -565,6 +609,7 @@ void MyScriptPanel::menu(Section& section, std::size_t row, glw::Point at) {
                                  onFindReferences_(member, entry.owner, entry.name);
                          }, .shortcut = tr("Shift+F12")});
     }
+    giveIcons(items);
     glw::showContextMenu(*section.table, at, std::move(items));
 }
 
