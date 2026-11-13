@@ -18,6 +18,7 @@
 
 namespace glw {
 class Application;
+class Window;
 }
 
 namespace fged::gl {
@@ -46,6 +47,8 @@ public:
     Studio& operator=(const Studio&) = delete;
 
     core::Document& document();
+    // Its window (open as long as it is).
+    glw::Window& window();
     // A new script, at once (what was not saved is lost: the menu asks first).
     void newScript();
     // The script of `path` (UTF-8), at once; false, and a message in the window, when it cannot be read.

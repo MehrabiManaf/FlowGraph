@@ -12,13 +12,13 @@ MIT (LICENSES/MIT.txt) - the runtime, usable in any application, closed source i
   Examples/MakeExamples.cpp, Examples/Scripts/
   Tests/ (except Tests/EditorTests.cpp), Tools/, cmake/, the build files
 
-GPL-3.0-only (LICENSES/GPL-3.0.txt) - the editor, because it is built on KDDockWidgets, which is licensed
-under GPL-2.0-only or GPL-3.0-only:
-  Editor/                  FlowGraphEditor (the ScriptEditor library), its icons and resources
-  Apps/Studio/             flowstudio
-  GLEditor/                FlowGraphGLEditor, the editor on GLWidgets (its successor)
-  Apps/StudioNext/         flowstudio-next, FlowGraph Studio on GLWidgets while it grows
-  Examples/Embedded/       the example of an application that embeds the editor
+GPL-3.0-only (LICENSES/GPL-3.0.txt) - the editors (the Qt editor because it is built on KDDockWidgets, which
+is licensed under GPL-2.0-only or GPL-3.0-only):
+  GLEditor/                FlowGraphGLEditor, the editor on GLWidgets
+  Apps/Studio/             flowstudio, FlowGraph Studio
+  Editor/                  FlowGraphEditor (the ScriptEditor library, on Qt), its icons and resources
+  Examples/QtStudio/       flowstudio-qt, FlowGraph Studio on the Qt editor library
+  Examples/Embedded/       the example of an application that embeds the Qt editor
   Tests/EditorTests.cpp
 
 An application that embeds the editor is a work based on GPL-3.0 code; an application that only uses the
@@ -28,9 +28,9 @@ Third-party components
   KDDockWidgets   ThirdParty/KDDockWidgets, GPL-2.0-only or GPL-3.0-only (its LICENSE.txt and LICENSES/);
                   linked into the editor only
   GLWidgets       ThirdParty/GLWidgets, MIT (its LICENSE), with what it builds in (SDL3, FreeType, HarfBuzz,
-                  SheenBidi, libunibreak, ThorVG, the Vazirmatn font: their licenses in its folder); linked into
-                  the GLWidgets editor only
-  Qt              LGPL-3.0 (LICENSES/LGPL-3.0.txt, which supplements LICENSES/GPL-3.0.txt); used by the editor
+                  SheenBidi, libunibreak, ThorVG, the Vazirmatn font: their licenses in its folder and, in the
+                  packages, in share/doc/FlowGraph/GLWidgets); linked into flowstudio only
+  Qt              LGPL-3.0 (LICENSES/LGPL-3.0.txt, which supplements LICENSES/GPL-3.0.txt); used by the Qt editor
                   only, as shared libraries
 The runtime uses only the C++ standard library and the operating system. Its calendar arithmetic
 (Core/Source/BuiltinsTime.cpp) follows the date algorithms Howard Hinnant published and donated to the public

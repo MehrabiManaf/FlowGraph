@@ -41,7 +41,7 @@ target_link_libraries(FlowGraphEditor PRIVATE $<BUILD_INTERFACE:FlowGraphEditorC
 file(GLOB FGED_TS_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Translations/flowgraph_*.ts)
 qt_add_lupdate(TS_FILES ${FGED_TS_FILES}
     SOURCE_TARGETS FlowGraphEditor
-    SOURCES ${CMAKE_SOURCE_DIR}/Apps/Studio/main.cpp ${CMAKE_SOURCE_DIR}/Apps/Studio/StandardEditorHost.cpp ${CMAKE_SOURCE_DIR}/Apps/Studio/StandardEditorHost.hpp
+    SOURCES ${CMAKE_SOURCE_DIR}/Examples/QtStudio/main.cpp ${CMAKE_SOURCE_DIR}/Examples/QtStudio/StandardEditorHost.cpp ${CMAKE_SOURCE_DIR}/Examples/QtStudio/StandardEditorHost.hpp
     LUPDATE_TARGET flowgraph_lupdate NO_GLOBAL_TARGET
     OPTIONS -no-obsolete -locations none)
 qt_add_lrelease(TS_FILES ${FGED_TS_FILES} QM_FILES_OUTPUT_VARIABLE FGED_QM_FILES LRELEASE_TARGET flowgraph_lrelease NO_GLOBAL_TARGET)
@@ -55,8 +55,8 @@ endforeach()
 qt_add_resources(FlowGraphEditor flowgraph_node_translations PREFIX /i18n FILES ${FG_NODE_CATALOGS})
 
 if(FG_BUILD_TESTS)
-    qt_add_executable(FlowGraphEditorTests ${CMAKE_SOURCE_DIR}/Tests/EditorTests.cpp ${CMAKE_SOURCE_DIR}/Apps/Studio/StandardEditorHost.cpp)
-    target_include_directories(FlowGraphEditorTests PRIVATE Source ${CMAKE_SOURCE_DIR}/Apps/Studio)
+    qt_add_executable(FlowGraphEditorTests ${CMAKE_SOURCE_DIR}/Tests/EditorTests.cpp ${CMAKE_SOURCE_DIR}/Examples/QtStudio/StandardEditorHost.cpp)
+    target_include_directories(FlowGraphEditorTests PRIVATE Source ${CMAKE_SOURCE_DIR}/Examples/QtStudio)
     if(FG_SHARED)
         # The tests reach into the editor's internals (only ScriptEditor.hpp is exported), so they compile the editor sources
         # themselves instead of using the DLL; for them the editor's API is not imported from it.

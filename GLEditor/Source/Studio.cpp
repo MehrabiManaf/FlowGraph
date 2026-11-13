@@ -1175,8 +1175,7 @@ struct Studio::Impl {
 
     void about() {
         glw::showMessage(*area, tr("About {application}").arg("application", options.applicationName),
-                         tr("The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets. A preview: it "
-                            "takes the place of the Qt editor once it does all that one does."),
+                         tr("The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets."),
                          {tr("Close")});
     }
 };
@@ -1193,6 +1192,10 @@ Studio::~Studio() = default;
 
 core::Document& Studio::document() {
     return impl_->doc;
+}
+
+glw::Window& Studio::window() {
+    return *impl_->window;
 }
 
 void Studio::newScript() {

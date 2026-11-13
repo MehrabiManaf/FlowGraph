@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Panels/DebugPanel.hpp"
+#include "Panels/Elide.hpp"
 #include "Icons.hpp"
 
 #include "NodeTexts.hpp"
@@ -194,9 +195,14 @@ protected:
     }
     void paint(glw::PaintContext& context) override {
         const glw::Theme& t = context.ui.theme;
-        if (!layout_)
-            layout_.emplace(context.ui.translator.resolve(text_), glw::text::TextStyle{{&context.ui.fonts.defaultFont()}, t.fontSize});
-        context.painter.pushClip({4, 0, std::max(0.0f, size().width - 8), size().height});
+        // narrower than its text: cut with "..."
+        const float room = std::max(0.0f, size().width - 8);
+        if (!layout_ || laidFor_ != room) {
+            layout_.emplace(elidedLayout(context.ui.translator.resolve(text_),
+                                         glw::text::TextStyle{{&context.ui.fonts.defaultFont()}, t.fontSize}, room));
+            laidFor_ = room;
+        }
+        context.painter.pushClip({4, 0, room, size().height});
         context.drawText(*layout_, {4, (size().height - layout_->size().height) / 2 + layout_->opticalOffset()},
                          color_ ? *color_ : muted_ ? t.palette.mutedText : t.palette.text);
         context.painter.popClip();
@@ -207,6 +213,7 @@ private:
     std::optional<glw::Color> color_;
     bool muted_ = false;
     std::optional<glw::text::TextLayout> layout_;
+    float laidFor_ = -1;                    // the room it was laid out (cut) for
 };
 
 class ValueDelegate final : public glw::TreeDelegate {
@@ -275,10 +282,14 @@ std::unique_ptr<glw::TreeView> valueTree(const std::shared_ptr<ValueModel>& mode
     tree->setDelegate(std::make_unique<ValueDelegate>(*model));
     tree->setRowHeight(rowHeight);
     tree->setSelectionMode(glw::SelectionMode::Single);
-    // the values all the room the names and the types leave (theirs as set: a drag of a column's edge changes it)
-    tree->setColumnWidth(0, 120);
+    // the names and the types as wide as they need, the values all the room they leave (at least 80); narrower than all
+    // that, the types give way, then the names (cut with "...") before the tree scrolls across
+    tree->setColumnSizing(0, glw::ColumnSizing::FitContent);
+    tree->setColumnYields(0, true);
     tree->setColumnSizing(1, glw::ColumnSizing::Stretch);
-    tree->setColumnWidth(2, 70);
+    tree->setColumnWidth(1, 80);
+    tree->setColumnSizing(2, glw::ColumnSizing::FitContent);
+    tree->setColumnYields(2, true);
     return tree;
 }
 

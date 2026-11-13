@@ -469,9 +469,9 @@
       "About {application}",
       "{application} について"
     ],
-    "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets. A preview: it takes the place of the Qt editor once it does all that one does.": [
-      "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets. A preview: it takes the place of the Qt editor once it does all that one does.",
-      "GLWidgets で描画された、FlowGraph 標準アプリケーションのエディターとデバッガーです。プレビュー版: Qt エディターのすべての機能を備えた時点で置き換わります。"
+    "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets.": [
+      "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets.",
+      "GLWidgets で描画された、FlowGraph 標準アプリケーションのエディターとデバッガーです。"
     ],
     "The events of the application and the entry of a function cannot be deleted": [
       "The events of the application and the entry of a function cannot be deleted",

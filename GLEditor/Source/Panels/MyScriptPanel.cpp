@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Abdolmanaf Mehrabi Sisakht
 // SPDX-License-Identifier: GPL-3.0-only
 #include "Panels/MyScriptPanel.hpp"
+#include "Panels/Elide.hpp"
 #include "Icons.hpp"
 
 #include "Graph/GraphStyle.hpp"
@@ -119,24 +120,8 @@ protected:
         const glw::text::TextStyle style{{&context.ui.fonts.defaultFont()}, detail_ ? t.fontSize - 1 : t.fontSize};
         const float room = std::max(0.0f, size().width - x - 4);
         if (!layout_ || laidFor_ != room) {
-            layout_.emplace(text_, style);
+            layout_.emplace(elidedLayout(text_, style, room));
             laidFor_ = room;
-            // narrower than its text: as much of it as fits, then "..."
-            if (layout_->size().width > room) {
-                std::vector<std::size_t> ends;           // where each character ends (UTF-8)
-                for (std::size_t i = 1; i <= text_.size(); ++i)
-                    if (i == text_.size() || (static_cast<unsigned char>(text_[i]) & 0xC0) != 0x80)
-                        ends.push_back(i);
-                std::size_t low = 0, high = ends.size();
-                while (low < high) {
-                    const std::size_t mid = (low + high + 1) / 2;
-                    if (glw::text::TextLayout(text_.substr(0, ends[mid - 1]) + ellipsis, style).size().width <= room)
-                        low = mid;
-                    else
-                        high = mid - 1;
-                }
-                layout_.emplace((low > 0 ? text_.substr(0, ends[low - 1]) : std::string()) + ellipsis, style);
-            }
         }
         p.pushClip({x, 0, room, size().height});
         context.drawText(*layout_, {x, (size().height - layout_->size().height) / 2 + layout_->opticalOffset()},
@@ -150,7 +135,6 @@ private:
     bool detail_ = false, missing_ = false, event_ = false;
     std::optional<glw::text::TextLayout> layout_;
     float laidFor_ = -1;                    // the room it was laid out (cut) for
-    static constexpr const char* ellipsis = "\u2026";
 };
 
 } // namespace

@@ -7,4 +7,5 @@ It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
 more details: LICENSES/GPL-3.0.txt at the root of the source tree, or <https://www.gnu.org/licenses/>.
 
-It uses GLWidgets (MIT, ThirdParty/GLWidgets), and none of Qt or KDDockWidgets.
+It uses KDDockWidgets (GPL-2.0-only or GPL-3.0-only, ThirdParty/KDDockWidgets) and Qt (LGPL-3.0, see
+LICENSES/LGPL-3.0.txt).

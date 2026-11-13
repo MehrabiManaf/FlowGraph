@@ -1,6 +1,7 @@
 # Embedding FlowGraph
 
-How to run scripts in your application, give them your classes, functions and events, and embed the script editor.
+How to run scripts in your application, give them your classes, functions and events, and embed the script editor (the Qt
+editor library, `FlowGraph::ScriptEditor`).
 
 ## Building against FlowGraph
 
@@ -13,8 +14,10 @@ A host project then only needs
 find_package(FlowGraph 0.5 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
 target_link_libraries(myapp PRIVATE FlowGraph::Core FlowGraph::ScriptEditor)
 ```
-with `CMAKE_PREFIX_PATH` pointing at the prefix (and at Qt). The editor is installed when it is built as a shared library
-(`FG_SHARED`, the default).
+with `CMAKE_PREFIX_PATH` pointing at the prefix (and at Qt). The editor library is built when Qt 6 is found
+(`FG_BUILD_EDITOR`: `AUTO`, `ON` or `OFF`) and installed when it is built as a shared library (`FG_SHARED`, the default). The SDK
+in the release packages is the runtime's only: an application that embeds the editor builds FlowGraph from the sources, with
+the Qt it uses itself.
 
 ## The runtime
 
@@ -153,6 +156,10 @@ debugger holds the others up.
 
 ## Embedding the script editor
 
+The editor to embed is the Qt editor library, `FlowGraph::ScriptEditor` (`Editor/`, Qt 6 widgets): a Qt application creates it
+and gives it an `EditorHost`. It does what FlowGraph Studio does - `flowstudio` itself is built on GLWidgets (`GLEditor/`), which
+is not offered as a library.
+
 ```cpp
 class MyHost : public fged::EditorHost {
     fg::Runtime& runtime() override { return rt_; }
@@ -168,8 +175,8 @@ editor.open("level.flow"); editor.show();
 ```
 By default every event and function of the script can be run and the editor asks for the arguments. Scripts run on a
 worker thread (`AsyncExecutor`): the editor never blocks, even when a script computes for a long time or a native
-function blocks; editing the script stops the run. `Apps/Studio` (`flowstudio`) and [`Examples/Embedded`](../Examples/Embedded)
-are complete hosts.
+function blocks; editing the script stops the run. [`Examples/QtStudio`](../Examples/QtStudio) (`flowstudio-qt`, FlowGraph
+Studio on this library) and [`Examples/Embedded`](../Examples/Embedded) are complete hosts.
 
 **There is one `ScriptEditor` per program**: creating a second one while the first exists throws `std::logic_error`
 (`ScriptEditor::instance()` is the one that exists). An application with several things to edit lets the same editor edit them one
@@ -177,7 +184,7 @@ after the other, `editor.edit(script, "title")`.
 
 The editor has two modes, chosen by `EditorHost::mode()`:
 
-* `EditorMode::Standalone` (the default; flowstudio): the user works with files (New, Open, Save, Save As) and *Run* starts an
+* `EditorMode::Standalone` (the default; flowstudio-qt): the user works with files (New, Open, Save, Save As) and *Run* starts an
   event or function of the script, chosen in the toolbar (launch configurations).
 * `EditorMode::Embedded`: the application owns the scripts and runs them itself (it raises the events), so the editor has no files and
   nothing to launch. The application hands a script over with `ScriptEditor::edit()`. **Only a script that fits the application is

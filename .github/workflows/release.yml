@@ -2,9 +2,12 @@ name: Release
 
 # A release is made by pushing a tag:   git tag v0.3.0 && git push origin v0.3.0
 # The tag must match project(FlowGraph VERSION ...) in CMakeLists.txt. Windows and Linux are built and tested, packed with what they
-# need to run (Qt included) and attached to a DRAFT release: check its notes on GitHub, then press Publish.
+# need to run and attached to a DRAFT release: check its notes on GitHub, then press Publish.
 # Run it by hand (Actions > Release > Run workflow) to build the packages without making a release: they are kept as artifacts of
 # the run, to try before tagging.
+#
+# The packages hold flow, flowstudio (FlowGraph Studio, on GLWidgets: no Qt) and the SDK of the runtime. The Qt editor library
+# (FlowGraph::ScriptEditor) is not in them: who embeds it builds it from the sources, with their own Qt.
 
 on:
   push:
@@ -13,9 +16,6 @@ on:
 
 permissions:
   contents: read
-
-env:
-  QT_VERSION: "6.9.0"
 
 jobs:
   # The version: from CMakeLists.txt, and it must be the one of the tag.
@@ -35,7 +35,7 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  # flow, flowstudio and the SDK (headers, libraries, CMake package), with Qt and the MSVC runtime next to them.
+  # flow, flowstudio and the SDK (headers, libraries, CMake package), with the MSVC runtime next to them.
   windows:
     needs: version
     runs-on: windows-2022
@@ -46,39 +46,25 @@ jobs:
         with:
           submodules: recursive
       - uses: ./.github/actions/msvc-env
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          arch: win64_msvc2022_64
-          cache: true
       - name: Configure
-        # the GLWidgets editor (flowstudio-next) is not in the packages until it takes the place of flowstudio
-        run: cmake --preset windows-release -DFG_BUILD_GLEDITOR=OFF
-        env:
-          QT_DIR: ${{ env.QT_ROOT_DIR }}
+        run: cmake --preset windows-release -DFG_BUILD_EDITOR=OFF
       - name: Build
         run: cmake --build --preset windows-release
       - name: Test
         run: ctest --preset windows-release
-      - name: Install and deploy Qt
+      - name: Install
         shell: bash
         run: |
+          # the programs, the SDK, the licenses (GLWidgets' and its libraries' in share/doc/FlowGraph/GLWidgets) and the
+          # MSVC runtime in bin (InstallRequiredSystemLibraries)
           cmake --install build/windows-release --prefix "dist/$PACKAGE" --component FlowGraph
-          # Qt's own translations (its dialogs and buttons) for the languages the editor has (Editor/Translations/flowgraph_<code>.ts)
-          languages=$(ls Editor/Translations/flowgraph_*.ts | sed 's|.*/flowgraph_||; s|\.ts$||' | paste -sd, -)
-          windeployqt --release --translations "$languages" --no-system-d3d-compiler --no-opengl-sw --compiler-runtime \
-            "dist/$PACKAGE/bin/flowstudio.exe" "dist/$PACKAGE/bin/FlowGraphEditor.dll"
-          # the offscreen platform: flowstudio without a display (and the check below)
-          cp "$(cygpath -u "$QT_ROOT_DIR")/plugins/platforms/qoffscreen.dll" "dist/$PACKAGE/bin/platforms/"
-          cp -r LICENSE LICENSES README.md "dist/$PACKAGE/"          # also in share/doc/FlowGraph (cmake --install), with KDDockWidgets'
+          cp -r LICENSE LICENSES README.md "dist/$PACKAGE/"
           mkdir -p "dist/$PACKAGE/examples" && cp Examples/Scripts/*.flow "dist/$PACKAGE/examples/"   # to try it (README: Try it)
       - name: Check that the package runs on its own
         shell: pwsh
         run: |
           $bin = "dist\$env:PACKAGE\bin"
-          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"      # no Qt, no compiler: only what the package brings
-          Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"      # no compiler: only what the package brings
           & "$bin\flow.exe" --version
           if ($LASTEXITCODE -ne 0) { throw "flow does not start" }
           & "$bin\flow.exe" --no-plugins --reference smoke-reference.md
@@ -87,12 +73,18 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $out -notcontains "FizzBuzz") { throw "the FizzBuzz example does not run: $out" }
           $nodes = & "$bin\flow.exe" --reference | Select-String -SimpleMatch "from FileSystem"
           if ($LASTEXITCODE -ne 0 -or -not $nodes) { throw "flow does not load the FileSystem plugin (bin\plugins)" }
-          $env:QT_QPA_PLATFORM = "offscreen"
-          $env:FG_STUDIO_SCREENSHOT = "$PWD\smoke.png"
-          $p = Start-Process "$bin\flowstudio.exe" -PassThru
+          # flowstudio: its libraries are all there (it prints its version without a window)...
+          $p = Start-Process "$bin\flowstudio.exe" -ArgumentList "--version" -PassThru -Wait -NoNewWindow -RedirectStandardOutput version.txt
+          if ($p.ExitCode -ne 0 -or -not (Select-String -Path version.txt -Pattern "^flowstudio ")) { throw "flowstudio does not start ($($p.ExitCode))" }
+          # ... and its window, with the FizzBuzz example running, as a picture. The runners may have no GPU it can use
+          # (Direct3D 12): then only a warning.
+          $p = Start-Process "$bin\flowstudio.exe" -PassThru -NoNewWindow -RedirectStandardError smoke-error.txt `
+               -ArgumentList "dist\$env:PACKAGE\examples\fizzbuzz.flow", "--run", "--screenshot", "$PWD\smoke.png"
           if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "flowstudio did not end" }
-          if ($p.ExitCode -ne 0) { throw "flowstudio ended with $($p.ExitCode)" }
-          if (-not (Test-Path smoke.png)) { throw "flowstudio did not start" }
+          $err = Get-Content smoke-error.txt -Raw
+          if ($p.ExitCode -eq 0 -and (Test-Path smoke.png)) { "flowstudio drew its window" }
+          elseif ($err -match "no GPU device") { "::warning::flowstudio's window was not tried: the runner has no GPU it can use ($err)" }
+          else { throw "flowstudio ended with $($p.ExitCode): $err" }
       - name: Pack
         shell: bash
         run: cd dist && 7z a -tzip "../$PACKAGE.zip" "$PACKAGE" > /dev/null
@@ -101,11 +93,18 @@ jobs:
           name: release-windows
           path: ${{ env.PACKAGE }}.zip
           if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: smoke-windows
+          path: smoke.png
+          if-no-files-found: ignore
 
-  # The same for Linux: the programs find their libraries next to them (RPATH $ORIGIN/../lib), Qt and its plugins are bundled.
+  # The same for Linux: the programs find their libraries next to them (RPATH $ORIGIN/../lib).
   # Built on AlmaLinux 8 (glibc 2.28) with GCC 13 (gcc-toolset: the parts of its C++ library that GCC 8's lacks are linked into
   # the binaries): a program needs the C library of the system it was built on or a newer one, so the package runs on the
-  # distributions of 2019 on - RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu 20.04 and newer.
+  # distributions of 2019 on - RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu 20.04 and newer. flowstudio's SDL3
+  # loads the system's X11 or Wayland libraries and its Vulkan driver when it starts.
   linux:
     needs: version
     runs-on: ubuntu-24.04
@@ -119,69 +118,39 @@ jobs:
         run: |
           dnf install -y dnf-plugins-core epel-release
           dnf config-manager --set-enabled powertools
-          # the compiler, the build tools, git for the checkout, Python for aqtinstall, and what Qt needs to build and to run the
-          # tests (offscreen: fontconfig, freetype, a font)
-          dnf install -y gcc-toolset-13-gcc-c++ git cmake ninja-build python3.11 python3.11-pip which file findutils tar gzip \
-            binutils mesa-libGL-devel mesa-libEGL-devel libxkbcommon-devel fontconfig-devel freetype-devel vulkan-headers \
-            dejavu-sans-fonts dejavu-sans-mono-fonts
+          # the compiler, the build tools, git for the checkout
+          dnf install -y gcc-toolset-13-gcc-c++ git cmake ninja-build which file findutils tar gzip xz binutils pkgconf-pkg-config
+          # SDL3 for flowstudio: X11, Wayland, the input methods; fontconfig for the system's fonts (strict=0: what this
+          # system does not have is left out, as SDL3 leaves out what it does not find)
+          dnf install -y --setopt=strict=0 libX11-devel libXext-devel libXrandr-devel libXcursor-devel libXfixes-devel libXi-devel \
+            libXScrnSaver-devel libXtst-devel libxkbcommon-devel wayland-devel wayland-protocols-devel mesa-libEGL-devel \
+            mesa-libGL-devel mesa-libgbm-devel libdrm-devel dbus-devel ibus-devel systemd-devel fontconfig-devel
+          # to try flowstudio's window: a display without a screen, Vulkan on the CPU (when the system has it), a font
+          dnf install -y --setopt=strict=0 xorg-x11-server-Xvfb mesa-vulkan-drivers vulkan-loader dejavu-sans-fonts
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - name: Install Qt
-        run: |
-          # with aqtinstall (the install-qt-action would set up a Python built for Ubuntu, which needs a newer glibc than this)
-          python3.11 -m pip install --quiet aqtinstall
-          python3.11 -m aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 --outputdir /opt/Qt
-          test -x "/opt/Qt/$QT_VERSION/gcc_64/bin/qmake"
-          echo "QT_ROOT_DIR=/opt/Qt/$QT_VERSION/gcc_64" >> "$GITHUB_ENV"
       - name: Configure
         # lib, not lib64 (the default of RHEL-like systems): the layout of the package, and where its RPATH looks
-        # (the GLWidgets editor, flowstudio-next, is not in the packages until it takes the place of flowstudio)
-        run: cmake --preset linux-release -DFG_BUILD_GLEDITOR=OFF -DCMAKE_INSTALL_LIBDIR=lib '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
-        env:
-          QT_DIR: ${{ env.QT_ROOT_DIR }}
+        run: cmake --preset linux-release -DFG_BUILD_EDITOR=OFF -DCMAKE_INSTALL_LIBDIR=lib '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib'
       - name: Build
         run: cmake --build --preset linux-release
       - name: Test
         run: ctest --preset linux-release
-      - name: Install and bundle Qt
+      - name: Install
         run: |
           dist="dist/$PACKAGE"
           cmake --install build/linux-release --prefix "$dist" --component FlowGraph
-          # Qt's plugins: X11 (xcb) and offscreen platforms, SVG images and icons
-          for p in platforms/libqxcb.so platforms/libqoffscreen.so imageformats/libqsvg.so iconengines/libqsvgicon.so; do
-            mkdir -p "$dist/plugins/$(dirname "$p")"
-            cp "$QT_ROOT_DIR/plugins/$p" "$dist/plugins/$p"
-          done
-          cp -r "$QT_ROOT_DIR/plugins/xcbglintegrations" "$dist/plugins/"
-          printf '[Paths]\nPrefix=..\nPlugins=plugins\n' > "$dist/bin/qt.conf"
-          # every Qt library (and ICU) that the programs, libraries and plugins need, until nothing is missing
-          for pass in 1 2 3 4; do
-            find "$dist/bin" "$dist/lib" "$dist/plugins" -type f \( -name '*.so*' -o -perm -u+x \) | while read -r f; do
-              LD_LIBRARY_PATH="$QT_ROOT_DIR/lib" ldd "$f" 2>/dev/null | awk '/=>/ { print $3 }' | grep "^$QT_ROOT_DIR/lib/" || true
-            done | sort -u | while read -r dep; do
-              [ -e "$dist/lib/$(basename "$dep")" ] || cp -L "$dep" "$dist/lib/"
-            done
-          done
-          # Qt's own translations for the editor's languages, where the editor looks for them (bin/../translations)
-          mkdir -p "$dist/translations"
-          for ts in Editor/Translations/flowgraph_*.ts; do
-            code=$(basename "$ts" .ts); code=${code#flowgraph_}
-            cp "$QT_ROOT_DIR/translations/qtbase_$code.qm" "$dist/translations/" 2>/dev/null || echo "no Qt translation for $code"
-          done
           cp -r LICENSE LICENSES README.md "$dist/"
           mkdir -p "$dist/examples" && cp Examples/Scripts/*.flow "$dist/examples/"     # to try it (README: Try it)
       - name: Check that the package runs on its own
         run: |
           dist="dist/$PACKAGE"
-          unset LD_LIBRARY_PATH QT_PLUGIN_PATH QML2_IMPORT_PATH
-          # nothing may come from the Qt installation; the X11 libraries the xcb plugin loads are the system's (not on this machine)
-          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist"/lib/*.so* "$dist"/plugins/*/*.so "$dist"/bin/plugins/*.so; do
-            if ldd "$f" | grep -F "$QT_ROOT_DIR"; then echo "::error::$f takes a library from the Qt installation"; exit 1; fi
-          done
-          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist/plugins/platforms/libqoffscreen.so" "$dist"/bin/plugins/*.so; do
+          unset LD_LIBRARY_PATH
+          for f in "$dist/bin/flow" "$dist/bin/flowstudio" "$dist"/lib/*.so* "$dist"/bin/plugins/*.so; do
             if ldd "$f" | grep "not found"; then echo "::error::$f needs a library the package does not bring"; exit 1; fi
           done
+          echo "flowstudio needs:"; ldd "$dist/bin/flowstudio"
           # what the package needs of the system's C and C++ libraries: not newer than this AlmaLinux 8's (glibc 2.28, libstdc++
           # of GCC 8 = GLIBCXX_3.4.25), or it does not run on the systems the package is for
           needs=$(find "$dist" -type f \( -name '*.so*' -o -perm -u+x \) -exec objdump -T {} + 2>/dev/null | grep -oE 'GLIBC(XX)?_[0-9.]+' | sort -u)
@@ -197,8 +166,22 @@ jobs:
           "$dist/bin/flow" --no-plugins --reference smoke-reference.md
           "$dist/bin/flow" "$dist/examples/fizzbuzz.flow" | grep -qx FizzBuzz
           "$dist/bin/flow" --reference | grep -q "from FileSystem" || { echo "::error::flow does not load the FileSystem plugin (bin/plugins)"; exit 1; }
-          QT_QPA_PLATFORM=offscreen FG_STUDIO_SCREENSHOT="$PWD/smoke.png" timeout 60 "$dist/bin/flowstudio"
-          test -s smoke.png
+          "$dist/bin/flowstudio" --version | grep -q "^flowstudio " || { echo "::error::flowstudio does not start"; exit 1; }
+          # its window, with the FizzBuzz example running, as a picture: on a virtual display, with Vulkan on the CPU when
+          # this system has it - otherwise only a warning
+          if command -v xvfb-run > /dev/null; then
+            status=0
+            xvfb-run -a timeout 60 "$dist/bin/flowstudio" "$dist/examples/fizzbuzz.flow" --run --screenshot "$PWD/smoke.png" 2> smoke-error.txt || status=$?
+            if [ "$status" -eq 0 ] && [ -s smoke.png ]; then
+              echo "flowstudio drew its window"
+            elif grep -q "no GPU device" smoke-error.txt; then
+              echo "::warning::flowstudio's window was not tried: no Vulkan driver here ($(cat smoke-error.txt))"
+            else
+              echo "::error::flowstudio ended with $status: $(cat smoke-error.txt)"; exit 1
+            fi
+          else
+            echo "::warning::flowstudio's window was not tried: no Xvfb here"
+          fi
       - name: Pack
         run: tar -C dist -czf "$PACKAGE.tar.gz" "$PACKAGE"
       - uses: actions/upload-artifact@v7
@@ -206,6 +189,12 @@ jobs:
           name: release-linux
           path: ${{ env.PACKAGE }}.tar.gz
           if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: smoke-linux
+          path: smoke.png
+          if-no-files-found: ignore
 
   # Only for a tag: a draft release with both packages and their checksums.
   release:
@@ -230,17 +219,20 @@ jobs:
           cat > ../notes.md <<EOF
           ## Downloads
 
-          - **FlowGraph-$VERSION-windows-x64.zip**: \`flow\`, \`flowstudio\` (Qt included) and the SDK: headers, libraries and the CMake
-            package (\`find_package(FlowGraph)\`: \`FlowGraph::Core\`, \`FlowGraph::ScriptEditor\`). Windows 10 or later, x64.
+          - **FlowGraph-$VERSION-windows-x64.zip**: \`flow\`, \`flowstudio\` (FlowGraph Studio) and the SDK of the runtime: headers,
+            libraries and the CMake package (\`find_package(FlowGraph)\`: \`FlowGraph::Core\`). Windows 10 or later, x64; \`flowstudio\`
+            draws with Direct3D 12.
           - **FlowGraph-$VERSION-linux-x64.tar.gz**: the same for Linux x64. It runs on distributions with glibc 2.28 or newer:
-            RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu 20.04 and newer. \`flowstudio\` brings its Qt; the system
-            needs the usual X11 libraries (for example \`xcb-util-cursor\` / \`libxcb-cursor0\`, \`libxkbcommon-x11\`).
+            RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu 20.04 and newer. \`flowstudio\` uses the system's X11 or Wayland
+            and draws with Vulkan (the graphics driver's, or Mesa's).
           - **SHA256SUMS.txt**: checksums of both.
 
           Plugins are binary: build them against this release (the loader refuses a plugin made for another build, with the reason).
+          The Qt editor library (\`FlowGraph::ScriptEditor\`) is not in the packages: build it from the sources (Docs/Embedding.md).
 
-          Licenses: the runtime (FlowGraphCore) and \`flow\` are MIT; the editor and \`flowstudio\` are GPL-3.0-only, as they are
-          built on KDDockWidgets (GPL). Qt is used under the LGPL-3.0. The texts are in each package (\`LICENSE\`, \`LICENSES/\`).
+          Licenses: the runtime (FlowGraphCore) and \`flow\` are MIT; \`flowstudio\` is GPL-3.0-only. It is built on GLWidgets (MIT)
+          and the libraries it links in (SDL3, FreeType, HarfBuzz, SheenBidi, libunibreak, ThorVG, the Vazirmatn font), whose
+          licenses are in \`share/doc/FlowGraph/GLWidgets\`. The texts are in each package (\`LICENSE\`, \`LICENSES/\`).
 
           EOF
           prerelease=""

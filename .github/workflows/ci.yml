@@ -14,7 +14,7 @@ env:
   QT_VERSION: "6.9.0"
 
 jobs:
-  # Everything (runtime, editor, flowstudio, flowstudio-next, examples), MSVC 2022, both test suites.
+  # Everything (runtime, flowstudio, the Qt editor and its examples), MSVC 2022, all the test suites.
   windows:
     runs-on: windows-2022
     steps:
@@ -29,7 +29,7 @@ jobs:
           arch: win64_msvc2022_64
           cache: true
       - name: Configure
-        run: cmake --preset windows-release
+        run: cmake --preset windows-release -DFG_BUILD_EDITOR=ON
         env:
           QT_DIR: ${{ env.QT_ROOT_DIR }}
       - name: Build
@@ -37,7 +37,7 @@ jobs:
       - name: Test
         run: ctest --preset windows-release
 
-  # Everything with GCC on Linux (the editor tests run on the offscreen platform).
+  # Everything with GCC on Linux (the Qt editor's tests run on the offscreen platform).
   linux:
     runs-on: ubuntu-24.04
     steps:
@@ -58,7 +58,7 @@ jobs:
           arch: linux_gcc_64
           cache: true
       - name: Configure
-        run: cmake --preset linux-release
+        run: cmake --preset linux-release -DFG_BUILD_EDITOR=ON
         env:
           QT_DIR: ${{ env.QT_ROOT_DIR }}
       - name: Build

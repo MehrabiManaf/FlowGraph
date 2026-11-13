@@ -7,21 +7,21 @@ defaults, is in [NodeReference.md](NodeReference.md).
 
 | | |
 |-|-|
-| Add a node | right-click the canvas, or drag from a pin and release on empty space (the list is filtered to nodes that fit) |
+| Add a node | right-click the canvas or press Space, or drag from a pin and release on empty space (the list is filtered to nodes that fit) |
 | Connect | drag between pins; Alt+click a pin breaks its links; double-click a data link to add a reroute |
 | Variables | drag a variable from *My Script* onto the canvas (Ctrl = Get, Alt = Set, otherwise a menu) |
 | Edit | Ctrl+Z / Ctrl+Y, Ctrl+C / X / V, Ctrl+D duplicate, Del delete, `C` add comment box (wraps the selection) |
-| Navigate | wheel zooms, middle / right drag pans, Home frames everything |
+| Navigate | wheel zooms, middle / right drag pans, Home frames everything, F frames the selection; *View > Snap to Grid* and *Grid Snap Size* |
 | Refactor | *Edit > Collapse to Function* (or right-click a node) moves the selected nodes into a new function and calls it in their place: links that come in become inputs, links that go out become outputs. One undo step |
 | Find | Ctrl+F finds nodes by title, comment or value in every graph; Shift+F12 (or right-click > *Find References*) lists the nodes that use the selected variable or function; double-click a result to go there |
-| Run | F5 (or F6) runs the launch configuration chosen in the toolbar; the same button pauses the running script and continues a paused one; Shift+F5 stop |
-| Debug | F9 toggles a breakpoint, F10 / F11 / Shift+F11 step over / into / out; hover pins while paused to see values; *Run > Execution speed* slows execution so the animated links are visible |
-| View | Shift+Alt+Enter (*View > Full Screen*) switches full screen on and off; *View > Theme*: Dark, Light or System; *View > Language*. *File > Open Recent* lists the last 10 scripts |
+| Run | F5 runs the launch configuration chosen in the toolbar and continues a paused script, F6 pauses it (the toolbar's Run button turns into Pause while the script runs); Shift+F5 stop |
+| Debug | F9 toggles a breakpoint, F10 / F11 / Shift+F11 step over / into / out; hover pins while paused to see values; *Debug > Execution Speed* slows execution so the animated links are visible |
+| View | Shift+Alt+Enter (*View > Full Screen*) switches full screen on and off; *View > Colors* (Dark, Light, Dusk, Sand, Turquoise, or as the system) and *View > Style*; *View > Language*. *File > Open Recent* lists the last 10 scripts |
 
 ## Launch configurations
 
 What *Run* does in flowstudio is described by **launch configurations**, stored next to the script as `script.flowlaunch`
-(*Run > Launch Configurations...* edits them):
+(*Debug > Launch Configurations...*, or the button next to the toolbar's list, edits them):
 
 ```json
 { "format": "flowlaunch", "version": 1, "selected": "Verbose",
