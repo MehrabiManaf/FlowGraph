@@ -1,3 +1,6 @@
 [submodule "ThirdParty/KDDockWidgets"]
 	path = ThirdParty/KDDockWidgets
 	url = https://github.com/KDAB/KDDockWidgets.git
+[submodule "ThirdParty/GLWidgets"]
+	path = ThirdParty/GLWidgets
+	url = https://github.com/MehrabiManaf/GLWidgets.git

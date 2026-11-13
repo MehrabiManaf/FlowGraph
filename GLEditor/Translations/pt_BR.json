@@ -1,0 +1,1347 @@
+{
+  "language": "pt_BR",
+  "texts": {
+    "English": [
+      "English",
+      "Português (Brasil)"
+    ],
+    "Dark": [
+      "Dark",
+      "Escuro"
+    ],
+    "Light": [
+      "Light",
+      "Claro"
+    ],
+    "Dusk": [
+      "Dusk",
+      "Crepúsculo"
+    ],
+    "Sand": [
+      "Sand",
+      "Areia"
+    ],
+    "Turquoise": [
+      "Turquoise",
+      "Turquesa"
+    ],
+    "Studio": [
+      "Studio",
+      "Estúdio"
+    ],
+    "Fluid": [
+      "Fluid",
+      "Fluido"
+    ],
+    "Plain": [
+      "Plain",
+      "Simples"
+    ],
+    "Plastic": [
+      "Plastic",
+      "Plástico"
+    ],
+    "Metal": [
+      "Metal",
+      "Metal"
+    ],
+    "Solid": [
+      "Solid",
+      "Sólido"
+    ],
+    "Glass": [
+      "Glass",
+      "Vidro"
+    ],
+    "My Script": [
+      "My Script",
+      "Meu script"
+    ],
+    "Details": [
+      "Details",
+      "Detalhes"
+    ],
+    "Output Log": [
+      "Output Log",
+      "Log de saída"
+    ],
+    "Compile Results": [
+      "Compile Results",
+      "Resultados da compilação"
+    ],
+    "Find Results": [
+      "Find Results",
+      "Resultados da pesquisa"
+    ],
+    "Debugger": [
+      "Debugger",
+      "Depurador"
+    ],
+    "FlowGraph Studio": [
+      "FlowGraph Studio",
+      ""
+    ],
+    "Ready": [
+      "Ready",
+      "Pronto"
+    ],
+    "Idle": [
+      "Idle",
+      "Ocioso"
+    ],
+    "&New": [
+      "&New",
+      "&Novo"
+    ],
+    "&Open...": [
+      "&Open...",
+      "&Abrir..."
+    ],
+    "&Save": [
+      "&Save",
+      "&Salvar"
+    ],
+    "Save &As...": [
+      "Save &As...",
+      "Salvar &como..."
+    ],
+    "&Quit": [
+      "&Quit",
+      "&Sair"
+    ],
+    "&Undo": [
+      "&Undo",
+      "&Desfazer"
+    ],
+    "&Redo": [
+      "&Redo",
+      "&Refazer"
+    ],
+    "Cu&t": [
+      "Cu&t",
+      "Recor&tar"
+    ],
+    "&Copy": [
+      "&Copy",
+      "&Copiar"
+    ],
+    "&Paste": [
+      "&Paste",
+      "C&olar"
+    ],
+    "D&uplicate": [
+      "D&uplicate",
+      "D&uplicar"
+    ],
+    "Select &All": [
+      "Select &All",
+      "&Selecionar tudo"
+    ],
+    "&Snap to Grid": [
+      "&Snap to Grid",
+      "&Ajustar à grade"
+    ],
+    "&Find in Script...": [
+      "&Find in Script...",
+      "&Localizar no script..."
+    ],
+    "Find &References": [
+      "Find &References",
+      "Localizar refer&ências"
+    ],
+    "&Run": [
+      "&Run",
+      "Exe&cutar"
+    ],
+    "&Pause": [
+      "&Pause",
+      "&Pausar"
+    ],
+    "S&top": [
+      "S&top",
+      "&Parar"
+    ],
+    "Step &Over": [
+      "Step &Over",
+      "&Depurar parcialmente"
+    ],
+    "Step &Into": [
+      "Step &Into",
+      "&Intervir"
+    ],
+    "Step O&ut": [
+      "Step O&ut",
+      "Depuração &circular"
+    ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "&Configurações de inicialização..."
+    ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "Recolher em &função..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "Tela c&heia"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "Move os nós selecionados para uma nova função e a chama no lugar deles"
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "Editar as configurações de inicialização deste script"
+    ],
+    "Toggle &Breakpoint": [
+      "Toggle &Breakpoint",
+      "Alternar &ponto de interrupção"
+    ],
+    "Clear the List": [
+      "Clear the List",
+      "Limpar a lista"
+    ],
+    "As the System": [
+      "As the System",
+      "Como o sistema"
+    ],
+    "&File": [
+      "&File",
+      "&Arquivo"
+    ],
+    "Open &Recent": [
+      "Open &Recent",
+      "Abrir &recentes"
+    ],
+    "&Edit": [
+      "&Edit",
+      "&Editar"
+    ],
+    "&Delete": [
+      "&Delete",
+      "&Excluir"
+    ],
+    "Del": [
+      "Del",
+      ""
+    ],
+    "&View": [
+      "&View",
+      "E&xibir"
+    ],
+    "&Frame Selection": [
+      "&Frame Selection",
+      "&Enquadrar a seleção"
+    ],
+    "F": [
+      "F",
+      ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "&Enquadrar tudo"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "Tamanho do a&juste à grade"
+    ],
+    "&Colors": [
+      "&Colors",
+      "&Cores"
+    ],
+    "&Style": [
+      "&Style",
+      "&Estilo"
+    ],
+    "&Language": [
+      "&Language",
+      "&Idioma"
+    ],
+    "&Debug": [
+      "&Debug",
+      "&Depurar"
+    ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "&Velocidade de execução"
+    ],
+    "&Help": [
+      "&Help",
+      "Aj&uda"
+    ],
+    "&About FlowGraph Studio": [
+      "&About FlowGraph Studio",
+      "&Sobre o FlowGraph Studio"
+    ],
+    "Untitled": [
+      "Untitled",
+      "Sem título"
+    ],
+    "{name}{dirty} - {application}": [
+      "{name}{dirty} - {application}",
+      ""
+    ],
+    "System": [
+      "System",
+      "Sistema"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "Velocidade máxima"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "Lenta (100 ms / nó)"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "Mais lenta (300 ms / nó)"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "Passo a passo (1 s / nó)"
+    ],
+    "{step} units": [
+      "{step} units",
+      "{step} unidades"
+    ],
+    "&Undo {what}": [
+      "&Undo {what}",
+      "&Desfazer {what}"
+    ],
+    "&Redo {what}": [
+      "&Redo {what}",
+      "&Refazer {what}"
+    ],
+    "Paused at '{graph}'": [
+      "Paused at '{graph}'",
+      "Pausado em '{graph}'"
+    ],
+    "The run ended": [
+      "The run ended",
+      "A execução terminou"
+    ],
+    "The run failed: see the Output Log": [
+      "The run failed: see the Output Log",
+      "A execução falhou: veja o log de saída"
+    ],
+    "Warning: {text}": [
+      "Warning: {text}",
+      "Aviso: {text}"
+    ],
+    "The script has errors: it cannot run": [
+      "The script has errors: it cannot run",
+      "O script tem erros: não pode ser executado"
+    ],
+    "The script was changed: the run was stopped": [
+      "The script was changed: the run was stopped",
+      "O script foi alterado: a execução foi parada"
+    ],
+    "Nothing to run: the application has no event to start": [
+      "Nothing to run: the application has no event to start",
+      "Nada a executar: o aplicativo não tem evento para iniciar"
+    ],
+    "Run:": [
+      "Run:",
+      "Executar:"
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "A configuração de inicialização que Executar inicia"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "As configurações de inicialização são salvas com o script"
+    ],
+    "&Continue": [
+      "&Continue",
+      "&Continuar"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "Pausar (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "Continuar (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "Executar (F5)"
+    ],
+    "Running": [
+      "Running",
+      "Em execução"
+    ],
+    "Waiting": [
+      "Waiting",
+      "Aguardando"
+    ],
+    "Paused": [
+      "Paused",
+      "Pausado"
+    ],
+    "{count} reference(s) of {what}": [
+      "{count} reference(s) of {what}",
+      "{count} referência(s) de {what}"
+    ],
+    "Select a node, or a variable, function or struct in My Script, to find its references": [
+      "Select a node, or a variable, function or struct in My Script, to find its references",
+      "Selecione um nó, ou uma variável, função ou estrutura em Meu script, para localizar suas referências"
+    ],
+    "{errors} error(s), {warnings} warning(s)": [
+      "{errors} error(s), {warnings} warning(s)",
+      "{errors} erro(s), {warnings} aviso(s)"
+    ],
+    "OK": [
+      "OK",
+      "OK"
+    ],
+    "A new script": [
+      "A new script",
+      "Um novo script"
+    ],
+    "The script was not opened": [
+      "The script was not opened",
+      "O script não foi aberto"
+    ],
+    "Close": [
+      "Close",
+      "Fechar"
+    ],
+    "Opened {file}": [
+      "Opened {file}",
+      "Aberto {file}"
+    ],
+    "FlowGraph scripts": [
+      "FlowGraph scripts",
+      "Scripts do FlowGraph"
+    ],
+    "Open a Script": [
+      "Open a Script",
+      "Abrir um script"
+    ],
+    "No file dialog": [
+      "No file dialog",
+      "Sem diálogo de arquivos"
+    ],
+    "Save the Script": [
+      "Save the Script",
+      "Salvar o script"
+    ],
+    "The script was not saved": [
+      "The script was not saved",
+      "O script não foi salvo"
+    ],
+    "Saved {file}": [
+      "Saved {file}",
+      "Salvo {file}"
+    ],
+    "Save the changes?": [
+      "Save the changes?",
+      "Salvar as alterações?"
+    ],
+    "The changes to {name} are lost if they are not saved.": [
+      "The changes to {name} are lost if they are not saved.",
+      "As alterações em {name} serão perdidas se não forem salvas."
+    ],
+    "Save": [
+      "Save",
+      "Salvar"
+    ],
+    "Don't Save": [
+      "Don't Save",
+      "Não salvar"
+    ],
+    "Cancel": [
+      "Cancel",
+      "Cancelar"
+    ],
+    "About {application}": [
+      "About {application}",
+      "Sobre o {application}"
+    ],
+    "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets.": [
+      "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets.",
+      "O editor e depurador dos aplicativos padrão do FlowGraph, desenhado com GLWidgets."
+    ],
+    "The events of the application and the entry of a function cannot be deleted": [
+      "The events of the application and the entry of a function cannot be deleted",
+      "Os eventos do aplicativo e a entrada de uma função não podem ser excluídos"
+    ],
+    "Delete": [
+      "Delete",
+      "Excluir"
+    ],
+    "The clipboard has no nodes": [
+      "The clipboard has no nodes",
+      "A área de transferência não tem nós"
+    ],
+    "Paste": [
+      "Paste",
+      "Colar"
+    ],
+    "Duplicate": [
+      "Duplicate",
+      "Duplicar"
+    ],
+    "Break links": [
+      "Break links",
+      "Desfazer ligações"
+    ],
+    "Connect pins": [
+      "Connect pins",
+      "Conectar pinos"
+    ],
+    "Connect an output pin to an input pin": [
+      "Connect an output pin to an input pin",
+      "Conecte um pino de saída a um pino de entrada"
+    ],
+    "A node cannot be connected to itself": [
+      "A node cannot be connected to itself",
+      "Um nó não pode ser conectado a si mesmo"
+    ],
+    "Execution pins only connect to execution pins": [
+      "Execution pins only connect to execution pins",
+      "Pinos de execução só se conectam a pinos de execução"
+    ],
+    "Cannot connect {from} to {to}": [
+      "Cannot connect {from} to {to}",
+      "Não é possível conectar {from} a {to}"
+    ],
+    "This link would make the value depend on itself (the data links would form a cycle)": [
+      "This link would make the value depend on itself (the data links would form a cycle)",
+      "Esta ligação faria o valor depender de si mesmo (as ligações de dados formariam um ciclo)"
+    ],
+    "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first": [
+      "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first",
+      "Esta ligação criaria um loop infinito: adicione primeiro ao loop um nó Ramificação (uma saída) ou um nó Atraso"
+    ],
+    "Comment": [
+      "Comment",
+      "Comentário"
+    ],
+    "Edit comment": [
+      "Edit comment",
+      "Editar comentário"
+    ],
+    "Resize comment": [
+      "Resize comment",
+      "Redimensionar comentário"
+    ],
+    "Move": [
+      "Move",
+      "Mover"
+    ],
+    "Add reroute": [
+      "Add reroute",
+      "Adicionar redirecionamento"
+    ],
+    "Reroute nodes are only for links of data": [
+      "Reroute nodes are only for links of data",
+      "Nós de redirecionamento são apenas para ligações de dados"
+    ],
+    "Paused here": [
+      "Paused here",
+      "Pausado aqui"
+    ],
+    "No node fits that pin": [
+      "No node fits that pin",
+      "Nenhum nó se encaixa nesse pino"
+    ],
+    "Search the nodes that fit the pin": [
+      "Search the nodes that fit the pin",
+      "Pesquisar os nós que se encaixam no pino"
+    ],
+    "Search the nodes": [
+      "Search the nodes",
+      "Pesquisar os nós"
+    ],
+    "Add node": [
+      "Add node",
+      "Adicionar nó"
+    ],
+    "Add call to {function}": [
+      "Add call to {function}",
+      "Adicionar chamada a {function}"
+    ],
+    "Add Set variable": [
+      "Add Set variable",
+      "Adicionar “Definir variável”"
+    ],
+    "Add Get variable": [
+      "Add Get variable",
+      "Adicionar “Obter variável”"
+    ],
+    "Get {name}": [
+      "Get {name}",
+      "Obter {name}"
+    ],
+    "Set {name}": [
+      "Set {name}",
+      "Definir {name}"
+    ],
+    "Add comment": [
+      "Add comment",
+      "Adicionar comentário"
+    ],
+    "Delete Link": [
+      "Delete Link",
+      "Excluir ligação"
+    ],
+    "Delete link": [
+      "Delete link",
+      "Excluir ligação"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "Adicionar nó de redirecionamento"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "Desfazer todas as ligações"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
+    "Edit Node Comment...": [
+      "Edit Node Comment...",
+      "Editar comentário do nó..."
+    ],
+    "Node Comment": [
+      "Node Comment",
+      "Comentário do nó"
+    ],
+    "Edit node comment": [
+      "Edit node comment",
+      "Editar comentário do nó"
+    ],
+    "Toggle Breakpoint": [
+      "Toggle Breakpoint",
+      "Alternar ponto de interrupção"
+    ],
+    "F9": [
+      "F9",
+      ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "Recolher em função..."
+    ],
+    "Find References": [
+      "Find References",
+      "Localizar referências"
+    ],
+    "Shift+F12": [
+      "Shift+F12",
+      ""
+    ],
+    "Edit Comment Text...": [
+      "Edit Comment Text...",
+      "Editar texto do comentário..."
+    ],
+    "Delete Comment": [
+      "Delete Comment",
+      "Excluir comentário"
+    ],
+    "Add Node...": [
+      "Add Node...",
+      "Adicionar nó..."
+    ],
+    "Space": [
+      "Space",
+      ""
+    ],
+    "Add Comment": [
+      "Add Comment",
+      "Adicionar comentário"
+    ],
+    "Cut": [
+      "Cut",
+      "Recortar"
+    ],
+    "Copy": [
+      "Copy",
+      "Copiar"
+    ],
+    "Add Comment Around": [
+      "Add Comment Around",
+      "Adicionar comentário ao redor"
+    ],
+    "Frame": [
+      "Frame",
+      "Enquadrar"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "Selecione pelo menos dois nós para recolhê-los em uma função"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "Recolher em função"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "Estes nós não podem ser recolhidos em uma função: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "Nome da nova função"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "Recolher em função"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "Recolher em função: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "{count} nó(s) recolhido(s) em {function}"
+    ],
+    "Edit value": [
+      "Edit value",
+      "Editar valor"
+    ],
+    "Value: {value}": [
+      "Value: {value}",
+      "Valor: {value}"
+    ],
+    "Call Stack": [
+      "Call Stack",
+      "Pilha de chamadas"
+    ],
+    "Node": [
+      "Node",
+      "Nó"
+    ],
+    "Value": [
+      "Value",
+      "Valor"
+    ],
+    "Type": [
+      "Type",
+      "Tipo"
+    ],
+    "Variable": [
+      "Variable",
+      "Variável"
+    ],
+    "Watch": [
+      "Watch",
+      "Inspeção"
+    ],
+    "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)": [
+      "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)",
+      "Inspecionar: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adiciona)"
+    ],
+    "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.": [
+      "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.",
+      "Uma expressão para inspecionar. Um intervalo name[a..b] carrega esses elementos (inclusive): um array grande nunca é carregado inteiro."
+    ],
+    "The locals and parameters of the frame chosen are found first, then the variables of the script.": [
+      "The locals and parameters of the frame chosen are found first, then the variables of the script.",
+      "Primeiro são procuradas as variáveis locais e os parâmetros do quadro escolhido, depois as variáveis do script."
+    ],
+    "{left} more - double-click to load {next} more": [
+      "{left} more - double-click to load {next} more",
+      "Mais {left} - clique duas vezes para carregar mais {next}"
+    ],
+    "(event)": [
+      "(event)",
+      "(evento)"
+    ],
+    "Locals / Parameters": [
+      "Locals / Parameters",
+      "Locais / Parâmetros"
+    ],
+    "Variables": [
+      "Variables",
+      "Variáveis"
+    ],
+    "(not available: run the script first)": [
+      "(not available: run the script first)",
+      "(indisponível: execute o script primeiro)"
+    ],
+    "Load the next {count}": [
+      "Load the next {count}",
+      "Carregar os próximos {count}"
+    ],
+    "Load the next {count} (of {left} left)": [
+      "Load the next {count} (of {left} left)",
+      "Carregar os próximos {count} (de {left} restantes)"
+    ],
+    "Load all ({left} left)": [
+      "Load all ({left} left)",
+      "Carregar tudo (restam {left})"
+    ],
+    "Watch a Range...": [
+      "Watch a Range...",
+      "Inspecionar um intervalo..."
+    ],
+    "Add to Watch": [
+      "Add to Watch",
+      "Adicionar à inspeção"
+    ],
+    "Copy Value": [
+      "Copy Value",
+      "Copiar valor"
+    ],
+    "Edit Watch": [
+      "Edit Watch",
+      "Editar inspeção"
+    ],
+    "Remove Watch": [
+      "Remove Watch",
+      "Remover inspeção"
+    ],
+    "Remove All Watches": [
+      "Remove All Watches",
+      "Remover todas as inspeções"
+    ],
+    "Array": [
+      "Array",
+      "Array"
+    ],
+    "Map": [
+      "Map",
+      "Mapa"
+    ],
+    "Single": [
+      "Single",
+      "Único"
+    ],
+    "Name": [
+      "Name",
+      "Nome"
+    ],
+    "Container": [
+      "Container",
+      "Contêiner"
+    ],
+    "Key": [
+      "Key",
+      "Chave"
+    ],
+    "Ref": [
+      "Ref",
+      "Ref"
+    ],
+    "Const": [
+      "Const",
+      "Const"
+    ],
+    "Search types": [
+      "Search types",
+      "Pesquisar tipos"
+    ],
+    "Part of the definition of the node: it cannot be changed.": [
+      "Part of the definition of the node: it cannot be changed.",
+      "Faz parte da definição do nó: não pode ser alterado."
+    ],
+    "Double-click or F2 to rename it.": [
+      "Double-click or F2 to rename it.",
+      "Clique duas vezes ou pressione F2 para renomear."
+    ],
+    "Click to change it.": [
+      "Click to change it.",
+      "Clique para alterar."
+    ],
+    "A single value, an array of it, or a map from a key type to it. Click to change it.": [
+      "A single value, an array of it, or a map from a key type to it. Click to change it.",
+      "Um único valor, um array dele ou um mapa de um tipo de chave para ele. Clique para alterar."
+    ],
+    "(none)": [
+      "(none)",
+      "(nenhum)"
+    ],
+    "The key type of a map; only used when the container is a Map.": [
+      "The key type of a map; only used when the container is a Map.",
+      "O tipo da chave de um mapa; usado apenas quando o contêiner é um Mapa."
+    ],
+    "yes": [
+      "yes",
+      "sim"
+    ],
+    "no": [
+      "no",
+      "não"
+    ],
+    "Passed by reference: the function reads and writes the caller's variable.": [
+      "Passed by reference: the function reads and writes the caller's variable.",
+      "Passado por referência: a função lê e escreve a variável de quem a chama."
+    ],
+    "The function may not modify the parameter (a const reference needs no variable and makes no copy).": [
+      "The function may not modify the parameter (a const reference needs no variable and makes no copy).",
+      "A função não pode modificar o parâmetro (uma referência constante não precisa de variável e não faz cópia)."
+    ],
+    "A name cannot be empty": [
+      "A name cannot be empty",
+      "Um nome não pode ficar vazio"
+    ],
+    "A graph named '{name}' already exists": [
+      "A graph named '{name}' already exists",
+      "Já existe um grafo chamado '{name}'"
+    ],
+    "A variable named '{name}' already exists": [
+      "A variable named '{name}' already exists",
+      "Já existe uma variável chamada '{name}'"
+    ],
+    "The function has a local variable named '{name}' already": [
+      "The function has a local variable named '{name}' already",
+      "A função já tem uma variável local chamada '{name}'"
+    ],
+    "A struct's name is one word: letters, digits and _": [
+      "A struct's name is one word: letters, digits and _",
+      "O nome de uma estrutura é uma palavra: letras, dígitos e _"
+    ],
+    "A struct named '{name}' already exists": [
+      "A struct named '{name}' already exists",
+      "Já existe uma estrutura chamada '{name}'"
+    ],
+    "The application has a type named '{name}' already": [
+      "The application has a type named '{name}' already",
+      "O aplicativo já tem um tipo chamado '{name}'"
+    ],
+    "Search": [
+      "Search",
+      "Pesquisar"
+    ],
+    "The names must be different from each other": [
+      "The names must be different from each other",
+      "Os nomes devem ser diferentes entre si"
+    ],
+    "Select a variable, function, struct or node to see its properties.": [
+      "Select a variable, function, struct or node to see its properties.",
+      "Selecione uma variável, função, estrutura ou nó para ver suas propriedades."
+    ],
+    "Nothing matches the search.": [
+      "Nothing matches the search.",
+      "Nada corresponde à pesquisa."
+    ],
+    "Each field starts with the default of the struct.": [
+      "Each field starts with the default of the struct.",
+      "Cada campo começa com o padrão da estrutura."
+    ],
+    "Containers start empty.": [
+      "Containers start empty.",
+      "Contêineres começam vazios."
+    ],
+    "Objects start as null.": [
+      "Objects start as null.",
+      "Objetos começam como null."
+    ],
+    "Default": [
+      "Default",
+      "Padrão"
+    ],
+    "Hex, e.g. 48 65 6C 6C 6F": [
+      "Hex, e.g. 48 65 6C 6C 6F",
+      "Hex, ex.: 48 65 6C 6C 6F"
+    ],
+    "Add": [
+      "Add",
+      "Adicionar"
+    ],
+    "The variable no longer exists.": [
+      "The variable no longer exists.",
+      "A variável não existe mais."
+    ],
+    "Local variable": [
+      "Local variable",
+      "Variável local"
+    ],
+    "Rename local variable": [
+      "Rename local variable",
+      "Renomear variável local"
+    ],
+    "Rename variable": [
+      "Rename variable",
+      "Renomear variável"
+    ],
+    "Change variable type": [
+      "Change variable type",
+      "Alterar tipo da variável"
+    ],
+    "Key type": [
+      "Key type",
+      "Tipo da chave"
+    ],
+    "Edit default value": [
+      "Edit default value",
+      "Editar valor padrão"
+    ],
+    "Category": [
+      "Category",
+      "Categoria"
+    ],
+    "Edit category": [
+      "Edit category",
+      "Editar categoria"
+    ],
+    "Description": [
+      "Description",
+      "Descrição"
+    ],
+    "Edit description": [
+      "Edit description",
+      "Editar descrição"
+    ],
+    "The graph no longer exists.": [
+      "The graph no longer exists.",
+      "O grafo não existe mais."
+    ],
+    "Function": [
+      "Function",
+      "Função"
+    ],
+    "Event graph": [
+      "Event graph",
+      "Grafo de eventos"
+    ],
+    "Rename function": [
+      "Rename function",
+      "Renomear função"
+    ],
+    "Rename graph": [
+      "Rename graph",
+      "Renomear grafo"
+    ],
+    "Inputs": [
+      "Inputs",
+      "Entradas"
+    ],
+    "Outputs": [
+      "Outputs",
+      "Saídas"
+    ],
+    "Add parameter": [
+      "Add parameter",
+      "Adicionar parâmetro"
+    ],
+    "The struct no longer exists.": [
+      "The struct no longer exists.",
+      "A estrutura não existe mais."
+    ],
+    "Struct": [
+      "Struct",
+      "Estrutura"
+    ],
+    "Rename struct": [
+      "Rename struct",
+      "Renomear estrutura"
+    ],
+    "Fields": [
+      "Fields",
+      "Campos"
+    ],
+    "Add field": [
+      "Add field",
+      "Adicionar campo"
+    ],
+    "Add a field with the + of Fields.": [
+      "Add a field with the + of Fields.",
+      "Adicione um campo com o + de Campos."
+    ],
+    "Field: {name}": [
+      "Field: {name}",
+      "Campo: {name}"
+    ],
+    "{count} nodes selected": [
+      "{count} nodes selected",
+      "{count} nós selecionados"
+    ],
+    "Function entry node": [
+      "Function entry node",
+      "Nó de entrada da função"
+    ],
+    "Definition": [
+      "Definition",
+      "Definição"
+    ],
+    "Event": [
+      "Event",
+      "Evento"
+    ],
+    "Arguments": [
+      "Arguments",
+      "Argumentos"
+    ],
+    "unknown": [
+      "unknown",
+      "desconhecido"
+    ],
+    "This event is raised by the application. A script can only handle it.": [
+      "This event is raised by the application. A script can only handle it.",
+      "Este evento é disparado pelo aplicativo. Um script só pode tratá-lo."
+    ],
+    "Change field": [
+      "Change field",
+      "Alterar campo"
+    ],
+    "Field": [
+      "Field",
+      "Campo"
+    ],
+    "Change {setting}": [
+      "Change {setting}",
+      "Alterar {setting}"
+    ],
+    "Auto": [
+      "Auto",
+      "Auto"
+    ],
+    "Auto ({type})": [
+      "Auto ({type})",
+      "Auto ({type})"
+    ],
+    "Change node type": [
+      "Change node type",
+      "Alterar tipo do nó"
+    ],
+    "Type {name}": [
+      "Type {name}",
+      "Tipo {name}"
+    ],
+    "Add pin": [
+      "Add pin",
+      "Adicionar pino"
+    ],
+    "Edit parameters": [
+      "Edit parameters",
+      "Editar parâmetros"
+    ],
+    "Edit fields": [
+      "Edit fields",
+      "Editar campos"
+    ],
+    "Edit node pins": [
+      "Edit node pins",
+      "Editar pinos do nó"
+    ],
+    "Rename": [
+      "Rename",
+      "Renomear"
+    ],
+    "F2": [
+      "F2",
+      ""
+    ],
+    "Move field": [
+      "Move field",
+      "Mover campo"
+    ],
+    "Move pin": [
+      "Move pin",
+      "Mover pino"
+    ],
+    "Move Up": [
+      "Move Up",
+      "Mover para cima"
+    ],
+    "Move Down": [
+      "Move Down",
+      "Mover para baixo"
+    ],
+    "Remove": [
+      "Remove",
+      "Remover"
+    ],
+    "Remove parameter": [
+      "Remove parameter",
+      "Remover parâmetro"
+    ],
+    "Remove field": [
+      "Remove field",
+      "Remover campo"
+    ],
+    "Remove pin": [
+      "Remove pin",
+      "Remover pino"
+    ],
+    "EventGraph": [
+      "EventGraph",
+      "Grafo de eventos"
+    ],
+    "Graph": [
+      "Graph",
+      "Grafo"
+    ],
+    "Message": [
+      "Message",
+      "Mensagem"
+    ],
+    "Compiled successfully.": [
+      "Compiled successfully.",
+      "Compilado com sucesso."
+    ],
+    "Find in script (node titles, comments, values)": [
+      "Find in script (node titles, comments, values)",
+      "Localizar no script (títulos de nós, comentários, valores)"
+    ],
+    "Where": [
+      "Where",
+      "Onde"
+    ],
+    "References of {what}": [
+      "References of {what}",
+      "Referências de {what}"
+    ],
+    "\"{text}\"": [
+      "\"{text}\"",
+      "“{text}”"
+    ],
+    "Type to search, or use Find References on a node, variable, function or struct.": [
+      "Type to search, or use Find References on a node, variable, function or struct.",
+      "Digite para pesquisar ou use Localizar referências em um nó, variável, função ou estrutura."
+    ],
+    "{what}: nothing found": [
+      "{what}: nothing found",
+      "{what}: nada encontrado"
+    ],
+    "{what}: {count} found": [
+      "{what}: {count} found",
+      "{what}: {count} encontrado(s)"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "Os argumentos de Main, um por linha"
+    ],
+    "Working directory": [
+      "Working directory",
+      "Diretório de trabalho"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "relativa à pasta do script; vazia: sem alteração"
+    ],
+    "Environment": [
+      "Environment",
+      "Ambiente"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "NOME=valor, um por linha: definidas enquanto o script é executado"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "Pastas de plugins"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "Pastas de plugins, relativas à do script, uma por linha"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "Atraso por passo (ms)"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "Um atraso entre dois nós durante a execução: câmera lenta, para observar as ligações"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "Configurações de inicialização"
+    ],
+    "Add a function": [
+      "Add a function",
+      "Adicionar uma função"
+    ],
+    "Add a variable": [
+      "Add a variable",
+      "Adicionar uma variável"
+    ],
+    "Add a local variable": [
+      "Add a local variable",
+      "Adicionar uma variável local"
+    ],
+    "Add a struct": [
+      "Add a struct",
+      "Adicionar uma estrutura"
+    ],
+    "Event Graphs": [
+      "Event Graphs",
+      "Grafos de eventos"
+    ],
+    "Functions": [
+      "Functions",
+      "Funções"
+    ],
+    "Local Variables": [
+      "Local Variables",
+      "Variáveis locais"
+    ],
+    "Structs": [
+      "Structs",
+      "Estruturas"
+    ],
+    "Local Variables of {function}": [
+      "Local Variables of {function}",
+      "Variáveis locais de {function}"
+    ],
+    "Go to the Handler": [
+      "Go to the Handler",
+      "Ir para o manipulador"
+    ],
+    "Open": [
+      "Open",
+      "Abrir"
+    ],
+    "Duplicate function": [
+      "Duplicate function",
+      "Duplicar função"
+    ],
+    "Add function": [
+      "Add function",
+      "Adicionar função"
+    ],
+    "Add variable": [
+      "Add variable",
+      "Adicionar variável"
+    ],
+    "Add local variable": [
+      "Add local variable",
+      "Adicionar variável local"
+    ],
+    "Add struct": [
+      "Add struct",
+      "Adicionar estrutura"
+    ],
+    "Dock": [
+      "Dock",
+      "Encaixar"
+    ],
+    "Float": [
+      "Float",
+      "Flutuar"
+    ],
+    "Hide the tab bar": [
+      "Hide the tab bar",
+      "Ocultar a barra de abas"
+    ],
+    "Add a function, a variable or a struct": [
+      "Add a function, a variable or a struct",
+      "Adicionar uma função, uma variável ou uma estrutura"
+    ],
+    "Local Variable of {function}": [
+      "Local Variable of {function}",
+      "Variável local de {function}"
+    ]
+  },
+  "obsolete": {
+    "Language": [
+      "Language",
+      "Idioma"
+    ],
+    "{application} shows the new language when it is started again.": [
+      "{application} shows the new language when it is started again.",
+      "{application} mostrará o novo idioma quando for iniciado novamente."
+    ]
+  }
+}

@@ -30,6 +30,8 @@ FG_CORE_EXPORT std::vector<NodeTemplate> filterPalette(const Registry& reg, cons
 // Case insensitive search over title, keywords and category; every word of `query` must match.
 // Results are ordered best match first. An empty query returns everything sorted by category and title.
 FG_CORE_EXPORT std::vector<NodeTemplate> searchPalette(const std::vector<NodeTemplate>& all, const std::string& query);
+// The same, as the indices in `all` of what `query` finds, best first.
+FG_CORE_EXPORT std::vector<size_t> searchPaletteIndices(const std::vector<NodeTemplate>& all, const std::string& query);
 
 // Creates a node in `graph` from a palette entry (type arguments and properties applied).
 FG_CORE_EXPORT Node& instantiate(Graph& graph, const NodeTemplate& t, double x, double y);

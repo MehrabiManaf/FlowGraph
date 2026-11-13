@@ -3,6 +3,9 @@
 // Minimal test runner: TEST(name) { CHECK(cond); }
 #include <FlowGraph/Encoding.hpp>
 #include <FlowGraph/Runtime.hpp>
+#include <FlowGraphEditorCore/GraphEdits.hpp>
+#include <FlowGraphEditorCore/RunSession.hpp>
+#include <FlowGraphEditorCore/ScriptEdits.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -10,6 +13,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <deque>
 #include <ctime>
 #include <map>
 #include <filesystem>
@@ -5543,6 +5547,271 @@ TEST(structs_are_renamed_everywhere_and_offered_in_the_palette) {
     CHECK(checkCompatibility(t.s, rt.registry()).ok());
     t.s.structs[1].fields.push_back({"Gone", "MissingClass", Value(), ""});
     CHECK(!checkCompatibility(t.s, rt.registry()).ok());
+}
+
+// ---- the editors' shared part (EditorCore: no Qt) --------------------------------------------------------------------
+namespace {
+// The editor's thread of a test: what is posted waits in a queue until the test pumps it.
+struct PumpedThread : fged::core::UiThread {
+    std::mutex mu;
+    std::deque<std::function<void()>> queue;
+    std::function<void()> repeated;
+    void post(std::function<void()> fn) override {
+        std::lock_guard lk(mu);
+        queue.push_back(std::move(fn));
+    }
+    void startRepeating(int, std::function<void()> fn) override { repeated = std::move(fn); }
+    void stopRepeating() override { repeated = nullptr; }
+    void pump() {
+        std::deque<std::function<void()>> now;
+        {
+            std::lock_guard lk(mu);
+            now.swap(queue);
+        }
+        for (auto& fn : now) fn();
+        if (repeated) repeated();
+    }
+};
+} // namespace
+
+TEST(editor_core_document_undoes_coalesces_and_tells) {
+    TestRuntime rt;
+    fged::core::Document doc(rt);
+    std::vector<std::string> heard;
+    doc.changed.connect([&](bool structural) { heard.push_back(structural ? "changed" : "layout"); });
+    doc.titleChanged.connect([&] { heard.push_back("title"); });
+    CHECK(!doc.isDirty() && !doc.canUndo() && doc.script().findGraph("EventGraph"));
+    doc.edit("Add A", [](fg::Script& s) { s.variables.push_back({"A", "int", Value(int64_t(1)), "", ""}); });
+    CHECK(doc.isDirty() && doc.canUndo() && doc.undoLabel() == "Add A");
+    CHECK((heard == std::vector<std::string>{"title", "changed"}));        // dirty now, then the edit
+    // typing into a field: one step
+    for (int i = 2; i <= 5; ++i)
+        doc.edit("Type", [i](fg::Script& s) { s.variables[0].def = Value(int64_t(i)); }, fged::core::EditKind::Structural, "field");
+    doc.undo();
+    CHECK(doc.script().variables.size() == 1 && doc.script().variables[0].def.toInt() == 1);
+    doc.undo();
+    CHECK(doc.script().variables.empty() && !doc.canUndo() && doc.canRedo() && doc.redoLabel() == "Add A");
+    doc.redo();
+    CHECK(doc.script().variables.size() == 1);
+    // a layout edit does not compile
+    int compiled = 0;
+    doc.compiled.connect([&] { ++compiled; });
+    doc.edit("Move", [](fg::Script& s) { s.graphs[0].nodes.empty() ? void() : void(s.graphs[0].nodes[0].x += 10); }, fged::core::EditKind::Layout);
+    CHECK_EQ(compiled, 0);
+    // struct names
+    doc.edit("Struct", [](fg::Script& s) { s.structs.push_back({"Point", "", "", {}}); });
+    CHECK(doc.structNameProblem("Point") == fged::core::StructNameProblem::StructExists);
+    CHECK(doc.structNameProblem("Point", "Point") == fged::core::StructNameProblem::None);
+    CHECK(doc.structNameProblem("two words") == fged::core::StructNameProblem::NotAName);
+    CHECK(doc.structNameProblem("int") == fged::core::StructNameProblem::TypeExists);
+    // a file: saved, and loaded again into a new history
+    const std::string file = (std::filesystem::temp_directory_path() / "fg_editorcore_doc.flow").string();
+    CHECK(doc.save(file) && !doc.isDirty() && doc.path() == file);
+    fged::core::Document other(rt);
+    std::string error;
+    CHECK(other.load(file, &error) && other.script().structs.size() == 1 && !other.canUndo());
+    CHECK(!other.load(file + ".missing", &error) && !error.empty());
+    std::filesystem::remove(file);
+}
+
+TEST(editor_core_graph_edits_link_remove_copy_and_place) {
+    using fged::core::GraphEdits;
+    using fged::core::LinkProblem;
+    using fged::core::PinEnd;
+    TestRuntime rt;
+    GoGraph t;
+    t.s.variables.push_back({"Name", "string", Value("Ann"), "", ""});
+    const NodeId a = t.say("a"), b = t.say("b");
+    const NodeId get = t.var("var.get", "Name");
+    fged::core::Document doc(rt);
+    doc.setScript(t.s, "Test");
+    GraphEdits edits(doc, "EventGraph");
+    const auto pin = [&](NodeId node, const std::string& name, PinDir dir) {
+        return PinEnd::of(*doc.compiledGraph("EventGraph")->findNode(node), name, dir);
+    };
+    const auto links = [&] { return doc.graph("EventGraph")->connections.size(); };
+
+    // what cannot be linked, and why
+    LinkProblem why = LinkProblem::None;
+    CHECK(!edits.link(pin(a, "In", PinDir::In), pin(b, "In", PinDir::In), "Link", &why) && why == LinkProblem::SameDirection);
+    CHECK(!edits.link(pin(a, "Then", PinDir::Out), pin(a, "In", PinDir::In), "Link", &why) && why == LinkProblem::SameNode);
+    CHECK(edits.linkProblem(pin(t.ev, "Then", PinDir::Out), pin(a, "String", PinDir::In)) == LinkProblem::KindsDiffer);
+    CHECK(links() == 0 && !doc.canUndo());
+    // linked, in either order; an output of execution has one link: the next replaces it
+    CHECK(edits.link(pin(a, "In", PinDir::In), pin(t.ev, "Then", PinDir::Out), "Link"));
+    CHECK(links() == 1 && doc.undoLabel() == "Link");
+    CHECK(edits.link(pin(t.ev, "Then", PinDir::Out), pin(b, "In", PinDir::In), "Link"));
+    CHECK(links() == 1 && doc.graph("EventGraph")->connections[0].toNode == b);
+    // a loop of execution with no way out is refused
+    CHECK(edits.link(pin(b, "Then", PinDir::Out), pin(a, "In", PinDir::In), "Link"));
+    CHECK(edits.linkProblem(pin(a, "Then", PinDir::Out), pin(b, "In", PinDir::In)) == LinkProblem::EndlessLoop);
+
+    // a reroute in a link of data, none in one of execution
+    const fg::CompiledNode& getter = *doc.compiledGraph("EventGraph")->findNode(get);
+    const std::string value = getter.pins[std::size_t(getter.dataOut.at(0))].name;
+    CHECK(edits.link(pin(get, value, PinDir::Out), pin(a, "String", PinDir::In), "Link"));
+    const fg::Connection data{get, value, a, "String"};
+    CHECK(!edits.insertReroute(doc.graph("EventGraph")->connections[0], 0, 0, "Reroute"));
+    CHECK(edits.insertReroute(data, 50, 60, "Reroute"));
+    const fg::Graph& g = *doc.graph("EventGraph");
+    const auto reroute = std::find_if(g.nodes.begin(), g.nodes.end(), [](const fg::Node& n) { return n.def == "reroute"; });
+    CHECK(reroute != g.nodes.end() && reroute->x == 50 && reroute->y == 60);
+    CHECK(std::count(g.connections.begin(), g.connections.end(), data) == 0 && links() == 4);
+
+    // breaking a pin's links
+    edits.breakLinks(pin(b, "Then", PinDir::Out), "Break");
+    CHECK(links() == 3);
+
+    // moved: one step of the layout; not moved: none
+    const std::string before = doc.undoLabel();
+    edits.place({{a, 20, 20}}, {}, "Move");
+    edits.place({{a, 20, 20}}, {}, "Move");         // where it is already: no step
+    CHECK(doc.undoLabel() == "Move");
+    doc.undo();
+    CHECK(doc.undoLabel() == before);
+    edits.place({{a, 300, 40}}, {}, "Move");
+    CHECK(doc.graph("EventGraph")->findNode(a)->x == 300);
+
+    // copied and pasted: the nodes and the links between them; an event is not copied
+    const std::string clip = edits.copy({a, b, t.ev});
+    CHECK(GraphEdits::isClip(clip) && !GraphEdits::isClip("{\"name\": \"x\"}") && !GraphEdits::isClip("not json"));
+    const std::size_t nodes = doc.graph("EventGraph")->nodes.size();
+    const std::vector<NodeId> made = edits.paste(clip, 1000, 1000, false, "Paste");
+    CHECK(made.size() == 2 && doc.graph("EventGraph")->nodes.size() == nodes + 2);
+    double left = 1e9;
+    for (NodeId id : made)
+        left = std::min(left, doc.graph("EventGraph")->findNode(id)->x);
+    CHECK(left == 1000);
+    CHECK(edits.paste("nothing", 0, 0, false, "Paste").empty());
+
+    // removed: the nodes with their links; the event stays
+    edits.remove({made[0], made[1], t.ev}, {}, {}, "Delete");
+    CHECK(doc.graph("EventGraph")->nodes.size() == nodes && doc.graph("EventGraph")->findNode(t.ev));
+
+    // a value typed: one step
+    edits.setPinValue(b, "String", Value("x"), "Edit value");
+    edits.setPinValue(b, "String", Value("xy"), "Edit value");
+    CHECK(doc.graph("EventGraph")->findNode(b)->defaults.at("String").str() == "xy");
+    doc.undo();
+    CHECK(doc.graph("EventGraph")->findNode(b)->defaults.at("String").str() == "b");
+
+    // comments
+    const int id = edits.addComment(0, 0, 300, 160, "Note", "Comment");
+    edits.setCommentText(id, "Notes", "Comment");
+    edits.place({}, {{id, 10, 20, 400, 200}}, "Resize");
+    const fg::CommentBox& c = doc.graph("EventGraph")->comments.at(0);
+    CHECK(c.text == "Notes" && c.x == 10 && c.w == 400);
+    edits.setNodeComment(a, "first", "Node comment");
+    CHECK(doc.graph("EventGraph")->findNode(a)->comment == "first");
+}
+
+TEST(editor_core_script_edits_add_rename_duplicate_and_remove_members) {
+    using fged::core::Member;
+    using fged::core::NameProblem;
+    TestRuntime rt;
+    fged::core::Document doc(rt);
+    fged::core::ScriptEdits edits(doc);
+    // added, with names not taken
+    const std::string f = edits.add(Member::Function, "NewFunction", "Add function");
+    const std::string f2 = edits.add(Member::Function, "NewFunction", "Add function");
+    CHECK(f == "NewFunction" && f2 != f && doc.script().findGraph(f2));
+    CHECK(doc.script().findGraph(f)->kind == fg::GraphKind::Function && doc.undoLabel() == "Add function");
+    const std::string v = edits.add(Member::Variable, "NewVar", "Add variable");
+    const std::string st = edits.add(Member::Struct, "NewStruct", "Add struct");
+    const std::string l = edits.add(Member::Local, "NewLocal", "Add local", f);
+    CHECK(doc.script().findVariable(v) && doc.script().findStruct(st) && doc.script().findGraph(f)->findLocal(l));
+    CHECK(edits.add(Member::Local, "NewLocal", "Add local", "EventGraph").empty());      // locals are a function's
+    // what a rename would clash with
+    CHECK(edits.renameProblem(Member::Function, "", f, f2) == NameProblem::GraphExists);
+    CHECK(edits.renameProblem(Member::Function, "", f, "EventGraph") == NameProblem::GraphExists);
+    CHECK(edits.renameProblem(Member::Variable, "", v, " ") == NameProblem::Empty);
+    CHECK(edits.renameProblem(Member::Struct, "", st, "two words") == NameProblem::NotAName);
+    CHECK(edits.renameProblem(Member::Struct, "", st, "int") == NameProblem::TypeExists);
+    CHECK(edits.renameProblem(Member::Function, "", f, f) == NameProblem::None);
+    // renamed with what refers to it: a Get of the variable follows
+    doc.edit("Get", [&](fg::Script& s) {
+        fg::Node& n = s.graphs[0].addNode("var.get");
+        n.props["name"] = v;
+        n.props["scope"] = "global";
+    });
+    NameProblem why = NameProblem::None;
+    CHECK(edits.rename(Member::Variable, "", v, "Speed", "Rename variable", &why) && why == NameProblem::None);
+    CHECK(doc.script().findVariable("Speed") && doc.script().graphs[0].nodes.back().props.at("name") == "Speed");
+    CHECK(!edits.rename(Member::Function, "", f, f2, "Rename function", &why) && why == NameProblem::GraphExists);
+    CHECK(edits.rename(Member::Function, "", f, "Move", "Rename function") && doc.script().findGraph("Move"));
+    CHECK(edits.rename(Member::Local, "Move", l, "Step", "Rename local") && doc.script().findGraph("Move")->findLocal("Step"));
+    // a function duplicated; members removed; an event graph stays
+    const std::string copy = edits.duplicateFunction("Move", "Duplicate function");
+    CHECK(copy == "Move_Copy" && doc.script().findGraph(copy)->findLocal("Step"));
+    CHECK(edits.duplicateFunction("EventGraph", "Duplicate function").empty());
+    edits.remove(Member::Function, "", copy, "Delete");
+    edits.remove(Member::Local, "Move", "Step", "Delete");
+    edits.remove(Member::Variable, "", "Speed", "Delete");
+    edits.remove(Member::Struct, "", st, "Delete");
+    edits.remove(Member::EventGraph, "", "EventGraph", "Delete");
+    CHECK(!doc.script().findGraph(copy) && !doc.script().findGraph("Move")->findLocal("Step"));
+    CHECK(!doc.script().findVariable("Speed") && !doc.script().findStruct(st) && doc.script().findGraph("EventGraph"));
+    doc.undo();
+    CHECK(doc.script().findStruct(st));
+}
+
+TEST(editor_core_run_session_runs_reports_and_stops_on_edits) {
+    TestRuntime rt;
+    GoGraph t;
+    NodeId pr = t.node("util.print", {{"String", Value("hello")}});
+    t.link(t.ev, "Then", pr, "In");
+    fged::core::Document doc(rt);
+    doc.setScript(t.s, "Test");
+    PumpedThread ui;
+    fged::core::RunSession run(doc, ui);
+    std::vector<std::string> log;
+    bool done = false, ok = false;
+    std::vector<fged::core::RunState> states;
+    run.logMessage.connect([&](int, const std::string& text) { log.push_back(text); });
+    run.finished.connect([&](bool success, const std::string&) { done = true; ok = success; });
+    run.stateChanged.connect([&](fged::core::RunState s) { states.push_back(s); });
+    CHECK(run.start("Go", {}));
+    for (int i = 0; i < 500 && !done; ++i) {
+        ui.pump();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(done && ok && !run.isActive());
+    CHECK(std::find(log.begin(), log.end(), "hello") != log.end());
+    CHECK(!states.empty() && states.front() == fged::core::RunState::Running && states.back() == fged::core::RunState::Idle);
+
+    // a script with compile errors does not run: the editor is told, in its own words
+    std::vector<fged::core::RunNotice> notices;
+    run.notice.connect([&](fged::core::RunNotice n) { notices.push_back(n); });
+    doc.edit("Broken", [](fg::Script& s) { s.graphs[0].addNode("no.such.node"); });
+    CHECK(!run.start("Go", {}));
+    CHECK(notices.size() == 1 && notices[0] == fged::core::RunNotice::CompileErrors);
+    doc.undo();
+
+    // a run waiting in a Delay is stopped by an edit, before the views hear of it
+    GoGraph w;
+    NodeId delay = w.node("flow.delay", {{"Duration", Value(30.0)}});
+    w.link(w.ev, "Then", delay, "In");
+    doc.setScript(w.s, "Wait");
+    CHECK(run.start("Go", {}));
+    for (int i = 0; i < 100 && run.state() != fged::core::RunState::Waiting; ++i) {
+        ui.pump();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(run.state() == fged::core::RunState::Waiting);
+    bool activeWhenViewsHeard = true;
+    doc.changed.connect([&](bool) { activeWhenViewsHeard = run.isActive(); });
+    notices.clear();
+    doc.edit("Edit", [](fg::Script& s) { s.variables.push_back({"X", "int", Value(int64_t(0)), "", ""}); });
+    CHECK(!activeWhenViewsHeard && !run.isActive());
+    CHECK(notices.size() == 1 && notices[0] == fged::core::RunNotice::StoppedByEdit);
+
+    // what a user types, as a value of a type
+    const Registry& reg = rt.registry();
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.tInt(), " 42 ").toInt() == 42);
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.tInt(), "4x").toInt() == 0);
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.tFloat(), "2.5").toFloat() == 2.5);
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.tBool(), "Yes").toBool());
+    CHECK(fged::core::RunSession::parseArgument(reg, reg.findType("bytes"), "48 65").bytesView() == "He");
 }
 
 int main(int argc, char** argv) {

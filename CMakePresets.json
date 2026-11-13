@@ -29,9 +29,9 @@
     {
       "name": "core-only",
       "displayName": "Runtime only (no Qt)",
-      "description": "FlowGraphCore, flow, tests and examples; no editor, so Qt is not needed",
+      "description": "FlowGraphCore, flow, tests and examples; no editor, so neither Qt nor GLWidgets is needed",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "FG_BUILD_EDITOR": "OFF" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "FG_BUILD_EDITOR": "OFF", "FG_BUILD_GLEDITOR": "OFF" }
     }
   ],
   "buildPresets": [

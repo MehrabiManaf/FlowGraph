@@ -112,7 +112,7 @@ std::vector<NodeTemplate> filterPalette(const Registry& reg, const std::vector<N
     return out;
 }
 
-std::vector<NodeTemplate> searchPalette(const std::vector<NodeTemplate>& all, const std::string& query) {
+std::vector<size_t> searchPaletteIndices(const std::vector<NodeTemplate>& all, const std::string& query) {
     std::vector<std::string> words;
     {
         std::string cur;
@@ -150,9 +150,15 @@ std::vector<NodeTemplate> searchPalette(const std::vector<NodeTemplate>& all, co
         if (x.title.size() != y.title.size() && !words.empty()) return x.title.size() < y.title.size();
         return x.title < y.title;
     });
-    std::vector<NodeTemplate> out;
+    std::vector<size_t> out;
     out.reserve(hits.size());
-    for (auto& h : hits) out.push_back(all[h.index]);
+    for (auto& h : hits) out.push_back(h.index);
+    return out;
+}
+
+std::vector<NodeTemplate> searchPalette(const std::vector<NodeTemplate>& all, const std::string& query) {
+    std::vector<NodeTemplate> out;
+    for (size_t i : searchPaletteIndices(all, query)) out.push_back(all[i]);
     return out;
 }
 

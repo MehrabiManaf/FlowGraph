@@ -1,0 +1,1347 @@
+{
+  "language": "ru",
+  "texts": {
+    "English": [
+      "English",
+      "Русский"
+    ],
+    "Dark": [
+      "Dark",
+      "Тёмная"
+    ],
+    "Light": [
+      "Light",
+      "Светлая"
+    ],
+    "Dusk": [
+      "Dusk",
+      "Сумерки"
+    ],
+    "Sand": [
+      "Sand",
+      "Песок"
+    ],
+    "Turquoise": [
+      "Turquoise",
+      "Бирюза"
+    ],
+    "Studio": [
+      "Studio",
+      "Студия"
+    ],
+    "Fluid": [
+      "Fluid",
+      "Плавный"
+    ],
+    "Plain": [
+      "Plain",
+      "Простой"
+    ],
+    "Plastic": [
+      "Plastic",
+      "Пластик"
+    ],
+    "Metal": [
+      "Metal",
+      "Металл"
+    ],
+    "Solid": [
+      "Solid",
+      "Объёмный"
+    ],
+    "Glass": [
+      "Glass",
+      "Стекло"
+    ],
+    "My Script": [
+      "My Script",
+      "Мой скрипт"
+    ],
+    "Details": [
+      "Details",
+      "Подробности"
+    ],
+    "Output Log": [
+      "Output Log",
+      "Журнал вывода"
+    ],
+    "Compile Results": [
+      "Compile Results",
+      "Результаты компиляции"
+    ],
+    "Find Results": [
+      "Find Results",
+      "Результаты поиска"
+    ],
+    "Debugger": [
+      "Debugger",
+      "Отладчик"
+    ],
+    "FlowGraph Studio": [
+      "FlowGraph Studio",
+      ""
+    ],
+    "Ready": [
+      "Ready",
+      "Готово"
+    ],
+    "Idle": [
+      "Idle",
+      "Простой"
+    ],
+    "&New": [
+      "&New",
+      "Соз&дать"
+    ],
+    "&Open...": [
+      "&Open...",
+      "&Открыть..."
+    ],
+    "&Save": [
+      "&Save",
+      "&Сохранить"
+    ],
+    "Save &As...": [
+      "Save &As...",
+      "Сохранить &как..."
+    ],
+    "&Quit": [
+      "&Quit",
+      "&Выход"
+    ],
+    "&Undo": [
+      "&Undo",
+      "&Отменить"
+    ],
+    "&Redo": [
+      "&Redo",
+      "&Повторить"
+    ],
+    "Cu&t": [
+      "Cu&t",
+      "&Вырезать"
+    ],
+    "&Copy": [
+      "&Copy",
+      "&Копировать"
+    ],
+    "&Paste": [
+      "&Paste",
+      "Вс&тавить"
+    ],
+    "D&uplicate": [
+      "D&uplicate",
+      "Д&ублировать"
+    ],
+    "Select &All": [
+      "Select &All",
+      "Выделить вс&ё"
+    ],
+    "&Snap to Grid": [
+      "&Snap to Grid",
+      "&Привязка к сетке"
+    ],
+    "&Find in Script...": [
+      "&Find in Script...",
+      "&Найти в скрипте..."
+    ],
+    "Find &References": [
+      "Find &References",
+      "Найти сс&ылки"
+    ],
+    "&Run": [
+      "&Run",
+      "&Запуск"
+    ],
+    "&Pause": [
+      "&Pause",
+      "&Пауза"
+    ],
+    "S&top": [
+      "S&top",
+      "&Остановить"
+    ],
+    "Step &Over": [
+      "Step &Over",
+      "Шаг с &обходом"
+    ],
+    "Step &Into": [
+      "Step &Into",
+      "Шаг с &заходом"
+    ],
+    "Step O&ut": [
+      "Step O&ut",
+      "Шаг с &выходом"
+    ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "&Конфигурации запуска..."
+    ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "Свернуть в &функцию..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "Во весь &экран"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "Переносит выбранные узлы в новую функцию и вызывает её на их месте"
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "Изменить конфигурации запуска этого скрипта"
+    ],
+    "Toggle &Breakpoint": [
+      "Toggle &Breakpoint",
+      "Точка о&станова"
+    ],
+    "Clear the List": [
+      "Clear the List",
+      "Очистить список"
+    ],
+    "As the System": [
+      "As the System",
+      "Как в системе"
+    ],
+    "&File": [
+      "&File",
+      "&Файл"
+    ],
+    "Open &Recent": [
+      "Open &Recent",
+      "&Недавние"
+    ],
+    "&Edit": [
+      "&Edit",
+      "&Правка"
+    ],
+    "&Delete": [
+      "&Delete",
+      "&Удалить"
+    ],
+    "Del": [
+      "Del",
+      ""
+    ],
+    "&View": [
+      "&View",
+      "&Вид"
+    ],
+    "&Frame Selection": [
+      "&Frame Selection",
+      "&Показать выделенное"
+    ],
+    "F": [
+      "F",
+      ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "Показать &всё"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "&Шаг сетки"
+    ],
+    "&Colors": [
+      "&Colors",
+      "&Цвета"
+    ],
+    "&Style": [
+      "&Style",
+      "&Стиль"
+    ],
+    "&Language": [
+      "&Language",
+      "&Язык"
+    ],
+    "&Debug": [
+      "&Debug",
+      "&Отладка"
+    ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "&Скорость выполнения"
+    ],
+    "&Help": [
+      "&Help",
+      "&Справка"
+    ],
+    "&About FlowGraph Studio": [
+      "&About FlowGraph Studio",
+      "&О FlowGraph Studio"
+    ],
+    "Untitled": [
+      "Untitled",
+      "Без имени"
+    ],
+    "{name}{dirty} - {application}": [
+      "{name}{dirty} - {application}",
+      ""
+    ],
+    "System": [
+      "System",
+      "Системный"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "Полная скорость"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "Медленно (100 мс / узел)"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "Медленнее (300 мс / узел)"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "Пошагово (1 с / узел)"
+    ],
+    "{step} units": [
+      "{step} units",
+      "{step} ед."
+    ],
+    "&Undo {what}": [
+      "&Undo {what}",
+      "&Отменить: {what}"
+    ],
+    "&Redo {what}": [
+      "&Redo {what}",
+      "&Повторить: {what}"
+    ],
+    "Paused at '{graph}'": [
+      "Paused at '{graph}'",
+      "Пауза на '{graph}'"
+    ],
+    "The run ended": [
+      "The run ended",
+      "Выполнение завершено"
+    ],
+    "The run failed: see the Output Log": [
+      "The run failed: see the Output Log",
+      "Выполнение не удалось: см. журнал вывода"
+    ],
+    "Warning: {text}": [
+      "Warning: {text}",
+      "Предупреждение: {text}"
+    ],
+    "The script has errors: it cannot run": [
+      "The script has errors: it cannot run",
+      "В скрипте есть ошибки: его нельзя запустить"
+    ],
+    "The script was changed: the run was stopped": [
+      "The script was changed: the run was stopped",
+      "Скрипт изменён: выполнение остановлено"
+    ],
+    "Nothing to run: the application has no event to start": [
+      "Nothing to run: the application has no event to start",
+      "Нечего запускать: у приложения нет события для запуска"
+    ],
+    "Run:": [
+      "Run:",
+      "Запуск:"
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "Конфигурация запуска, которую запускает «Запуск»"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "Конфигурации запуска сохраняются вместе со скриптом"
+    ],
+    "&Continue": [
+      "&Continue",
+      "&Продолжить"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "Пауза (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "Продолжить (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "Запуск (F5)"
+    ],
+    "Running": [
+      "Running",
+      "Выполняется"
+    ],
+    "Waiting": [
+      "Waiting",
+      "Ожидание"
+    ],
+    "Paused": [
+      "Paused",
+      "Пауза"
+    ],
+    "{count} reference(s) of {what}": [
+      "{count} reference(s) of {what}",
+      "Ссылок на {what}: {count}"
+    ],
+    "Select a node, or a variable, function or struct in My Script, to find its references": [
+      "Select a node, or a variable, function or struct in My Script, to find its references",
+      "Выберите узел или переменную, функцию либо структуру в «Мой скрипт», чтобы найти ссылки на них"
+    ],
+    "{errors} error(s), {warnings} warning(s)": [
+      "{errors} error(s), {warnings} warning(s)",
+      "Ошибок: {errors}, предупреждений: {warnings}"
+    ],
+    "OK": [
+      "OK",
+      "ОК"
+    ],
+    "A new script": [
+      "A new script",
+      "Новый скрипт"
+    ],
+    "The script was not opened": [
+      "The script was not opened",
+      "Скрипт не открыт"
+    ],
+    "Close": [
+      "Close",
+      "Закрыть"
+    ],
+    "Opened {file}": [
+      "Opened {file}",
+      "Открыт {file}"
+    ],
+    "FlowGraph scripts": [
+      "FlowGraph scripts",
+      "Скрипты FlowGraph"
+    ],
+    "Open a Script": [
+      "Open a Script",
+      "Открыть скрипт"
+    ],
+    "No file dialog": [
+      "No file dialog",
+      "Нет диалога выбора файла"
+    ],
+    "Save the Script": [
+      "Save the Script",
+      "Сохранить скрипт"
+    ],
+    "The script was not saved": [
+      "The script was not saved",
+      "Скрипт не сохранён"
+    ],
+    "Saved {file}": [
+      "Saved {file}",
+      "Сохранён {file}"
+    ],
+    "Save the changes?": [
+      "Save the changes?",
+      "Сохранить изменения?"
+    ],
+    "The changes to {name} are lost if they are not saved.": [
+      "The changes to {name} are lost if they are not saved.",
+      "Изменения в {name} будут потеряны, если их не сохранить."
+    ],
+    "Save": [
+      "Save",
+      "Сохранить"
+    ],
+    "Don't Save": [
+      "Don't Save",
+      "Не сохранять"
+    ],
+    "Cancel": [
+      "Cancel",
+      "Отмена"
+    ],
+    "About {application}": [
+      "About {application}",
+      "О программе {application}"
+    ],
+    "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets.": [
+      "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets.",
+      "Редактор и отладчик стандартных приложений FlowGraph, отрисованный GLWidgets."
+    ],
+    "The events of the application and the entry of a function cannot be deleted": [
+      "The events of the application and the entry of a function cannot be deleted",
+      "События приложения и вход функции удалить нельзя"
+    ],
+    "Delete": [
+      "Delete",
+      "Удалить"
+    ],
+    "The clipboard has no nodes": [
+      "The clipboard has no nodes",
+      "В буфере обмена нет узлов"
+    ],
+    "Paste": [
+      "Paste",
+      "Вставить"
+    ],
+    "Duplicate": [
+      "Duplicate",
+      "Дублировать"
+    ],
+    "Break links": [
+      "Break links",
+      "Разорвать связи"
+    ],
+    "Connect pins": [
+      "Connect pins",
+      "Соединить пины"
+    ],
+    "Connect an output pin to an input pin": [
+      "Connect an output pin to an input pin",
+      "Соедините выходной пин с входным"
+    ],
+    "A node cannot be connected to itself": [
+      "A node cannot be connected to itself",
+      "Узел нельзя соединить с самим собой"
+    ],
+    "Execution pins only connect to execution pins": [
+      "Execution pins only connect to execution pins",
+      "Пины выполнения соединяются только с пинами выполнения"
+    ],
+    "Cannot connect {from} to {to}": [
+      "Cannot connect {from} to {to}",
+      "Нельзя соединить {from} с {to}"
+    ],
+    "This link would make the value depend on itself (the data links would form a cycle)": [
+      "This link would make the value depend on itself (the data links would form a cycle)",
+      "Эта связь сделала бы значение зависимым от самого себя (связи данных образовали бы цикл)"
+    ],
+    "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first": [
+      "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first",
+      "Эта связь создала бы бесконечный цикл: сначала добавьте в цикл узел «Ветвление» (выход) или «Задержка»"
+    ],
+    "Comment": [
+      "Comment",
+      "Комментарий"
+    ],
+    "Edit comment": [
+      "Edit comment",
+      "Изменить комментарий"
+    ],
+    "Resize comment": [
+      "Resize comment",
+      "Изменить размер комментария"
+    ],
+    "Move": [
+      "Move",
+      "Переместить"
+    ],
+    "Add reroute": [
+      "Add reroute",
+      "Добавить перенаправление"
+    ],
+    "Reroute nodes are only for links of data": [
+      "Reroute nodes are only for links of data",
+      "Узлы перенаправления — только для связей данных"
+    ],
+    "Paused here": [
+      "Paused here",
+      "Пауза здесь"
+    ],
+    "No node fits that pin": [
+      "No node fits that pin",
+      "Нет узла, подходящего к этому выводу"
+    ],
+    "Search the nodes that fit the pin": [
+      "Search the nodes that fit the pin",
+      "Искать узлы, подходящие к выводу"
+    ],
+    "Search the nodes": [
+      "Search the nodes",
+      "Искать узлы"
+    ],
+    "Add node": [
+      "Add node",
+      "Добавить узел"
+    ],
+    "Add call to {function}": [
+      "Add call to {function}",
+      "Добавить вызов {function}"
+    ],
+    "Add Set variable": [
+      "Add Set variable",
+      "Добавить «Задать переменную»"
+    ],
+    "Add Get variable": [
+      "Add Get variable",
+      "Добавить «Получить переменную»"
+    ],
+    "Get {name}": [
+      "Get {name}",
+      "Получить {name}"
+    ],
+    "Set {name}": [
+      "Set {name}",
+      "Задать {name}"
+    ],
+    "Add comment": [
+      "Add comment",
+      "Добавить комментарий"
+    ],
+    "Delete Link": [
+      "Delete Link",
+      "Удалить связь"
+    ],
+    "Delete link": [
+      "Delete link",
+      "Удалить связь"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "Добавить узел перенаправления"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "Разорвать все связи"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
+    "Edit Node Comment...": [
+      "Edit Node Comment...",
+      "Изменить комментарий узла..."
+    ],
+    "Node Comment": [
+      "Node Comment",
+      "Комментарий узла"
+    ],
+    "Edit node comment": [
+      "Edit node comment",
+      "Изменить комментарий узла"
+    ],
+    "Toggle Breakpoint": [
+      "Toggle Breakpoint",
+      "Точка останова"
+    ],
+    "F9": [
+      "F9",
+      ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "Свернуть в функцию..."
+    ],
+    "Find References": [
+      "Find References",
+      "Найти ссылки"
+    ],
+    "Shift+F12": [
+      "Shift+F12",
+      ""
+    ],
+    "Edit Comment Text...": [
+      "Edit Comment Text...",
+      "Изменить текст комментария..."
+    ],
+    "Delete Comment": [
+      "Delete Comment",
+      "Удалить комментарий"
+    ],
+    "Add Node...": [
+      "Add Node...",
+      "Добавить узел..."
+    ],
+    "Space": [
+      "Space",
+      ""
+    ],
+    "Add Comment": [
+      "Add Comment",
+      "Добавить комментарий"
+    ],
+    "Cut": [
+      "Cut",
+      "Вырезать"
+    ],
+    "Copy": [
+      "Copy",
+      "Копировать"
+    ],
+    "Add Comment Around": [
+      "Add Comment Around",
+      "Обвести комментарием"
+    ],
+    "Frame": [
+      "Frame",
+      "Показать"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "Выберите хотя бы два узла, чтобы свернуть их в функцию"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "Свернуть в функцию"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "Эти узлы нельзя свернуть в функцию: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "Имя новой функции"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "Свернуть в функцию"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "Свернуть в функцию: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "Узлов свёрнуто в {function}: {count}"
+    ],
+    "Edit value": [
+      "Edit value",
+      "Изменить значение"
+    ],
+    "Value: {value}": [
+      "Value: {value}",
+      "Значение: {value}"
+    ],
+    "Call Stack": [
+      "Call Stack",
+      "Стек вызовов"
+    ],
+    "Node": [
+      "Node",
+      "Узел"
+    ],
+    "Value": [
+      "Value",
+      "Значение"
+    ],
+    "Type": [
+      "Type",
+      "Тип"
+    ],
+    "Variable": [
+      "Variable",
+      "Переменная"
+    ],
+    "Watch": [
+      "Watch",
+      "Наблюдение"
+    ],
+    "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)": [
+      "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)",
+      "Наблюдение: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter добавляет)"
+    ],
+    "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.": [
+      "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.",
+      "Выражение для наблюдения. Диапазон name[a..b] загружает эти элементы (включительно): большой массив никогда не загружается целиком."
+    ],
+    "The locals and parameters of the frame chosen are found first, then the variables of the script.": [
+      "The locals and parameters of the frame chosen are found first, then the variables of the script.",
+      "Сначала ищутся локальные переменные и параметры выбранного кадра, затем переменные скрипта."
+    ],
+    "{left} more - double-click to load {next} more": [
+      "{left} more - double-click to load {next} more",
+      "Ещё {left} - дважды щёлкните, чтобы загрузить ещё {next}"
+    ],
+    "(event)": [
+      "(event)",
+      "(событие)"
+    ],
+    "Locals / Parameters": [
+      "Locals / Parameters",
+      "Локальные / Параметры"
+    ],
+    "Variables": [
+      "Variables",
+      "Переменные"
+    ],
+    "(not available: run the script first)": [
+      "(not available: run the script first)",
+      "(недоступно: сначала запустите скрипт)"
+    ],
+    "Load the next {count}": [
+      "Load the next {count}",
+      "Загрузить следующие {count}"
+    ],
+    "Load the next {count} (of {left} left)": [
+      "Load the next {count} (of {left} left)",
+      "Загрузить следующие {count} (из {left} оставшихся)"
+    ],
+    "Load all ({left} left)": [
+      "Load all ({left} left)",
+      "Загрузить все (осталось {left})"
+    ],
+    "Watch a Range...": [
+      "Watch a Range...",
+      "Наблюдать за диапазоном..."
+    ],
+    "Add to Watch": [
+      "Add to Watch",
+      "Добавить в наблюдение"
+    ],
+    "Copy Value": [
+      "Copy Value",
+      "Копировать значение"
+    ],
+    "Edit Watch": [
+      "Edit Watch",
+      "Изменить наблюдение"
+    ],
+    "Remove Watch": [
+      "Remove Watch",
+      "Удалить наблюдение"
+    ],
+    "Remove All Watches": [
+      "Remove All Watches",
+      "Удалить все наблюдения"
+    ],
+    "Array": [
+      "Array",
+      "Массив"
+    ],
+    "Map": [
+      "Map",
+      "Словарь"
+    ],
+    "Single": [
+      "Single",
+      "Одиночное"
+    ],
+    "Name": [
+      "Name",
+      "Имя"
+    ],
+    "Container": [
+      "Container",
+      "Контейнер"
+    ],
+    "Key": [
+      "Key",
+      "Ключ"
+    ],
+    "Ref": [
+      "Ref",
+      "Ссылка"
+    ],
+    "Const": [
+      "Const",
+      "Конст"
+    ],
+    "Search types": [
+      "Search types",
+      "Искать типы"
+    ],
+    "Part of the definition of the node: it cannot be changed.": [
+      "Part of the definition of the node: it cannot be changed.",
+      "Часть определения узла: изменить нельзя."
+    ],
+    "Double-click or F2 to rename it.": [
+      "Double-click or F2 to rename it.",
+      "Двойной щелчок или F2 — переименовать."
+    ],
+    "Click to change it.": [
+      "Click to change it.",
+      "Щёлкните, чтобы изменить."
+    ],
+    "A single value, an array of it, or a map from a key type to it. Click to change it.": [
+      "A single value, an array of it, or a map from a key type to it. Click to change it.",
+      "Одно значение, массив таких значений или словарь от типа ключа к нему. Щёлкните, чтобы изменить."
+    ],
+    "(none)": [
+      "(none)",
+      "(нет)"
+    ],
+    "The key type of a map; only used when the container is a Map.": [
+      "The key type of a map; only used when the container is a Map.",
+      "Тип ключа словаря; используется, только когда контейнер — Словарь."
+    ],
+    "yes": [
+      "yes",
+      "да"
+    ],
+    "no": [
+      "no",
+      "нет"
+    ],
+    "Passed by reference: the function reads and writes the caller's variable.": [
+      "Passed by reference: the function reads and writes the caller's variable.",
+      "Передаётся по ссылке: функция читает и записывает переменную вызывающего."
+    ],
+    "The function may not modify the parameter (a const reference needs no variable and makes no copy).": [
+      "The function may not modify the parameter (a const reference needs no variable and makes no copy).",
+      "Функция не может изменять параметр (константная ссылка не требует переменной и не создаёт копию)."
+    ],
+    "A name cannot be empty": [
+      "A name cannot be empty",
+      "Имя не может быть пустым"
+    ],
+    "A graph named '{name}' already exists": [
+      "A graph named '{name}' already exists",
+      "Граф с именем '{name}' уже существует"
+    ],
+    "A variable named '{name}' already exists": [
+      "A variable named '{name}' already exists",
+      "Переменная с именем '{name}' уже существует"
+    ],
+    "The function has a local variable named '{name}' already": [
+      "The function has a local variable named '{name}' already",
+      "У функции уже есть локальная переменная с именем '{name}'"
+    ],
+    "A struct's name is one word: letters, digits and _": [
+      "A struct's name is one word: letters, digits and _",
+      "Имя структуры — одно слово: буквы, цифры и _"
+    ],
+    "A struct named '{name}' already exists": [
+      "A struct named '{name}' already exists",
+      "Структура с именем '{name}' уже существует"
+    ],
+    "The application has a type named '{name}' already": [
+      "The application has a type named '{name}' already",
+      "У приложения уже есть тип с именем '{name}'"
+    ],
+    "Search": [
+      "Search",
+      "Поиск"
+    ],
+    "The names must be different from each other": [
+      "The names must be different from each other",
+      "Имена должны отличаться друг от друга"
+    ],
+    "Select a variable, function, struct or node to see its properties.": [
+      "Select a variable, function, struct or node to see its properties.",
+      "Выберите переменную, функцию, структуру или узел, чтобы увидеть их свойства."
+    ],
+    "Nothing matches the search.": [
+      "Nothing matches the search.",
+      "Ничего не найдено."
+    ],
+    "Each field starts with the default of the struct.": [
+      "Each field starts with the default of the struct.",
+      "Каждое поле начинается со значения по умолчанию из структуры."
+    ],
+    "Containers start empty.": [
+      "Containers start empty.",
+      "Контейнеры изначально пусты."
+    ],
+    "Objects start as null.": [
+      "Objects start as null.",
+      "Объекты изначально равны null."
+    ],
+    "Default": [
+      "Default",
+      "По умолчанию"
+    ],
+    "Hex, e.g. 48 65 6C 6C 6F": [
+      "Hex, e.g. 48 65 6C 6C 6F",
+      "Hex, например 48 65 6C 6C 6F"
+    ],
+    "Add": [
+      "Add",
+      "Добавить"
+    ],
+    "The variable no longer exists.": [
+      "The variable no longer exists.",
+      "Переменная больше не существует."
+    ],
+    "Local variable": [
+      "Local variable",
+      "Локальная переменная"
+    ],
+    "Rename local variable": [
+      "Rename local variable",
+      "Переименовать локальную переменную"
+    ],
+    "Rename variable": [
+      "Rename variable",
+      "Переименовать переменную"
+    ],
+    "Change variable type": [
+      "Change variable type",
+      "Изменить тип переменной"
+    ],
+    "Key type": [
+      "Key type",
+      "Тип ключа"
+    ],
+    "Edit default value": [
+      "Edit default value",
+      "Изменить значение по умолчанию"
+    ],
+    "Category": [
+      "Category",
+      "Категория"
+    ],
+    "Edit category": [
+      "Edit category",
+      "Изменить категорию"
+    ],
+    "Description": [
+      "Description",
+      "Описание"
+    ],
+    "Edit description": [
+      "Edit description",
+      "Изменить описание"
+    ],
+    "The graph no longer exists.": [
+      "The graph no longer exists.",
+      "Граф больше не существует."
+    ],
+    "Function": [
+      "Function",
+      "Функция"
+    ],
+    "Event graph": [
+      "Event graph",
+      "Граф событий"
+    ],
+    "Rename function": [
+      "Rename function",
+      "Переименовать функцию"
+    ],
+    "Rename graph": [
+      "Rename graph",
+      "Переименовать граф"
+    ],
+    "Inputs": [
+      "Inputs",
+      "Входы"
+    ],
+    "Outputs": [
+      "Outputs",
+      "Выходы"
+    ],
+    "Add parameter": [
+      "Add parameter",
+      "Добавить параметр"
+    ],
+    "The struct no longer exists.": [
+      "The struct no longer exists.",
+      "Структура больше не существует."
+    ],
+    "Struct": [
+      "Struct",
+      "Структура"
+    ],
+    "Rename struct": [
+      "Rename struct",
+      "Переименовать структуру"
+    ],
+    "Fields": [
+      "Fields",
+      "Поля"
+    ],
+    "Add field": [
+      "Add field",
+      "Добавить поле"
+    ],
+    "Add a field with the + of Fields.": [
+      "Add a field with the + of Fields.",
+      "Добавьте поле кнопкой + в разделе «Поля»."
+    ],
+    "Field: {name}": [
+      "Field: {name}",
+      "Поле: {name}"
+    ],
+    "{count} nodes selected": [
+      "{count} nodes selected",
+      "Выбрано узлов: {count}"
+    ],
+    "Function entry node": [
+      "Function entry node",
+      "Узел входа в функцию"
+    ],
+    "Definition": [
+      "Definition",
+      "Определение"
+    ],
+    "Event": [
+      "Event",
+      "Событие"
+    ],
+    "Arguments": [
+      "Arguments",
+      "Аргументы"
+    ],
+    "unknown": [
+      "unknown",
+      "неизвестно"
+    ],
+    "This event is raised by the application. A script can only handle it.": [
+      "This event is raised by the application. A script can only handle it.",
+      "Это событие вызывает приложение. Скрипт может только обработать его."
+    ],
+    "Change field": [
+      "Change field",
+      "Изменить поле"
+    ],
+    "Field": [
+      "Field",
+      "Поле"
+    ],
+    "Change {setting}": [
+      "Change {setting}",
+      "Изменить: {setting}"
+    ],
+    "Auto": [
+      "Auto",
+      "Авто"
+    ],
+    "Auto ({type})": [
+      "Auto ({type})",
+      "Авто ({type})"
+    ],
+    "Change node type": [
+      "Change node type",
+      "Изменить тип узла"
+    ],
+    "Type {name}": [
+      "Type {name}",
+      "Тип {name}"
+    ],
+    "Add pin": [
+      "Add pin",
+      "Добавить пин"
+    ],
+    "Edit parameters": [
+      "Edit parameters",
+      "Изменить параметры"
+    ],
+    "Edit fields": [
+      "Edit fields",
+      "Изменить поля"
+    ],
+    "Edit node pins": [
+      "Edit node pins",
+      "Изменить пины узла"
+    ],
+    "Rename": [
+      "Rename",
+      "Переименовать"
+    ],
+    "F2": [
+      "F2",
+      ""
+    ],
+    "Move field": [
+      "Move field",
+      "Переместить поле"
+    ],
+    "Move pin": [
+      "Move pin",
+      "Переместить пин"
+    ],
+    "Move Up": [
+      "Move Up",
+      "Вверх"
+    ],
+    "Move Down": [
+      "Move Down",
+      "Вниз"
+    ],
+    "Remove": [
+      "Remove",
+      "Удалить"
+    ],
+    "Remove parameter": [
+      "Remove parameter",
+      "Удалить параметр"
+    ],
+    "Remove field": [
+      "Remove field",
+      "Удалить поле"
+    ],
+    "Remove pin": [
+      "Remove pin",
+      "Удалить пин"
+    ],
+    "EventGraph": [
+      "EventGraph",
+      "Граф событий"
+    ],
+    "Graph": [
+      "Graph",
+      "Граф"
+    ],
+    "Message": [
+      "Message",
+      "Сообщение"
+    ],
+    "Compiled successfully.": [
+      "Compiled successfully.",
+      "Компиляция прошла успешно."
+    ],
+    "Find in script (node titles, comments, values)": [
+      "Find in script (node titles, comments, values)",
+      "Найти в скрипте (заголовки узлов, комментарии, значения)"
+    ],
+    "Where": [
+      "Where",
+      "Где"
+    ],
+    "References of {what}": [
+      "References of {what}",
+      "Ссылки на {what}"
+    ],
+    "\"{text}\"": [
+      "\"{text}\"",
+      "«{text}»"
+    ],
+    "Type to search, or use Find References on a node, variable, function or struct.": [
+      "Type to search, or use Find References on a node, variable, function or struct.",
+      "Введите текст для поиска или используйте «Найти ссылки» на узле, переменной, функции или структуре."
+    ],
+    "{what}: nothing found": [
+      "{what}: nothing found",
+      "{what}: ничего не найдено"
+    ],
+    "{what}: {count} found": [
+      "{what}: {count} found",
+      "{what}: найдено {count}"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "Аргументы Main, по одному в строке"
+    ],
+    "Working directory": [
+      "Working directory",
+      "Рабочий каталог"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "относительно папки скрипта; пусто — без изменений"
+    ],
+    "Environment": [
+      "Environment",
+      "Окружение"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "ИМЯ=значение, по одному в строке: действуют, пока выполняется скрипт"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "Папки плагинов"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "Папки плагинов относительно папки скрипта, по одной в строке"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "Задержка шага (мс)"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "Задержка между двумя узлами при выполнении: замедленное воспроизведение, чтобы следить за связями"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "Конфигурации запуска"
+    ],
+    "Add a function": [
+      "Add a function",
+      "Добавить функцию"
+    ],
+    "Add a variable": [
+      "Add a variable",
+      "Добавить переменную"
+    ],
+    "Add a local variable": [
+      "Add a local variable",
+      "Добавить локальную переменную"
+    ],
+    "Add a struct": [
+      "Add a struct",
+      "Добавить структуру"
+    ],
+    "Event Graphs": [
+      "Event Graphs",
+      "Графы событий"
+    ],
+    "Functions": [
+      "Functions",
+      "Функции"
+    ],
+    "Local Variables": [
+      "Local Variables",
+      "Локальные переменные"
+    ],
+    "Structs": [
+      "Structs",
+      "Структуры"
+    ],
+    "Local Variables of {function}": [
+      "Local Variables of {function}",
+      "Локальные переменные {function}"
+    ],
+    "Go to the Handler": [
+      "Go to the Handler",
+      "Перейти к обработчику"
+    ],
+    "Open": [
+      "Open",
+      "Открыть"
+    ],
+    "Duplicate function": [
+      "Duplicate function",
+      "Дублировать функцию"
+    ],
+    "Add function": [
+      "Add function",
+      "Добавить функцию"
+    ],
+    "Add variable": [
+      "Add variable",
+      "Добавить переменную"
+    ],
+    "Add local variable": [
+      "Add local variable",
+      "Добавить локальную переменную"
+    ],
+    "Add struct": [
+      "Add struct",
+      "Добавить структуру"
+    ],
+    "Dock": [
+      "Dock",
+      "Закрепить"
+    ],
+    "Float": [
+      "Float",
+      "Открепить"
+    ],
+    "Hide the tab bar": [
+      "Hide the tab bar",
+      "Скрыть панель вкладок"
+    ],
+    "Add a function, a variable or a struct": [
+      "Add a function, a variable or a struct",
+      "Добавить функцию, переменную или структуру"
+    ],
+    "Local Variable of {function}": [
+      "Local Variable of {function}",
+      "Локальная переменная {function}"
+    ]
+  },
+  "obsolete": {
+    "Language": [
+      "Language",
+      "Язык"
+    ],
+    "{application} shows the new language when it is started again.": [
+      "{application} shows the new language when it is started again.",
+      "{application} покажет новый язык при следующем запуске."
+    ]
+  }
+}

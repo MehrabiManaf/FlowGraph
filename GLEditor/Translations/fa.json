@@ -1,0 +1,1347 @@
+{
+  "language": "fa",
+  "texts": {
+    "English": [
+      "English",
+      "فارسی"
+    ],
+    "Dark": [
+      "Dark",
+      "تیره"
+    ],
+    "Light": [
+      "Light",
+      "روشن"
+    ],
+    "Dusk": [
+      "Dusk",
+      "شامگاه"
+    ],
+    "Sand": [
+      "Sand",
+      "شنی"
+    ],
+    "Turquoise": [
+      "Turquoise",
+      "فیروزه‌ای"
+    ],
+    "Studio": [
+      "Studio",
+      "استودیو"
+    ],
+    "Fluid": [
+      "Fluid",
+      "روان"
+    ],
+    "Plain": [
+      "Plain",
+      "ساده"
+    ],
+    "Plastic": [
+      "Plastic",
+      "پلاستیکی"
+    ],
+    "Metal": [
+      "Metal",
+      "فلزی"
+    ],
+    "Solid": [
+      "Solid",
+      "توپُر"
+    ],
+    "Glass": [
+      "Glass",
+      "شیشه‌ای"
+    ],
+    "My Script": [
+      "My Script",
+      "اسکریپت من"
+    ],
+    "Details": [
+      "Details",
+      "جزئیات"
+    ],
+    "Output Log": [
+      "Output Log",
+      "گزارش خروجی"
+    ],
+    "Compile Results": [
+      "Compile Results",
+      "نتایج کامپایل"
+    ],
+    "Find Results": [
+      "Find Results",
+      "نتایج جستجو"
+    ],
+    "Debugger": [
+      "Debugger",
+      "اشکال‌زدا"
+    ],
+    "FlowGraph Studio": [
+      "FlowGraph Studio",
+      ""
+    ],
+    "Ready": [
+      "Ready",
+      "آماده"
+    ],
+    "Idle": [
+      "Idle",
+      "بیکار"
+    ],
+    "&New": [
+      "&New",
+      "جدید(&N)"
+    ],
+    "&Open...": [
+      "&Open...",
+      "باز کردن(&O)..."
+    ],
+    "&Save": [
+      "&Save",
+      "ذخیره(&S)"
+    ],
+    "Save &As...": [
+      "Save &As...",
+      "ذخیره با نام(&A)..."
+    ],
+    "&Quit": [
+      "&Quit",
+      "خروج(&Q)"
+    ],
+    "&Undo": [
+      "&Undo",
+      "واگرد(&U)"
+    ],
+    "&Redo": [
+      "&Redo",
+      "انجام دوباره(&R)"
+    ],
+    "Cu&t": [
+      "Cu&t",
+      "برش(&T)"
+    ],
+    "&Copy": [
+      "&Copy",
+      "رونوشت(&C)"
+    ],
+    "&Paste": [
+      "&Paste",
+      "چسباندن(&P)"
+    ],
+    "D&uplicate": [
+      "D&uplicate",
+      "تکثیر(&U)"
+    ],
+    "Select &All": [
+      "Select &All",
+      "انتخاب همه(&A)"
+    ],
+    "&Snap to Grid": [
+      "&Snap to Grid",
+      "چسبیدن به شبکه(&S)"
+    ],
+    "&Find in Script...": [
+      "&Find in Script...",
+      "جستجو در اسکریپت(&F)..."
+    ],
+    "Find &References": [
+      "Find &References",
+      "یافتن ارجاع‌ها(&R)"
+    ],
+    "&Run": [
+      "&Run",
+      "اجرا(&R)"
+    ],
+    "&Pause": [
+      "&Pause",
+      "مکث(&P)"
+    ],
+    "S&top": [
+      "S&top",
+      "توقف(&T)"
+    ],
+    "Step &Over": [
+      "Step &Over",
+      "گام بعدی(&O)"
+    ],
+    "Step &Into": [
+      "Step &Into",
+      "ورود به تابع(&I)"
+    ],
+    "Step O&ut": [
+      "Step O&ut",
+      "خروج از تابع(&U)"
+    ],
+    "Launch &Configurations...": [
+      "Launch &Configurations...",
+      "پیکربندی‌های اجرا(&C)..."
+    ],
+    "Collapse to &Function...": [
+      "Collapse to &Function...",
+      "تبدیل به تابع(&F)..."
+    ],
+    "F&ull Screen": [
+      "F&ull Screen",
+      "تمام‌صفحه(&U)"
+    ],
+    "Moves the selected nodes into a new function and calls it in their place": [
+      "Moves the selected nodes into a new function and calls it in their place",
+      "گره‌های انتخاب‌شده را به یک تابع تازه می‌برد و آن تابع را به جای آن‌ها فرامی‌خواند"
+    ],
+    "Edit the launch configurations of this script": [
+      "Edit the launch configurations of this script",
+      "ویرایش پیکربندی‌های اجرای این اسکریپت"
+    ],
+    "Toggle &Breakpoint": [
+      "Toggle &Breakpoint",
+      "نقطهٔ توقف(&B)"
+    ],
+    "Clear the List": [
+      "Clear the List",
+      "پاک کردن فهرست"
+    ],
+    "As the System": [
+      "As the System",
+      "مانند سیستم"
+    ],
+    "&File": [
+      "&File",
+      "پرونده(&F)"
+    ],
+    "Open &Recent": [
+      "Open &Recent",
+      "پرونده‌های اخیر(&R)"
+    ],
+    "&Edit": [
+      "&Edit",
+      "ویرایش(&E)"
+    ],
+    "&Delete": [
+      "&Delete",
+      "حذف(&D)"
+    ],
+    "Del": [
+      "Del",
+      ""
+    ],
+    "&View": [
+      "&View",
+      "نمایش(&V)"
+    ],
+    "&Frame Selection": [
+      "&Frame Selection",
+      "نمایش انتخاب‌شده‌ها(&F)"
+    ],
+    "F": [
+      "F",
+      ""
+    ],
+    "&Frame All": [
+      "&Frame All",
+      "نمایش همه(&F)"
+    ],
+    "Home": [
+      "Home",
+      ""
+    ],
+    "Grid Snap Si&ze": [
+      "Grid Snap Si&ze",
+      "اندازهٔ شبکه(&Z)"
+    ],
+    "&Colors": [
+      "&Colors",
+      "رنگ‌ها(&C)"
+    ],
+    "&Style": [
+      "&Style",
+      "سبک(&S)"
+    ],
+    "&Language": [
+      "&Language",
+      "زبان(&L)"
+    ],
+    "&Debug": [
+      "&Debug",
+      "اشکال‌زدایی(&D)"
+    ],
+    "Execution &Speed": [
+      "Execution &Speed",
+      "سرعت اجرا(&S)"
+    ],
+    "&Help": [
+      "&Help",
+      "راهنما(&H)"
+    ],
+    "&About FlowGraph Studio": [
+      "&About FlowGraph Studio",
+      "دربارهٔ FlowGraph Studio(&A)"
+    ],
+    "Untitled": [
+      "Untitled",
+      "بی‌نام"
+    ],
+    "{name}{dirty} - {application}": [
+      "{name}{dirty} - {application}",
+      ""
+    ],
+    "System": [
+      "System",
+      "سیستم"
+    ],
+    "Full Speed": [
+      "Full Speed",
+      "حداکثر سرعت"
+    ],
+    "Slow (100 ms / node)": [
+      "Slow (100 ms / node)",
+      "آهسته (100 میلی‌ثانیه برای هر گره)"
+    ],
+    "Slower (300 ms / node)": [
+      "Slower (300 ms / node)",
+      "آهسته‌تر (300 میلی‌ثانیه برای هر گره)"
+    ],
+    "Step by Step (1 s / node)": [
+      "Step by Step (1 s / node)",
+      "گام‌به‌گام (1 ثانیه برای هر گره)"
+    ],
+    "{step} units": [
+      "{step} units",
+      "{step} واحد"
+    ],
+    "&Undo {what}": [
+      "&Undo {what}",
+      "واگرد {what}(&U)"
+    ],
+    "&Redo {what}": [
+      "&Redo {what}",
+      "انجام دوبارهٔ {what}(&R)"
+    ],
+    "Paused at '{graph}'": [
+      "Paused at '{graph}'",
+      "در «{graph}» مکث شد"
+    ],
+    "The run ended": [
+      "The run ended",
+      "اجرا تمام شد"
+    ],
+    "The run failed: see the Output Log": [
+      "The run failed: see the Output Log",
+      "اجرا ناموفق بود: گزارش خروجی را ببینید"
+    ],
+    "Warning: {text}": [
+      "Warning: {text}",
+      "هشدار: {text}"
+    ],
+    "The script has errors: it cannot run": [
+      "The script has errors: it cannot run",
+      "اسکریپت خطا دارد: اجرا نمی‌شود"
+    ],
+    "The script was changed: the run was stopped": [
+      "The script was changed: the run was stopped",
+      "اسکریپت تغییر کرد: اجرا متوقف شد"
+    ],
+    "Nothing to run: the application has no event to start": [
+      "Nothing to run: the application has no event to start",
+      "چیزی برای اجرا نیست: برنامه رویدادی برای شروع ندارد"
+    ],
+    "Run:": [
+      "Run:",
+      "اجرا:"
+    ],
+    "The launch configuration Run starts": [
+      "The launch configuration Run starts",
+      "پیکربندی اجرایی که «اجرا» شروع می‌کند"
+    ],
+    "The launch configurations are saved with the script": [
+      "The launch configurations are saved with the script",
+      "پیکربندی‌های اجرا همراه با اسکریپت ذخیره می‌شوند"
+    ],
+    "&Continue": [
+      "&Continue",
+      "ادامه(&C)"
+    ],
+    "Pause (F6)": [
+      "Pause (F6)",
+      "مکث (F6)"
+    ],
+    "Continue (F5)": [
+      "Continue (F5)",
+      "ادامه (F5)"
+    ],
+    "Run (F5)": [
+      "Run (F5)",
+      "اجرا (F5)"
+    ],
+    "Running": [
+      "Running",
+      "در حال اجرا"
+    ],
+    "Waiting": [
+      "Waiting",
+      "در انتظار"
+    ],
+    "Paused": [
+      "Paused",
+      "مکث"
+    ],
+    "{count} reference(s) of {what}": [
+      "{count} reference(s) of {what}",
+      "{count} ارجاع به {what}"
+    ],
+    "Select a node, or a variable, function or struct in My Script, to find its references": [
+      "Select a node, or a variable, function or struct in My Script, to find its references",
+      "برای یافتن ارجاع‌ها، یک گره، یا یک متغیر، تابع یا ساختار در «اسکریپت من» را انتخاب کنید"
+    ],
+    "{errors} error(s), {warnings} warning(s)": [
+      "{errors} error(s), {warnings} warning(s)",
+      "{errors} خطا، {warnings} هشدار"
+    ],
+    "OK": [
+      "OK",
+      "بدون خطا"
+    ],
+    "A new script": [
+      "A new script",
+      "اسکریپتی تازه"
+    ],
+    "The script was not opened": [
+      "The script was not opened",
+      "اسکریپت باز نشد"
+    ],
+    "Close": [
+      "Close",
+      "بستن"
+    ],
+    "Opened {file}": [
+      "Opened {file}",
+      "{file} باز شد"
+    ],
+    "FlowGraph scripts": [
+      "FlowGraph scripts",
+      "اسکریپت‌های FlowGraph"
+    ],
+    "Open a Script": [
+      "Open a Script",
+      "باز کردن اسکریپت"
+    ],
+    "No file dialog": [
+      "No file dialog",
+      "پنجرهٔ انتخاب پرونده در دسترس نیست"
+    ],
+    "Save the Script": [
+      "Save the Script",
+      "ذخیرهٔ اسکریپت"
+    ],
+    "The script was not saved": [
+      "The script was not saved",
+      "اسکریپت ذخیره نشد"
+    ],
+    "Saved {file}": [
+      "Saved {file}",
+      "{file} ذخیره شد"
+    ],
+    "Save the changes?": [
+      "Save the changes?",
+      "تغییرات ذخیره شوند؟"
+    ],
+    "The changes to {name} are lost if they are not saved.": [
+      "The changes to {name} are lost if they are not saved.",
+      "اگر تغییرات {name} ذخیره نشوند، از دست می‌روند."
+    ],
+    "Save": [
+      "Save",
+      "ذخیره"
+    ],
+    "Don't Save": [
+      "Don't Save",
+      "ذخیره نکن"
+    ],
+    "Cancel": [
+      "Cancel",
+      "انصراف"
+    ],
+    "About {application}": [
+      "About {application}",
+      "دربارهٔ {application}"
+    ],
+    "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets.": [
+      "The editor and debugger of FlowGraph's standard applications, drawn by GLWidgets.",
+      "ویرایشگر و اشکال‌زدای برنامه‌های استاندارد FlowGraph که با GLWidgets ترسیم می‌شود."
+    ],
+    "The events of the application and the entry of a function cannot be deleted": [
+      "The events of the application and the entry of a function cannot be deleted",
+      "رویدادهای برنامه و گره ورودی تابع حذف‌شدنی نیستند"
+    ],
+    "Delete": [
+      "Delete",
+      "حذف"
+    ],
+    "The clipboard has no nodes": [
+      "The clipboard has no nodes",
+      "در کلیپ‌بورد گره‌ای نیست"
+    ],
+    "Paste": [
+      "Paste",
+      "چسباندن"
+    ],
+    "Duplicate": [
+      "Duplicate",
+      "تکثیر"
+    ],
+    "Break links": [
+      "Break links",
+      "قطع اتصال‌ها"
+    ],
+    "Connect pins": [
+      "Connect pins",
+      "اتصال پایه‌ها"
+    ],
+    "Connect an output pin to an input pin": [
+      "Connect an output pin to an input pin",
+      "یک پایهٔ خروجی را به یک پایهٔ ورودی وصل کنید"
+    ],
+    "A node cannot be connected to itself": [
+      "A node cannot be connected to itself",
+      "گره را نمی‌توان به خودش وصل کرد"
+    ],
+    "Execution pins only connect to execution pins": [
+      "Execution pins only connect to execution pins",
+      "پایه‌های اجرا فقط به پایه‌های اجرا وصل می‌شوند"
+    ],
+    "Cannot connect {from} to {to}": [
+      "Cannot connect {from} to {to}",
+      "نمی‌توان {from} را به {to} وصل کرد"
+    ],
+    "This link would make the value depend on itself (the data links would form a cycle)": [
+      "This link would make the value depend on itself (the data links would form a cycle)",
+      "این اتصال مقدار را به خودش وابسته می‌کند (اتصال‌های داده یک چرخه می‌سازند)"
+    ],
+    "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first": [
+      "This link would make an endless loop: add a Branch (a way out) or a Delay to the loop first",
+      "این اتصال یک حلقهٔ بی‌پایان می‌سازد: ابتدا یک Branch (راه خروج) یا Delay به حلقه اضافه کنید"
+    ],
+    "Comment": [
+      "Comment",
+      "یادداشت"
+    ],
+    "Edit comment": [
+      "Edit comment",
+      "ویرایش یادداشت"
+    ],
+    "Resize comment": [
+      "Resize comment",
+      "تغییر اندازهٔ یادداشت"
+    ],
+    "Move": [
+      "Move",
+      "جابه‌جایی"
+    ],
+    "Add reroute": [
+      "Add reroute",
+      "افزودن گره تغییر مسیر"
+    ],
+    "Reroute nodes are only for links of data": [
+      "Reroute nodes are only for links of data",
+      "گره تغییر مسیر فقط برای اتصال‌های داده است"
+    ],
+    "Paused here": [
+      "Paused here",
+      "اینجا متوقف است"
+    ],
+    "No node fits that pin": [
+      "No node fits that pin",
+      "هیچ گرهی با این پایه سازگار نیست"
+    ],
+    "Search the nodes that fit the pin": [
+      "Search the nodes that fit the pin",
+      "جستجوی گره‌های سازگار با این پایه"
+    ],
+    "Search the nodes": [
+      "Search the nodes",
+      "جستجوی گره‌ها"
+    ],
+    "Add node": [
+      "Add node",
+      "افزودن گره"
+    ],
+    "Add call to {function}": [
+      "Add call to {function}",
+      "افزودن فراخوانی {function}"
+    ],
+    "Add Set variable": [
+      "Add Set variable",
+      "افزودن «تنظیم متغیر»"
+    ],
+    "Add Get variable": [
+      "Add Get variable",
+      "افزودن «خواندن متغیر»"
+    ],
+    "Get {name}": [
+      "Get {name}",
+      "خواندن {name}"
+    ],
+    "Set {name}": [
+      "Set {name}",
+      "تنظیم {name}"
+    ],
+    "Add comment": [
+      "Add comment",
+      "افزودن یادداشت"
+    ],
+    "Delete Link": [
+      "Delete Link",
+      "حذف اتصال"
+    ],
+    "Delete link": [
+      "Delete link",
+      "حذف اتصال"
+    ],
+    "Add Reroute Node": [
+      "Add Reroute Node",
+      "افزودن گره تغییر مسیر"
+    ],
+    "Break All Links": [
+      "Break All Links",
+      "قطع همهٔ اتصال‌ها"
+    ],
+    "Alt+Click": [
+      "Alt+Click",
+      ""
+    ],
+    "Edit Node Comment...": [
+      "Edit Node Comment...",
+      "ویرایش یادداشت گره..."
+    ],
+    "Node Comment": [
+      "Node Comment",
+      "یادداشت گره"
+    ],
+    "Edit node comment": [
+      "Edit node comment",
+      "ویرایش یادداشت گره"
+    ],
+    "Toggle Breakpoint": [
+      "Toggle Breakpoint",
+      "نقطهٔ توقف"
+    ],
+    "F9": [
+      "F9",
+      ""
+    ],
+    "Collapse to Function...": [
+      "Collapse to Function...",
+      "تبدیل به تابع..."
+    ],
+    "Find References": [
+      "Find References",
+      "یافتن ارجاع‌ها"
+    ],
+    "Shift+F12": [
+      "Shift+F12",
+      ""
+    ],
+    "Edit Comment Text...": [
+      "Edit Comment Text...",
+      "ویرایش متن یادداشت..."
+    ],
+    "Delete Comment": [
+      "Delete Comment",
+      "حذف یادداشت"
+    ],
+    "Add Node...": [
+      "Add Node...",
+      "افزودن گره..."
+    ],
+    "Space": [
+      "Space",
+      ""
+    ],
+    "Add Comment": [
+      "Add Comment",
+      "افزودن یادداشت"
+    ],
+    "Cut": [
+      "Cut",
+      "برش"
+    ],
+    "Copy": [
+      "Copy",
+      "رونوشت"
+    ],
+    "Add Comment Around": [
+      "Add Comment Around",
+      "افزودن یادداشت به دور انتخاب‌شده‌ها"
+    ],
+    "Frame": [
+      "Frame",
+      "نمایش"
+    ],
+    "Select at least two nodes to collapse them into a function": [
+      "Select at least two nodes to collapse them into a function",
+      "برای تبدیل به تابع، دست‌کم دو گره را انتخاب کنید"
+    ],
+    "Collapse to Function": [
+      "Collapse to Function",
+      "تبدیل به تابع"
+    ],
+    "These nodes cannot be collapsed into a function: {why}": [
+      "These nodes cannot be collapsed into a function: {why}",
+      "این گره‌ها را نمی‌توان به تابع تبدیل کرد: {why}"
+    ],
+    "Name of the New Function": [
+      "Name of the New Function",
+      "نام تابع تازه"
+    ],
+    "Collapse to function": [
+      "Collapse to function",
+      "تبدیل به تابع"
+    ],
+    "Collapse to Function: {warning}": [
+      "Collapse to Function: {warning}",
+      "تبدیل به تابع: {warning}"
+    ],
+    "Collapsed {count} node(s) into {function}": [
+      "Collapsed {count} node(s) into {function}",
+      "{count} گره به {function} تبدیل شد"
+    ],
+    "Edit value": [
+      "Edit value",
+      "ویرایش مقدار"
+    ],
+    "Value: {value}": [
+      "Value: {value}",
+      "مقدار: {value}"
+    ],
+    "Call Stack": [
+      "Call Stack",
+      "پشتهٔ فراخوانی"
+    ],
+    "Node": [
+      "Node",
+      "گره"
+    ],
+    "Value": [
+      "Value",
+      "مقدار"
+    ],
+    "Type": [
+      "Type",
+      "نوع"
+    ],
+    "Variable": [
+      "Variable",
+      "متغیر"
+    ],
+    "Watch": [
+      "Watch",
+      "پایش"
+    ],
+    "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)": [
+      "Watch: name, name[3].Prop, name[\"key\"], name[1000..1099]  (Enter adds)",
+      "پایش: name، name[3].Prop، name[\"key\"]، name[1000..1099]  (با Enter افزوده می‌شود)"
+    ],
+    "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.": [
+      "An expression to watch. A range name[a..b] loads those elements (inclusive): a big array is never loaded as a whole.",
+      "عبارتی برای پایش. بازهٔ name[a..b] همان عنصرها را (با دو سر بازه) بارگذاری می‌کند: آرایهٔ بزرگ هیچ‌وقت یکجا بارگذاری نمی‌شود."
+    ],
+    "The locals and parameters of the frame chosen are found first, then the variables of the script.": [
+      "The locals and parameters of the frame chosen are found first, then the variables of the script.",
+      "اول متغیرهای محلی و پارامترهای قاب انتخاب‌شده جستجو می‌شوند، سپس متغیرهای اسکریپت."
+    ],
+    "{left} more - double-click to load {next} more": [
+      "{left} more - double-click to load {next} more",
+      "{left} مورد دیگر - برای بارگذاری {next} مورد دیگر دوبار کلیک کنید"
+    ],
+    "(event)": [
+      "(event)",
+      "(رویداد)"
+    ],
+    "Locals / Parameters": [
+      "Locals / Parameters",
+      "متغیرهای محلی / پارامترها"
+    ],
+    "Variables": [
+      "Variables",
+      "متغیرها"
+    ],
+    "(not available: run the script first)": [
+      "(not available: run the script first)",
+      "(در دسترس نیست: ابتدا اسکریپت را اجرا کنید)"
+    ],
+    "Load the next {count}": [
+      "Load the next {count}",
+      "بارگذاری {count} مورد بعدی"
+    ],
+    "Load the next {count} (of {left} left)": [
+      "Load the next {count} (of {left} left)",
+      "بارگذاری {count} مورد بعدی (از {left} مورد باقی‌مانده)"
+    ],
+    "Load all ({left} left)": [
+      "Load all ({left} left)",
+      "بارگذاری همه ({left} مورد باقی‌مانده)"
+    ],
+    "Watch a Range...": [
+      "Watch a Range...",
+      "پایش یک بازه..."
+    ],
+    "Add to Watch": [
+      "Add to Watch",
+      "افزودن به پایش"
+    ],
+    "Copy Value": [
+      "Copy Value",
+      "رونوشت مقدار"
+    ],
+    "Edit Watch": [
+      "Edit Watch",
+      "ویرایش پایش"
+    ],
+    "Remove Watch": [
+      "Remove Watch",
+      "حذف پایش"
+    ],
+    "Remove All Watches": [
+      "Remove All Watches",
+      "حذف همهٔ پایش‌ها"
+    ],
+    "Array": [
+      "Array",
+      "آرایه"
+    ],
+    "Map": [
+      "Map",
+      "نگاشت"
+    ],
+    "Single": [
+      "Single",
+      "تکی"
+    ],
+    "Name": [
+      "Name",
+      "نام"
+    ],
+    "Container": [
+      "Container",
+      "مخزن"
+    ],
+    "Key": [
+      "Key",
+      "کلید"
+    ],
+    "Ref": [
+      "Ref",
+      "ارجاع"
+    ],
+    "Const": [
+      "Const",
+      "ثابت"
+    ],
+    "Search types": [
+      "Search types",
+      "جستجوی نوع‌ها"
+    ],
+    "Part of the definition of the node: it cannot be changed.": [
+      "Part of the definition of the node: it cannot be changed.",
+      "بخشی از تعریف گره است: نمی‌توان آن را تغییر داد."
+    ],
+    "Double-click or F2 to rename it.": [
+      "Double-click or F2 to rename it.",
+      "برای تغییر نام، دوبار کلیک کنید یا F2 را بزنید."
+    ],
+    "Click to change it.": [
+      "Click to change it.",
+      "برای تغییر، کلیک کنید."
+    ],
+    "A single value, an array of it, or a map from a key type to it. Click to change it.": [
+      "A single value, an array of it, or a map from a key type to it. Click to change it.",
+      "یک مقدار، آرایه‌ای از آن، یا نگاشتی از یک نوع کلید به آن. برای تغییر کلیک کنید."
+    ],
+    "(none)": [
+      "(none)",
+      "(هیچ)"
+    ],
+    "The key type of a map; only used when the container is a Map.": [
+      "The key type of a map; only used when the container is a Map.",
+      "نوع کلید یک نگاشت؛ فقط وقتی مخزن «نگاشت» باشد به کار می‌رود."
+    ],
+    "yes": [
+      "yes",
+      "بله"
+    ],
+    "no": [
+      "no",
+      "خیر"
+    ],
+    "Passed by reference: the function reads and writes the caller's variable.": [
+      "Passed by reference: the function reads and writes the caller's variable.",
+      "با ارجاع فرستاده می‌شود: تابع، متغیرِ فراخواننده را می‌خواند و می‌نویسد."
+    ],
+    "The function may not modify the parameter (a const reference needs no variable and makes no copy).": [
+      "The function may not modify the parameter (a const reference needs no variable and makes no copy).",
+      "تابع نمی‌تواند پارامتر را تغییر دهد (ارجاع ثابت به متغیر نیاز ندارد و رونوشتی نمی‌سازد)."
+    ],
+    "A name cannot be empty": [
+      "A name cannot be empty",
+      "نام نمی‌تواند خالی باشد"
+    ],
+    "A graph named '{name}' already exists": [
+      "A graph named '{name}' already exists",
+      "گرافی با نام «{name}» از قبل وجود دارد"
+    ],
+    "A variable named '{name}' already exists": [
+      "A variable named '{name}' already exists",
+      "متغیری با نام «{name}» از قبل وجود دارد"
+    ],
+    "The function has a local variable named '{name}' already": [
+      "The function has a local variable named '{name}' already",
+      "تابع از قبل متغیر محلی‌ای با نام «{name}» دارد"
+    ],
+    "A struct's name is one word: letters, digits and _": [
+      "A struct's name is one word: letters, digits and _",
+      "نام ساختار یک کلمه است: حرف، رقم و _"
+    ],
+    "A struct named '{name}' already exists": [
+      "A struct named '{name}' already exists",
+      "ساختاری با نام «{name}» از قبل وجود دارد"
+    ],
+    "The application has a type named '{name}' already": [
+      "The application has a type named '{name}' already",
+      "برنامه از قبل نوعی با نام «{name}» دارد"
+    ],
+    "Search": [
+      "Search",
+      "جستجو"
+    ],
+    "The names must be different from each other": [
+      "The names must be different from each other",
+      "نام‌ها باید با هم فرق داشته باشند"
+    ],
+    "Select a variable, function, struct or node to see its properties.": [
+      "Select a variable, function, struct or node to see its properties.",
+      "برای دیدن ویژگی‌ها، یک متغیر، تابع، ساختار یا گره را انتخاب کنید."
+    ],
+    "Nothing matches the search.": [
+      "Nothing matches the search.",
+      "چیزی با جستجو جور نیست."
+    ],
+    "Each field starts with the default of the struct.": [
+      "Each field starts with the default of the struct.",
+      "هر فیلد با مقدار پیش‌فرضِ ساختار آغاز می‌شود."
+    ],
+    "Containers start empty.": [
+      "Containers start empty.",
+      "مخزن‌ها خالی آغاز می‌شوند."
+    ],
+    "Objects start as null.": [
+      "Objects start as null.",
+      "شیءها با مقدار تهی آغاز می‌شوند."
+    ],
+    "Default": [
+      "Default",
+      "پیش‌فرض"
+    ],
+    "Hex, e.g. 48 65 6C 6C 6F": [
+      "Hex, e.g. 48 65 6C 6C 6F",
+      "هگزادسیمال، مثلاً 48 65 6C 6C 6F"
+    ],
+    "Add": [
+      "Add",
+      "افزودن"
+    ],
+    "The variable no longer exists.": [
+      "The variable no longer exists.",
+      "این متغیر دیگر وجود ندارد."
+    ],
+    "Local variable": [
+      "Local variable",
+      "متغیر محلی"
+    ],
+    "Rename local variable": [
+      "Rename local variable",
+      "تغییر نام متغیر محلی"
+    ],
+    "Rename variable": [
+      "Rename variable",
+      "تغییر نام متغیر"
+    ],
+    "Change variable type": [
+      "Change variable type",
+      "تغییر نوع متغیر"
+    ],
+    "Key type": [
+      "Key type",
+      "نوع کلید"
+    ],
+    "Edit default value": [
+      "Edit default value",
+      "ویرایش مقدار پیش‌فرض"
+    ],
+    "Category": [
+      "Category",
+      "دسته"
+    ],
+    "Edit category": [
+      "Edit category",
+      "ویرایش دسته"
+    ],
+    "Description": [
+      "Description",
+      "توضیحات"
+    ],
+    "Edit description": [
+      "Edit description",
+      "ویرایش توضیحات"
+    ],
+    "The graph no longer exists.": [
+      "The graph no longer exists.",
+      "این گراف دیگر وجود ندارد."
+    ],
+    "Function": [
+      "Function",
+      "تابع"
+    ],
+    "Event graph": [
+      "Event graph",
+      "گراف رویداد"
+    ],
+    "Rename function": [
+      "Rename function",
+      "تغییر نام تابع"
+    ],
+    "Rename graph": [
+      "Rename graph",
+      "تغییر نام گراف"
+    ],
+    "Inputs": [
+      "Inputs",
+      "ورودی‌ها"
+    ],
+    "Outputs": [
+      "Outputs",
+      "خروجی‌ها"
+    ],
+    "Add parameter": [
+      "Add parameter",
+      "افزودن پارامتر"
+    ],
+    "The struct no longer exists.": [
+      "The struct no longer exists.",
+      "این ساختار دیگر وجود ندارد."
+    ],
+    "Struct": [
+      "Struct",
+      "ساختار"
+    ],
+    "Rename struct": [
+      "Rename struct",
+      "تغییر نام ساختار"
+    ],
+    "Fields": [
+      "Fields",
+      "فیلدها"
+    ],
+    "Add field": [
+      "Add field",
+      "افزودن فیلد"
+    ],
+    "Add a field with the + of Fields.": [
+      "Add a field with the + of Fields.",
+      "با + در «فیلدها» یک فیلد اضافه کنید."
+    ],
+    "Field: {name}": [
+      "Field: {name}",
+      "فیلد: {name}"
+    ],
+    "{count} nodes selected": [
+      "{count} nodes selected",
+      "{count} گره انتخاب شده"
+    ],
+    "Function entry node": [
+      "Function entry node",
+      "گره ورودی تابع"
+    ],
+    "Definition": [
+      "Definition",
+      "تعریف"
+    ],
+    "Event": [
+      "Event",
+      "رویداد"
+    ],
+    "Arguments": [
+      "Arguments",
+      "آرگومان‌ها"
+    ],
+    "unknown": [
+      "unknown",
+      "نامعلوم"
+    ],
+    "This event is raised by the application. A script can only handle it.": [
+      "This event is raised by the application. A script can only handle it.",
+      "این رویداد را برنامه رخ می‌دهد. اسکریپت فقط می‌تواند به آن پاسخ دهد."
+    ],
+    "Change field": [
+      "Change field",
+      "تغییر فیلد"
+    ],
+    "Field": [
+      "Field",
+      "فیلد"
+    ],
+    "Change {setting}": [
+      "Change {setting}",
+      "تغییر {setting}"
+    ],
+    "Auto": [
+      "Auto",
+      "خودکار"
+    ],
+    "Auto ({type})": [
+      "Auto ({type})",
+      "خودکار ({type})"
+    ],
+    "Change node type": [
+      "Change node type",
+      "تغییر نوع گره"
+    ],
+    "Type {name}": [
+      "Type {name}",
+      "نوع {name}"
+    ],
+    "Add pin": [
+      "Add pin",
+      "افزودن پایه"
+    ],
+    "Edit parameters": [
+      "Edit parameters",
+      "ویرایش پارامترها"
+    ],
+    "Edit fields": [
+      "Edit fields",
+      "ویرایش فیلدها"
+    ],
+    "Edit node pins": [
+      "Edit node pins",
+      "ویرایش پایه‌های گره"
+    ],
+    "Rename": [
+      "Rename",
+      "تغییر نام"
+    ],
+    "F2": [
+      "F2",
+      ""
+    ],
+    "Move field": [
+      "Move field",
+      "جابه‌جایی فیلد"
+    ],
+    "Move pin": [
+      "Move pin",
+      "جابه‌جایی پایه"
+    ],
+    "Move Up": [
+      "Move Up",
+      "انتقال به بالا"
+    ],
+    "Move Down": [
+      "Move Down",
+      "انتقال به پایین"
+    ],
+    "Remove": [
+      "Remove",
+      "حذف"
+    ],
+    "Remove parameter": [
+      "Remove parameter",
+      "حذف پارامتر"
+    ],
+    "Remove field": [
+      "Remove field",
+      "حذف فیلد"
+    ],
+    "Remove pin": [
+      "Remove pin",
+      "حذف پایه"
+    ],
+    "EventGraph": [
+      "EventGraph",
+      "گراف رویداد"
+    ],
+    "Graph": [
+      "Graph",
+      "گراف"
+    ],
+    "Message": [
+      "Message",
+      "پیام"
+    ],
+    "Compiled successfully.": [
+      "Compiled successfully.",
+      "کامپایل با موفقیت انجام شد."
+    ],
+    "Find in script (node titles, comments, values)": [
+      "Find in script (node titles, comments, values)",
+      "جستجو در اسکریپت (عنوان گره‌ها، یادداشت‌ها، مقدارها)"
+    ],
+    "Where": [
+      "Where",
+      "محل"
+    ],
+    "References of {what}": [
+      "References of {what}",
+      "ارجاع‌های {what}"
+    ],
+    "\"{text}\"": [
+      "\"{text}\"",
+      "«{text}»"
+    ],
+    "Type to search, or use Find References on a node, variable, function or struct.": [
+      "Type to search, or use Find References on a node, variable, function or struct.",
+      "برای جستجو تایپ کنید، یا «یافتن ارجاع‌ها» را روی یک گره، متغیر، تابع یا ساختار به کار ببرید."
+    ],
+    "{what}: nothing found": [
+      "{what}: nothing found",
+      "{what}: چیزی پیدا نشد"
+    ],
+    "{what}: {count} found": [
+      "{what}: {count} found",
+      "{what}: {count} مورد پیدا شد"
+    ],
+    "Main's arguments, one per line": [
+      "Main's arguments, one per line",
+      "آرگومان‌های Main، هر کدام در یک سطر"
+    ],
+    "Working directory": [
+      "Working directory",
+      "پوشهٔ کاری"
+    ],
+    "relative to the script's folder; empty: unchanged": [
+      "relative to the script's folder; empty: unchanged",
+      "نسبت به پوشهٔ اسکریپت؛ خالی: بدون تغییر"
+    ],
+    "Environment": [
+      "Environment",
+      "متغیرهای محیطی"
+    ],
+    "NAME=value, one per line: set while the script runs": [
+      "NAME=value, one per line: set while the script runs",
+      "NAME=value، هر کدام در یک سطر: در مدت اجرای اسکریپت تنظیم می‌شوند"
+    ],
+    "Plugin folders": [
+      "Plugin folders",
+      "پوشه‌های افزونه"
+    ],
+    "Folders of plugins, relative to the script's, one per line": [
+      "Folders of plugins, relative to the script's, one per line",
+      "پوشه‌های افزونه نسبت به پوشهٔ اسکریپت، هر کدام در یک سطر"
+    ],
+    "Step delay (ms)": [
+      "Step delay (ms)",
+      "مکث هر گام (میلی‌ثانیه)"
+    ],
+    "A delay between two nodes while running: slow motion, to watch the links": [
+      "A delay between two nodes while running: slow motion, to watch the links",
+      "مکث بین دو گره هنگام اجرا: حرکت آهسته، برای دیدن اتصال‌ها"
+    ],
+    "Launch Configurations": [
+      "Launch Configurations",
+      "پیکربندی‌های اجرا"
+    ],
+    "Add a function": [
+      "Add a function",
+      "افزودن تابع"
+    ],
+    "Add a variable": [
+      "Add a variable",
+      "افزودن متغیر"
+    ],
+    "Add a local variable": [
+      "Add a local variable",
+      "افزودن متغیر محلی"
+    ],
+    "Add a struct": [
+      "Add a struct",
+      "افزودن ساختار"
+    ],
+    "Event Graphs": [
+      "Event Graphs",
+      "گراف‌های رویداد"
+    ],
+    "Functions": [
+      "Functions",
+      "تابع‌ها"
+    ],
+    "Local Variables": [
+      "Local Variables",
+      "متغیرهای محلی"
+    ],
+    "Structs": [
+      "Structs",
+      "ساختارها"
+    ],
+    "Local Variables of {function}": [
+      "Local Variables of {function}",
+      "متغیرهای محلی {function}"
+    ],
+    "Go to the Handler": [
+      "Go to the Handler",
+      "رفتن به گره رویداد"
+    ],
+    "Open": [
+      "Open",
+      "باز کردن"
+    ],
+    "Duplicate function": [
+      "Duplicate function",
+      "تکثیر تابع"
+    ],
+    "Add function": [
+      "Add function",
+      "افزودن تابع"
+    ],
+    "Add variable": [
+      "Add variable",
+      "افزودن متغیر"
+    ],
+    "Add local variable": [
+      "Add local variable",
+      "افزودن متغیر محلی"
+    ],
+    "Add struct": [
+      "Add struct",
+      "افزودن ساختار"
+    ],
+    "Dock": [
+      "Dock",
+      "چسباندن"
+    ],
+    "Float": [
+      "Float",
+      "شناور"
+    ],
+    "Hide the tab bar": [
+      "Hide the tab bar",
+      "پنهان کردن نوار زبانه‌ها"
+    ],
+    "Add a function, a variable or a struct": [
+      "Add a function, a variable or a struct",
+      "افزودن تابع، متغیر یا ساختار"
+    ],
+    "Local Variable of {function}": [
+      "Local Variable of {function}",
+      "متغیر محلی {function}"
+    ]
+  },
+  "obsolete": {
+    "Language": [
+      "Language",
+      "زبان"
+    ],
+    "{application} shows the new language when it is started again.": [
+      "{application} shows the new language when it is started again.",
+      "{application} پس از اجرای دوباره، زبان تازه را نشان می‌دهد."
+    ]
+  }
+}

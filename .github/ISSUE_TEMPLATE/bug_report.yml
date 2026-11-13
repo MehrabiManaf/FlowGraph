@@ -31,9 +31,10 @@ body:
       label: Where
       options:
         - flowstudio (the editor)
+        - flowstudio-qt (the Qt example)
         - flow (command line)
         - The runtime library in my application
-        - The editor library in my application
+        - The Qt editor library in my application
         - Building FlowGraph
   - type: input
     id: system

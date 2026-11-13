@@ -10,7 +10,7 @@ editor and debug them step by step; your application runs them in a small interp
 * **A real debugger.** Breakpoints, step over / into / out, the call stack, the script's variables and watches, values shown
   when you hover a pin - also on a script your application is running right now.
 * **Ready to use on its own.** `flow script.flow` runs a script from the command line, like `python script.py`; `flowstudio`
-  edits, runs and debugs it.
+  (FlowGraph Studio) edits, runs and debugs it.
 * **Scripts have their own data.** Functions with parameters by value, by reference or const; local variables; arrays and
   maps; **structs** the script declares (a `Contact` with a `Name`, an `Age` and a `Home` that is a `Point`); **bytes** for
   binary data; and the classes and enums of your application.
@@ -20,22 +20,21 @@ editor and debug them step by step; your application runs them in a small interp
   The **FileSystem** plugin comes with it: open, read and write files (text or binary); copy, move, list and delete files
   and folders.
 * **In 10 languages.** The editor speaks English, Persian, Chinese, Spanish, German, Japanese, Portuguese, French, Russian and
-  Korean (most of them machine translations: reviews are welcome).
+  Korean (most of them machine translations: reviews are welcome). It comes in five color schemes and seven styles.
 
 ![The debugger paused in a loop: the call stack and the script's variables](Docs/Images/debugger.png)
 
 ## Try it
 
 Download the package for Windows or Linux from [Releases](https://github.com/MehrabiManaf/FlowGraph/releases) and unzip it. Start
-`bin/flowstudio`, open `examples/fizzbuzz.flow` (*File > Open*) and press **F5**: *Run > Execution speed* slows the run down
+`bin/flowstudio`, open `examples/fizzbuzz.flow` (*File > Open*) and press **F5**: *Debug > Execution Speed* slows the run down
 so you can follow it. In a terminal, `bin/flow examples/fizzbuzz.flow` runs the same script without the editor. The other
 examples show functions and containers (`inventory.flow`), structs (`contacts.flow`), files (`files.flow`) and bytes
 (`bytes.flow`).
 
 On Linux the package runs on distributions with glibc 2.28 or newer: RHEL / CentOS / Alma / Rocky 8 and 9, Debian 10, Ubuntu
-20.04 and newer. `flowstudio` runs on Wayland or X11. On X11 it uses the system's X11 libraries, and Qt 6 needs
-`xcb-util-cursor` among them (RHEL family, from EPEL: `dnf install xcb-util-cursor`; Debian / Ubuntu: `apt install
-libxcb-cursor0`). `flow` needs none of them.
+20.04 and newer. `flowstudio` uses the system's X11 or Wayland and draws with Vulkan (the graphics driver's, or Mesa's); on
+Windows it draws with Direct3D 12. `flow` needs none of them.
 
 ## Put it in your application
 
@@ -52,16 +51,16 @@ fg::Instance instance(program);
 instance.callEvent("Tick", {0.016});
 ```
 
-Your users get the same editor as `flowstudio`: `fged::ScriptEditor` is a class your Qt application creates, with an
-`EditorHost` that tells it what *Run* means in your application. The [embedded example](Examples/Embedded) is a complete one:
+Your users get an editor that does what `flowstudio` does: `fged::ScriptEditor`, the Qt editor library, is a class your Qt
+application creates, with an `EditorHost` that tells it what *Run* means in your application. The [embedded example](Examples/Embedded) is a complete one:
 an application whose tables are filled by scripts, edited and debugged while it runs. **[Docs/Embedding.md](Docs/Embedding.md)**
 has the rest: your classes as nodes, plugins, limits for scripts you do not trust, hot reload, running without blocking, the
 editor's modes.
 
 ![An application and its script editor: the table on the left is filled by the script on the right](Docs/Images/embedded.png)
 
-**Licenses:** the runtime and `flow` are **MIT**, so they can go into any application, closed source included. The editor and
-`flowstudio` are **GPL-3.0** (they are built on KDDockWidgets), so an application that embeds the editor is GPL too. See
+**Licenses:** the runtime and `flow` are **MIT**, so they can go into any application, closed source included. The editors and
+`flowstudio` are **GPL-3.0** (the Qt editor is built on KDDockWidgets), so an application that embeds the editor is GPL too. See
 [License](#license).
 
 ## The pieces
@@ -71,36 +70,40 @@ editor's modes.
  ┌──────────────────────────────┐                           ┌───────────────────────────────┐
  │ runtime only                 │  FlowGraphCore            │ flow         runs a script    │
  │   load / check / run scripts │  (no Qt)                  │ flowstudio   edit, run, debug │
- ├──────────────────────────────┤                           └───────────────────────────────┘
- │ + Executor / AsyncExecutor   │  non-blocking execution       both raise only one event:
- ├──────────────────────────────┤                               Main(Args: array<string>)
- │ + ScriptEditor (library)     │  FlowGraph::ScriptEditor
+ ├──────────────────────────────┤                           │              (GLWidgets)      │
+ │ + Executor / AsyncExecutor   │  non-blocking execution   └───────────────────────────────┘
+ ├──────────────────────────────┤                               both raise only one event:
+ │ + ScriptEditor (library)     │  FlowGraph::ScriptEditor      Main(Args: array<string>)
  └──────────────────────────────┘  (Qt 6 + KDDockWidgets)
 ```
 
 * **Runtime** (`Core/`): types and reflection, compiler, interpreter, debugger, built-in nodes, plugins. An application
   that only needs to *run* scripts links only this.
 * **Executor / AsyncExecutor** (`Core/`): run scripts without blocking the host.
-* **ScriptEditor** (`Editor/`): the editor as a library, for applications that let their users create, change, run and debug
-  scripts.
+* **ScriptEditor** (`Editor/`): the Qt editor as a library, for Qt applications that let their users create, change, run and
+  debug scripts.
 * **flow** and **flowstudio** (`Apps/`): the *standard applications*. Their only event is `Main(Args: array<string>)` and scripts
-  may end them with the **Exit** node.
+  may end them with the **Exit** node. flowstudio is built on [GLWidgets](https://github.com/MehrabiManaf/GLWidgets) (`GLEditor/`:
+  its own widgets, drawn on the GPU through SDL3; no Qt).
 * **FileSystem** (`Plugins/FileSystem/`): the plugin for files and folders, loaded by `flow` and `flowstudio`.
 
-Also: `Examples/` (sample scripts and the embedded example), `Tests/`, `Docs/`.
+Also: `Examples/` (sample scripts, `flowstudio-qt` - FlowGraph Studio on the Qt editor library - and the embedded example),
+`Tests/`, `Docs/`.
 
 ## Build
 
-Windows with MSVC 2022, or Linux with GCC 13; Qt 6.9 for the editor (`QT_DIR` names the Qt kit):
+Windows with MSVC 2022, or Linux with GCC 13, and CMake 3.24 or newer. flowstudio needs nothing else on Windows; on Linux, the
+headers SDL3 builds with (X11, Wayland, the input methods: see `.github/workflows/ci.yml`). Qt 6.9 is only for the Qt editor
+library and its examples, built when CMake finds Qt (`QT_DIR` names the Qt kit):
 
 ```
 git submodule update --init
-cmake --preset windows-release      # or linux-release; core-only: the runtime and flow, without Qt
+cmake --preset windows-release      # or linux-release; core-only: the runtime and flow only
 cmake --build --preset windows-release
 ctest --preset windows-release
 ```
-The programs are in `build/<preset>/bin`. `FG_BUILD_EDITOR`, `FG_BUILD_TESTS`, `FG_BUILD_EXAMPLES` and `FG_BUILD_PLUGINS` switch
-parts off. To use FlowGraph from another CMake project, install it and `find_package(FlowGraph)`: see
+The programs are in `build/<preset>/bin`. `FG_BUILD_GLEDITOR` (flowstudio), `FG_BUILD_EDITOR` (the Qt editor: `AUTO`, `ON`,
+`OFF`), `FG_BUILD_TESTS`, `FG_BUILD_EXAMPLES` and `FG_BUILD_PLUGINS` switch parts on or off. To use FlowGraph from another CMake project, install it and `find_package(FlowGraph)`: see
 [Docs/Embedding.md](Docs/Embedding.md#building-against-flowgraph).
 
 ## flow and flowstudio
@@ -109,15 +112,15 @@ parts off. To use FlowGraph from another CMake project, install it and `find_pac
 loads the plugins in the `plugins` folder next to it and in `FLOW_PLUGIN_PATH`; `flow --help` lists its options.
 
 `flowstudio [script.flow]` edits, runs and debugs a script. What *Run* does (arguments, working directory, environment,
-plugins) is kept in **launch configurations** next to the script (`script.flowlaunch`, *Run > Launch Configurations...*).
+plugins) is kept in **launch configurations** next to the script (`script.flowlaunch`, *Debug > Launch Configurations...*).
 
 **[Docs/Scripting.md](Docs/Scripting.md)** has the keys of the editor, the launch configurations, `flow`'s options, how the
 nodes behave and the FileSystem plugin; **[Docs/NodeReference.md](Docs/NodeReference.md)** lists every built-in node.
 
 ## Languages
 
-*View > Language* chooses the language of the editor and of the nodes (it applies at the next start). Only texts change - the
-layout stays left to right - and scripts do not depend on the language: a script made in one language opens unchanged in any
+*View > Language* chooses the language of the editor and of the nodes (in flowstudio it applies at once; in the Qt editor, at
+the next start). Only texts change - the layout stays left to right - and scripts do not depend on the language: a script made in one language opens unchanged in any
 other. Persian is reviewed; the other languages are machine translations waiting for a native speaker, and corrections are
 welcome (see [CONTRIBUTING.md](CONTRIBUTING.md#translations)).
 
@@ -127,12 +130,14 @@ FlowGraph has two licenses; `LICENSE` lists which part has which, and every sour
 
 | Part | License |
 |-|-|
-| `Core/` (FlowGraphCore), `Apps/Flow/` (`flow`), `Plugins/FileSystem/`, the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
-| `Editor/` (FlowGraphEditor, the ScriptEditor library), `Apps/Studio/` (`flowstudio`), `Examples/Embedded/` | **GPL-3.0-only** (`LICENSES/GPL-3.0.txt`) |
+| `Core/` (FlowGraphCore), `EditorCore/` (what the editors share), `Apps/Flow/` (`flow`), `Plugins/FileSystem/`, the tests, tools and build files | **MIT** (`LICENSES/MIT.txt`) |
+| `GLEditor/` and `Apps/Studio/` (`flowstudio`, the editor on GLWidgets), `Editor/` (FlowGraphEditor, the Qt ScriptEditor library), `Examples/QtStudio/` (`flowstudio-qt`), `Examples/Embedded/` | **GPL-3.0-only** (`LICENSES/GPL-3.0.txt`) |
 
-The runtime can be used in any application, closed source included, and plugins may have any license. The editor is GPL
+The runtime can be used in any application, closed source included, and plugins may have any license. The Qt editor is GPL
 because it is built on KDDockWidgets (GPL-2.0-only or GPL-3.0-only, `ThirdParty/KDDockWidgets`): an application that embeds
-the editor is a work based on GPL code. Qt, which only the editor uses, is used under the LGPL-3.0 (`LICENSES/LGPL-3.0.txt`).
+the editor is a work based on GPL code. Qt, which only the Qt editor uses, is used under the LGPL-3.0 (`LICENSES/LGPL-3.0.txt`).
+flowstudio is built on GLWidgets (MIT, `ThirdParty/GLWidgets`) and the libraries it links in, all under permissive licenses
+(SDL3, FreeType, HarfBuzz, SheenBidi, libunibreak, ThorVG, the Vazirmatn font).
 
 ## About
 
