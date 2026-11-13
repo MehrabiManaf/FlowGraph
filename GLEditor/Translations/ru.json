@@ -1332,6 +1332,14 @@
     "Local Variable of {function}": [
       "Local Variable of {function}",
       "Локальная переменная {function}"
+    ],
+    "Select All": [
+      "Select All",
+      "Выделить всё"
+    ],
+    "Clear": [
+      "Clear",
+      "Очистить"
     ]
   },
   "obsolete": {

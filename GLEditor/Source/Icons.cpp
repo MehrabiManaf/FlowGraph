@@ -52,6 +52,7 @@ void giveIcons(std::vector<glw::MenuItem>& items) {
         {"Load all ({left} left)", "load-more"},
         {"Clear", "clear"},
         {"Clear the List", "clear"},
+        {"Select All", "select-all"},
         {"Float", "dock-float"},
         {"Dock", "dock-dock"},
         {"Hide the tab bar", "tabbar-hide"},

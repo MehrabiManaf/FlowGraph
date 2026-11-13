@@ -101,7 +101,16 @@ void GraphView::openPalette(glw::Point at, const core::PinEnd* from) {
         t.title = nodeTexts().nodeTitle(def, t.props, t.title);
         t.category = nodeTexts().category(t.category);
         t.keywords += " " + english + " " + englishCategory;
-        items.push_back({glw::LocalizedText(t.title), glw::LocalizedText(categoryShown(englishCategory))});
+        // in a tree of its category's folders ("Math|Float": Math, then Float in it)
+        std::vector<glw::LocalizedText> path;
+        const std::string folders = nodeTexts().category(englishCategory);
+        for (std::size_t start = 0; start <= folders.size();) {
+            const std::size_t end = std::min(folders.find('|', start), folders.size());
+            if (end > start)
+                path.emplace_back(folders.substr(start, end - start));
+            start = end + 1;
+        }
+        items.push_back({glw::LocalizedText(t.title), glw::LocalizedText(categoryShown(englishCategory)), std::move(path)});
     }
     const core::PinEnd pin = from ? *from : core::PinEnd{};
     const glw::Point shown = fromCanvas(at);
@@ -131,7 +140,10 @@ void GraphView::openPalette(glw::Point at, const core::PinEnd* from) {
                                   select({made});
                                   focus();
                               },
-                          .search = [searched](const std::string& query) { return fg::searchPaletteIndices(*searched, query); }});
+                          .search = [searched](const std::string& query) { return fg::searchPaletteIndices(*searched, query); },
+                          // the nodes in a tree of their categories (those that fit a pin: all of it open)
+                          .tree = true,
+                          .expanded = pin.valid()});
 }
 
 // ---- what is dropped on it ----

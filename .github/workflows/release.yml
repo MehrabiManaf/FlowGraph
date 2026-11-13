@@ -171,7 +171,9 @@ jobs:
           # this system has it - otherwise only a warning
           if command -v xvfb-run > /dev/null; then
             status=0
-            xvfb-run -a timeout 60 "$dist/bin/flowstudio" "$dist/examples/fizzbuzz.flow" --run --screenshot "$PWD/smoke.png" 2> smoke-error.txt || status=$?
+            # (xvfb-run gives what the program says on its output, its errors too)
+            export XDG_RUNTIME_DIR=$(mktemp -d)
+            xvfb-run -a timeout 60 "$dist/bin/flowstudio" "$dist/examples/fizzbuzz.flow" --run --screenshot "$PWD/smoke.png" > smoke-error.txt 2>&1 || status=$?
             if [ "$status" -eq 0 ] && [ -s smoke.png ]; then
               echo "flowstudio drew its window"
             elif grep -q "no GPU device" smoke-error.txt; then

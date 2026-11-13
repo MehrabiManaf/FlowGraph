@@ -1332,6 +1332,14 @@
     "Local Variable of {function}": [
       "Local Variable of {function}",
       "متغیر محلی {function}"
+    ],
+    "Select All": [
+      "Select All",
+      "انتخاب همه"
+    ],
+    "Clear": [
+      "Clear",
+      "پاک کردن"
     ]
   },
   "obsolete": {

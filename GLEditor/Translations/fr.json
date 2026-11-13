@@ -1332,6 +1332,14 @@
     "Local Variable of {function}": [
       "Local Variable of {function}",
       "Variable locale de {function}"
+    ],
+    "Select All": [
+      "Select All",
+      "Tout sélectionner"
+    ],
+    "Clear": [
+      "Clear",
+      "Effacer"
     ]
   },
   "obsolete": {

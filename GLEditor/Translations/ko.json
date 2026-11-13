@@ -1332,6 +1332,14 @@
     "Local Variable of {function}": [
       "Local Variable of {function}",
       "{function}의 지역 변수"
+    ],
+    "Select All": [
+      "Select All",
+      "모두 선택"
+    ],
+    "Clear": [
+      "Clear",
+      "지우기"
     ]
   },
   "obsolete": {

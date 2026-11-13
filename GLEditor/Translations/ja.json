@@ -1332,6 +1332,14 @@
     "Local Variable of {function}": [
       "Local Variable of {function}",
       "{function} のローカル変数"
+    ],
+    "Select All": [
+      "Select All",
+      "すべて選択"
+    ],
+    "Clear": [
+      "Clear",
+      "クリア"
     ]
   },
   "obsolete": {

@@ -1332,6 +1332,14 @@
     "Local Variable of {function}": [
       "Local Variable of {function}",
       "{function} 的局部变量"
+    ],
+    "Select All": [
+      "Select All",
+      "全选"
+    ],
+    "Clear": [
+      "Clear",
+      "清除"
     ]
   },
   "obsolete": {

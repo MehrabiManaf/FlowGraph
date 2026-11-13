@@ -351,6 +351,13 @@ struct Studio::Impl {
         log = output.get();
         log->setReadOnly(true);
         log->setLineNumbers(false);
+        // its menu: Copy, Select All, and Clear
+        log->setOnContextMenu([this](std::vector<glw::MenuItem>& items) {
+            items.push_back(glw::MenuItem::separatorItem());
+            items.push_back({.text = tr("Clear"), .onTriggered = [this] { log->setText(""); },
+                             .enabled = log->lineCount() > 1 || !log->line(0).empty()});
+            giveIcons(items);
+        });
         area->addPanel({.id = "output", .title = tr("Output Log"), .content = atLeast(inset(std::move(output)), bottomPanelLeast), .closable = false}, center,
                        glw::DockSide::Bottom, 0.24f);
         // what the compiler says, what was found: beside it
