@@ -21,6 +21,7 @@
 #include <GLWidgets/Widgets/CollapsiblePanel.hpp>
 #include <GLWidgets/Widgets/Layout.hpp>
 #include <GLWidgets/Widgets/LineEdit.hpp>
+#include <GLWidgets/Widgets/SearchField.hpp>
 #include <GLWidgets/Widgets/SpinBox.hpp>
 #include <GLWidgets/Widgets/TableView.hpp>
 #include <GLWidgets/Widgets/ToolBar.hpp>
@@ -575,6 +576,20 @@ TEST(myScriptListsSelectsAddsAndRenames) {
     l.root.dispatch(glw::platform::KeyChanged{1, Key::Enter, KeyModifiers::None, true, false});
     l.root.layout();
     CHECK(told.size() == 1 && l.doc->script().findVariable("NewVar"));
+    // the button beside the search: a menu of what can be added (no local variable: the graph shown is no function)
+    glw::Widget* adds = l.panel->addButton();
+    CHECK(adds && adds->size().height > 20);
+    if (!adds)
+        return;
+    l.click(l.middleOf(*adds));
+    CHECK(l.host.open().size() == 1);
+    if (l.host.open().empty())
+        return;
+    glw::UiRoot& menu = l.host.open()[0]->root;
+    for (Key k : {Key::Down, Key::Down, Key::Down, Key::Enter})          // Function, Variable, Struct
+        menu.dispatch(glw::platform::KeyChanged{1, k, KeyModifiers::None, true, false});
+    l.root.layout();
+    CHECK(l.doc->undoLabel() == "Add struct");
 }
 
 TEST(aVariableOrAFunctionDraggedOntoTheGraphMakesANode) {
@@ -734,7 +749,7 @@ TEST(detailsEditAVariable) {
     CHECK(d.doc->script().findVariable("Velocity") && !d.messages.empty());
     // the search (the panel's first child): only the rows with the words
     d.root.setFocus(nullptr);
-    static_cast<glw::LineEdit&>(*d.panel->children()[0]).setText("categ");
+    static_cast<glw::SearchField&>(*d.panel->children()[0]).setText("categ");
     d.panel->rebuild();
     d.root.layout();
     glw::Widget* category = d.panel->field("category");

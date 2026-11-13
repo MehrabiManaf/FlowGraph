@@ -333,10 +333,6 @@
       "Warning: {text}",
       "警告: {text}"
     ],
-    "Error: {text}": [
-      "Error: {text}",
-      "エラー: {text}"
-    ],
     "The script has errors: it cannot run": [
       "The script has errors: it cannot run",
       "スクリプトにエラーがあるため実行できません"
@@ -1328,6 +1324,14 @@
     "Hide the tab bar": [
       "Hide the tab bar",
       "タブ バーを隠す"
+    ],
+    "Add a function, a variable or a struct": [
+      "Add a function, a variable or a struct",
+      "関数、変数、または構造体を追加"
+    ],
+    "Local Variable of {function}": [
+      "Local Variable of {function}",
+      "{function} のローカル変数"
     ]
   },
   "obsolete": {

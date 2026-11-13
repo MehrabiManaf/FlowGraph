@@ -333,10 +333,6 @@
       "Warning: {text}",
       "警告：{text}"
     ],
-    "Error: {text}": [
-      "Error: {text}",
-      "错误：{text}"
-    ],
     "The script has errors: it cannot run": [
       "The script has errors: it cannot run",
       "脚本有错误：无法运行"
@@ -1328,6 +1324,14 @@
     "Hide the tab bar": [
       "Hide the tab bar",
       "隐藏标签栏"
+    ],
+    "Add a function, a variable or a struct": [
+      "Add a function, a variable or a struct",
+      "添加函数、变量或结构体"
+    ],
+    "Local Variable of {function}": [
+      "Local Variable of {function}",
+      "{function} 的局部变量"
     ]
   },
   "obsolete": {

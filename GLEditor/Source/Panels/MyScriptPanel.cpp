@@ -12,6 +12,7 @@
 #include <GLWidgets/Text/Font.hpp>
 #include <GLWidgets/Text/TextLayout.hpp>
 #include <GLWidgets/Widgets/Action.hpp>
+#include <GLWidgets/Widgets/Button.hpp>
 #include <GLWidgets/Widgets/CollapsiblePanel.hpp>
 #include <GLWidgets/Widgets/Icon.hpp>
 #include <GLWidgets/Widgets/ItemModel.hpp>
@@ -20,6 +21,7 @@
 #include <GLWidgets/Widgets/ListView.hpp>
 #include <GLWidgets/Widgets/Menu.hpp>
 #include <GLWidgets/Widgets/ScrollArea.hpp>
+#include <GLWidgets/Widgets/SearchField.hpp>
 #include <GLWidgets/Widgets/TableView.hpp>
 #include <GLWidgets/Widgets/ToolBar.hpp>
 #include <GLWidgets/Widgets/UiRoot.hpp>
@@ -41,6 +43,30 @@ constexpr float dragThreshold = 5;
 constexpr const char* addIcon = R"(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24">
   <path d="M12 3.5 V20.5 M3.5 12 H20.5" stroke="#34d17c" stroke-width="4.4" stroke-linecap="round"/>
 </svg>)";
+
+// The button beside the search: a button of the theme as high as the field, a plus and the arrow of a menu on it, apart.
+class AddMenuButton final : public glw::Button {
+public:
+    AddMenuButton() {
+        setAlignment(glw::Alignment::Start, glw::Alignment::Stretch);     // as high as the search beside it
+        setMinimumSize({46, 0});
+        setToolTip(tr("Add a function, a variable or a struct"));
+    }
+
+protected:
+    void paintOver(glw::PaintContext& context) override {
+        const float middle = size().height / 2;
+        const float x = (size().width - 25) / 2;            // the plus (14), a gap (5), the arrow (6)
+        if (plus_.empty())
+            plus_ = studioIcon("add");
+        plus_.draw(context, {x, middle - 7, 14, 14}, glw::Color{1, 1, 1, enabledInTree() ? 1.0f : 0.35f});
+        const glw::Point arrow[] = {{x + 19, middle - 1.5f}, {x + 22, middle + 1.5f}, {x + 25, middle - 1.5f}};
+        context.painter.drawPolyline(arrow, 1.5f, style().text.resolve({.disabled = !enabledInTree()}));
+    }
+
+private:
+    glw::Icon plus_;
+};
 
 std::string lowered(std::string s) {
     for (char& c : s)
@@ -240,7 +266,14 @@ private:
 MyScriptPanel::MyScriptPanel(core::Document& doc) : doc_(doc), edits_(doc) {
     setLayout(std::make_unique<glw::StackLayout>(glw::Orientation::Vertical, 6.0f));
     setPadding(glw::Insets::all(6));
-    search_ = &add(std::make_unique<glw::LineEdit>(glw::LineEdit::Props{.placeholder = tr("Search"), .onChanged = [this](const std::string&) { applyFilter(); }}));
+    // the search, and beside it a button with a menu of what can be added (as the Qt editor's)
+    auto top = std::make_unique<glw::Widget>();
+    top->setLayout(std::make_unique<glw::StackLayout>(glw::Orientation::Horizontal, 4.0f));
+    search_ = &top->add(std::make_unique<glw::SearchField>(glw::SearchField::Props{.onChanged = [this](const std::string&) { applyFilter(); }}));
+    search_->setStretch(1);
+    addButton_ = &top->add(std::make_unique<AddMenuButton>());
+    addButton_->setOnClick([this] { showAddMenu(*addButton_); });
+    add(std::move(top));
 
     auto list = std::make_unique<glw::Widget>();
     glw::Widget& column = *list;
@@ -313,11 +346,9 @@ MyScriptPanel::~MyScriptPanel() {
 }
 
 void MyScriptPanel::onRootChanged() {
-    // the tables as the theme's lists are (no cells' borders)
-    if (const glw::UiContext* ui = context()) {
-        for (const auto& s : sections_)
-            s->table->setStyle(ui->theme.itemView);
-    }
+    // the tables as the theme's lists are (no cells' borders), as it changes
+    for (const auto& s : sections_)
+        s->table->setThemeStyle(&glw::Theme::itemView);
     scheduleRebuild();
 }
 
@@ -595,6 +626,23 @@ void MyScriptPanel::menu(Section& section, std::size_t row, glw::Point at) {
     }
     giveIcons(items);
     glw::showContextMenu(*section.table, at, std::move(items));
+}
+
+glw::Widget* MyScriptPanel::addButton() const {
+    return addButton_;
+}
+
+void MyScriptPanel::showAddMenu(glw::Widget& button) {
+    std::vector<glw::MenuItem> items{{.text = tr("Function"), .onTriggered = [this] { addMember(core::Member::Function); }},
+                                     {.text = tr("Variable"), .onTriggered = [this] { addMember(core::Member::Variable); }}};
+    // a local variable: of the function shown
+    const fg::Graph* graph = doc_.script().findGraph(current_);
+    if (graph && graph->kind == fg::GraphKind::Function)
+        items.push_back({.text = tr("Local Variable of {function}").arg("function", current_),
+                         .onTriggered = [this] { addMember(core::Member::Local); }});
+    items.push_back({.text = tr("Struct"), .onTriggered = [this] { addMember(core::Member::Struct); }});
+    giveIcons(items);
+    glw::showMenu(button, {0, 0, button.size().width, button.size().height}, std::move(items));
 }
 
 void MyScriptPanel::addMember(core::Member member) {

@@ -22,6 +22,7 @@
 #include <GLWidgets/Widgets/Label.hpp>
 #include <GLWidgets/Widgets/Layout.hpp>
 #include <GLWidgets/Widgets/LineEdit.hpp>
+#include <GLWidgets/Widgets/SearchField.hpp>
 #include <GLWidgets/Widgets/ListView.hpp>
 #include <GLWidgets/Widgets/Menu.hpp>
 #include <GLWidgets/Widgets/ScrollArea.hpp>
@@ -532,7 +533,7 @@ glw::LocalizedText nameProblemText(core::NameProblem why) {
 DetailsPanel::DetailsPanel(core::Document& doc) : doc_(doc), props_(doc), script_(doc) {
     setLayout(std::make_unique<glw::StackLayout>(glw::Orientation::Vertical, 6.0f));
     setPadding(glw::Insets::all(6));
-    search_ = &add(std::make_unique<glw::LineEdit>(glw::LineEdit::Props{.placeholder = tr("Search"), .onChanged = [this](const std::string&) { applyFilter(); }}));
+    search_ = &add(std::make_unique<glw::SearchField>(glw::SearchField::Props{.onChanged = [this](const std::string&) { applyFilter(); }}));
     auto scroll = std::make_unique<glw::ScrollArea>();
     scroll->setStretch(1);
     scroll_ = &add(std::move(scroll));
@@ -550,9 +551,6 @@ DetailsPanel::~DetailsPanel() {
 }
 
 void DetailsPanel::onRootChanged() {
-    for (const auto& t : tables_)
-        if (const glw::UiContext* ui = context())
-            t->view->setStyle(ui->theme.itemView);
     scheduleRebuild();
 }
 
@@ -968,8 +966,7 @@ DetailsPanel::Table& DetailsPanel::addTable(glw::CollapsiblePanel* in, const std
     t.view = &v;
     v.setModel(std::make_shared<ParamModel>(t));
     v.setDelegate(std::make_unique<ParamDelegate>(*this, t));
-    if (const glw::UiContext* ui = context())
-        v.setStyle(ui->theme.itemView);
+    v.setThemeStyle(&glw::Theme::itemView);    // as the theme's lists are (no cells' borders), as it changes
     v.setHeaderVisible(false);              // the cells' tooltips name their columns
     v.setRowHeight(rowHeight);
     v.setSelectionMode(t.editable() ? glw::SelectionMode::Single : glw::SelectionMode::None);

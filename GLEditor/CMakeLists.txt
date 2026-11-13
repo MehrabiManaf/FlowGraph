@@ -25,7 +25,8 @@ endforeach()
 set(FGGLED_ICONS new open save save-as exit undo redo cut copy paste duplicate delete select-all comment edit-comment
     continue interrupt stop step-over step-into step-out configure breakpoint-add find find-references function rename
     open-function goto add reroute break-links variable-get variable-set watch-add watch-range watch-edit watch-remove
-    watch-clear load-more clear)
+    watch-clear load-more clear recent frame-selection frame-all full-screen snap grid colors style language speed about
+    move-up move-down variable local-variable struct dock-float dock-dock dock-close tabbar-hide)
 set(FGGLED_ICON_FILES "")
 foreach(icon ${FGGLED_ICONS})
     list(APPEND FGGLED_CATALOG_LIST "icon=${CMAKE_SOURCE_DIR}/Editor/Resources/Icons/${icon}.svg")

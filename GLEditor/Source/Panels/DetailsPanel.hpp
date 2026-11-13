@@ -28,6 +28,7 @@ namespace glw {
 class CollapsiblePanel;
 class GridLayout;
 class LineEdit;
+class SearchField;
 class ScrollArea;
 } // namespace glw
 
@@ -113,7 +114,7 @@ private:
     std::string owner_, name_;                  // a local's function, a node's graph; the variable, graph, struct
     std::vector<fg::NodeId> nodes_;
     std::size_t fieldRow_ = 0;                  // the struct's field shown below its table
-    glw::LineEdit* search_ = nullptr;
+    glw::SearchField* search_ = nullptr;
     glw::ScrollArea* scroll_ = nullptr;
     glw::Widget* body_ = nullptr;
     glw::GridLayout* grid_ = nullptr;

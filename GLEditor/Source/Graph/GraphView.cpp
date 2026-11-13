@@ -8,6 +8,7 @@
 
 #include <FlowGraph/Vm.hpp>
 #include <GLWidgets/Paint/Painter.hpp>
+#include <GLWidgets/Widgets/Bevel.hpp>
 #include <GLWidgets/Text/Font.hpp>
 #include <GLWidgets/Text/TextLayout.hpp>
 #include <GLWidgets/Widgets/UiRoot.hpp>
@@ -906,7 +907,9 @@ void GraphView::paintFiring(glw::PaintContext& context, const Bezier& curve, con
     if (length < 10)
         return;
     const float phase = std::fmod(seconds(t - firing.first), seconds(fireTotal)) / seconds(fireTotal);
-    const float radius = 0.5f + 3.5f * std::clamp(k, 0.0f, 1.0f);
+    // larger than the line is wide, with a light core: seen on it
+    const float radius = 0.5f + 5.5f * std::clamp(k, 0.0f, 1.0f);
+    const glw::Color core = blend(lit, glw::Color{1, 1, 1, lit.a}, 0.6f);
     std::size_t at = 1;
     for (float d = phase * dotSpacing; d <= length; d += dotSpacing) {
         while (at < samples && along[at] < d)
@@ -914,7 +917,9 @@ void GraphView::paintFiring(glw::PaintContext& context, const Bezier& curve, con
         const float span = along[at] - along[at - 1];
         const float f = span > 0 ? (d - along[at - 1]) / span : 0;
         const glw::Point a = points[at - 1], b = points[at];
-        p.fillCircle({a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f}, radius, lit);
+        const glw::Point dot{a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f};
+        p.fillCircle(dot, radius, lit);
+        p.fillCircle(dot, radius * 0.55f, core);
     }
 }
 
@@ -960,12 +965,18 @@ void GraphView::paintOverItems(glw::PaintContext& context) {
         const glw::Size s = label.size();
         const float w = s.width + 34 * k, h = s.height + 10 * k;
         const glw::Rect banner{node.x + (node.width - w) / 2, top - h - 12 * k, w, h};
-        p.drawShadow({banner.x, banner.y + 2 * k, banner.width, banner.height}, h / 2, 8 * k, {0, 0, 0, 0.45f});
-        p.fillRoundedRect(banner, h / 2, colors.debug);
-        // its arrow down to the node
+        // its arrow down to the node, under it; then the banner, a button of the style in use (its corners, its relief,
+        // its gradient and shadow), in the debugger's color, as large on the screen however far it is zoomed
         const float tip = banner.x + banner.width / 2;
-        const glw::Point arrow[] = {{tip - 7 * k, banner.bottom() - 0.5f * k}, {tip + 7 * k, banner.bottom() - 0.5f * k}, {tip, banner.bottom() + 8 * k}};
+        const glw::Point arrow[] = {{tip - 7 * k, banner.bottom() - 2 * k}, {tip + 7 * k, banner.bottom() - 2 * k}, {tip, banner.bottom() + 8 * k}};
         p.fillConvexPolygon(arrow, colors.debug);
+        const glw::ButtonStyle& button = context.ui.theme.button;
+        glw::Bevel bevel = button.bevel;
+        bevel.relief *= k;
+        bevel.roundness *= k;
+        bevel.edge *= k;
+        const float radius = std::min(button.cornerRadius * k, h / 2);
+        glw::paintRaised(p, banner, radius, colors.debug, glw::lit(colors.debug, -0.3f), bevel);
         // a pause mark, then the words
         const glw::Color ink{0.08f, 0.06f, 0.02f, 1};
         const float mark = banner.x + 12 * k, middle = banner.y + h / 2;

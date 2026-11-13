@@ -333,10 +333,6 @@
       "Warning: {text}",
       "경고: {text}"
     ],
-    "Error: {text}": [
-      "Error: {text}",
-      "오류: {text}"
-    ],
     "The script has errors: it cannot run": [
       "The script has errors: it cannot run",
       "스크립트에 오류가 있어 실행할 수 없습니다"
@@ -1328,6 +1324,14 @@
     "Hide the tab bar": [
       "Hide the tab bar",
       "탭 표시줄 숨기기"
+    ],
+    "Add a function, a variable or a struct": [
+      "Add a function, a variable or a struct",
+      "함수, 변수 또는 구조체 추가"
+    ],
+    "Local Variable of {function}": [
+      "Local Variable of {function}",
+      "{function}의 지역 변수"
     ]
   },
   "obsolete": {

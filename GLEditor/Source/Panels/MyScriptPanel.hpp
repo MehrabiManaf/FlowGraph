@@ -24,6 +24,8 @@
 namespace glw {
 class CollapsiblePanel;
 class LineEdit;
+class SearchField;
+class Button;
 class TableView;
 } // namespace glw
 
@@ -52,6 +54,8 @@ public:
     void clearSelection();
     // The widget of a member's name (its cell), while it shows: where it is.
     glw::Widget* rowOf(core::Member member, const std::string& owner, const std::string& name) const;
+    // The button beside the search that opens the menu of what can be added (tests).
+    glw::Widget* addButton() const;
 
     // ---- what it asks of the editor ----
 
@@ -84,6 +88,7 @@ private:
     void applyFilter();
     void fit(Section& section);         // its table as tall as its rows that show
     void addMember(core::Member member);
+    void showAddMenu(glw::Widget& button);     // what can be added, under the button beside the search
     void beginRename(core::Member member, const std::string& owner, const std::string& name);
     Section* sectionOf(core::Member member) const;
     std::optional<std::size_t> rowIn(const Section& section, const std::string& owner, const std::string& name) const;
@@ -94,7 +99,8 @@ private:
     core::Document& doc_;
     core::ScriptEdits edits_;
     std::string current_;
-    glw::LineEdit* search_ = nullptr;
+    glw::SearchField* search_ = nullptr;
+    glw::Button* addButton_ = nullptr;          // beside the search: a menu of what can be added
     std::vector<std::unique_ptr<Section>> sections_;            // events, functions, variables, locals, structs
     std::optional<Selection> selected_;
     std::string shown_;                 // the signature of what the tables show

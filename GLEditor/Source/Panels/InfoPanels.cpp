@@ -12,6 +12,7 @@
 #include <GLWidgets/Widgets/Label.hpp>
 #include <GLWidgets/Widgets/Layout.hpp>
 #include <GLWidgets/Widgets/LineEdit.hpp>
+#include <GLWidgets/Widgets/SearchField.hpp>
 #include <GLWidgets/Widgets/TableView.hpp>
 #include <GLWidgets/Widgets/UiRoot.hpp>
 
@@ -124,6 +125,7 @@ public:
         setDelegate(std::make_unique<ResultDelegate>(*model_));
         setRowHeight(rowHeight);
         setSelectionMode(glw::SelectionMode::Single);
+        setThemeStyle(&glw::Theme::itemView);       // as the theme's lists are (no cells' borders), as it changes
         setColumnSizing(0, glw::ColumnSizing::FitContent);
         setColumnSizing(1, glw::ColumnSizing::FitContent);
         setColumnSizing(2, glw::ColumnSizing::Stretch);
@@ -142,13 +144,6 @@ public:
                     return glw::ToolTip{.text = model_->rows[*row].columns[column]};
             }
         return std::nullopt;
-    }
-
-protected:
-    void onRootChanged() override {
-        glw::TableView::onRootChanged();
-        if (const glw::UiContext* ui = context())
-            setStyle(ui->theme.itemView);
     }
 
 private:
@@ -218,7 +213,7 @@ void CompileResultsPanel::refresh() {
 FindPanel::FindPanel(core::Document& doc) : doc_(doc) {
     setLayout(std::make_unique<glw::StackLayout>(glw::Orientation::Vertical, 4.0f));
     setPadding(glw::Insets::all(6));
-    field_ = &add(std::make_unique<glw::LineEdit>(glw::LineEdit::Props{
+    field_ = &add(std::make_unique<glw::SearchField>(glw::SearchField::Props{
         .placeholder = tr("Find in script (node titles, comments, values)"),
         .onChanged = [this](const std::string& text) { search(text); },
         .onSubmit = [this](const std::string&) {
@@ -257,8 +252,8 @@ void FindPanel::search(const std::string& text) {
 
 void FindPanel::focusSearch() {
     if (glw::UiRoot* r = root())
-        r->setFocus(field_);
-    field_->selectAll();
+        r->setFocus(&field_->field());
+    field_->field().selectAll();
 }
 
 void FindPanel::refresh() {

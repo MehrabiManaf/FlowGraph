@@ -20,6 +20,7 @@
 namespace glw {
 class Label;
 class LineEdit;
+class SearchField;
 class TableView;
 } // namespace glw
 
@@ -82,7 +83,7 @@ private:
     void activate(std::size_t row);
 
     core::Document& doc_;
-    glw::LineEdit* field_ = nullptr;
+    glw::SearchField* field_ = nullptr;
     glw::Label* summary_ = nullptr;
     glw::TableView* table_ = nullptr;
     std::shared_ptr<ResultModel> model_;

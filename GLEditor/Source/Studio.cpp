@@ -271,6 +271,7 @@ struct Studio::Impl {
         // with its room when none is open
         documents = &area->setCenterStack();
         area->setCenterFixed(true);                 // the graphs stay there: not floated, no tool among them
+        area->setOnTabMenu([](const std::string&, std::vector<glw::MenuItem>& items) { giveIcons(items); });     // a tab's menu
         glw::Widget* center = area->center();
         area->setOnPanelShown([this](glw::DockTabs&, const std::string& id) {
             if (id.rfind(graphPrefix, 0) != 0)
@@ -496,7 +497,7 @@ struct Studio::Impl {
                                {saveAsAction, "save-as"}, {quitAction, "exit"}, {undoAction, "undo"}, {redoAction, "redo"},
                                {cutAction, "cut"}, {copyAction, "copy"}, {pasteAction, "paste"}, {duplicateAction, "duplicate"},
                                {selectAllAction, "select-all"}, {findAction, "find"}, {findReferencesAction, "find-references"},
-                               {collapseAction, "function"}})
+                               {collapseAction, "function"}, {fullScreenAction, "full-screen"}, {snapAction, "snap"}})
             a->setIcon(studioIcon(icon));
         breakpointAction = action(tr("Toggle &Breakpoint"), [this] {
             if (GraphView* g = currentGraph())
@@ -776,15 +777,15 @@ struct Studio::Impl {
         run->finished.connect([this](bool ok, const std::string& message) {
             for (GraphView* g : graphViews())
                 g->setDebugNode(0);
-            if (!message.empty())
-                log->append(message);
+            // (its message is in the Output Log already: the run's "--- failed: ... ---")
             status->showMessage(ok ? tr("The run ended") : tr("The run failed: see the Output Log"), 4s);
         });
+        // what the run says, in the colors of its level (the theme's); its own lines ("--- running Main ---") muted
         run->logMessage.connect([this](int level, const std::string& text) {
             switch (fg::LogLevel(level)) {
-            case fg::LogLevel::Warning: log->append(app.translator().resolve(tr("Warning: {text}").arg("text", text))); break;
-            case fg::LogLevel::Error: log->append(app.translator().resolve(tr("Error: {text}").arg("text", text))); break;
-            default: log->append(text); break;
+            case fg::LogLevel::Warning: log->append(text, glw::LineTone::Warning); break;
+            case fg::LogLevel::Error: log->append(text, glw::LineTone::Error); break;
+            default: log->append(text, text.starts_with("--- ") ? glw::LineTone::Muted : glw::LineTone::Normal); break;
             }
         });
         run->notice.connect([this](core::RunNotice notice) {
@@ -875,7 +876,7 @@ struct Studio::Impl {
             if (launches.setFile(std::move(file), &problems))
                 doc.refresh();
             for (const std::string& p : problems)
-                log->append(app.translator().resolve(tr("Warning: {text}").arg("text", p)));
+                log->append(app.translator().resolve(tr("Warning: {text}").arg("text", p)), glw::LineTone::Warning);
             showLaunches();
             if (doc.path().empty())
                 status->showMessage(tr("The launch configurations are saved with the script"), 4s);
@@ -1066,7 +1067,7 @@ struct Studio::Impl {
         if (launches.scriptOpened(path, &problems))
             doc.refresh();
         for (const std::string& p : problems)
-            log->append(app.translator().resolve(tr("Warning: {text}").arg("text", p)));
+            log->append(app.translator().resolve(tr("Warning: {text}").arg("text", p)), glw::LineTone::Warning);
         showLaunches();
         addRecent(path);
         status->showMessage(tr("Opened {file}").arg("file", path), 3s);

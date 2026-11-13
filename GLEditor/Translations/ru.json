@@ -333,10 +333,6 @@
       "Warning: {text}",
       "Предупреждение: {text}"
     ],
-    "Error: {text}": [
-      "Error: {text}",
-      "Ошибка: {text}"
-    ],
     "The script has errors: it cannot run": [
       "The script has errors: it cannot run",
       "В скрипте есть ошибки: его нельзя запустить"
@@ -1328,6 +1324,14 @@
     "Hide the tab bar": [
       "Hide the tab bar",
       "Скрыть панель вкладок"
+    ],
+    "Add a function, a variable or a struct": [
+      "Add a function, a variable or a struct",
+      "Добавить функцию, переменную или структуру"
+    ],
+    "Local Variable of {function}": [
+      "Local Variable of {function}",
+      "Локальная переменная {function}"
     ]
   },
   "obsolete": {

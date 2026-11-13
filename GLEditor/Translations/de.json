@@ -333,10 +333,6 @@
       "Warning: {text}",
       "Warnung: {text}"
     ],
-    "Error: {text}": [
-      "Error: {text}",
-      "Fehler: {text}"
-    ],
     "The script has errors: it cannot run": [
       "The script has errors: it cannot run",
       "Das Skript hat Fehler: es kann nicht laufen"
@@ -1328,6 +1324,14 @@
     "Hide the tab bar": [
       "Hide the tab bar",
       "Registerleiste ausblenden"
+    ],
+    "Add a function, a variable or a struct": [
+      "Add a function, a variable or a struct",
+      "Eine Funktion, eine Variable oder eine Struktur hinzufügen"
+    ],
+    "Local Variable of {function}": [
+      "Local Variable of {function}",
+      "Lokale Variable von {function}"
     ]
   },
   "obsolete": {
