@@ -100,6 +100,17 @@ std::unique_ptr<glw::Widget> inset(std::unique_ptr<glw::Widget> content) {
     return box;
 }
 
+// The least room a panel keeps (its stack and the splitters around it keep it, however their handles are dragged): what
+// its controls need to show.
+constexpr glw::Size sidePanelLeast{220, 160};       // My Script, the Details
+constexpr glw::Size debuggerLeast{220, 280};        // its call stack, its variables and its watches, each a few rows
+constexpr glw::Size bottomPanelLeast{240, 90};      // the Output Log, the results
+
+std::unique_ptr<glw::Widget> atLeast(std::unique_ptr<glw::Widget> panel, glw::Size least) {
+    panel->setMinimumSize(least);
+    return panel;
+}
+
 std::string fileName(const std::string& path) {
     const std::filesystem::path p(std::u8string(path.begin(), path.end()));
     const std::u8string name = p.filename().u8string();
@@ -304,7 +315,7 @@ struct Studio::Impl {
             }
         });
         myScript->setOnMessage([this](glw::LocalizedText text) { status->showMessage(std::move(text), 4s); });
-        area->addPanel({.id = "myScript", .title = tr("My Script"), .content = std::move(scriptPanel), .closable = false}, center,
+        area->addPanel({.id = "myScript", .title = tr("My Script"), .content = atLeast(std::move(scriptPanel), sidePanelLeast), .closable = false}, center,
                        glw::DockSide::Start, 0.2f);
         // what is chosen in My Script, or selected in a graph: its properties
         auto detailsPanel = std::make_unique<DetailsPanel>(doc);
@@ -333,14 +344,14 @@ struct Studio::Impl {
             case core::Member::Struct: details->showStruct(chosen->name); break;
             }
         });
-        area->addPanel({.id = "details", .title = tr("Details"), .content = std::move(detailsPanel), .closable = false}, center,
+        area->addPanel({.id = "details", .title = tr("Details"), .content = atLeast(std::move(detailsPanel), sidePanelLeast), .closable = false}, center,
                        glw::DockSide::End, 0.24f);
         // what a run prints
         auto output = std::make_unique<glw::TextEdit>();
         log = output.get();
         log->setReadOnly(true);
         log->setLineNumbers(false);
-        area->addPanel({.id = "output", .title = tr("Output Log"), .content = inset(std::move(output)), .closable = false}, center,
+        area->addPanel({.id = "output", .title = tr("Output Log"), .content = atLeast(inset(std::move(output)), bottomPanelLeast), .closable = false}, center,
                        glw::DockSide::Bottom, 0.24f);
         // what the compiler says, what was found: beside it
         auto results = std::make_unique<CompileResultsPanel>(doc);
@@ -377,9 +388,9 @@ struct Studio::Impl {
         // what the compiler says, what was found: beside the Output Log; the debugger beside the Details. A layout saved
         // before them does not know them: they are put there after it is restored (it would put them in its first stack)
         std::vector<std::pair<glw::DockPanel, const char*>> added;
-        added.emplace_back(glw::DockPanel{.id = "compileResults", .title = tr("Compile Results"), .content = std::move(results), .closable = false}, "output");
-        added.emplace_back(glw::DockPanel{.id = "findResults", .title = tr("Find Results"), .content = std::move(findPanel), .closable = false}, "output");
-        added.emplace_back(glw::DockPanel{.id = "debugger", .title = tr("Debugger"), .content = inset(std::move(debugPanel)), .closable = false}, "details");
+        added.emplace_back(glw::DockPanel{.id = "compileResults", .title = tr("Compile Results"), .content = atLeast(std::move(results), bottomPanelLeast), .closable = false}, "output");
+        added.emplace_back(glw::DockPanel{.id = "findResults", .title = tr("Find Results"), .content = atLeast(std::move(findPanel), bottomPanelLeast), .closable = false}, "output");
+        added.emplace_back(glw::DockPanel{.id = "debugger", .title = tr("Debugger"), .content = atLeast(inset(std::move(debugPanel)), debuggerLeast), .closable = false}, "details");
         const std::string layout = settings.string("layout");
         const std::vector<std::string> known = glw::DockArea::panelsIn(layout);
         std::vector<std::pair<glw::DockPanel, const char*>> later;
