@@ -126,8 +126,18 @@ int Runtime::loadPluginsFromPathList(const std::string& list, std::vector<std::s
 }
 
 int Runtime::loadPluginsFromEnvironment(const char* variable, std::vector<std::string>* errors) {
+#ifdef _WIN32
+    char* v = nullptr;
+    std::size_t size = 0;
+    if (_dupenv_s(&v, &size, variable) != 0 || !v)
+        return 0;
+    const std::string list = v;
+    std::free(v);
+    return loadPluginsFromPathList(list, errors);
+#else
     const char* v = std::getenv(variable);
     return v ? loadPluginsFromPathList(v, errors) : 0;
+#endif
 }
 
 std::string Runtime::LoadedScript::explanation() const {

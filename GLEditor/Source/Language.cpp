@@ -30,6 +30,27 @@ namespace {
 std::string g_current = "en";
 std::set<std::string> g_pluginsLooked;      // the plugin libraries whose catalog of this language was looked for
 
+// An environment variable's value (empty: none), as Windows wants it read (_dupenv_s).
+std::string environment(const char* name) {
+#ifdef _WIN32
+    char* value = nullptr;
+    std::size_t size = 0;
+    if (_dupenv_s(&value, &size, name) != 0 || !value)
+        return {};
+    std::string v = value;
+    std::free(value);
+    return v;
+#else
+    const char* value = std::getenv(name);
+    return value ? value : "";
+#endif
+}
+
+// A path of UTF-8.
+std::filesystem::path pathOf(const std::string& utf8) {
+    return std::filesystem::path(std::u8string(utf8.begin(), utf8.end()));
+}
+
 bool hasTranslation(const std::string& code) {
     if (code == "en")
         return true;
@@ -55,7 +76,7 @@ std::vector<std::string> systemLanguages() {
     }
 #endif
     for (const char* variable : {"LC_ALL", "LC_MESSAGES", "LANG"})
-        if (const char* value = std::getenv(variable); value && *value) {
+        if (const std::string value = environment(variable); !value.empty()) {
             std::string v = value;
             v = v.substr(0, v.find('.'));       // fa_IR.UTF-8
             if (!v.empty() && v != "C" && v != "POSIX")
@@ -159,7 +180,7 @@ void loadPluginTexts(const fg::Runtime& rt) {
             continue;
         // <plugin folder>/translations/<Plugin>_<code>.json (Translations.hpp)
         const std::filesystem::path catalog =
-            std::filesystem::u8path(files[i]).parent_path() / "translations" / std::filesystem::u8path(names[i] + "_" + g_current + ".json");
+            pathOf(files[i]).parent_path() / "translations" / pathOf(names[i] + "_" + g_current + ".json");
         std::error_code error;
         if (std::filesystem::exists(catalog, error))
             editableNodeTexts().loadJson(readFile(catalog));

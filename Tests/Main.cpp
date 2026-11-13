@@ -3969,11 +3969,9 @@ bool diesSoon(long pid) {
     return false;
 }
 long readPid(const std::filesystem::path& file) {
-    FILE* f = std::fopen(file.string().c_str(), "r");
-    if (!f) return 0;
+    std::ifstream in(file);
     long pid = 0;
-    if (std::fscanf(f, "%ld", &pid) != 1) pid = 0;
-    std::fclose(f);
+    if (!(in >> pid)) pid = 0;
     return pid;
 }
 

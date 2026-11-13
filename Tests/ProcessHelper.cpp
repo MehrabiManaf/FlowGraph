@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -53,10 +54,7 @@ static int run(int argc, char** argv) {
             if (i < n) ms(std::atol(argv[3]));
         }
     } else if (cmd == "forever" && argc > 2) {
-        if (FILE* f = std::fopen(argv[2], "w")) {
-            std::fprintf(f, "%ld", static_cast<long>(getpid()));
-            std::fclose(f);
-        }
+        std::ofstream(argv[2]) << static_cast<long>(getpid());
         for (;;) {
             std::printf("tick\n");
             std::fflush(stdout);

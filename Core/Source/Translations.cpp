@@ -310,7 +310,7 @@ std::string updateCatalog(const Registry& reg, const std::string& existing, cons
         Json j = Json::parse(existing);
         if (j["note"].isString()) note = j["note"].asString();
         for (auto& [key, value] : j["texts"].members())
-            if (value.isArray() && value.size() >= 2) old[key] = {value[size_t(0)].asString(), value[size_t(1)].asString()};
+            if (const Json& v = value; v.isArray() && v.size() >= 2) old[key] = {v[size_t(0)].asString(), v[size_t(1)].asString()};
     }
     const auto texts = translatableTexts(reg, source);
     std::set<std::string> keys;

@@ -267,29 +267,29 @@ void Script::renameLocal(const std::string& graph, const std::string& from, cons
         if ((n.def == "var.get" || n.def == "var.set") && n.prop("name") == from && n.prop("scope") == "local") n.props["name"] = to;
 }
 
-void Script::retypeVariable(const std::string& name, const std::string& type) {
-    VariableDecl* v = findVariable(name);
+void Script::retypeVariable(const std::string& variable, const std::string& type) {
+    VariableDecl* v = findVariable(variable);
     if (!v || v->type == type) return;
     v->type = type;
     v->def = Value();
     for (auto& g : graphs) {
-        const bool shadowed = g.findLocal(name) != nullptr;
+        const bool shadowed = g.findLocal(variable) != nullptr;
         for (auto& n : g.nodes) {
-            if (n.def != "var.set" || n.prop("name") != name) continue;
+            if (n.def != "var.set" || n.prop("name") != variable) continue;
             const std::string scope = n.prop("scope");
             if (scope == "global" || (scope.empty() && !shadowed)) n.defaults.erase("Value");
         }
     }
 }
 
-void Script::retypeLocal(const std::string& graph, const std::string& name, const std::string& type) {
+void Script::retypeLocal(const std::string& graph, const std::string& variable, const std::string& type) {
     Graph* g = findGraph(graph);
-    VariableDecl* v = g ? g->findLocal(name) : nullptr;
+    VariableDecl* v = g ? g->findLocal(variable) : nullptr;
     if (!v || v->type == type) return;
     v->type = type;
     v->def = Value();
     for (auto& n : g->nodes)
-        if (n.def == "var.set" && n.prop("name") == name && n.prop("scope") == "local") n.defaults.erase("Value");
+        if (n.def == "var.set" && n.prop("name") == variable && n.prop("scope") == "local") n.defaults.erase("Value");
 }
 
 // ------------------------------------------------------------------ JSON

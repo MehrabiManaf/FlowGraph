@@ -11,7 +11,7 @@ cmake --install build/Release --prefix C:/FlowGraph --component FlowGraph
 installs the libraries, their headers, `flow` / `flowstudio` (with the FileSystem plugin in `bin/plugins`) and a CMake package.
 A host project then only needs
 ```cmake
-find_package(FlowGraph 0.5 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
+find_package(FlowGraph 0.6 REQUIRED COMPONENTS ScriptEditor)        # ScriptEditor is optional (it needs Qt 6)
 target_link_libraries(myapp PRIVATE FlowGraph::Core FlowGraph::ScriptEditor)
 ```
 with `CMAKE_PREFIX_PATH` pointing at the prefix (and at Qt). The editor library is built when Qt 6 is found

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 cmake_minimum_required(VERSION 3.21)
 
-project(FlowGraph VERSION 0.5.2 LANGUAGES CXX)
+project(FlowGraph VERSION 0.6.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,11 @@ if(MSVC)
     add_compile_options(/W4 /permissive- /Zc:__cplusplus /utf-8 /wd4100 /wd4127 /wd4251 /wd4275)
 else()
     add_compile_options(-Wall -Wextra -Wno-unused-parameter)
+    # GLWidgets' Props and menu items are made with designated initializers that leave out what keeps its default
+    # ({.text = ...}): GCC warns of every member left out, even with a default of its own (as GLWidgets' own build says)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options(-Wno-missing-field-initializers)
+    endif()
 endif()
 
 # ---- core: pure C++20, no Qt ------------------------------------------------
