@@ -51,10 +51,15 @@ public:
     LinkProblem linkProblem(const PinEnd& a, const PinEnd& b) const;
     // `a` and `b` linked (an output and an input, in either order); the link an input of data, or an output of execution,
     // had goes. False (and why) when they cannot be.
-    bool link(const PinEnd& a, const PinEnd& b, const std::string& label, LinkProblem* why = nullptr);
+    bool link(const PinEnd& a, const PinEnd& b, const std::string& label, LinkProblem* why = nullptr,
+              const std::string& coalesceKey = {});
     void breakLinks(const PinEnd& pin, const std::string& label);
     // A reroute node at (x, y) - its top left corner - in the middle of the data link `c`. False for a link of execution.
     bool insertReroute(const fg::Connection& c, double x, double y, const std::string& label);
+    // The node `node` put into the execution link `c`: the link's start to its first execution input, its first execution
+    // output to the link's end, `c` gone. False (nothing done) when `c` is no link of execution or the node has no
+    // execution in and out (a pure call).
+    bool insertIntoLink(const fg::Connection& c, fg::NodeId node, const std::string& label, const std::string& coalesceKey = {});
 
     // ---- nodes ----
 
@@ -63,9 +68,10 @@ public:
     fg::NodeId addNode(const fg::NodeTemplate& t, double x, double y, const PinEnd* from, const std::string& label,
                        std::string* linkedPin = nullptr, const std::string& coalesceKey = {});
     // A Get (or a Set) of a variable at (x, y): `scope` "global", or "local" (of the function the graph is); its id.
-    fg::NodeId addVariableNode(const std::string& name, const std::string& scope, bool set, double x, double y, const std::string& label);
+    fg::NodeId addVariableNode(const std::string& name, const std::string& scope, bool set, double x, double y, const std::string& label,
+                               const std::string& coalesceKey = {});
     // A call of a function of the script at (x, y); 0 when there is no such function.
-    fg::NodeId addCall(const std::string& function, double x, double y, const std::string& label);
+    fg::NodeId addCall(const std::string& function, double x, double y, const std::string& label, const std::string& coalesceKey = {});
     // Whether a node can be deleted, copied: the entry of a function and the events of the application are fixed.
     static bool removable(const fg::CompiledNode& node);
     // The nodes (those removable), links and comments, gone with the links of the nodes.

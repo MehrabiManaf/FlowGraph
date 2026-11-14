@@ -73,7 +73,7 @@ LinkProblem GraphEdits::linkProblem(const PinEnd& a, const PinEnd& b) const {
     return LinkProblem::None;
 }
 
-bool GraphEdits::link(const PinEnd& a, const PinEnd& b, const std::string& label, LinkProblem* why) {
+bool GraphEdits::link(const PinEnd& a, const PinEnd& b, const std::string& label, LinkProblem* why, const std::string& coalesceKey) {
     const LinkProblem problem = linkProblem(a, b);
     if (why)
         *why = problem;
@@ -86,7 +86,7 @@ bool GraphEdits::link(const PinEnd& a, const PinEnd& b, const std::string& label
     doc_.edit(label, [&](fg::Script& s) {
         if (fg::Graph* g = graphOf(s))
             addConnection(*g, c, exec);
-    });
+    }, EditKind::Structural, coalesceKey);
     return true;
 }
 
@@ -121,6 +121,36 @@ bool GraphEdits::insertReroute(const fg::Connection& c, double x, double y, cons
     return true;
 }
 
+bool GraphEdits::insertIntoLink(const fg::Connection& c, fg::NodeId node, const std::string& label, const std::string& coalesceKey) {
+    const fg::CompiledGraph* cg = doc_.compiledGraph(graph_);
+    const fg::CompiledNode* from = cg ? cg->findNode(c.fromNode) : nullptr;
+    const fg::CompiledNode* put = cg ? cg->findNode(node) : nullptr;
+    if (!from || !put || !from->findPin(c.fromPin, fg::PinDir::Out, fg::PinKind::Exec))
+        return false;
+    const fg::CompiledPin* in = nullptr;
+    const fg::CompiledPin* out = nullptr;
+    for (const fg::CompiledPin& p : put->pins) {
+        if (p.kind != fg::PinKind::Exec)
+            continue;
+        if (p.dir == fg::PinDir::In && !in)
+            in = &p;
+        if (p.dir == fg::PinDir::Out && !out)
+            out = &p;
+    }
+    if (!in || !out)
+        return false;
+    const std::string inPin = in->name, outPin = out->name;
+    doc_.edit(label, [&](fg::Script& s) {
+        fg::Graph* g = graphOf(s);
+        if (!g)
+            return;
+        std::erase(g->connections, c);
+        addConnection(*g, {c.fromNode, c.fromPin, node, inPin}, true);
+        addConnection(*g, {node, outPin, c.toNode, c.toPin}, true);
+    }, EditKind::Structural, coalesceKey);
+    return true;
+}
+
 fg::NodeId GraphEdits::addNode(const fg::NodeTemplate& t, double x, double y, const PinEnd* from, const std::string& label,
                                std::string* linkedPin, const std::string& coalesceKey) {
     std::string pinName;
@@ -150,7 +180,7 @@ fg::NodeId GraphEdits::addNode(const fg::NodeTemplate& t, double x, double y, co
 }
 
 fg::NodeId GraphEdits::addVariableNode(const std::string& name, const std::string& scope, bool set, double x, double y,
-                                       const std::string& label) {
+                                       const std::string& label, const std::string& coalesceKey) {
     fg::NodeId id = 0;
     doc_.edit(label, [&](fg::Script& s) {
         if (fg::Graph* g = graphOf(s)) {
@@ -159,11 +189,11 @@ fg::NodeId GraphEdits::addVariableNode(const std::string& name, const std::strin
             n.props["scope"] = scope;
             id = n.id;
         }
-    });
+    }, EditKind::Structural, coalesceKey);
     return id;
 }
 
-fg::NodeId GraphEdits::addCall(const std::string& function, double x, double y, const std::string& label) {
+fg::NodeId GraphEdits::addCall(const std::string& function, double x, double y, const std::string& label, const std::string& coalesceKey) {
     const fg::Graph* callee = doc_.script().findGraph(function);
     if (!callee || callee->kind != fg::GraphKind::Function)
         return 0;
@@ -174,7 +204,7 @@ fg::NodeId GraphEdits::addCall(const std::string& function, double x, double y, 
             n.props["function"] = function;
             id = n.id;
         }
-    });
+    }, EditKind::Structural, coalesceKey);
     return id;
 }
 

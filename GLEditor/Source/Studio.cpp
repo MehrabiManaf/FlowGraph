@@ -209,8 +209,7 @@ struct Studio::Impl {
     // The window's panels and graphs go first, while the document and the run they listen to are there (the application,
     // and its windows, outlive the studio).
     ~Impl() {
-        layoutTimer.stop();                     // (they read the panels' area and the graphs, which go now)
-        graphActionsTimer.stop();
+        graphActionsTimer.stop();               // (it reads the graphs, which go now)
         area = nullptr;
         if (window)
             window->ui().setContent(nullptr);
@@ -250,7 +249,6 @@ struct Studio::Impl {
         settings.setString("layout", layout);
         saveSettings();
     }
-    glw::Timer layoutTimer;
 
     void applyTheme(bool animated) {
         const std::string style = settings.string("style", "studio");
@@ -448,9 +446,6 @@ struct Studio::Impl {
         window->setOnCloseRequested([this] { return closeRequested([this] { window->close(); }); });
         app.setOnQuitRequested([this] { return closeRequested([this] { app.quit(); }); });
         app.setOnQuitting([this] { saveLayout(); });
-        // ... and every few seconds when it changed: a program ended otherwise (stopped, the session ending) keeps it too
-        if (glw::Scheduler* s = app.context().scheduler)
-            layoutTimer.start(*s, std::chrono::seconds(3), [this] { saveLayout(); }, true);
 
         doc.titleChanged.connect([this] { showTitle(); });
         doc.undoStateChanged.connect([this] { showUndoState(); });

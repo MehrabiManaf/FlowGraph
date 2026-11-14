@@ -156,13 +156,18 @@ glw::DropAction GraphView::onDragOver(const glw::DragEvent& event) {
 }
 
 glw::DropAction GraphView::onDrop(const glw::DragEvent& event) {
-    glw::Point at = toCanvas(event.position);
+    const glw::Point dropped = toCanvas(event.position);
+    glw::Point at = dropped;
     if (snap_)
         at = {std::round(at.x / snapStep_) * snapStep_, std::round(at.y / snapStep_) * snapStep_};
+    const std::string step = "drop:" + graph_ + ":" + std::to_string(++addSerial_);       // what a drop does: one step
     if (event.data.format == functionDragFormat) {
-        // a call of the function
-        if (const fg::NodeId made = edits_.addCall(event.data.content, at.x, at.y,
-                                                   words(tr("Add call to {function}").arg("function", event.data.content)))) {
+        // a call of the function; let go on a link of execution, put into it (between the nodes it linked)
+        const std::optional<fg::Connection> link = linkAt(dropped);
+        const std::string label = words(tr("Add call to {function}").arg("function", event.data.content));
+        if (const fg::NodeId made = edits_.addCall(event.data.content, at.x, at.y, label, step)) {
+            if (link)
+                edits_.insertIntoLink(*link, made, label, step);
             select({made});
             focus();
         }
@@ -174,6 +179,9 @@ glw::DropAction GraphView::onDrop(const glw::DragEvent& event) {
     if (bar == std::string::npos)
         return glw::DropAction::None;
     const std::string scope = event.data.content.substr(0, bar), name = event.data.content.substr(bar + 1);
+    // let go on an input of data its value fits (a Set not asked for): a Get before it, linked to it
+    if (!glw::platform::hasAny(event.modifiers, glw::platform::KeyModifiers::Alt) && getInto(scope, name, dropped, step))
+        return glw::DropAction::Copy;
     const auto make = [this, scope, name, at](bool set) {
         if (const fg::NodeId made = edits_.addVariableNode(name, scope, set, at.x, at.y,
                                                            words(set ? tr("Add Set variable") : tr("Add Get variable")))) {
@@ -194,6 +202,54 @@ glw::DropAction GraphView::onDrop(const glw::DragEvent& event) {
             glw::showContextMenu(*this, shown, std::move(items));
         });
     return glw::DropAction::Copy;
+}
+
+bool GraphView::getInto(const std::string& scope, const std::string& name, glw::Point at, const std::string& step) {
+    // the input under the point
+    NodeView* view = nullptr;
+    std::optional<NodeView::PinHit> pin;
+    for (const auto& [id, v] : nodes_) {
+        if (!itemRect(*v).inflated(4).contains(at))
+            continue;
+        if (const std::optional<NodeView::PinHit> hit = v->pinAt(at - itemPosition(*v)); hit && hit->dir == fg::PinDir::In && hit->kind == fg::PinKind::Data) {
+            view = v;
+            pin = hit;
+        }
+    }
+    if (!view || !pin)
+        return false;
+    const core::PinEnd to = core::PinEnd::of(view->compiled(), pin->name, fg::PinDir::In);
+    // the variable's type, and whether it fits the input
+    const fg::Script& s = doc_.script();
+    const fg::VariableDecl* variable = nullptr;
+    if (scope == "local") {
+        if (const fg::Graph* g = s.findGraph(graph_))
+            variable = g->findLocal(name);
+    } else {
+        variable = s.findVariable(name);
+    }
+    const auto types = doc_.types();
+    if (!variable || !to.valid() || !types)
+        return false;
+    if (!to.wildcard && !registry().canConnect(types->typeOrAny(variable->type), to.type))
+        return false;
+    // the Get left of the input, level with it
+    const std::optional<glw::Point> target = pinPoint(to.node, to.pin, fg::PinDir::In);
+    const glw::Point place = target ? glw::Point{target->x - 200, target->y - 14} : at;
+    const std::string label = words(tr("Add Get variable"));
+    const fg::NodeId made = edits_.addVariableNode(name, scope, false, place.x, place.y, label, step);
+    const NodeView* get = nodeView(made);
+    if (!made || !get)
+        return true;
+    for (const fg::CompiledPin& p : get->compiled().pins) {
+        if (p.dir == fg::PinDir::Out && p.kind == fg::PinKind::Data) {
+            edits_.link(core::PinEnd::of(get->compiled(), p.name, fg::PinDir::Out), to, label, nullptr, step);
+            break;
+        }
+    }
+    select({made});
+    focus();
+    return true;
 }
 
 // ---- comments, breakpoints ----

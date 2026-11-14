@@ -642,6 +642,49 @@ TEST(aVariableOrAFunctionDraggedOntoTheGraphMakesANode) {
     CHECK(l.doc->graph("EventGraph")->nodes.size() == nodes + 2 && l.doc->graph("EventGraph")->nodes.back().def == "func.call");
 }
 
+// A call let go on a link of execution goes into it; a variable let go on an input it fits, a Get linked to it.
+TEST(whatIsDroppedOnALinkOrAPinIsLinked) {
+    Listed l;
+    fg::NodeId go = 0, print = 0;
+    l.doc->edit("x", [&](fg::Script& s) {
+        fg::Graph& g = s.graphs[0];
+        go = g.nodes.front().id;
+        print = g.addNode("util.print", 500, 300).id;
+        g.connections.push_back({go, "Then", print, "In"});
+    });
+    l.root.layout();
+    const auto rootOf = [&](fg::NodeId id, const std::string& pin, fg::PinDir dir) {
+        const fged::gl::NodeView& v = *l.view->nodeView(id);
+        return l.view->mapToRoot(l.view->fromCanvas(l.view->itemPosition(v) + *v.pinCenter(pin, dir)));
+    };
+    const auto drag = [&](glw::Widget& row, Point to) {
+        const Point from = l.middleOf(row);
+        l.press(from);
+        l.move({from.x + 20, from.y});
+        l.move(to);
+        l.release(to);
+    };
+    // the function onto the middle of the link: Go -> Jump -> Print
+    const Point a = rootOf(go, "Then", fg::PinDir::Out), b = rootOf(print, "In", fg::PinDir::In);
+    if (glw::Widget* jump = l.panel->rowOf(fged::core::Member::Function, "", "Jump"))
+        drag(*jump, {(a.x + b.x) / 2, (a.y + b.y) / 2});
+    const fg::Graph& g = *l.doc->graph("EventGraph");
+    const fg::NodeId call = g.nodes.back().def == "func.call" ? g.nodes.back().id : 0;
+    CHECK(call != 0 && g.connections.size() == 2);
+    CHECK(std::count(g.connections.begin(), g.connections.end(), fg::Connection{go, "Then", call, "In"}) == 1);
+    CHECK(std::count(g.connections.begin(), g.connections.end(), fg::Connection{call, "Then", print, "In"}) == 1);
+    CHECK(l.doc->undoLabel() == "Add call to Jump");
+    // the variable onto Print's String: a Get of it, linked
+    l.root.layout();
+    if (glw::Widget* speed = l.panel->rowOf(fged::core::Member::Variable, "", "Speed"))
+        drag(*speed, rootOf(print, "String", fg::PinDir::In));
+    const fg::Graph& after = *l.doc->graph("EventGraph");
+    const fg::Node& get = after.nodes.back();
+    CHECK(get.def == "var.get" && get.props.at("name") == "Speed");
+    CHECK(std::count(after.connections.begin(), after.connections.end(), fg::Connection{get.id, "Value", print, "String"}) == 1);
+    CHECK(l.host.open().empty());           // no menu asked Get or Set
+}
+
 TEST(myScriptsTablesRenameByF2AndOpenByADoubleClick) {
     Listed l;
     glw::Widget* speed = l.panel->rowOf(fged::core::Member::Variable, "", "Speed");

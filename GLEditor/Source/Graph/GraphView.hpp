@@ -149,6 +149,9 @@ private:
     static Bezier curve(glw::Point a, glw::Point b);
     // The link at `point` of the canvas.
     std::optional<fg::Connection> linkAt(glw::Point point) const;
+    // A variable dropped at `at` (the canvas's): on an input of data its value fits, a Get of it before the input, linked to
+    // it (one step, `step`). False when it was dropped elsewhere.
+    bool getInto(const std::string& scope, const std::string& name, glw::Point at, const std::string& step);
     CommentView* commentView(int id) const;
     // `text` in the language of the editor (an undo step's name).
     std::string words(const glw::LocalizedText& text) const;

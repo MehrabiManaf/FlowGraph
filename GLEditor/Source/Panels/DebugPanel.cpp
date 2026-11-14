@@ -324,6 +324,8 @@ DebugPanel::DebugPanel(core::Document& doc, core::RunSession& run) : doc_(doc), 
             onLocation_(stackModel_->rows[*row].graph, stackModel_->rows[*row].node);
     });
     stack->setStretch(1);
+    // each part at least its header and a row or two: its splitter's handles squeeze none of them away
+    stack->setMinimumSize({0, 56});
     split->add(std::move(stack));
 
     // the variables
@@ -332,6 +334,7 @@ DebugPanel::DebugPanel(core::Document& doc, core::RunSession& run) : doc_(doc), 
     variables_ = variables.get();
     auto variablesFrame = std::make_unique<TreeFrame>(*this, *variableModel_, std::move(variables));
     variablesFrame->setStretch(3);
+    variablesFrame->setMinimumSize({0, 82});
     split->add(std::move(variablesFrame));
 
     // the watches: a field to add one (Enter), their tree
@@ -356,6 +359,7 @@ DebugPanel::DebugPanel(core::Document& doc, core::RunSession& run) : doc_(doc), 
             removeWatch(watchModel_->items[*item].name.source);
     });
     watchFrame->setStretch(1);
+    watchFrame->setMinimumSize({0, 56});
     watchBox->add(std::move(watchFrame));
     split->add(std::move(watchBox));
     add(std::move(split));
