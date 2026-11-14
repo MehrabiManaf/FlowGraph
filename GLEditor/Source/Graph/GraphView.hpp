@@ -77,6 +77,8 @@ public:
     // ---- what is selected ----
 
     const std::set<fg::NodeId>& selectedNodes() const { return selectedNodes_; }
+    // Two nodes or more selected that can be collapsed into a function (tried on a copy of the script).
+    bool canCollapseSelection() const;
     void select(const std::set<fg::NodeId>& nodes, const std::set<int>& comments = {});
     void selectAll();
     void clearSelection();

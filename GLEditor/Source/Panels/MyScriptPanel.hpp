@@ -104,6 +104,7 @@ private:
     std::vector<std::unique_ptr<Section>> sections_;            // events, functions, variables, locals, structs
     std::optional<Selection> selected_;
     std::string shown_;                 // the signature of what the tables show
+    bool rebuilt_ = false;              // once: its sections close and open eased from then on
     bool rebuildQueued_ = false;
     bool selecting_ = false;            // choosing in one table clears the others
     int changedConnection_ = 0, replacedConnection_ = 0;

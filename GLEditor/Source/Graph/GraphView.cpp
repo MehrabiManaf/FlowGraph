@@ -651,7 +651,7 @@ void GraphView::onMouse(glw::MouseEvent& event) {
             // a link: selected; clicked twice, a reroute there (links of data)
             if (const std::optional<fg::Connection> link = linkAt(at)) {
                 if (event.clicks == 2) {
-                    if (!edits_.insertReroute(*link, at.x - 18, at.y - 9, words(tr("Add reroute"))))
+                    if (!edits_.insertReroute(*link, at.x - 22, at.y - 10, words(tr("Add reroute"))))
                         tell(tr("Reroute nodes are only for links of data"));
                     return;
                 }
@@ -805,8 +805,8 @@ void GraphView::paintUnderItems(glw::PaintContext& context) {
         if (drag_ == Drag::Link && (linkFrom_.kind == fg::PinKind::Exec) == execPass) {
             if (const std::optional<glw::Point> pin = pinPoint(linkFrom_.node, linkFrom_.pin, linkFrom_.dir)) {
                 glw::Color color = linkFrom_.kind == fg::PinKind::Exec ? colors.exec
-                                   : linkFrom_.type && !linkFrom_.wildcard ? rgb(registry().typeColor(linkFrom_.type))
-                                                                            : rgb(160, 160, 168);
+                                   : linkFrom_.type && !linkFrom_.wildcard ? colors.typed(rgb(registry().typeColor(linkFrom_.type)))
+                                                                            : colors.typed(rgb(160, 160, 168));
                 color.a *= 0.75f;
                 const Bezier bz = linkFrom_.dir == fg::PinDir::Out ? curve(*pin, linkTo_) : curve(linkTo_, *pin);
                 context.painter.drawBezier(bz.a, bz.c1, bz.c2, bz.b, linkFrom_.kind == fg::PinKind::Exec ? 3.0f : 2.0f, color);

@@ -190,7 +190,8 @@ protected:
         const glw::UiContext* ui = context();
         if (!ui)
             return {60, rowHeight};
-        const glw::text::TextLayout t(ui->translator.resolve(text_), glw::text::TextStyle{{&ui->fonts.defaultFont()}, ui->theme.fontSize});
+        const glw::text::TextLayout t(shortened(ui->translator.resolve(text_), 200, true),
+                                      glw::text::TextStyle{{&ui->fonts.defaultFont()}, ui->theme.fontSize});
         return {std::min(std::ceil(t.size().width) + 12, 420.0f), rowHeight};
     }
     void paint(glw::PaintContext& context) override {

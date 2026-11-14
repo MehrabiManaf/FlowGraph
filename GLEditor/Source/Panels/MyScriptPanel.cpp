@@ -465,6 +465,10 @@ void MyScriptPanel::rebuild() {
     sectionOf(core::Member::Variable)->model->set(std::move(variables));
     sectionOf(core::Member::Local)->model->set(std::move(locals));
     sectionOf(core::Member::Struct)->model->set(std::move(structs));
+    // a section with nothing in it: closed, not to be opened (what it had chosen comes back when it has rows again)
+    for (const auto& section : sections_)
+        section->panel->setExpandable(!section->model->rows.empty(), rebuilt_);
+    rebuilt_ = true;
     // a variable's name: at least as wide as the widest (as the Details' tables), its type giving way first
     if (const glw::UiContext* ui = context())
         for (core::Member member : {core::Member::Variable, core::Member::Local}) {

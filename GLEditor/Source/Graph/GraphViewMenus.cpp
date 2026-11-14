@@ -20,6 +20,8 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <string>
+#include <string_view>
 
 namespace fged::gl {
 
@@ -247,7 +249,7 @@ void GraphView::contextMenu(glw::Point at) {
             std::vector<glw::MenuItem> items{
                 {.text = tr("Delete Link"), .onTriggered = [this, c] { edits_.remove({}, {c}, {}, words(tr("Delete link"))); }, .shortcut = tr("Del")},
                 {.text = tr("Add Reroute Node"), .onTriggered = [this, c, at] {
-                     if (!edits_.insertReroute(c, at.x - 18, at.y - 9, words(tr("Add reroute"))))
+                     if (!edits_.insertReroute(c, at.x - 22, at.y - 10, words(tr("Add reroute"))))
                          tell(tr("Reroute nodes are only for links of data"));
                  }}};
             giveIcons(items);
@@ -328,6 +330,13 @@ void GraphView::contextMenu(glw::Point at) {
     glw::showContextMenu(*this, fromCanvas(at), std::move(items));
 }
 
+bool GraphView::canCollapseSelection() const {
+    if (selectedNodes_.size() < 2)
+        return false;
+    fg::Script trial = doc_.script();
+    return fg::collapseToFunction(trial, doc_.registry(), graph_, {selectedNodes_.begin(), selectedNodes_.end()}).ok;
+}
+
 void GraphView::collapseSelection() {
     const std::set<fg::NodeId> nodes = selectedNodes_;
     if (nodes.size() < 2) {
@@ -373,6 +382,42 @@ void GraphView::askText(glw::LocalizedText title, std::string text, std::functio
                                 if (button == 0u)
                                     done(*typed);
                             }});
+}
+
+// What a box of a value of `type` may have typed in it on the way to one (an empty one, "-" before the digits): the
+// digits of an int, of a byte (at most 255), a float's (a point, an exponent); any text for the others.
+static std::function<bool(std::string_view)> typedAccepts(const fg::TypeDesc* type) {
+    const auto digits = [](std::string_view t) { return std::all_of(t.begin(), t.end(), [](char c) { return c >= '0' && c <= '9'; }); };
+    switch (type ? type->kind : fg::TypeKind::Any) {
+    case fg::TypeKind::Int:
+        return [digits](std::string_view t) {
+            if (!t.empty() && (t.front() == '-' || t.front() == '+'))
+                t.remove_prefix(1);
+            return t.size() <= 19 && digits(t);
+        };
+    case fg::TypeKind::Byte:
+        return [digits](std::string_view t) { return t.size() <= 3 && digits(t) && (t.empty() || std::stoi(std::string(t)) <= 255); };
+    case fg::TypeKind::Float:
+        return [digits](std::string_view t) {
+            if (!t.empty() && (t.front() == '-' || t.front() == '+'))
+                t.remove_prefix(1);
+            // digits, a point and digits, then an exponent: e, a sign, digits
+            const std::size_t e = t.find_first_of("eE");
+            std::string_view mantissa = t.substr(0, e), exponent = e == std::string_view::npos ? std::string_view() : t.substr(e + 1);
+            if (e != std::string_view::npos && mantissa.empty())
+                return false;
+            const std::size_t point = mantissa.find('.');
+            if (point != std::string_view::npos && (!digits(mantissa.substr(0, point)) || !digits(mantissa.substr(point + 1))))
+                return false;
+            if (point == std::string_view::npos && !digits(mantissa))
+                return false;
+            if (!exponent.empty() && (exponent.front() == '-' || exponent.front() == '+'))
+                exponent.remove_prefix(1);
+            return t.size() <= 40 && digits(exponent);
+        };
+    default:
+        return {};
+    }
 }
 
 // ---- values ----
@@ -422,6 +467,7 @@ void GraphView::editValue(NodeView& node, const NodeView::ValueHit& hit) {
             valueEditor_->setMinimumSize({w, h});
             valueEditor_->setMaximumSize({w, h});
         });
+        editor->setAccepts(typedAccepts(editType_));
         if (const glw::UiContext* ui = context()) {
             glw::LineEditStyle style = ui->theme.lineEdit;
             style.padding = {6, 0, 6, 0};

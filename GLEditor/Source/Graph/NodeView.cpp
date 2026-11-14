@@ -4,6 +4,7 @@
 
 #include "Graph/GraphView.hpp"
 #include "NodeTexts.hpp"
+#include "Panels/Elide.hpp"
 
 #include <GLWidgets/Paint/Painter.hpp>
 #include <GLWidgets/Widgets/Bevel.hpp>
@@ -17,8 +18,9 @@ namespace fged::gl {
 
 namespace {
 
-// A reroute: a small pill, its input and its output circles near its ends.
-constexpr float rerouteWidth = 36, rerouteHeight = 18, rerouteInset = 10, rerouteHit = 5.5f;
+// A reroute: a small pill, its input and its output circles near its ends; pressed between them it is taken (moved), on
+// them a link is dragged from it.
+constexpr float rerouteWidth = 44, rerouteHeight = 20, rerouteInset = 9, rerouteHit = 4.5f;
 constexpr glw::Insets titleMargins{10, 6, 10, 6};
 constexpr glw::Insets pinMargins{6, 2, 6, 2};
 constexpr float pinSpacing = 5, sideSpacing = 14;
@@ -30,6 +32,22 @@ constexpr std::size_t valueShown = 200;                 // of a long text, what 
 // How wide the box of a value is for a text `textWidth` wide.
 float boxWidth(float textWidth, bool choice) {
     return std::clamp(textWidth + 12 + (choice ? 14.0f : 0.0f), editorMinimum, editorMaximum);
+}
+
+// A value as a tooltip shows it: of a long one (a text of a megabyte), its first lines and characters, then "...".
+std::string tipValue(const std::string& value) {
+    constexpr std::size_t most = 600, lines = 12;
+    std::size_t end = 0, line = 0;
+    while (end < value.size() && end < most && line < lines) {
+        if (value[end] == '\n')
+            ++line;
+        ++end;
+    }
+    if (end >= value.size())
+        return value;
+    while (end > 0 && (static_cast<unsigned char>(value[end]) & 0xC0) == 0x80)
+        --end;
+    return value.substr(0, end) + "\u2026";
 }
 
 // "In" and "Then" are what every execution pin is: their names are not shown.
@@ -113,7 +131,7 @@ void NodeView::layout() {
         v.kind = p.kind;
         v.dir = p.dir;
         v.color = pinColor(reg, p, colors);
-        v.keyColor = p.type && p.type->kind == fg::TypeKind::Map && !p.wildcard && p.type->keyType ? rgb(reg.typeColor(p.type->keyType)) : v.color;
+        v.keyColor = p.type && p.type->kind == fg::TypeKind::Map && !p.wildcard && p.type->keyType ? colors.typed(rgb(reg.typeColor(p.type->keyType))) : v.color;
         v.connected = p.connected;
         v.byRef = p.byRef;
         v.isConst = p.isConst;
@@ -330,6 +348,16 @@ void NodeView::paint(glw::PaintContext& context) {
     glw::paint::Painter& p = context.painter;
     const glw::Theme& theme = context.ui.theme;
     const glw::NodeStyle& style = theme.node;           // the theme's nodes: their body, header, shadow, corners
+    // a style's reliefs (bricks: Solid, Plastic, Metal) as high on the screen as at 100% when the graph is zoomed in: in
+    // the graph's units they would grow with it, and their sides - seen in perspective away from the middle of the
+    // window - would show as much larger, the corners of a node far from it bent
+    const float flatten = std::min(1.0f, 1.0f / std::max(graph_.zoom(), 0.1f));
+    const auto atZoom = [flatten](glw::Bevel bevel) {
+        bevel.relief *= flatten;
+        bevel.roundness *= flatten;
+        bevel.edge *= flatten;
+        return bevel;
+    };
     const GraphColors colors = GraphColors::of(theme);
     const glw::Rect body = bodyRect();
     const bool debugHere = graph_.debugNode() == id_;
@@ -370,7 +398,7 @@ void NodeView::paint(glw::PaintContext& context) {
         const glw::Color c = outputs_.empty() ? rgb(150, 150, 150) : outputs_.front().color;
         if (style.shadow.a > 0)
             p.drawShadow({body.x, body.y + 2, body.width, body.height}, rerouteHeight / 2, 8, style.shadow);
-        glw::paintRaised(p, body, rerouteHeight / 2, colors.body, {0, 0, 0, 0}, style.bodyBevel);
+        glw::paintRaised(p, body, rerouteHeight / 2, colors.body, {0, 0, 0, 0}, atZoom(style.bodyBevel));
         p.strokeRoundedRect(body, rerouteHeight / 2, borderWidth, border);
         selectionRing(rerouteHeight / 2);
         for (const Pin* v : pins()) {
@@ -386,9 +414,9 @@ void NodeView::paint(glw::PaintContext& context) {
     // its top, rounded with the body (drawn taller and cut at its bottom), the border over them
     if (style.shadow.a > 0)
         p.drawShadow({body.x, body.y + 3, body.width, body.height}, radius, 12, style.shadow);
-    glw::paintRaised(p, body, radius, colors.body, {0, 0, 0, 0}, style.bodyBevel);
+    glw::paintRaised(p, body, radius, colors.body, {0, 0, 0, 0}, atZoom(style.bodyBevel));
     p.pushClip(titleRect_);
-    glw::paintRaised(p, {0, 0, width_, titleRect_.height + radius}, radius, header_, {0, 0, 0, 0}, style.bevel);
+    glw::paintRaised(p, {0, 0, width_, titleRect_.height + radius}, radius, header_, {0, 0, 0, 0}, atZoom(style.bevel));
     p.popClip();
     p.strokeRoundedRect(body, radius, borderWidth, border);
     selectionRing(radius);
@@ -439,20 +467,27 @@ void NodeView::paint(glw::PaintContext& context) {
             const glw::Rect r = v.editorRect;
             const float cr = std::min(cb.cornerRadius, r.height / 2);
             if (!v.value.empty()) {
-                glw::paintRaised(p, r, cr, cb.checkedBackground.normal, cb.checkedBorder, cb.checkedBevel);
+                glw::paintRaised(p, r, cr, cb.checkedBackground.normal, cb.checkedBorder, atZoom(cb.checkedBevel));
                 const glw::Point mark[] = {{r.x + 3, r.y + r.height / 2}, {r.x + r.width / 2 - 1, r.bottom() - 3.5f}, {r.right() - 3, r.y + 3.5f}};
                 p.drawPolyline(mark, 1.6f, cb.check);
             } else {
-                glw::paintSunken(p, r, cr, cb.background.normal, cb.border.normal, cb.bevel);
+                glw::paintSunken(p, r, cr, cb.background.normal, cb.border.normal, atZoom(cb.bevel));
             }
         } else if (v.editor == Editor::Line || v.editor == Editor::Choice) {
             // the theme's field, sunk
             const glw::LineEditStyle& field = theme.lineEdit;
             const glw::Rect r = v.editorRect;
-            glw::paintSunken(p, r, std::min(field.cornerRadius, r.height / 2), colors.field, colors.fieldBorder, field.bevel);
+            glw::paintSunken(p, r, std::min(field.cornerRadius, r.height / 2), colors.field, colors.fieldBorder, atZoom(field.bevel));
             if (v.valueText) {
+                const float room = std::max(0.0f, r.width - 12 - (v.editor == Editor::Choice ? 14 : 0));
                 p.pushClip({r.x + 3, r.y, std::max(0.0f, r.width - 6 - (v.editor == Editor::Choice ? 14 : 0)), r.height});
-                context.drawText(*v.valueText, {r.x + 6, r.y + (r.height - v.valueText->size().height) / 2 + v.valueText->opticalOffset()}, colors.fieldText);
+                if (v.valueText->size().width > room) {
+                    // longer than the box (as wide as it may be): as much as fits, then "..."
+                    const glw::text::TextLayout cut = elidedLayout(v.valueText->text(), v.valueText->style(), room);
+                    context.drawText(cut, {r.x + 6, r.y + (r.height - cut.size().height) / 2 + cut.opticalOffset()}, colors.fieldText);
+                } else {
+                    context.drawText(*v.valueText, {r.x + 6, r.y + (r.height - v.valueText->size().height) / 2 + v.valueText->opticalOffset()}, colors.fieldText);
+                }
                 p.popClip();
             }
             if (v.editor == Editor::Choice) {
@@ -494,7 +529,7 @@ std::optional<glw::ToolTip> NodeView::toolTipAt(glw::Point point) const {
         // a run paused: its value
         std::string value;
         if (v->kind == fg::PinKind::Data && graph_.pinValue(id_, v->name, value))
-            tip.note = glw::tr("Value: {value}").arg("value", value);
+            tip.note = glw::tr("Value: {value}").arg("value", tipValue(value));
         return tip;
     }
     if (!diagnostics_.empty())

@@ -198,7 +198,8 @@ struct Studio::Impl {
     std::shared_ptr<glw::Action> newAction, openAction, saveAction, saveAsAction, quitAction, undoAction, redoAction;
     std::shared_ptr<glw::Action> cutAction, copyAction, pasteAction, duplicateAction, selectAllAction, snapAction;
     std::shared_ptr<glw::Action> findAction, findReferencesAction;
-    std::shared_ptr<glw::Action> configureAction, collapseAction, fullScreenAction;
+    std::shared_ptr<glw::Action> configureAction, collapseAction, fullScreenAction, frameSelectionAction, frameAllAction;
+    glw::Timer graphActionsTimer;               // what the graph shown allows, looked at once its selection settles
     // The toolbar's Run, Pause and Continue in one button: what the run's state allows (the Debug menu has each)
     std::shared_ptr<glw::Action> runPauseAction;
     std::shared_ptr<glw::Action> runAction, pauseAction, stopAction, stepOverAction, stepIntoAction, stepOutAction, breakpointAction;
@@ -208,6 +209,9 @@ struct Studio::Impl {
     // The window's panels and graphs go first, while the document and the run they listen to are there (the application,
     // and its windows, outlive the studio).
     ~Impl() {
+        layoutTimer.stop();                     // (they read the panels' area and the graphs, which go now)
+        graphActionsTimer.stop();
+        area = nullptr;
         if (window)
             window->ui().setContent(nullptr);
         closedViews.clear();
@@ -235,6 +239,18 @@ struct Studio::Impl {
         if (!settings.path().empty())
             settings.save();
     }
+
+    // Where the panels are, kept when it changed.
+    void saveLayout() {
+        if (!area)
+            return;
+        const std::string layout = area->saveLayout();
+        if (layout == settings.string("layout"))
+            return;
+        settings.setString("layout", layout);
+        saveSettings();
+    }
+    glw::Timer layoutTimer;
 
     void applyTheme(bool animated) {
         const std::string style = settings.string("style", "studio");
@@ -288,6 +304,7 @@ struct Studio::Impl {
             if (id.rfind(graphPrefix, 0) != 0)
                 return;
             currentGraphName = id.substr(std::string_view(graphPrefix).size());
+            showGraphActions();
             if (myScript)
                 myScript->setCurrentGraph(currentGraphName);
         });
@@ -430,16 +447,17 @@ struct Studio::Impl {
         // closing the window, quitting: what was not saved first
         window->setOnCloseRequested([this] { return closeRequested([this] { window->close(); }); });
         app.setOnQuitRequested([this] { return closeRequested([this] { app.quit(); }); });
-        app.setOnQuitting([this] {
-            settings.setString("layout", area->saveLayout());
-            saveSettings();
-        });
+        app.setOnQuitting([this] { saveLayout(); });
+        // ... and every few seconds when it changed: a program ended otherwise (stopped, the session ending) keeps it too
+        if (glw::Scheduler* s = app.context().scheduler)
+            layoutTimer.start(*s, std::chrono::seconds(3), [this] { saveLayout(); }, true);
 
         doc.titleChanged.connect([this] { showTitle(); });
         doc.undoStateChanged.connect([this] { showUndoState(); });
         doc.changed.connect([this](bool structural) {
             if (structural)
                 showScript();
+            showGraphActions();                 // (what can be collapsed changes with the script)
         });
         doc.scriptReplaced.connect([this] { showScript(); });
         // another script: views of its own (not those of the graphs of the same name the other had)
@@ -502,6 +520,8 @@ struct Studio::Impl {
         stepOutAction = action(tr("Step O&ut"), [this] { run->stepOut(); }, {Key::F11, glw::platform::KeyModifiers::Shift});
         configureAction = action(tr("Launch &Configurations..."), [this] { editLaunches(); });
         collapseAction = action(tr("Collapse to &Function..."), onGraph(&GraphView::collapseSelection));
+        frameSelectionAction = action(tr("&Frame Selection"), onGraph(&GraphView::frameSelection));
+        frameAllAction = action(tr("&Frame All"), onGraph(&GraphView::frameAll));
         fullScreenAction = action(tr("F&ull Screen"), [this] {
             window->setFullScreen(!window->fullScreen());
             fullScreenAction->setChecked(window->fullScreen());
@@ -515,7 +535,8 @@ struct Studio::Impl {
                                {saveAsAction, "save-as"}, {quitAction, "exit"}, {undoAction, "undo"}, {redoAction, "redo"},
                                {cutAction, "cut"}, {copyAction, "copy"}, {pasteAction, "paste"}, {duplicateAction, "duplicate"},
                                {selectAllAction, "select-all"}, {findAction, "find"}, {findReferencesAction, "find-references"},
-                               {collapseAction, "function"}, {fullScreenAction, "full-screen"}, {snapAction, "snap"}})
+                               {collapseAction, "function"}, {fullScreenAction, "full-screen"}, {snapAction, "snap"},
+                               {frameSelectionAction, "frame-selection"}, {frameAllAction, "frame-all"}})
             a->setIcon(studioIcon(icon));
         breakpointAction = action(tr("Toggle &Breakpoint"), [this] {
             if (GraphView* g = currentGraph())
@@ -585,14 +606,8 @@ struct Studio::Impl {
                        glw::MenuItem::separatorItem(),
                        {.action = collapseAction}}},
             {.text = tr("&View"),
-             .items = {{.text = tr("&Frame Selection"), .onTriggered = [this] {
-                            if (GraphView* g = currentGraph())
-                                g->frameSelection();
-                        }, .shortcut = tr("F")},
-                       {.text = tr("&Frame All"), .onTriggered = [this] {
-                            if (GraphView* g = currentGraph())
-                                g->frameAll();
-                        }, .shortcut = tr("Home")},
+             .items = {{.shortcut = tr("F"), .action = frameSelectionAction},          // (the graph's keys: no shortcut of
+                       {.shortcut = tr("Home"), .action = frameAllAction},              // their own, a field typed in has them)
                        {.action = fullScreenAction},
                        glw::MenuItem::separatorItem(),
                        {.action = snapAction},
@@ -691,6 +706,21 @@ struct Studio::Impl {
         return items;
     }
 
+    // What the graph shown allows: its selection framed, collapsed into a function (two nodes or more that can be); after a
+    // moment, once the selection settles (a rectangle dragged changes it at every move)
+    void showGraphActions() {
+        const auto update = [this] {
+            GraphView* g = currentGraph();
+            frameSelectionAction->setEnabled(g && !g->selectedNodes().empty());
+            frameAllAction->setEnabled(g != nullptr);
+            collapseAction->setEnabled(g && g->canCollapseSelection());
+        };
+        if (glw::Scheduler* s = app.context().scheduler)
+            graphActionsTimer.start(*s, std::chrono::milliseconds(80), update);
+        else
+            update();
+    }
+
     void showUndoState() {
         undoAction->setEnabled(doc.canUndo());
         redoAction->setEnabled(doc.canRedo());
@@ -712,6 +742,7 @@ struct Studio::Impl {
         });
         // nodes selected: their properties (what My Script had chosen let go)
         view->setOnSelectionChanged([this, g] {
+            showGraphActions();
             if (!details)
                 return;
             const std::set<fg::NodeId>& nodes = g->selectedNodes();
@@ -849,6 +880,9 @@ struct Studio::Impl {
         bar->addAction(openAction);
         bar->addAction(saveAction);
         bar->addSeparator();
+        bar->addAction(undoAction);
+        bar->addAction(redoAction);
+        bar->addSeparator();
         if (options.launchConfigurations) {
             auto box = std::make_unique<glw::ComboBox>();
             box->setToolTip(glw::ToolTip{.title = tr("Run:"), .text = tr("The launch configuration Run starts")});
@@ -865,7 +899,15 @@ struct Studio::Impl {
         bar->addAction(stepOverAction);
         bar->addAction(stepIntoAction);
         bar->addAction(stepOutAction);
+        // the graph shown: framed, snapped to its grid, its selection collapsed into a function
+        bar->addSeparator();
+        bar->addAction(frameSelectionAction);
+        bar->addAction(frameAllAction);
+        bar->addAction(snapAction);
+        bar->addSeparator();
+        bar->addAction(collapseAction);
         window->setToolBar(std::move(bar));
+        showGraphActions();
         showLaunches();
     }
 

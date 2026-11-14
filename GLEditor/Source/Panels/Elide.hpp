@@ -9,9 +9,29 @@
 
 namespace fged::gl {
 
+// At most `bytes` of `text` (at a character, never inside one), and "..." when it was longer: what is laid out of a text
+// that may be huge (a value of a megabyte), so that laying it out stays quick. Its lines' breaks as spaces when `oneLine`.
+inline std::string shortened(const std::string& text, std::size_t bytes, bool oneLine = false) {
+    std::string out;
+    if (text.size() <= bytes) {
+        out = text;
+    } else {
+        std::size_t end = bytes;
+        while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80)
+            --end;
+        out = text.substr(0, end) + "\u2026";
+    }
+    if (oneLine)
+        for (char& c : out)
+            if (c == '\n' || c == '\r')
+                c = ' ';
+    return out;
+}
+
 // `text` laid out in `style`, cut where it is wider than `room` (at a character, never inside one) with an ellipsis.
-inline glw::text::TextLayout elidedLayout(const std::string& text, const glw::text::TextStyle& style, float room) {
+inline glw::text::TextLayout elidedLayout(const std::string& full, const glw::text::TextStyle& style, float room) {
     static constexpr const char* ellipsis = "\u2026";
+    const std::string text = shortened(full, 2048);         // (a cell never shows more of it)
     glw::text::TextLayout whole(text, style);
     if (whole.size().width <= room)
         return whole;

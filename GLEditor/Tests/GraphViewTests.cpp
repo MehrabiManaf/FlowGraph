@@ -355,6 +355,21 @@ TEST(valuesAreTypedToggledAndChosenOnTheNode) {
     CHECK(!e.node(e.branch).defaults.at("Condition").toBool());
 }
 
+// The box of a number takes only what a number may be on its way: an int's digits (a sign before them).
+TEST(theBoxOfANumberTakesOnlyANumber) {
+    Edited e;
+    fg::NodeId loop = 0;
+    e.doc->edit("x", [&](fg::Script& s) { loop = s.graphs[0].addNode("flow.for", 300, 500).id; });
+    e.root.layout();
+    e.click(e.value(loop, "Last"));
+    e.key(Key::Backspace);                  // (its text selected: gone)
+    for (const char* typed : {"-", "1", "x", "2", ".", "5"})       // one at a time, as typed: the letter and the point refused
+        e.type(typed);
+    e.key(Key::Enter);
+    e.root.layout();
+    CHECK(e.node(loop).defaults.at("Last").toInt() == -125);
+}
+
 TEST(nodesAreAddedBySearchingThem) {
     Edited e;
     // Space, where the mouse is: every node; typed, the best one taken by Enter

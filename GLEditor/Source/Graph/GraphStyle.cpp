@@ -42,6 +42,7 @@ GraphColors GraphColors::of(const glw::Theme& theme) {
     c.fieldText = theme.lineEdit.text;
     c.exec = p.text;
     c.lock = dark ? rgb(205, 170, 90) : rgb(150, 110, 30);
+    c.typeShade = dark ? 1.0f : 0.62f;
     return c;
 }
 
@@ -49,8 +50,8 @@ glw::Color pinColor(const fg::Registry& reg, const fg::CompiledPin& pin, const G
     if (pin.kind == fg::PinKind::Exec)
         return colors.exec;
     if (pin.wildcard)
-        return rgb(160, 160, 168);
-    return rgb(reg.typeColor(pin.type));
+        return colors.typed(rgb(160, 160, 168));
+    return colors.typed(rgb(reg.typeColor(pin.type)));
 }
 
 namespace {

@@ -43,6 +43,10 @@ struct GraphColors {
     glw::Color breakpoint{0.86f, 0.16f, 0.16f, 1};
     glw::Color bubble{0.9f, 0.78f, 0.35f, 0.92f};   // a node's comment
     glw::Color bubbleText{0.12f, 0.12f, 0.12f, 1};
+    // A type's color (a pin's, a link's) as it shows on the theme's background: as it is on a dark one, darker on a light
+    // one (the types' colors are light, made for dark backgrounds)
+    float typeShade = 1;
+    glw::Color typed(glw::Color c) const { return {c.r * typeShade, c.g * typeShade, c.b * typeShade, c.a}; }
 
     static GraphColors of(const glw::Theme& theme);
 };
