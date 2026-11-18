@@ -464,6 +464,41 @@ TEST(delay_suspends_until_tick) {
     CHECK_EQ(inst.pendingTaskCount(), size_t(0));
 }
 
+TEST(script_call_fires_its_then_link_only_after_return) {
+    TestRuntime rt;
+    Script script;
+    Graph& fn = script.addFunction("Wait");
+    const NodeId entry = fn.nodes[0].id, ret = fn.nodes[1].id;
+    const NodeId delay = fn.addNode("flow.delay").id;
+    fn.findNode(delay)->defaults["Duration"] = Value(1.0);
+    fn.connections.clear();
+    link(fn, entry, "Then", delay, "In");
+    link(fn, delay, "Then", ret, "In");
+
+    Graph& graph = script.addEventGraph();
+    const NodeId event = graph.addNode("event:Go").id;
+    const NodeId call = graph.addNode("func.call").id;
+    graph.findNode(call)->props["function"] = "Wait";
+    const NodeId next = graph.addNode("util.print").id;
+    link(graph, event, "Then", call, "In");
+    link(graph, call, "Then", next, "In");
+
+    Debugger debugger;
+    int fired = 0;
+    debugger.linkFired = [&](const std::string& name, NodeId from, int, NodeId to) {
+        if (name == graph.name && from == call && to == next) ++fired;
+    };
+    Instance inst(build(rt, script));
+    inst.setDebugHooks(&debugger);
+    CHECK(inst.callEvent("Go").waiting());
+    CHECK_EQ(fired, 0);
+    inst.tick(0.5);
+    CHECK_EQ(fired, 0);
+    inst.tick(0.5);
+    CHECK_EQ(fired, 1);
+    CHECK_EQ(inst.pendingTaskCount(), size_t(0));
+}
+
 TEST(break_exits_loop) {
     TestRuntime rt;
     Script s;

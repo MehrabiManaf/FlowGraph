@@ -1186,7 +1186,6 @@ void Task::callGraph(Frame& f, const CompiledNode& n) {
         popFrame();
         throw;
     }
-    follow(f, n, 0);                       // the caller continues here once the callee is done
     nf->callerNode = n.index;
     nf->pc = cg.entry;
 }
@@ -1212,7 +1211,12 @@ void Task::finishFrame() {
         for (size_t i = 0; i < callNode.dataOut.size() && i < f.results.size(); ++i)
             caller.slotValues[static_cast<size_t>(callNode.outBase) + i] = std::move(f.results[i]);
     }
+    const int callerNode = f.callerNode;
     popFrame();
+    if (!frames_.empty()) {
+        Frame& caller = *frames_.back();
+        follow(caller, caller.graph->nodes[static_cast<size_t>(callerNode)], 0);
+    }
 }
 
 // ------------------------------------------------------------------ inspection
