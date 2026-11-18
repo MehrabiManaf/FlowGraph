@@ -29,8 +29,10 @@ constexpr glw::Size dataConnector{12, 12}, arrayConnector{arrayConnectorWidth, 1
 constexpr float editorMinimum = 22, editorMaximum = 400, editorHeight = 20, checkSize = 14;
 constexpr std::size_t valueShown = 200;                 // of a long text, what its box shows
 
-// How wide the box of a value is for a text `textWidth` wide.
-float boxWidth(float textWidth, bool choice) {
+float boxWidth(const glw::text::TextLayout& layout, bool choice) {
+    // The layout's size omits trailing spaces, but the value box needs room for them.
+    const float end = layout.caret(layout.text().size()).top.x;
+    const float textWidth = std::max(layout.size().width, end) - std::min(0.0f, end);
     return std::clamp(textWidth + 12 + (choice ? 14.0f : 0.0f), editorMinimum, editorMaximum);
 }
 
@@ -207,7 +209,7 @@ void NodeView::layout() {
         float right = v.labelRect.right();
         if (v.editor != Editor::None) {
             const float w = v.editor == Editor::Check ? checkSize
-                                                     : boxWidth(v.valueText ? v.valueText->size().width : 0, v.editor == Editor::Choice);
+                                                     : boxWidth(*v.valueText, v.editor == Editor::Choice);
             const float h = v.editor == Editor::Check ? checkSize : editorHeight;
             v.editorRect = {right + pinSpacing, top + (pinHeight - h) / 2, w, h};
             right = v.editorRect.right();
@@ -327,7 +329,7 @@ float NodeView::valueBoxWidth(const glw::UiContext& ui, const std::string& text,
     std::string shown = text.size() > valueShown ? text.substr(0, valueShown) + "…" : text;
     std::replace(shown.begin(), shown.end(), '\n', ' ');
     const glw::text::TextLayout layout(shown, glw::text::TextStyle{{&ui.fonts.defaultFont()}, ui.theme.fontSize});
-    return boxWidth(layout.size().width, choice);
+    return boxWidth(layout, choice);
 }
 
 std::optional<glw::Rect> NodeView::valueRect(const std::string& pin) const {

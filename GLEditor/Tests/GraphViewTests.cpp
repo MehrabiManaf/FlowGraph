@@ -370,6 +370,34 @@ TEST(theBoxOfANumberTakesOnlyANumber) {
     CHECK(e.node(loop).defaults.at("Last").toInt() == -125);
 }
 
+// Spaces typed at the end of a value widen its box, as other letters do (a text's layout leaves them out of its size).
+TEST(spacesAtTheEndWidenTheBoxOfAValue) {
+    Edited e;
+    const auto nodeView = [&] { return e.view->nodeView(e.a); };
+    const auto valueWidth = [&] { return nodeView()->valueRect("String")->width; };
+    const std::string word = "word word word";
+    const std::string spaced = word + "      ";
+    e.click(e.value(e.a, "String"));
+    e.type(word);
+    e.root.layout();
+    const float wordWidth = valueWidth();
+    const float nodeWidth = nodeView()->size().width;
+
+    e.type("      ");
+    e.root.layout();
+    const float spacedWidth = valueWidth();
+    const float spacedNodeWidth = nodeView()->size().width;
+    CHECK(spacedWidth > wordWidth + 10);
+    CHECK(spacedNodeWidth > nodeWidth + 10);
+    CHECK(spacedWidth == fged::gl::NodeView::valueBoxWidth(context(), spaced, false));
+
+    e.key(Key::Enter);
+    e.root.layout();
+    CHECK(e.node(e.a).defaults.at("String").str() == spaced);
+    CHECK(valueWidth() == spacedWidth);
+    CHECK(nodeView()->size().width == spacedNodeWidth);
+}
+
 TEST(nodesAreAddedBySearchingThem) {
     Edited e;
     // Space, where the mouse is: every node; typed, the best one taken by Enter
