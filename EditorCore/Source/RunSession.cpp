@@ -116,6 +116,11 @@ void RunSession::reportLink(uint64_t generation, const std::string& graph, int f
 }
 
 void RunSession::drainPending() {
+    if (state_ == RunState::Stopping) {
+        if (ax_->waitIdle(0))
+            post(generation_, [this] { finishStop(); });
+        return;
+    }
     std::vector<LinkEvent> links;
     std::vector<LogEvent> logs;
     size_t dropped;
@@ -153,7 +158,10 @@ void RunSession::setStepDelay(int ms) {
 
 bool RunSession::start(const std::string& entry, const std::vector<fg::Value>& args) {
     detach();
-    if (isActive()) stop();
+    if (isActive()) {
+        stop();
+        return false;
+    }
     auto program = doc_.program();
     if (!program || program->hasErrors) {
         notice(RunNotice::CompileErrors);
@@ -190,10 +198,15 @@ void RunSession::stop() {
         detach();
         return;
     }
-    if (!isActive() || !ax_) return;
+    if (!isActive() || state_ == RunState::Stopping || !ax_) return;
     ax_->abortAll();
-    if (!ax_->waitIdle(2000)) ax_.reset();         // a native function that never returns: abandon the worker
-    ++generation_;                                  // ignore whatever the stopped run still reports
+    ++generation_;                               // discard reports queued by the cancelled run
+    setState(RunState::Stopping);
+}
+
+void RunSession::finishStop() {
+    if (state_ != RunState::Stopping) return;
+    ax_.reset();                                  // the worker is idle
     clearPending();
     stopDraining();
     setState(RunState::Idle);
@@ -235,7 +248,10 @@ void RunSession::step(fg::Debugger::Command c) {
 bool RunSession::attach(std::shared_ptr<fg::AsyncExecutor> ax) {
     if (!ax) return false;
     detach();
-    if (isActive()) stop();
+    if (isActive()) {
+        stop();
+        return false;
+    }
     ax_.reset();
     clearPending();
     const uint64_t gen = ++generation_;
@@ -400,6 +416,7 @@ void RunSession::onCompleted(bool ok, bool exited, int exitCode, const std::stri
 // Another script was loaded (or a new one made): nothing of the previous run - its variables, its call stack - is its.
 void RunSession::onScriptOpened() {
     if (isActive()) stop();
+    if (state_ == RunState::Stopping) return;
     ax_.reset();
     ++generation_;
     clearPending();
@@ -409,7 +426,7 @@ void RunSession::onScriptOpened() {
 }
 
 void RunSession::onDocumentChanged(bool structural) {
-    if (structural && isActive() && !attached_) {   // an attached application keeps running the script it has, whatever is edited
+    if (structural && isActive() && state_ != RunState::Stopping && !attached_) {
         stop();
         notice(RunNotice::StoppedByEdit);
     }

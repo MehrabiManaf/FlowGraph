@@ -43,6 +43,8 @@
 #include <QJsonObject>
 #include <QResizeEvent>
 #include <QTimer>
+
+#include <utility>
 #include <QWindow>
 #include <set>
 #include "../Common/Settings.hpp"
@@ -138,6 +140,8 @@ ScriptEditorWindow::ScriptEditorWindow(EditorHost& host, ScriptEditor& facade, Q
         if (s == RunController::State::Running && logDock_ && !runShown_) { logDock_->raise(); runShown_ = true; }
         if (s == RunController::State::Idle) {
             runShown_ = false;
+            if (std::exchange(closeWhenStopped_, false))
+                QTimer::singleShot(0, this, [this] { close(); });
             if (runPending_) { runPending_ = false; host_.runFinished(); }
         }
     });
@@ -1119,6 +1123,13 @@ void ScriptEditorWindow::applyInitialSizes() {
 }
 
 void ScriptEditorWindow::closeEvent(QCloseEvent* e) {
+    if (run_.isActive() && !run_.isAttached()) {
+        closeWhenStopped_ = true;
+        run_.stop();
+        statusBar()->showMessage(tr("Waiting for the script to stop before closing"), 4000);
+        e->ignore();
+        return;
+    }
     if (!maybeSave()) { e->ignore(); return; }
     run_.stop();
     if (persistLayout_) {
@@ -1229,9 +1240,10 @@ void ScriptEditorWindow::updateRunActions() {
         actStepOut_->setEnabled(s == S::Paused);
         return;
     }
-    actRun_->setText(busy ? tr("Pause") : s == S::Paused ? tr("Continue") : tr("Run"));
+    actRun_->setText(busy ? tr("Pause") : s == S::Paused ? tr("Continue") : s == S::Stopping ? tr("Stopping") : tr("Run"));
     actRun_->setIcon(themedIcon(busy ? ":/Icons/interrupt.svg" : ":/Icons/continue.svg"));
-    actStop_->setEnabled(s != S::Idle);
+    actRun_->setEnabled(s != S::Stopping);
+    actStop_->setEnabled(s != S::Idle && s != S::Stopping);
     actStepOver_->setEnabled(s == S::Paused);
     actStepInto_->setEnabled(s == S::Paused);
     actStepOut_->setEnabled(s == S::Paused);

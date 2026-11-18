@@ -160,6 +160,7 @@ private:
     QByteArray maximizedLayout_;
 
     bool runShown_ = false;
+    bool closeWhenStopped_ = false;
     QComboBox* entryCombo_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QAction *actNew_, *actOpen_, *actSave_, *actSaveAs_, *actExit_;

@@ -4,6 +4,8 @@
 #include <FlowGraph/Encoding.hpp>
 #include <FlowGraph/TypeExpr.hpp>
 
+#include "FileIo.hpp"
+
 #include <algorithm>
 #include <fstream>
 #include <functional>
@@ -606,7 +608,7 @@ Script Script::fromJson(const Json& j) {
 }
 
 Script Script::load(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
+    std::ifstream in(file::path(path), std::ios::binary);
     if (!in) throw std::runtime_error("cannot open '" + path + "'");
     std::stringstream ss;
     ss << in.rdbuf();
@@ -614,10 +616,7 @@ Script Script::load(const std::string& path) {
 }
 
 void Script::save(const std::string& path) const {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) throw std::runtime_error("cannot write '" + path + "'");
-    out << toText();
-    if (!out) throw std::runtime_error("error while writing '" + path + "'");
+    file::replace(path, toText());
 }
 
 } // namespace fg

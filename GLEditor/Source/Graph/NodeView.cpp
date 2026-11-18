@@ -36,6 +36,19 @@ float boxWidth(const glw::text::TextLayout& layout, bool choice) {
     return std::clamp(textWidth + 12 + (choice ? 14.0f : 0.0f), editorMinimum, editorMaximum);
 }
 
+std::string valuePreview(const std::string& value) {
+    std::size_t end = std::min(value.size(), valueShown);
+    if (end < value.size()) {
+        while (end > 0 && (static_cast<unsigned char>(value[end]) & 0xC0) == 0x80)
+            --end;
+    }
+    std::string shown = value.substr(0, end);
+    if (end < value.size())
+        shown += "\u2026";
+    std::replace(shown.begin(), shown.end(), '\n', ' ');
+    return shown;
+}
+
 // A value as a tooltip shows it: of a long one (a text of a megabyte), its first lines and characters, then "...".
 std::string tipValue(const std::string& value) {
     constexpr std::size_t most = 600, lines = 12;
@@ -160,9 +173,7 @@ void NodeView::layout() {
             v.labelText.emplace(v.label, textStyle);
         if (v.editor == Editor::Line || v.editor == Editor::Choice) {
             const std::string& value = previewText_ && previewPin_ == v.name ? *previewText_ : v.value;
-            std::string shown = value.size() > valueShown ? value.substr(0, valueShown) + "…" : value;
-            std::replace(shown.begin(), shown.end(), '\n', ' ');
-            v.valueText.emplace(std::move(shown), textStyle);
+            v.valueText.emplace(valuePreview(value), textStyle);
         }
         return v;
     };
@@ -326,9 +337,7 @@ void NodeView::setValuePreview(const std::string& pin, std::optional<std::string
 }
 
 float NodeView::valueBoxWidth(const glw::UiContext& ui, const std::string& text, bool choice) {
-    std::string shown = text.size() > valueShown ? text.substr(0, valueShown) + "…" : text;
-    std::replace(shown.begin(), shown.end(), '\n', ' ');
-    const glw::text::TextLayout layout(shown, glw::text::TextStyle{{&ui.fonts.defaultFont()}, ui.theme.fontSize});
+    const glw::text::TextLayout layout(valuePreview(text), glw::text::TextStyle{{&ui.fonts.defaultFont()}, ui.theme.fontSize});
     return boxWidth(layout, choice);
 }
 

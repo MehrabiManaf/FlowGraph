@@ -31,7 +31,7 @@ public:
 
     // Starts an event of the compiled program (or a function when `entry` names one).
     bool start(const QString& entry, const std::vector<fg::Value>& args) { return session_->start(entry.toStdString(), args); }
-    void stop() { session_->stop(); }              // returns when the script has stopped (an attached debugger detaches)
+    void stop() { session_->stop(); }
 
     // Debugging a script that the application runs (see core::RunSession::attach).
     bool attach(std::shared_ptr<fg::AsyncExecutor> executor) { return session_->attach(std::move(executor)); }

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include <FlowGraph/Runtime.hpp>
 
+#include "FileIo.hpp"
+
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -38,12 +40,12 @@ bool Runtime::loadPlugin(const std::string& path, std::string* error) {
         if (error) *error = m;
         return false;
     };
-    std::filesystem::path p(path);
-    std::string name = p.stem().string();
+    const auto p = file::path(path);
+    std::string name = file::utf8(p.stem());
     // The same library may be reachable through several directories of the plugin path. It is remembered once it has
     // been loaded: a library that failed is tried again (and fails with its reason again) instead of being skipped.
     std::error_code canonError;
-    std::string canon = std::filesystem::weakly_canonical(p, canonError).string();
+    std::string canon = file::utf8(std::filesystem::weakly_canonical(p, canonError));
     if (!canonError && std::find(pluginPaths_.begin(), pluginPaths_.end(), canon) != pluginPaths_.end()) return true;
 #if defined(_WIN32)
     HMODULE h = LoadLibraryW(p.wstring().c_str());
@@ -96,12 +98,12 @@ int Runtime::loadPluginsFrom(const std::string& dir, std::vector<std::string>* e
     namespace fs = std::filesystem;
     int n = 0;
     std::error_code ec;
-    for (auto& e : fs::directory_iterator(dir, ec)) {
+    for (auto& e : fs::directory_iterator(file::path(dir), ec)) {
         if (!e.is_regular_file()) continue;
         std::string ext = e.path().extension().string();
         if (ext != ".dll" && ext != ".so" && ext != ".dylib") continue;
         std::string err;
-        if (loadPlugin(e.path().string(), &err)) ++n;
+        if (loadPlugin(file::utf8(e.path()), &err)) ++n;
         else if (errors) errors->push_back(err);
     }
     return n;
@@ -119,7 +121,7 @@ int Runtime::loadPluginsFromPathList(const std::string& list, std::vector<std::s
         size_t end = list.find(sep, start);
         if (end == std::string::npos) end = list.size();
         std::string dir = list.substr(start, end - start);
-        if (!dir.empty() && std::filesystem::exists(dir)) n += loadPluginsFrom(dir, errors);
+        if (!dir.empty() && std::filesystem::exists(file::path(dir))) n += loadPluginsFrom(dir, errors);
         start = end + 1;
     }
     return n;
@@ -127,11 +129,11 @@ int Runtime::loadPluginsFromPathList(const std::string& list, std::vector<std::s
 
 int Runtime::loadPluginsFromEnvironment(const char* variable, std::vector<std::string>* errors) {
 #ifdef _WIN32
-    char* v = nullptr;
+    wchar_t* v = nullptr;
     std::size_t size = 0;
-    if (_dupenv_s(&v, &size, variable) != 0 || !v)
+    if (_wdupenv_s(&v, &size, file::path(variable).c_str()) != 0 || !v)
         return 0;
-    const std::string list = v;
+    const std::string list = file::utf8(std::filesystem::path(v));
     std::free(v);
     return loadPluginsFromPathList(list, errors);
 #else

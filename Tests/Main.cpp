@@ -4,6 +4,7 @@
 #include <FlowGraph/Encoding.hpp>
 #include <FlowGraph/Runtime.hpp>
 #include <FlowGraphEditorCore/GraphEdits.hpp>
+#include <FlowGraphEditorCore/Launches.hpp>
 #include <FlowGraphEditorCore/RunSession.hpp>
 #include <FlowGraphEditorCore/ScriptEdits.hpp>
 
@@ -24,6 +25,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <limits>
 #include <string>
 #include <vector>
@@ -1189,8 +1191,8 @@ TEST(async_executor_pause_inspect_resume_and_stop) {
     auto prog2 = build(rt, printScript(60.0, "never"));
     {
         AsyncExecutor slow(prog2, cb2);
-        slow.postEvent("Go");
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        const auto waiting = slow.postEvent("Go");
+        CHECK(slow.inspect([&](Executor& ex) { CHECK(ex.task(waiting)); }));
         auto t0 = std::chrono::steady_clock::now();
         slow.stop();
         CHECK(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 2.0);
@@ -5785,7 +5787,7 @@ TEST(editor_core_run_session_runs_reports_and_stops_on_edits) {
     CHECK(notices.size() == 1 && notices[0] == fged::core::RunNotice::CompileErrors);
     doc.undo();
 
-    // a run waiting in a Delay is stopped by an edit, before the views hear of it
+    // A run waiting in a Delay starts stopping before the views hear of the edit.
     GoGraph w;
     NodeId delay = w.node("flow.delay", {{"Duration", Value(30.0)}});
     w.link(w.ev, "Then", delay, "In");
@@ -5796,12 +5798,17 @@ TEST(editor_core_run_session_runs_reports_and_stops_on_edits) {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     CHECK(run.state() == fged::core::RunState::Waiting);
-    bool activeWhenViewsHeard = true;
-    doc.changed.connect([&](bool) { activeWhenViewsHeard = run.isActive(); });
+    auto stateWhenViewsHeard = fged::core::RunState::Idle;
+    doc.changed.connect([&](bool) { stateWhenViewsHeard = run.state(); });
     notices.clear();
     doc.edit("Edit", [](fg::Script& s) { s.variables.push_back({"X", "int", Value(int64_t(0)), "", ""}); });
-    CHECK(!activeWhenViewsHeard && !run.isActive());
+    CHECK(stateWhenViewsHeard == fged::core::RunState::Stopping);
     CHECK(notices.size() == 1 && notices[0] == fged::core::RunNotice::StoppedByEdit);
+    for (int i = 0; i < 500 && run.isActive(); ++i) {
+        ui.pump();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(!run.isActive());
 
     // what a user types, as a value of a type
     const Registry& reg = rt.registry();
@@ -5810,6 +5817,92 @@ TEST(editor_core_run_session_runs_reports_and_stops_on_edits) {
     CHECK(fged::core::RunSession::parseArgument(reg, reg.tFloat(), "2.5").toFloat() == 2.5);
     CHECK(fged::core::RunSession::parseArgument(reg, reg.tBool(), "Yes").toBool());
     CHECK(fged::core::RunSession::parseArgument(reg, reg.findType("bytes"), "48 65").bytesView() == "He");
+}
+
+TEST(editor_stop_returns_while_a_native_function_is_still_running) {
+    TestRuntime rt;
+    std::promise<void> entered, release;
+    auto enteredFuture = entered.get_future();
+    auto releaseFuture = release.get_future();
+    rt.registry().addFunction("Test.Block", [&] {
+        entered.set_value();
+        releaseFuture.wait_for(std::chrono::seconds(4));
+    });
+    GoGraph script;
+    const NodeId call = script.node("fn:Test.Block");
+    script.link(script.ev, "Then", call, "In");
+    fged::core::Document doc(rt);
+    doc.setScript(script.s, "Stop");
+    PumpedThread ui;
+    fged::core::RunSession run(doc, ui);
+    CHECK(run.start("Go", {}));
+    CHECK(enteredFuture.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+    const auto start = std::chrono::steady_clock::now();
+    run.stop();
+    release.set_value();
+    CHECK(std::chrono::steady_clock::now() - start < std::chrono::seconds(1));
+    CHECK(run.state() == fged::core::RunState::Stopping);
+    for (int i = 0; i < 500 && run.isActive(); ++i) {
+        ui.pump();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(run.state() == fged::core::RunState::Idle);
+}
+
+TEST(script_and_launch_files_can_replace_existing_unicode_paths) {
+    TempFolder dir("unicode_save");
+    const std::string filename = dir["\u0641\u0627\u0631\u0633\u06cc.flow"];
+    Script script;
+    script.name = "First";
+    script.save(filename);
+    script.name = "Replacement";
+    script.save(filename);
+    CHECK(Script::load(filename).name == "Replacement");
+
+#ifdef _WIN32
+    // A reader holding the destination open prevents Windows from replacing it.
+    std::ifstream reader(u8path(filename), std::ios::binary);
+    CHECK(reader.is_open());
+    script.name = "Blocked";
+    bool blocked = false;
+    try {
+        script.save(filename);
+    } catch (const std::exception&) {
+        blocked = true;
+    }
+    reader.close();
+    CHECK(blocked);
+    CHECK(Script::load(filename).name == "Replacement");
+    CHECK(std::distance(std::filesystem::directory_iterator(dir.path), std::filesystem::directory_iterator()) == 1);
+#endif
+
+    const std::string launchPath = standard::LaunchFile::pathFor(filename);
+    CHECK(launchPath == dir["\u0641\u0627\u0631\u0633\u06cc.flowlaunch"]);
+    standard::LaunchFile launches;
+    launches.current().cwd = "first";
+    launches.save(launchPath);
+    launches.current().cwd = "second";
+    launches.save(launchPath);
+    CHECK(standard::LaunchFile::load(launchPath).current().cwd == "second");
+}
+
+TEST(editor_launch_rejects_a_missing_working_directory) {
+    TestRuntime rt;
+    fged::core::Launches launches(rt);
+    TempFolder dir("launch_cwd");
+    const auto previous = std::filesystem::current_path();
+    standard::LaunchConfig config;
+    config.cwd = dir["missing"];
+    std::string error;
+    CHECK(!launches.apply(config, &error));
+    CHECK(!error.empty() && !launches.applied());
+    CHECK(std::filesystem::current_path() == previous);
+    config.cwd = u8text(dir.path);
+    CHECK(launches.apply(config));
+    const auto current = std::filesystem::current_path();
+    launches.restore();
+    CHECK(std::filesystem::equivalent(current, dir.path));
+    CHECK(std::filesystem::current_path() == previous);
 }
 
 int main(int argc, char** argv) {

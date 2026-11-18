@@ -46,7 +46,7 @@ public:
     // ---- a run ----
 
     // The working directory and the variables of `config` in effect, until restore() (or the next apply()).
-    void apply(const fg::standard::LaunchConfig& config);
+    bool apply(const fg::standard::LaunchConfig& config, std::string* error = nullptr);
     void restore();
     bool applied() const { return applied_; }
 

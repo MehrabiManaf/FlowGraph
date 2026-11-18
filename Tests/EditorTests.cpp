@@ -1006,7 +1006,7 @@ TEST(editing_stops_a_running_script) {
     CHECK(spinUntil([&] { return run.state() == RunController::State::Waiting; }));
     f.scene.addComment(QPointF(0, 0));      // layout edit: keeps running? (comments are structural-free)
     f.doc.edit("Change", [](fg::Script& s) { s.graphs[0].nodes[0].x += 1; });
-    CHECK(run.state() == RunController::State::Idle);
+    CHECK(spinUntil([&] { return run.state() == RunController::State::Idle; }));
 }
 
 TEST(rename_function_updates_calls) {

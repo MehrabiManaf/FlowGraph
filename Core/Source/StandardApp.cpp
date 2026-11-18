@@ -5,6 +5,8 @@
 #include <FlowGraph/Compatibility.hpp>
 #include <FlowGraph/System.hpp>
 
+#include "FileIo.hpp"
+
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -147,7 +149,7 @@ LaunchFile LaunchFile::fromJson(const Json& j) {
 }
 
 LaunchFile LaunchFile::load(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
+    std::ifstream in(file::path(path), std::ios::binary);
     LaunchFile f;
     if (in) {
         std::stringstream ss;
@@ -159,15 +161,13 @@ LaunchFile LaunchFile::load(const std::string& path) {
 }
 
 void LaunchFile::save(const std::string& path) const {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) throw std::runtime_error("cannot write '" + path + "'");
-    out << toJson().dump(2);
+    file::replace(path, toJson().dump(2));
 }
 
 std::string LaunchFile::pathFor(const std::string& scriptPath) {
-    std::filesystem::path p(scriptPath);
+    auto p = file::path(scriptPath);
     p.replace_extension(".flowlaunch");
-    return p.string();
+    return file::utf8(p);
 }
 
 } // namespace fg::standard

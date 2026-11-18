@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: MIT
 add_executable(flow main.cpp)
 target_link_libraries(flow PRIVATE FlowGraphCore)
+target_include_directories(flow PRIVATE ${PROJECT_SOURCE_DIR}/Core/Source)
+if(MINGW)
+    target_link_options(flow PRIVATE -municode)
+endif()
 target_compile_definitions(flow PRIVATE FG_VERSION="${PROJECT_VERSION}")     # flow --version
 
 # Docs/NodeReference.md: the reference of everything a script of the standard applications can use (built in, without plugins).

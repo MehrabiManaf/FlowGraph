@@ -20,11 +20,11 @@ std::string utf8Of(const std::filesystem::path& p) {
 
 std::optional<std::string> variable(const std::string& name) {
 #ifdef _WIN32
-    char* value = nullptr;
+    wchar_t* value = nullptr;
     std::size_t size = 0;
-    if (_dupenv_s(&value, &size, name.c_str()) != 0 || !value)
+    if (_wdupenv_s(&value, &size, pathOf(name).c_str()) != 0 || !value)
         return std::nullopt;
-    std::string v = value;
+    std::string v = utf8Of(std::filesystem::path(value));
     std::free(value);
     return v;
 #else
@@ -35,7 +35,7 @@ std::optional<std::string> variable(const std::string& name) {
 
 void setVariable(const std::string& name, const std::optional<std::string>& value) {
 #ifdef _WIN32
-    _putenv_s(name.c_str(), value ? value->c_str() : "");      // "": removed
+    _wputenv_s(pathOf(name).c_str(), value ? pathOf(*value).c_str() : L"");
 #else
     if (value)
         setenv(name.c_str(), value->c_str(), 1);
@@ -139,17 +139,25 @@ bool Launches::loadPlugins(const fg::standard::LaunchConfig& config, std::vector
     return loaded;
 }
 
-void Launches::apply(const fg::standard::LaunchConfig& config) {
+bool Launches::apply(const fg::standard::LaunchConfig& config, std::string* error) {
     restore();
+    if (!config.cwd.empty()) {
+        std::error_code ec;
+        const auto previous = std::filesystem::current_path(ec);
+        if (!ec)
+            std::filesystem::current_path(pathOf(folder()) / pathOf(config.cwd), ec);
+        if (ec) {
+            if (error) *error = ec.message();
+            return false;
+        }
+        savedCwd_ = utf8Of(previous);
+    }
     applied_ = true;
     for (const auto& [name, value] : config.env) {
         savedEnv_[name] = variable(name);
         setVariable(name, value);
     }
-    std::error_code ec;
-    savedCwd_ = utf8Of(std::filesystem::current_path(ec));
-    if (!config.cwd.empty())
-        std::filesystem::current_path(pathOf(folder()) / pathOf(config.cwd), ec);
+    return true;
 }
 
 void Launches::restore() {

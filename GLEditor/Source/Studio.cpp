@@ -204,6 +204,7 @@ struct Studio::Impl {
     std::shared_ptr<glw::Action> runPauseAction;
     std::shared_ptr<glw::Action> runAction, pauseAction, stopAction, stepOverAction, stepIntoAction, stepOutAction, breakpointAction;
     bool closing = false;                       // asked whether to save, and it goes: the window may close now
+    std::function<void()> closeWhenStopped;
 
     Impl(glw::Application& a, fg::Runtime& r, StudioOptions o) : app(a), rt(r), options(std::move(o)), doc(r), launches(r), uiThread(a) {}
     // The window's panels and graphs go first, while the document and the run they listen to are there (the application,
@@ -800,8 +801,11 @@ struct Studio::Impl {
             run = std::make_unique<core::RunSession>(doc, uiThread);
         run->stateChanged.connect([this](core::RunState state) {
             showRunState(state);
-            if (state == core::RunState::Idle)
+            if (state == core::RunState::Idle) {
                 launches.restore();         // the working directory and the variables of the run, put back
+                if (closeWhenStopped)
+                    uiThread.post(std::exchange(closeWhenStopped, {}));
+            }
         });
         run->paused.connect([this](const std::string& graph, int node) {
             // the graph it stopped in shown, the node in view
@@ -858,7 +862,13 @@ struct Studio::Impl {
             args = {fg::standard::argsValue(rt.registry(), config.args)};
             if (delay == 0)
                 delay = config.stepDelayMs;
-            launches.apply(config);
+            std::string error;
+            if (!launches.apply(config, &error)) {
+                glw::showMessage(*area, tr("Cannot start the script"),
+                                 tr("Cannot change to the working directory '{path}': {error}").arg("path", config.cwd).arg("error", error),
+                                 {tr("Close")});
+                return;
+            }
         }
         run->setStepDelay(delay);
         log->setText("");
@@ -940,16 +950,18 @@ struct Studio::Impl {
 
     void showRunState(core::RunState state) {
         const bool active = state != core::RunState::Idle, paused = state == core::RunState::Paused;
+        const bool stopping = state == core::RunState::Stopping;
         if (runAction) {
             runAction->setText(paused ? tr("&Continue") : tr("&Run"));
             runAction->setEnabled(!active || paused);
-            pauseAction->setEnabled(active && !paused);
-            stopAction->setEnabled(active);
+            pauseAction->setEnabled(active && !paused && !stopping);
+            stopAction->setEnabled(active && !stopping);
             stepOverAction->setEnabled(paused);
             stepIntoAction->setEnabled(paused);
             stepOutAction->setEnabled(paused);
             // the toolbar's: Pause while it runs, Continue while it is paused, Run otherwise
-            const bool pauses = active && !paused;
+            const bool pauses = active && !paused && !stopping;
+            runPauseAction->setEnabled(!stopping);
             runPauseAction->setText(pauses ? tr("&Pause") : paused ? tr("&Continue") : tr("&Run"));
             runPauseAction->setToolTip(pauses ? tr("Pause (F6)") : paused ? tr("Continue (F5)") : tr("Run (F5)"));
             runPauseAction->setIcon(studioIcon(pauses ? "interrupt" : "continue"));
@@ -959,6 +971,7 @@ struct Studio::Impl {
         case core::RunState::Running: runState->setText(tr("Running")); break;
         case core::RunState::Waiting: runState->setText(tr("Waiting")); break;
         case core::RunState::Paused: runState->setText(tr("Paused")); break;
+        case core::RunState::Stopping: runState->setText(tr("Stopping")); break;
         }
     }
 
@@ -1220,6 +1233,15 @@ struct Studio::Impl {
 
     // Whether the window may close now; when not, it closes (by `close`) once what was not saved is saved or left.
     bool closeRequested(std::function<void()> close) {
+        if (run && run->isActive() && !run->isAttached()) {
+            closeWhenStopped = [this, close = std::move(close)] {
+                if (closeRequested(close))
+                    close();
+            };
+            run->stop();
+            status->showMessage(tr("Waiting for the script to stop before closing"), 4s);
+            return false;
+        }
         if (closing || !doc.isDirty())
             return true;
         whenSaved([this, close = std::move(close)] {

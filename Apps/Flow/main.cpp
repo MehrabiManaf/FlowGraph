@@ -10,6 +10,8 @@
 // when it cannot be loaded (unreadable file, missing events / plugins, compile errors).
 #include <FlowGraph/Runtime.hpp>
 
+#include "FileIo.hpp"
+
 #include <algorithm>
 #include <csignal>
 #include <cstdio>
@@ -21,13 +23,10 @@
 #include <vector>
 
 #if defined(_WIN32)
-#include <direct.h>
-#define fg_chdir _chdir
-#define fg_putenv(k, v) _putenv_s(k, v)
+#define fg_putenv(k, v) _wputenv_s(file::path(k).c_str(), file::path(v).c_str())
 #else
 #include <unistd.h>
-#define fg_chdir chdir
-#define fg_putenv(k, v) setenv(k, v, 1)
+#define fg_putenv(k, v) setenv((k).c_str(), (v).c_str(), 1)
 #endif
 
 using namespace fg;
@@ -70,7 +69,8 @@ int fail(const std::string& msg, int code = 2) {
 
 } // namespace
 
-int main(int argc, char** argv) {
+int run(const std::vector<std::string>& argv) {
+    const int argc = static_cast<int>(argv.size());
     std::string script, launchName;
     std::vector<std::string> scriptArgs, extraPlugins;
     bool checkOnly = false, launch = false, reference = false, defaultPlugins = true;
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
         else if (a == "--launch" && i + 1 < argc) { launch = true; launchName = argv[++i]; }
         else if (a == "--reference") {
             reference = true;
-            if (i + 1 < argc && argv[i + 1][0] != '-') referenceFile = argv[++i];
+            if (i + 1 < argc && !argv[i + 1].starts_with('-')) referenceFile = argv[++i];
         }
         else if (a == "--translations" && i + 1 < argc) catalogFile = argv[++i];
         else if (a == "--only" && i + 1 < argc) catalogSource = argv[++i];
@@ -100,15 +100,15 @@ int main(int argc, char** argv) {
         standard::registerStandardApp(rt.registry());
         std::vector<std::string> errors;
         if (defaultPlugins) rt.loadPluginsFromEnvironment("FLOW_PLUGIN_PATH", &errors);
-        fs::path self = fs::absolute(fs::path(argv[0]));
-        if (defaultPlugins && fs::exists(self.parent_path() / "plugins")) rt.loadPluginsFrom((self.parent_path() / "plugins").string(), &errors);
+        fs::path self = fs::absolute(file::path(argv[0]));
+        if (defaultPlugins && fs::exists(self.parent_path() / "plugins")) rt.loadPluginsFrom(file::utf8(self.parent_path() / "plugins"), &errors);
         for (auto& d : extraPlugins) rt.loadPluginsFrom(d, &errors);
         for (auto& e : errors) std::fprintf(stderr, "flow: warning: %s\n", e.c_str());
     };
     if (!catalogFile.empty()) {
         Runtime rt;
         standardRuntime(rt);
-        std::string existing, language = fs::path(catalogFile).stem().string();     // "fa.json" translates to "fa"
+        std::string existing, language = file::utf8(file::path(catalogFile).stem());     // "fa.json" translates to "fa"
         // --only: the standard nodes and that plugin, no other one (what its catalog shares with the standard nodes' catalog - In,
         // Then... - is left out of it, and other plugins must not change that)
         Runtime alone;
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
             catalogRuntime = &alone;
             if (language.rfind(catalogSource + "_", 0) == 0) language = language.substr(catalogSource.size() + 1);   // "FileSystem_fa"
         }
-        if (std::ifstream in(catalogFile, std::ios::binary); in) {
+        if (std::ifstream in(file::path(catalogFile), std::ios::binary); in) {
             std::stringstream ss;
             ss << in.rdbuf();
             existing = ss.str();
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
         } catch (const std::exception& e) {
             return fail("cannot read '" + catalogFile + "': " + e.what());
         }
-        std::ofstream out(catalogFile, std::ios::binary | std::ios::trunc);
+        std::ofstream out(file::path(catalogFile), std::ios::binary | std::ios::trunc);
         out << text;
         if (!out) return fail("cannot write '" + catalogFile + "'");
         std::printf("%s: %zu texts, %zu translated, %zu new, %zu outdated, %zu removed\n", catalogFile.c_str(), report.texts, report.translated,
@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
             std::fwrite(text.data(), 1, text.size(), stdout);
             return 0;
         }
-        std::ofstream out(referenceFile, std::ios::binary | std::ios::trunc);
+        std::ofstream out(file::path(referenceFile), std::ios::binary | std::ios::trunc);
         out << text;
         if (!out) return fail("cannot write '" + referenceFile + "'");
         return 0;
@@ -173,10 +173,10 @@ int main(int argc, char** argv) {
 
     // launch configuration
     standard::LaunchConfig cfg;
-    fs::path scriptDir = fs::absolute(fs::path(script)).parent_path();
+    fs::path scriptDir = fs::absolute(file::path(script)).parent_path();
     if (launch) {
         std::string lf = standard::LaunchFile::pathFor(script);
-        if (!fs::exists(lf)) return fail("there is no launch file '" + lf + "'");
+        if (!fs::exists(file::path(lf))) return fail("there is no launch file '" + lf + "'");
         try {
             auto file = standard::LaunchFile::load(lf);
             const standard::LaunchConfig* found = file.find(launchName);
@@ -185,16 +185,16 @@ int main(int argc, char** argv) {
         } catch (const std::exception& e) {
             return fail("cannot read '" + lf + "': " + e.what());
         }
-        for (auto& p : cfg.pluginPaths) extraPlugins.push_back((scriptDir / p).string());
+        for (auto& p : cfg.pluginPaths) extraPlugins.push_back(file::utf8(scriptDir / file::path(p)));
     }
 
     // plugins
     std::vector<std::string> errors;
     if (defaultPlugins) rt.loadPluginsFromEnvironment("FLOW_PLUGIN_PATH", &errors);
-    fs::path self = fs::absolute(fs::path(argv[0]));
-    if (defaultPlugins && fs::exists(self.parent_path() / "plugins")) rt.loadPluginsFrom((self.parent_path() / "plugins").string(), &errors);
+    fs::path self = fs::absolute(file::path(argv[0]));
+    if (defaultPlugins && fs::exists(self.parent_path() / "plugins")) rt.loadPluginsFrom(file::utf8(self.parent_path() / "plugins"), &errors);
     for (auto& d : extraPlugins) {
-        if (!fs::exists(d)) { errors.push_back("plugin directory '" + d + "' does not exist"); continue; }
+        if (!fs::exists(file::path(d))) { errors.push_back("plugin directory '" + d + "' does not exist"); continue; }
         rt.loadPluginsFrom(d, &errors);
     }
     for (auto& e : errors) std::fprintf(stderr, "flow: warning: %s\n", e.c_str());
@@ -217,8 +217,12 @@ int main(int argc, char** argv) {
     }
 
     // environment of the run
-    for (auto& [k, v] : cfg.env) fg_putenv(k.c_str(), v.c_str());
-    if (!cfg.cwd.empty() && fg_chdir((scriptDir / cfg.cwd).string().c_str()) != 0) return fail("cannot change to the working directory '" + cfg.cwd + "'");
+    for (auto& [k, v] : cfg.env) fg_putenv(k, v);
+    if (!cfg.cwd.empty()) {
+        std::error_code ec;
+        fs::current_path(scriptDir / file::path(cfg.cwd), ec);
+        if (ec) return fail("cannot change to the working directory '" + cfg.cwd + "': " + ec.message());
+    }
     std::vector<std::string> args = cfg.args;
     args.insert(args.end(), scriptArgs.begin(), scriptArgs.end());
 
@@ -230,3 +234,17 @@ int main(int argc, char** argv) {
     g_running = nullptr;
     return outcome.exitCode;
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+    std::vector<std::string> args;
+    args.reserve(argc);
+    for (int i = 0; i < argc; ++i)
+        args.push_back(file::utf8(fs::path(argv[i])));
+    return run(args);
+}
+#else
+int main(int argc, char** argv) {
+    return run(std::vector<std::string>(argv, argv + argc));
+}
+#endif

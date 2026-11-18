@@ -33,7 +33,7 @@ public:
     virtual void stopRepeating() = 0;
 };
 
-enum class RunState { Idle, Running, Waiting, Paused };
+enum class RunState { Idle, Running, Waiting, Paused, Stopping };
 
 // What the session tells the user in the editor's words (the editor writes them in its language).
 enum class RunNotice {
@@ -53,7 +53,7 @@ public:
 
     // Starts an event of the compiled program (or a function when `entry` names one).
     bool start(const std::string& entry, const std::vector<fg::Value>& args);
-    void stop();                                  // returns when the script has stopped (an attached debugger detaches)
+    void stop();                                  // requests cancellation (an attached debugger detaches)
 
     // Debugging a script that the application runs: the document's debugger takes over the executor (breakpoints stop its
     // tasks, pause / resume / step control them, the debug panels read it) until detach(). The state is Running while
@@ -121,7 +121,8 @@ private:
     void onTaskState(fg::AsyncExecutor::Handle handle, fg::TaskState st);
     void showPaused(fg::AsyncExecutor::Handle handle);                 // the paused task `handle` is the one the user looks at
     void commandAttached(fg::Debugger::Command c);
-    fg::AsyncExecutor* executor() const { return attached_ ? attached_.get() : ax_.get(); }
+    fg::AsyncExecutor* executor() const { return state_ == RunState::Stopping ? nullptr : attached_ ? attached_.get() : ax_.get(); }
+    void finishStop();
     void onCompleted(bool ok, bool exited, int exitCode, const std::string& error, const std::string& returns);
     void onDocumentChanged(bool structural);
     void onScriptOpened();
