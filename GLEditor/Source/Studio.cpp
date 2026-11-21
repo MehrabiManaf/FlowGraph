@@ -520,10 +520,11 @@ struct Studio::Impl {
         frameSelectionAction = action(tr("&Frame Selection"), onGraph(&GraphView::frameSelection));
         frameAllAction = action(tr("&Frame All"), onGraph(&GraphView::frameAll));
         fullScreenAction = action(tr("F&ull Screen"), [this] {
-            window->setFullScreen(!window->fullScreen());
-            fullScreenAction->setChecked(window->fullScreen());
+            // Action::trigger already toggled the check. Wayland applies the window request asynchronously.
+            window->setFullScreen(fullScreenAction->checked());
         }, {Key::Enter, glw::platform::KeyModifiers::Shift | glw::platform::KeyModifiers::Alt});
         fullScreenAction->setCheckable(true);
+        fullScreenAction->setChecked(window->fullScreen());
         collapseAction->setToolTip(tr("Moves the selected nodes into a new function and calls it in their place"));
         configureAction->setToolTip(tr("Edit the launch configurations of this script"));
         for (auto [a, icon] : {std::pair{newAction, "new"}, {openAction, "open"}, {saveAction, "save"}, {runAction, "continue"},
