@@ -678,6 +678,10 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
 <context>
     <name>fged::GraphView</name>
     <message>
+        <source>Promote to Variable</source>
+        <translation>Convertir en variable</translation>
+    </message>
+    <message>
         <source>Break all links</source>
         <translation type="unfinished">Rompre tous les liens</translation>
     </message>

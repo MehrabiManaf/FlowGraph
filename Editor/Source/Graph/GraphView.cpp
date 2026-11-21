@@ -4,6 +4,7 @@
 #include "../Common/Theme.hpp"
 #include "LinkItem.hpp"
 #include "PalettePopup.hpp"
+#include <FlowGraphEditorCore/GraphEdits.hpp>
 
 #include <QContextMenuEvent>
 #include <QCursor>
@@ -212,8 +213,22 @@ void GraphView::contextMenuEvent(QContextMenuEvent* e) {
     if (auto* node = dynamic_cast<NodeItem*>(under)) {
         if (auto pin = node->pinAt(sp)) {
             QMenu m;
+            core::GraphEdits edits(sc->document()->core(), sc->graphName().toStdString());
+            const core::PinEnd end = core::PinEnd::of(node->compiled(), pin->pin, pin->dir);
+            QAction* promote = nullptr;
+            const QRectF bounds = node->sceneBoundingRect();
+            if (end.kind == fg::PinKind::Data) {
+                promote = m.addAction(tr("Promote to Variable"));
+                promote->setEnabled(edits.canPromote(end));
+            }
             QAction* brk = m.addAction(themedIcon(":/Icons/break-links.svg"), tr("Break all links"));
-            if (m.exec(e->globalPos()) == brk) sc->breakPinLinks(*pin);
+            QAction* chosen = m.exec(e->globalPos());
+            if (chosen == brk) sc->breakPinLinks(*pin);
+            else if (promote && chosen == promote) {
+                const double x = end.dir == fg::PinDir::In ? bounds.left() - 200 : bounds.right() + 40;
+                if (const auto made = edits.promoteToVariable(end, x, sp.y(), tr("Promote to Variable").toStdString()))
+                    sc->selectOnly(made);
+            }
             return;
         }
         if (!node->isSelected()) { sc->clearSelection(); node->setSelected(true); }

@@ -446,6 +446,20 @@ TEST(theSearchFindsNodesByTheirKeywords) {
         CHECK(e.node(*e.view->selectedNodes().begin()).def == "math.add");
 }
 
+TEST(aDataPinsContextMenuPromotesItsLiteralToAVariable) {
+    Edited e;
+    const Point at = e.shown(e.pin(e.a, "String", fg::PinDir::In));
+    e.root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Right, true, 1, at});
+    e.root.dispatch(glw::platform::MouseButtonChanged{1, MouseButton::Right, false, 1, at});
+    CHECK(e.host.open().size() == 1);
+    if (e.host.open().empty()) return;
+    auto& menu = e.host.open()[0]->root;
+    Edited::key(menu, Key::Down);
+    Edited::key(menu, Key::Enter);
+    CHECK(e.doc->script().findVariable("String") && e.links() == 1);
+    CHECK(e.doc->undoLabel() == "Promote to Variable");
+}
+
 TEST(commentsAreAddedAroundTheSelectionAndNamed) {
     Edited e;
     e.click(e.header(e.a));

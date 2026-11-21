@@ -609,6 +609,10 @@
       "Add Reroute Node",
       "Umleitungsknoten hinzufügen"
     ],
+    "Promote to Variable": [
+      "Promote to Variable",
+      "In Variable umwandeln"
+    ],
     "Break All Links": [
       "Break All Links",
       "Alle Verbindungen trennen"

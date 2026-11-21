@@ -578,6 +578,22 @@ void registerMath(Registry& r) {
         };
         r.addNode(std::move(d));
     };
+    for (bool increment : {true, false}) {
+        NodeDef d = execNode(increment ? "math.increment" : "math.decrement", increment ? "++" : "--", "Math");
+        numeric(d);
+        d.keywords = increment ? "increment increase add one" : "decrement decrease subtract one";
+        d.doc = increment ? "Increments a numeric variable and returns its new value." : "Decrements a numeric variable and returns its new value.";
+        auto variable = dataIn("Value", "T");
+        variable.byRef = true;
+        d.pins.push_back(variable);
+        d.pins.push_back(dataOut("Result", "T"));
+        d.run = [step = increment ? 1 : -1](NodeCtx& c) {
+            Value& v = c.variableInput(0);
+            v = v.isInt() ? Value(addInt(v.toInt(), step)) : Value(v.toFloat() + step);
+            c.out(0, v);
+        };
+        r.addNode(std::move(d));
+    }
     binary("math.add", Intrinsic::Add, "Add", "+ plus sum", [](NodeCtx&, int64_t a, int64_t b) { return addInt(a, b); }, [](double a, double b) { return a + b; });
     binary("math.sub", Intrinsic::Sub, "Subtract", "- minus", [](NodeCtx&, int64_t a, int64_t b) { return subInt(a, b); }, [](double a, double b) { return a - b; });
     binary("math.mul", Intrinsic::Mul, "Multiply", "* times", [](NodeCtx&, int64_t a, int64_t b) { return mulInt(a, b); }, [](double a, double b) { return a * b; });

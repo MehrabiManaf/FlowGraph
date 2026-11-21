@@ -609,6 +609,10 @@
       "Add Reroute Node",
       "Ajouter un nœud de réacheminement"
     ],
+    "Promote to Variable": [
+      "Promote to Variable",
+      "Convertir en variable"
+    ],
     "Break All Links": [
       "Break All Links",
       "Couper tous les liens"

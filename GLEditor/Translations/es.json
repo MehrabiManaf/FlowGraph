@@ -609,6 +609,10 @@
       "Add Reroute Node",
       "Añadir nodo de redirección"
     ],
+    "Promote to Variable": [
+      "Promote to Variable",
+      "Convertir en variable"
+    ],
     "Break All Links": [
       "Break All Links",
       "Romper todos los enlaces"

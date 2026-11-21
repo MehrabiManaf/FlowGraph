@@ -134,7 +134,11 @@ std::vector<size_t> searchPaletteIndices(const std::vector<NodeTemplate>& all, c
         for (auto& w : words) {
             int s;
             size_t pos = title.find(w);
-            if (pos == 0) s = 0;
+            // An exact operator (including keyword aliases such as "+" for Add) precedes
+            // a longer operator with that prefix, such as "++".
+            if (std::ispunct(static_cast<unsigned char>(w.front())) &&
+                (title == w || (" " + kw + " ").find(" " + w + " ") != std::string::npos)) s = -1;
+            else if (pos == 0) s = 0;
             else if (pos != std::string::npos) s = 1;
             else if (kw.find(w) != std::string::npos) s = 2;
             else if (cat.find(w) != std::string::npos) s = 3;

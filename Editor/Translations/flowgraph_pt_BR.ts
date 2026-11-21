@@ -678,6 +678,10 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
 <context>
     <name>fged::GraphView</name>
     <message>
+        <source>Promote to Variable</source>
+        <translation>Converter em variável</translation>
+    </message>
+    <message>
         <source>Break all links</source>
         <translation type="unfinished">Desfazer todas as ligações</translation>
     </message>

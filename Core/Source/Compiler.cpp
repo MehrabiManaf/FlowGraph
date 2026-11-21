@@ -551,6 +551,18 @@ struct GraphCompiler {
                     }
                 }
             }
+            // Explicit writable native references alias a variable cell, with no conversion.
+            if (cn.op == NodeOp::Native) {
+                for (const auto& declared : cn.def->pins) {
+                    if (!declared.byRef || declared.isConst || declared.dir != PinDir::In || declared.kind != PinKind::Data) continue;
+                    const auto* pin = cn.findPin(declared.name, PinDir::In, PinKind::Data);
+                    if (!pin) continue;
+                    const auto* source = originOf(cg, cn, static_cast<size_t>(pin->ordinal));
+                    if (!source || source->op != NodeOp::GetVariable || isConstParam(*source) || source->dataOut.empty() ||
+                        source->pins[static_cast<size_t>(source->dataOut.front())].type != pin->type)
+                        diag(Severity::Error, g.name, cn.id, "'" + pin->name + "' requires a writable variable of the same type");
+                }
+            }
             // nodes that modify their first input may not be applied to const parameters
             if (cn.def->mutatesFirstInput && !cn.inputs.empty()) {
                 const std::string param = constParamReached(g, cg, cn, 0);

@@ -609,6 +609,10 @@
       "Add Reroute Node",
       "افزودن گره تغییر مسیر"
     ],
+    "Promote to Variable": [
+      "Promote to Variable",
+      "تبدیل به متغیر"
+    ],
     "Break All Links": [
       "Break All Links",
       "قطع همهٔ اتصال‌ها"

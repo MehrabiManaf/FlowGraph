@@ -609,6 +609,10 @@
       "Add Reroute Node",
       "リルート ノードを追加"
     ],
+    "Promote to Variable": [
+      "Promote to Variable",
+      "変数に昇格"
+    ],
     "Break All Links": [
       "Break All Links",
       "すべてのリンクを切断"

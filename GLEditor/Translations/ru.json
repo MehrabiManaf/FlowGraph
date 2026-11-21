@@ -609,6 +609,10 @@
       "Add Reroute Node",
       "Добавить узел перенаправления"
     ],
+    "Promote to Variable": [
+      "Promote to Variable",
+      "Преобразовать в переменную"
+    ],
     "Break All Links": [
       "Break All Links",
       "Разорвать все связи"

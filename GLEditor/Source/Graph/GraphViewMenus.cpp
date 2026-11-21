@@ -325,6 +325,14 @@ void GraphView::contextMenu(glw::Point at) {
             const fg::CompiledNode& cn = node->compiled();
             const int index = cn.findPinIndex(pin->name, pin->dir);
             const bool linked = index >= 0 && cn.pins[std::size_t(index)].connected;
+            if (end.kind == fg::PinKind::Data) {
+                const auto rect = itemRect(*node);
+                const float x = end.dir == fg::PinDir::In ? rect.x - 200 : rect.right() + 40;
+                items.push_back({.text = tr("Promote to Variable"), .onTriggered = [this, end, x, at] {
+                    if (const auto made = edits_.promoteToVariable(end, x, at.y, words(tr("Promote to Variable"))))
+                        select({made});
+                }, .enabled = edits_.canPromote(end)});
+            }
             items.push_back({.text = tr("Break All Links"), .onTriggered = [this, end] { edits_.breakLinks(end, words(tr("Break links"))); },
                              .shortcut = tr("Alt+Click"), .enabled = linked});
             items.push_back(glw::MenuItem::separatorItem());

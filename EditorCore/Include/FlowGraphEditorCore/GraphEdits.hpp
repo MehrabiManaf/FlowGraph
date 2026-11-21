@@ -54,6 +54,8 @@ public:
     bool link(const PinEnd& a, const PinEnd& b, const std::string& label, LinkProblem* why = nullptr,
               const std::string& coalesceKey = {});
     void breakLinks(const PinEnd& pin, const std::string& label);
+    bool canPromote(const PinEnd& end) const;
+    fg::NodeId promoteToVariable(const PinEnd& end, double x, double y, const std::string& label);
     // A reroute node at (x, y) - its top left corner - in the middle of the data link `c`. False for a link of execution.
     bool insertReroute(const fg::Connection& c, double x, double y, const std::string& label);
     // The node `node` put into the execution link `c`: the link's start to its first execution input, its first execution

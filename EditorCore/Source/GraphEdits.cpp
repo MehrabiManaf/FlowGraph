@@ -103,6 +103,57 @@ void GraphEdits::breakLinks(const PinEnd& p, const std::string& label) {
     });
 }
 
+bool GraphEdits::canPromote(const PinEnd& end) const {
+    const auto* graph = doc_.compiledGraph(graph_);
+    const auto* node = graph ? graph->findNode(end.node) : nullptr;
+    const auto* pin = node ? node->findPin(end.pin, end.dir, fg::PinKind::Data) : nullptr;
+    return end.kind == fg::PinKind::Data && pin && pin->type &&
+           (!pin->wildcard || pin->type->kind != fg::TypeKind::Any) &&
+           (end.dir == fg::PinDir::Out || !pin->connected);
+}
+
+fg::NodeId GraphEdits::promoteToVariable(const PinEnd& end, double x, double y, const std::string& label) {
+    if (!canPromote(end))
+        return 0;
+    const auto& source = *doc_.compiledGraph(graph_)->findNode(end.node);
+    const auto& pin = *source.findPin(end.pin, end.dir, fg::PinKind::Data);
+    const bool set = end.dir == fg::PinDir::Out;
+    fg::NodeId made = 0;
+    doc_.edit(label, [&](fg::Script& script) {
+        auto& graph = *graphOf(script);
+        const bool local = graph.kind == fg::GraphKind::Function;
+        std::string name = script.uniqueVariableName(pin.name);
+        if (local) {
+            name = pin.name;
+            for (int i = 1; graph.findLocal(name) || std::any_of(graph.inputs.begin(), graph.inputs.end(),
+                     [&](const auto& param) { return param.name == name; }); ++i)
+                name = pin.name + "_" + std::to_string(i);
+        }
+        (local ? graph.locals : script.variables).push_back({name, pin.type->name, set ? fg::Value{} : pin.def.deepCopy(), "", ""});
+        auto& variable = graph.addNode(set ? "var.set" : "var.get", x, y);
+        made = variable.id;
+        variable.props["name"] = name;
+        variable.props["scope"] = local ? "local" : "global";
+        if (set) {
+            addConnection(graph, {end.node, end.pin, made, "Value"}, false);
+            // A single execution exit gives the assignment an unambiguous place in the chain.
+            if (source.execOut.size() == 1) {
+                const auto& exit = source.pins[static_cast<size_t>(source.execOut.front())].name;
+                for (auto& link : graph.connections) {
+                    if (link.fromNode == end.node && link.fromPin == exit) {
+                        link.fromNode = made;
+                        link.fromPin = "Then";
+                    }
+                }
+                addConnection(graph, {end.node, exit, made, "In"}, true);
+            }
+        } else {
+            addConnection(graph, {made, "Value", end.node, end.pin}, false);
+        }
+    });
+    return made;
+}
+
 bool GraphEdits::insertReroute(const fg::Connection& c, double x, double y, const std::string& label) {
     const fg::CompiledGraph* cg = doc_.compiledGraph(graph_);
     const fg::CompiledNode* from = cg ? cg->findNode(c.fromNode) : nullptr;

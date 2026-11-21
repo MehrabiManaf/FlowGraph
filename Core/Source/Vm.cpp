@@ -73,6 +73,18 @@ const char* toString(TaskState s) {
 }
 
 // ================================================================== NodeCtx
+Value& NodeCtx::variableInput(size_t i) const {
+    if (i >= node_->dataIn.size()) outOfRange(i);
+    const auto& pin = node_->pins[static_cast<size_t>(node_->dataIn[i])];
+    const CompiledNode* source = task_->originNode(*frame_, *node_, i);
+    if (!pin.byRef || pin.isConst || !source || source->op != NodeOp::GetVariable)
+        error("Expected a writable variable for '" + pin.name + "'");
+    const auto& output = source->pins[static_cast<size_t>(source->dataOut.at(0))];
+    if (output.isConst || output.type != pin.type)
+        error("Incompatible variable reference for '" + pin.name + "'");
+    return *task_->cellFor(*frame_, *source);
+}
+
 std::string NodeCtx::inString(size_t i) const {
     const CompiledPin& p = node_->pins[static_cast<size_t>(node_->dataIn[i])];
     return registry().toString(inputs_[i], p.type);

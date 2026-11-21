@@ -678,6 +678,10 @@ Locals and parameters of the selected stack frame are found first, then the vari
 <context>
     <name>fged::GraphView</name>
     <message>
+        <source>Promote to Variable</source>
+        <translation>Преобразовать в переменную</translation>
+    </message>
+    <message>
         <source>Break all links</source>
         <translation type="unfinished">Разорвать все связи</translation>
     </message>

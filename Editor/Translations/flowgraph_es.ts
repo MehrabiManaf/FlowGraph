@@ -678,6 +678,10 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
 <context>
     <name>fged::GraphView</name>
     <message>
+        <source>Promote to Variable</source>
+        <translation>Convertir en variable</translation>
+    </message>
+    <message>
         <source>Break all links</source>
         <translation type="unfinished">Romper todos los enlaces</translation>
     </message>

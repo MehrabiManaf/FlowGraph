@@ -82,6 +82,8 @@ public:
     int64_t inInt(size_t i) const { return inputs_[i].toInt(); }
     double inFloat(size_t i) const { return inputs_[i].toFloat(); }
     std::string inString(size_t i) const;
+    // Storage connected to an explicitly declared writable variable-reference input.
+    Value& variableInput(size_t i) const;
     // ---- data outputs --------------------------------------------------------------------------
     void out(size_t i, Value v);
     // ---- exec flow (impure nodes) -------------------------------------------------------------
@@ -212,6 +214,7 @@ protected:
     Task(Instance& inst, int id, std::string name);
 
 private:
+    friend class NodeCtx;
     Frame* pushFrame(int graphIndex);
     void popFrame();
     void executeNode(Frame& f, const CompiledNode& n);

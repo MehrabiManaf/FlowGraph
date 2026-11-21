@@ -609,6 +609,10 @@
       "Add Reroute Node",
       "添加转接节点"
     ],
+    "Promote to Variable": [
+      "Promote to Variable",
+      "提升为变量"
+    ],
     "Break All Links": [
       "Break All Links",
       "断开所有连线"

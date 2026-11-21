@@ -678,6 +678,10 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
 <context>
     <name>fged::GraphView</name>
     <message>
+        <source>Promote to Variable</source>
+        <translation>In Variable umwandeln</translation>
+    </message>
+    <message>
         <source>Break all links</source>
         <translation type="unfinished">Alle Verbindungen trennen</translation>
     </message>

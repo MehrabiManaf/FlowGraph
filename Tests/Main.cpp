@@ -5649,6 +5649,76 @@ TEST(editor_core_document_undoes_coalesces_and_tells) {
     std::filesystem::remove(file);
 }
 
+TEST(native_numeric_steps_update_the_variable_and_return_the_new_value) {
+    TestRuntime rt;
+    for (const bool increment : {true, false}) {
+        for (const bool integer : {true, false}) {
+            GoGraph t;
+            t.s.variables.push_back({"Counter", integer ? "int" : "float", integer ? Value(4) : Value(4.5), "", ""});
+            const NodeId step = t.node(increment ? "math.increment" : "math.decrement");
+            const NodeId print = t.say("");
+            t.link(t.ev, "Then", step, "In");
+            t.link(step, "Then", print, "In");
+            t.link(step, "Result", print, "String");
+            CHECK(!rt.compile(t.s)->ok()); // literals cannot be written back
+            t.link(t.var("var.get", "Counter"), "Value", step, "Value");
+            GoRun run(rt, t.s);
+            CHECK_EQ(run.go(), integer ? (increment ? "5," : "3,") : (increment ? "5.5," : "3.5,"));
+            CHECK_EQ(run.inst->getVariable("Counter").toFloat(), (integer ? 4.0 : 4.5) + (increment ? 1 : -1));
+        }
+    }
+}
+
+TEST(promoting_a_pin_preserves_its_type_value_and_execution_chain_in_one_edit) {
+    TestRuntime rt;
+    GoGraph t;
+    const NodeId step = t.node("math.increment", {{"Value", Value(7)}});
+    const NodeId print = t.say("");
+    t.link(t.ev, "Then", step, "In");
+    t.link(step, "Then", print, "In");
+    t.link(step, "Result", print, "String");
+    fged::core::Document doc(rt);
+    doc.setScript(t.s, "Test");
+    fged::core::GraphEdits edits(doc, "EventGraph");
+    const auto pin = [&](const char* name, PinDir dir) {
+        return fged::core::PinEnd::of(*doc.compiledGraph("EventGraph")->findNode(step), name, dir);
+    };
+    CHECK(!edits.canPromote(pin("Then", PinDir::Out)));
+    CHECK(edits.promoteToVariable(pin("Value", PinDir::In), 0, 0, "Promote") != 0);
+    CHECK(!edits.canPromote(pin("Value", PinDir::In)));
+    CHECK_EQ(doc.script().variables.front().type, "int");
+    CHECK_EQ(doc.script().variables.front().def.toInt(), 7);
+    const std::string before = doc.script().toText(0);
+    CHECK(edits.promoteToVariable(pin("Result", PinDir::Out), 200, 0, "Promote") != 0);
+    GoRun run(rt, doc.script());
+    CHECK_EQ(run.go(), "8,");
+    CHECK_EQ(run.inst->getVariable("Result").toInt(), 8);
+    doc.undo();
+    CHECK_EQ(doc.script().toText(0), before);
+    doc.redo();
+    CHECK(doc.program()->ok() && doc.script().variables.size() == 2);
+}
+
+TEST(promote_inside_a_function_creates_a_local_and_numeric_steps_reject_const_parameters) {
+    TestRuntime rt;
+    Script script;
+    Graph& function = script.addFunction("Bump", {{"Value", "int", true, true, Value()}});
+    const NodeId step = function.addNode("math.increment").id;
+    fged::core::Document doc(rt);
+    doc.setScript(script, "Test");
+    fged::core::GraphEdits edits(doc, "Bump");
+    const auto* compiled = doc.compiledGraph("Bump")->findNode(step);
+    const NodeId get = edits.promoteToVariable(fged::core::PinEnd::of(*compiled, "Value", PinDir::In), 0, 0, "Promote");
+    const Graph& after = *doc.graph("Bump");
+    CHECK(get && doc.script().variables.empty() && after.findLocal("Value_1"));
+    CHECK(after.findNode(get)->prop("scope") == "local");
+    CHECK(doc.program()->ok());
+    Node& param = function.addNode("var.get");
+    param.props = {{"scope", "param"}, {"name", "Value"}};
+    link(function, param.id, "Value", step, "Value");
+    CHECK(!rt.compile(script)->ok());
+}
+
 TEST(editor_core_graph_edits_link_remove_copy_and_place) {
     using fged::core::GraphEdits;
     using fged::core::LinkProblem;
