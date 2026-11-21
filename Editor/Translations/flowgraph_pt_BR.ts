@@ -1356,6 +1356,14 @@ Primeiro são procuradas as variáveis locais e os parâmetros do quadro selecio
         <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
         <translation type="unfinished">Selecione um nó, ou uma variável, função ou estrutura em Meu script, para localizar suas referências</translation>
     </message>
+    <message>
+        <source>Waiting for the script to stop before closing</source>
+        <translation>Aguardando a parada do script antes de fechar</translation>
+    </message>
+    <message>
+        <source>Stopping</source>
+        <translation>Parando</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

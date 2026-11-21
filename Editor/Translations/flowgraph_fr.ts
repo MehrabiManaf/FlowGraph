@@ -1356,6 +1356,14 @@ Les variables locales et les paramètres du cadre de pile sélectionné sont che
         <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
         <translation type="unfinished">Sélectionnez un nœud, ou une variable, une fonction ou une structure dans Mon script, pour rechercher ses références</translation>
     </message>
+    <message>
+        <source>Waiting for the script to stop before closing</source>
+        <translation>En attente de l’arrêt du script avant la fermeture</translation>
+    </message>
+    <message>
+        <source>Stopping</source>
+        <translation>Arrêt en cours</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

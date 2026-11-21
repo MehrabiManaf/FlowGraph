@@ -1356,6 +1356,14 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
         <translation type="unfinished">选择一个节点，或“我的脚本”中的变量、函数或结构体，以查找其引用</translation>
     </message>
+    <message>
+        <source>Waiting for the script to stop before closing</source>
+        <translation>正在等待脚本停止后关闭</translation>
+    </message>
+    <message>
+        <source>Stopping</source>
+        <translation>正在停止</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

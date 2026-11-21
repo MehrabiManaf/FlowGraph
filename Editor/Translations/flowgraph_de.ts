@@ -1356,6 +1356,14 @@ Zuerst werden die lokalen Variablen und Parameter des gewählten Stapelrahmens g
         <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
         <translation type="unfinished">Wählen Sie einen Knoten oder eine Variable, Funktion bzw. Struktur in Mein Skript, um ihre Verweise zu finden</translation>
     </message>
+    <message>
+        <source>Waiting for the script to stop before closing</source>
+        <translation>Das Skript wird vor dem Schließen beendet</translation>
+    </message>
+    <message>
+        <source>Stopping</source>
+        <translation>Wird beendet</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

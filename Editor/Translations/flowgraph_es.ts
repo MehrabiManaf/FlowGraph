@@ -1356,6 +1356,14 @@ Primero se buscan las variables locales y los parámetros del marco seleccionado
         <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
         <translation type="unfinished">Seleccione un nodo, o una variable, función o estructura en Mi script, para buscar sus referencias</translation>
     </message>
+    <message>
+        <source>Waiting for the script to stop before closing</source>
+        <translation>Esperando a que se detenga el script antes de cerrar</translation>
+    </message>
+    <message>
+        <source>Stopping</source>
+        <translation>Deteniendo</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

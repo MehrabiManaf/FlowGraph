@@ -1356,6 +1356,14 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
         <translation type="unfinished">参照を検索するには、ノード、またはマイスクリプトの変数、関数、構造体を選択してください</translation>
     </message>
+    <message>
+        <source>Waiting for the script to stop before closing</source>
+        <translation>スクリプトが停止してから閉じます</translation>
+    </message>
+    <message>
+        <source>Stopping</source>
+        <translation>停止中</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

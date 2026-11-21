@@ -1356,6 +1356,14 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
         <translation type="unfinished">참조를 찾으려면 노드, 또는 내 스크립트의 변수, 함수나 구조체를 선택하세요</translation>
     </message>
+    <message>
+        <source>Waiting for the script to stop before closing</source>
+        <translation>스크립트가 중지되면 창을 닫습니다</translation>
+    </message>
+    <message>
+        <source>Stopping</source>
+        <translation>중지 중</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>

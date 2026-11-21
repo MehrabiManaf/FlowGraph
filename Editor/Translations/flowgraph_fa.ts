@@ -1356,6 +1356,14 @@ Locals and parameters of the selected stack frame are found first, then the vari
         <source>Select a node, or a variable, function or struct in My Script, to find its references</source>
         <translation>برای یافتن ارجاع‌ها، یک گره، یا یک متغیر، تابع یا ساختار در «اسکریپت من» را انتخاب کنید</translation>
     </message>
+    <message>
+        <source>Waiting for the script to stop before closing</source>
+        <translation>در انتظار توقف اسکریپت پیش از بستن</translation>
+    </message>
+    <message>
+        <source>Stopping</source>
+        <translation>در حال توقف</translation>
+    </message>
 </context>
 <context>
     <name>fged::Theme</name>
