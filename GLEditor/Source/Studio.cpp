@@ -52,11 +52,13 @@ using namespace std::chrono_literals;
 constexpr std::size_t recentLimit = 10;
 
 // The color schemes and the styles, as the preferences name them ("system": the colors follow the system's).
-constexpr std::array<std::pair<std::string_view, glw::ColorScheme>, 5> schemes{{{"dark", glw::ColorScheme::Dark},
+constexpr std::array<std::pair<std::string_view, glw::ColorScheme>, 7> schemes{{{"dark", glw::ColorScheme::Dark},
                                                                                 {"light", glw::ColorScheme::Light},
                                                                                 {"dusk", glw::ColorScheme::Dusk},
                                                                                 {"sand", glw::ColorScheme::Sand},
-                                                                                {"turquoise", glw::ColorScheme::Turquoise}}};
+                                                                                {"turquoise", glw::ColorScheme::Turquoise},
+                                                                                {"celadon", glw::ColorScheme::Celadon},
+                                                                                {"midnight", glw::ColorScheme::Midnight}}};
 constexpr std::array<std::pair<std::string_view, glw::ThemeStyle>, 7> styles{{{"studio", glw::ThemeStyle::Studio},
                                                                               {"fluid", glw::ThemeStyle::Fluid},
                                                                               {"plain", glw::ThemeStyle::Plain},
@@ -72,6 +74,8 @@ glw::LocalizedText schemeTitle(glw::ColorScheme scheme) {
     case glw::ColorScheme::Dusk: return tr("Dusk");
     case glw::ColorScheme::Sand: return tr("Sand");
     case glw::ColorScheme::Turquoise: return tr("Turquoise");
+    case glw::ColorScheme::Celadon: return tr("Celadon");
+    case glw::ColorScheme::Midnight: return tr("Midnight");
     }
     return {};
 }
@@ -252,11 +256,8 @@ struct Studio::Impl {
     }
 
     void applyTheme(bool animated) {
-        const std::string style = settings.string("style", "studio");
-        for (const auto& [name, s] : styles) {
-            if (name == style)
-                app.setStyle(s, animated);
-        }
+        const auto style = glw::themeStyleNamed(settings.string("style", ""));
+        app.setStyle(style.value_or(glw::defaultThemeStyle), animated);
         const std::string colors = settings.string("colors", "system");
         app.setFollowsSystemColors(colors == "system");
         if (colors == "system" && !app.systemPrefersDark())
@@ -570,7 +571,7 @@ struct Studio::Impl {
         for (const auto& [name, style] : styles)
             looks.push_back({.text = styleTitle(style),
                              .onTriggered = [this, n = std::string(name)] { setTheme("style", n); },
-                             .checked = settings.string("style", "studio") == name});
+                             .checked = app.style() == style});
 
         std::vector<glw::MenuItem> menus{
             {.text = tr("&File"),
