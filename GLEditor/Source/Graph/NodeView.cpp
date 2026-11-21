@@ -405,6 +405,16 @@ void NodeView::paint(glw::PaintContext& context) {
             p.strokeRoundedRect(body.inflated(2.5f), r + 2.5f, 2, colors.selection);
     };
 
+    const auto paintBreakpoint = [&] {
+        if (!graph_.isBreakpoint(id_))
+            return;
+        // Anchor the badge across the top-left corner, clear of the title and pin rows.
+        const glw::Point center{1, 0};
+        p.fillCircle(center, 8, rgb(61, 24, 30));
+        p.fillCircle(center, 6.5f, colors.breakpoint);
+        p.fillRoundedRect({center.x - 2.5f, center.y - 2.5f, 5, 5}, 1, rgb(255, 249, 246));
+    };
+
     if (reroute_) {
         const glw::Color c = outputs_.empty() ? rgb(150, 150, 150) : outputs_.front().color;
         if (style.shadow.a > 0)
@@ -418,6 +428,7 @@ void NodeView::paint(glw::PaintContext& context) {
                 p.fillCircle(v->connector.center(), 4, c);
             p.strokeCircle(v->connector.center(), 4, 1.2f, line);
         }
+        paintBreakpoint();
         return;
     }
 
@@ -434,8 +445,7 @@ void NodeView::paint(glw::PaintContext& context) {
     if (titleText_)
         context.drawText(*titleText_, {(width_ - titleText_->size().width) / 2, titleMargins.top + titleText_->opticalOffset()}, {1, 1, 1, 1});
 
-    if (graph_.isBreakpoint(id_))
-        p.fillCircle({-4, -4}, 6, colors.breakpoint);
+    paintBreakpoint();
     if (error_ || warning_) {
         const glw::Point at{body.right() + 2, -4};
         p.fillCircle(at, 7, error_ ? colors.error : colors.warning);
